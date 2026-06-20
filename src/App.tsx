@@ -80,10 +80,14 @@ export default function App() {
 
   // --- 🔒 登入 / 登出處理函式 ---
   const handleGoogleLogin = async () => {
+    // 自動抓取當前網頁的網域（可能是 localhost:5173 或 yourname.github.io）並加上 base 路徑
+    const currentRedirectUrl = window.location.origin + getBasePath();
+    console.log("登入後重新導向目標:", currentRedirectUrl); // 供除錯檢視
+    
     await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: window.location.origin + getBasePath()
+        redirectTo: currentRedirectUrl
       }
     })
   }
@@ -124,7 +128,7 @@ export default function App() {
     // 同步執行：抓取行程結構 與 校驗雲端權限
     Promise.all([
       fetch(url).then(res => res.json()),
-      // 💡 雲端防禦：去 admin_users 比對當前登入者使否有編輯該行程的權限
+      // 💡 雲端防禦：維持原設計，同時比對 email 與 trip_id，精準切割每個行程的獨立白名單
       userEmail 
         ? supabase.from('admin_users').select('*').eq('email', userEmail).eq('trip_id', selectedTripId)
         : Promise.resolve({ data: [] })
@@ -136,7 +140,7 @@ export default function App() {
         setCurrentScreen(tripData.sidebarConfig[0].id)
       }
 
-      // 如果資料庫查得到對應資料，代表在該行程白名單內，解鎖編輯權限
+      // 如果資料庫查得到對應行程的資料，代表在該行程白名單內，解鎖編輯權限
       if (authResult.data && authResult.data.length > 0) {
         setHasEditPermission(true)
       } else {
@@ -284,15 +288,20 @@ export default function App() {
           {userEmail ? (
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <span className="text-slate-400">目前登入：</span>
+                <span className="text-slate-400">目 前登入：</span>
                 <button onClick={handleLogout} className="text-rose-600 font-bold flex items-center gap-0.5 hover:underline"><LogOut size={12} /> 登出</button>
               </div>
               <p className="font-semibold text-slate-700 truncate">{userEmail}</p>
               <div className="mt-1">
-                {hasEditPermission ? (
-                  <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 font-bold rounded-full text-[10px]">🟢 本行程可編輯者</span>
+                {/* 💡 貼心小防呆：只有當確實抓到行程資料時，才進行白名單狀態比對，否則提示先選擇行程 */}
+                {selectedTripId && currentTrip ? (
+                  hasEditPermission ? (
+                    <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 font-bold rounded-full text-[10px]">🟢 本行程可編輯者</span>
+                  ) : (
+                    <span className="px-2 py-0.5 bg-amber-100 text-amber-800 font-bold rounded-full text-[10px]">👁️ 唯讀模式 (非授權人員)</span>
+                  )
                 ) : (
-                  <span className="px-2 py-0.5 bg-amber-100 text-amber-800 font-bold rounded-full text-[10px]">👁️ 唯讀模式 (非白名單)</span>
+                  <span className="px-2 py-0.5 bg-slate-100 text-slate-600 font-bold rounded-full text-[10px]">請先選擇上方行程</span>
                 )}
               </div>
             </div>
@@ -344,7 +353,7 @@ export default function App() {
                   <div className="flex items-baseline gap-3">
                     <span className="text-4xl font-extrabold text-amber-700 tracking-tight">{String(activeDay).padStart(2, '0')}</span>
                     <div>
-                      <h2 className="text-xl font-bold text-slate-800">行程探索 Day {activeDay}</h2>
+                      <h2>行程探索 Day {activeDay}</h2>
                     </div>
                   </div>
                 </div>
