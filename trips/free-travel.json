@@ -1,0 +1,98 @@
+{
+  "id": "free-travel",
+  "title": "九州放鬆自由行",
+  "isPublic": true,
+  "sidebarConfig": [
+    {"id": "itinerary", "title": "每日詳細行程", "type": "itinerary"},
+    {"id": "checklist", "title": "行前檢查清單", "type": "checklist"},
+    {"id": "custom_info", "title": "自駕租車須知", "type": "text"},
+    {"id": "expense", "title": "旅費記帳幫手", "type": "expense"}
+  ],
+  "content": {
+    "days": [1, 2, 3],
+    "custom_tab_1": {
+      "subtitle": "Budget 租車・博多口店",
+      "mainText": "預約號碼：TYO-9876543\n取車時間：Day 1 11:30\n注意事項：記得出示台灣駕照正本＋日文譯本，檢查車身刮痕再簽名。"
+    },
+    "checklistData": [
+      { "id": "ft-1", "category": "核心證件", "label": "護照正本（效期大於 6 個月）" },
+      { "id": "ft-2", "category": "核心證件", "label": "台灣駕照正本 + 日本駕照日文譯本" },
+      { "id": "ft-3", "category": "核心證件", "label": "日幣現金 + 海外高回饋信用卡" },
+      { "id": "ft-4", "category": "自駕與網路", "label": "日本上網 SIM 卡 / eSIM 啟用碼" },
+      { "id": "ft-5", "category": "自駕與網路", "label": "手機車用支架（看 Google 地圖超實用）" },
+      { "id": "ft-6", "category": "自駕與網路", "label": "行動電源 + 車充轉接頭" }
+    ],
+    "daysData": {
+      "1": [
+        {
+          "time": "04:00",
+          "title": "桃園機場第一航廈集合",
+          "type": "交通",
+          "typeColor": "bg-emerald-50 text-emerald-700 border-emerald-200",
+          "desc": "搭乘星宇航空 JX840，預計 06:30 起飛，別遲到囉！",
+          "location": "桃園國際機場第一航廈"
+        },
+        {
+          "time": "09:35",
+          "title": "抵達福岡機場 (入境與取車)",
+          "type": "自駕",
+          "typeColor": "bg-blue-50 text-blue-700 border-blue-200",
+          "desc": "辦理入境，搭乘接駁車前往 Budget 租車博多口店辦理取車手續。",
+          "location": "福岡機場"
+        },
+        {
+          "time": "13:00",
+          "title": "太宰府天滿宮 (吃梅枝餅)",
+          "type": "景點",
+          "typeColor": "bg-purple-50 text-purple-700 border-purple-200",
+          "desc": "參觀表參道與星巴克概念店，正殿參拜求個好運。",
+          "location": "太宰府天滿宮"
+        },
+        {
+          "time": "18:30",
+          "title": "由布院溫泉旅館 check-in",
+          "type": "住宿",
+          "typeColor": "bg-amber-50 text-amber-700 border-amber-200",
+          "desc": "入住「由布院壽花之莊」，享用豐後牛溫泉會席料理。",
+          "location": "由布院壽花之莊"
+        }
+      ],
+      "2": [
+        {
+          "time": "09:00",
+          "title": "金鱗湖與湯之坪街道散策",
+          "type": "景點",
+          "typeColor": "bg-purple-50 text-purple-700 border-purple-200",
+          "desc": "清晨的金鱗湖霧氣超美，接著沿路吃 B-Speak 瑞士捲。",
+          "location": "金鱗湖"
+        },
+        {
+          "time": "14:00",
+          "title": "別府地獄溫泉巡禮",
+          "type": "景點",
+          "typeColor": "bg-purple-50 text-purple-700 border-purple-200",
+          "desc": "參觀海地獄、血池地獄，體驗極熱地熱奇景。",
+          "location": "海地獄"
+        }
+      ],
+      "3": [
+        {
+          "time": "10:00",
+          "title": "博多運河城購物",
+          "type": "景點",
+          "typeColor": "bg-purple-50 text-purple-700 border-purple-200",
+          "desc": "最後採買藥妝與伴手禮，看整點的水舞秀。",
+          "location": "博多運河城"
+        },
+        {
+          "time": "16:00",
+          "title": "前往福岡機場搭機返台",
+          "type": "交通",
+          "typeColor": "bg-emerald-50 text-emerald-700 border-emerald-200",
+          "desc": "提早兩小時抵達機場辦理登機，免稅店做最後衝刺！",
+          "location": "福岡空港"
+        }
+      ]
+    }
+  }
+}
