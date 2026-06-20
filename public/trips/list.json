@@ -1,0 +1,12 @@
+[
+  {
+    "id": "free-travel",
+    "name": "九州放鬆自由行",
+    "isPublic": true
+  },
+  {
+    "id": "group-tour",
+    "name": "九州豪華跟團 5 日",
+    "isPublic": false
+  }
+]

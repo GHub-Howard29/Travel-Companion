@@ -1,0 +1,85 @@
+{
+  "id": "group-tour",
+  "title": "九州豪華跟團 5 日",
+  "isPublic": false,
+  "sidebarConfig": [
+    {"id": "itinerary", "title": "團體每日行程", "type": "itinerary"},
+    {"id": "checklist", "title": "跟團準備物品", "type": "checklist"},
+    {"id": "leader_info", "title": "領隊導遊聯絡資訊", "type": "text"},
+    {"id": "expense", "title": "自費/公帳記帳", "type": "expense"}
+  ],
+  "content": {
+    "days": [1, 2, 3, 4, 5],
+    "custom_tab_1": {
+      "subtitle": "雄獅旅遊・團號：KHH06205D",
+      "mainText": "帶團領隊：陳大明 (手機：0912-345678)\n當地導遊：山田先生 (LINE ID：yamada_guide)\n集合時間：Day 1 05:00 桃園機場第二航廈雄獅櫃檯前。"
+    },
+    "checklistData": [
+      { "id": "gt-1", "category": "必備證件", "label": "護照正本（確認沒有過期）" },
+      { "id": "gt-2", "category": "必備證件", "label": "團體換匯日幣（跟團少許即可）" },
+      { "id": "gt-3", "category": "跟團專屬", "label": "給導遊領隊的每日小費 (NT$ 300/天)" },
+      { "id": "gt-4", "category": "隨身行李", "label": "舒適好走的球鞋（景點走路用）" },
+      { "id": "gt-5", "category": "隨身行李", "label": "保溫瓶（遊覽車上喝熱水）" }
+    ],
+    "daysData": {
+      "1": [
+        {
+          "time": "05:00",
+          "title": "桃園機場雄獅櫃檯集合",
+          "type": "交通",
+          "typeColor": "bg-emerald-50 text-emerald-700 border-emerald-200",
+          "desc": "團體聯辦登機，領取行李託運條與登機證。",
+          "location": "桃園國際機場第二航廈"
+        },
+        {
+          "time": "11:00",
+          "title": "抵達福岡空港 ➡️ 專車前往豪斯登堡",
+          "type": "交通",
+          "typeColor": "bg-emerald-50 text-emerald-700 border-emerald-200",
+          "desc": "搭乘豪華遊覽車前往歐洲主題樂園。",
+          "location": "豪斯登堡"
+        }
+      ],
+      "2": [
+        {
+          "time": "09:00",
+          "title": "九十九島遊覽船體驗",
+          "type": "景點",
+          "typeColor": "bg-purple-50 text-purple-700 border-purple-200",
+          "desc": "乘船欣賞珍珠群島美景，包含挖珍珠體驗。",
+          "location": "九十九島"
+        }
+      ],
+      "3": [
+        {
+          "time": "10:00",
+          "title": "阿蘇火山直升機體驗（自費行程）",
+          "type": "景點",
+          "typeColor": "bg-purple-50 text-purple-700 border-purple-200",
+          "desc": "天氣許可時，可自費搭乘直升機俯瞰火山口。",
+          "location": "阿蘇山"
+        }
+      ],
+      "4": [
+        {
+          "time": "09:30",
+          "title": "免稅店購物行程",
+          "type": "景點",
+          "typeColor": "bg-purple-50 text-purple-700 border-purple-200",
+          "desc": "市區免稅店採購綜合酵素與各類伴手禮。",
+          "location": "福岡市"
+        }
+      ],
+      "5": [
+        {
+          "time": "14:00",
+          "title": "大濠公園散策 ➡️ 前往機場",
+          "type": "景點",
+          "typeColor": "bg-purple-50 text-purple-700 border-purple-200",
+          "desc": "享用最後的博多拉麵後，前往機場搭機返台。",
+          "location": "福岡空港"
+        }
+      ]
+    }
+  }
+}
