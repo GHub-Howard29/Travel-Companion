@@ -138,7 +138,7 @@ export default function App() {
         if (!res.ok) throw new Error(`找不到該行程的詳細 JSON 檔案 (${selectedTripId}.json)`);
         return res.json();
       }),
-      // 請求 B: 精準撈取白名單權限（改進點：不加上單一行程限制，好抓取出超級管理員的全貌設定）
+      // 請求 B: 精準撈取白名單權限
       userEmail 
         ? supabase.from('admin_users').select('email, role, trip_id').eq('email', userEmail).maybeSingle()
         : Promise.resolve({ data: null, error: null })
@@ -188,7 +188,48 @@ export default function App() {
     })
   }, [selectedTripId, userEmail])
 
-  // --- 💡 雲端寫入：新增一筆旅費 ---
+  // --- 🔄 監聽網路恢復：自動倒回同步本地暫存帳目至 Supabase ---
+  useEffect(() => {
+    const handleOnline = async () => {
+      const localQueue = JSON.parse(localStorage.getItem('offline_expenses') || '[]');
+      if (localQueue.length === 0) return;
+
+      console.log('偵測到網路恢復，開始自動同步離線帳目...');
+
+      // 剔除本地端生成用來防止 React Key 重複的暫時性 id，讓雲端資料庫自增 id
+      const syncData = localQueue.map(({ id, ...rest }: any) => rest);
+
+      try {
+        const { error } = await supabase
+          .from('expenses')
+          .insert(syncData);
+
+        if (!error) {
+          localStorage.removeItem('offline_expenses');
+          alert('系統提示：您在離線時記下的帳目，已成功同步上傳至雲端資料庫！');
+          
+          // 同步成功後，重新向雲端同步拉取最新的帳目清單刷新畫面
+          if (selectedTripId) {
+            const { data } = await supabase
+              .from('expenses')
+              .select('*')
+              .eq('trip_id', selectedTripId)
+              .order('created_at', { ascending: true });
+            if (data) setExpenses(data as ExpenseItem[]);
+          }
+        } else {
+          console.error('上傳離線帳目時發生 RLS 或資料庫錯誤:', error);
+        }
+      } catch (err) {
+        console.error('自動同步網路請求失敗：', err);
+      }
+    };
+
+    window.addEventListener('online', handleOnline);
+    return () => window.removeEventListener('online', handleOnline);
+  }, [selectedTripId]);
+
+  // --- 💡 雲端寫入：新增一筆旅費（升級支援斷網防禦與本地暫存） ---
   const handleAddExpense = async (e: React.FormEvent) => {
     e.preventDefault()
     
@@ -200,11 +241,36 @@ export default function App() {
     if (!newTitle || !newAmount || isNaN(Number(newAmount))) return
 
     const amountNum = Math.abs(Math.floor(Number(newAmount)))
+    const newExpenseData = { trip_id: selectedTripId, title: newTitle, amount: amountNum, payer: newPayer };
     
     try {
+      // 📡 核心離線分支攔截
+      if (!navigator.onLine) {
+        const localQueue = JSON.parse(localStorage.getItem('offline_expenses') || '[]');
+        const localId = `local_${Date.now()}`; // 產生本地端渲染防衝突 ID
+        
+        const offlineItem = {
+          id: localId,
+          created_at: new Date().toISOString(),
+          ...newExpenseData
+        };
+        
+        localQueue.push(offlineItem);
+        localStorage.setItem('offline_expenses', JSON.stringify(localQueue));
+
+        // 樂觀更新 UI 狀態，讓使用者斷網依然有完成操作的流暢感
+        setExpenses([...expenses, offlineItem as ExpenseItem]);
+        
+        setNewTitle('');
+        setNewAmount('');
+        alert('目前處於離線狀態！此筆帳目已妥善儲存在手機本地暫存箱，連上網路時小幫手會自動上傳同步。');
+        return;
+      }
+
+      // 正常連網狀態：走雲端資料庫寫入
       const { data, error } = await supabase
         .from('expenses')
-        .insert([{ trip_id: selectedTripId, title: newTitle, amount: amountNum, payer: newPayer }])
+        .insert([newExpenseData])
         .select()
 
       // 防禦第二關：處理雲端 RLS 策略拒絕的商務錯誤
@@ -234,6 +300,19 @@ export default function App() {
       return
     }
 
+    // 離線刪除防禦
+    if (!navigator.onLine && String(id).startsWith('local_')) {
+      // 如果刪除的是尚未同步的本地暫存項目
+      const localQueue = JSON.parse(localStorage.getItem('offline_expenses') || '[]');
+      const filteredQueue = localQueue.filter((item: any) => item.id !== id);
+      localStorage.setItem('offline_expenses', JSON.stringify(filteredQueue));
+      setExpenses(expenses.filter(item => item.id !== id));
+      return;
+    } else if (!navigator.onLine) {
+      alert('刪除失敗：您無法在離線狀態下刪除已上傳至雲端的歷史帳目。');
+      return;
+    }
+
     try {
       const { error } = await supabase.from('expenses').delete().eq('id', id)
 
@@ -258,7 +337,7 @@ export default function App() {
   const paitAmounts: { [key: string]: number } = { '我': 0, '小明': 0, '小華': 0 }
   expenses.forEach(item => { if (paitAmounts[item.payer] !== undefined) paitAmounts[item.payer] += item.amount })
 
-  const handleNavigate = (location: string) => { if (!location) return; window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(location)}`, '_blank'); };
+  const handleNavigate = (location: string) => { if (!location) return; window.open(`http://googleusercontent.com/maps.google.com/?q=${encodeURIComponent(location)}`, '_blank'); };
   const toggleChecklistItem = (id: string) => { checkedItems.includes(id) ? setCheckedItems(checkedItems.filter(item => item !== id)) : setCheckedItems([...checkedItems, id]) }
 
   // 💡 安全串接新 JSON 欄位對應
