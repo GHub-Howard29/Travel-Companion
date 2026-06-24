@@ -40,7 +40,6 @@ export default function App() {
   
   // 5. 權限狀態
   const [adminProfile, setAdminProfile] = useState<AdminUser | null>(null)
-  // 💡 直接從 localStorage 初始化，避免 React 渲染週期帶來的「初始化為 false」真空期
   const [hasEditPermission, setHasEditPermission] = useState<boolean>(() => {
     return localStorage.getItem(`auth_${selectedTripId}`) === 'true';
   });
@@ -155,7 +154,6 @@ export default function App() {
       const basePath = getBasePath();
       const url = `${basePath}trips/${selectedTripId}.json`.replace(/\/+/g, '/');
 
-      // 1. 讀取靜態 JSON 行程
       try {
         const res = await fetch(url);
         if (res.ok) {
@@ -168,7 +166,6 @@ export default function App() {
         }
       } catch (err) { console.error(err); }
 
-      // 2. 還原與驗證白名單權限
       let profile: AdminUser | null = null;
       const cachedProfile = localStorage.getItem(`admin_profile_${selectedTripId}`);
       
@@ -188,7 +185,6 @@ export default function App() {
 
       setAdminProfile(profile);
 
-      // 3. 💡 權限狀態校正與同步
       const lastKnownAuth = localStorage.getItem(`auth_${selectedTripId}`);
       const isAuthorized = 
         lastKnownAuth === 'true' || 
@@ -203,7 +199,6 @@ export default function App() {
         localStorage.setItem(`auth_${selectedTripId}`, 'true');
       }
 
-      // 4. 讀取記帳資料流
       if (navigator.onLine) {
         try {
           const { data: expenseData, error: expenseError } = await supabase
@@ -231,17 +226,17 @@ export default function App() {
     loadTripAndAuthData();
   }, [selectedTripId, userEmail])
 
-  // 網路恢復自動同步
+  // 💡 修正後的網路恢復自動同步機制：初始化與切換行程時主動檢測
   useEffect(() => {
-    const handleOnline = async () => {
+    const syncOfflineData = async () => {
+      if (!navigator.onLine) return;
+
       let localQueue: any[] = [];
       try {
         const localDataStr = localStorage.getItem('offline_expenses');
         localQueue = localDataStr ? JSON.parse(localDataStr) : [];
-        if (!Array.isArray(localQueue)) localQueue = [];
-      } catch (e) { localQueue = []; }
-
-      if (localQueue.length === 0) return;
+        if (!Array.isArray(localQueue) || localQueue.length === 0) return;
+      } catch (e) { return; }
 
       const syncData = localQueue.map(({ id, ...rest }: any) => rest);
       try {
@@ -249,6 +244,7 @@ export default function App() {
         if (!error) {
           localStorage.removeItem('offline_expenses');
           alert('系統提示：您在離線時記下的帳目，已成功同步上傳至雲端！');
+          
           if (selectedTripId) {
             const { data } = await supabase.from('expenses').select('*').eq('trip_id', selectedTripId).order('created_at', { ascending: true });
             if (data) {
@@ -257,11 +253,14 @@ export default function App() {
             }
           }
         }
-      } catch (err) { console.error(err); }
+      } catch (err) { console.error('同步失敗', err); }
     };
 
-    window.addEventListener('online', handleOnline);
-    return () => window.removeEventListener('online', handleOnline);
+    window.addEventListener('online', syncOfflineData);
+    // 主動執行一次檢查
+    syncOfflineData();
+
+    return () => window.removeEventListener('online', syncOfflineData);
   }, [selectedTripId]);
 
   const handleAddExpense = async (e: React.FormEvent) => {
