@@ -40,7 +40,10 @@ export default function App() {
   
   // 5. 權限狀態
   const [adminProfile, setAdminProfile] = useState<AdminUser | null>(null)
-  const [hasEditPermission, setHasEditPermission] = useState<boolean>(false)
+  // 💡 直接從 localStorage 初始化，避免 React 渲染週期帶來的「初始化為 false」真空期
+  const [hasEditPermission, setHasEditPermission] = useState<boolean>(() => {
+    return localStorage.getItem(`auth_${selectedTripId}`) === 'true';
+  });
 
   // 新增帳目表單狀態
   const [newTitle, setNewTitle] = useState('')
@@ -104,7 +107,7 @@ export default function App() {
       .catch(err => console.error(err))
   }, [])
 
-  // 📡 獨立出來的本地/離線資料加載核心，確保隨時可 safe 重刷而不崩潰
+  // 📡 獨立出來的本地/離線資料加載核心
   const loadLocalExpensesFallback = (tripId: string) => {
     const cachedData = localStorage.getItem(`cached_expenses_${tripId}`);
     let parsedData: ExpenseItem[] = [];
@@ -165,12 +168,10 @@ export default function App() {
         }
       } catch (err) { console.error(err); }
 
-      // 2. 還原與驗證白名單權限（🛡️ 100% 離線記憶盾牌防護）
+      // 2. 還原與驗證白名單權限
       let profile: AdminUser | null = null;
       const cachedProfile = localStorage.getItem(`admin_profile_${selectedTripId}`);
-      const lastKnownAuth = localStorage.getItem(`auth_${selectedTripId}`);
       
-      // 💡 第一層防線：如果是在線上且有登入帳號，優先向雲端同步最新白名單資料
       if (userEmail && navigator.onLine) {
         try {
           const { data, error } = await supabase.from('admin_users').select('email, role, trip_id').eq('email', userEmail).maybeSingle();
@@ -181,29 +182,28 @@ export default function App() {
         } catch (err) { console.warn('向雲端驗證權限失敗，將改用快取驗證。', err); }
       }
 
-      // 💡 第二層防線：如果雲端沒回應或處於離線狀態，嘗試從本地快取中還原 profile
       if (!profile && cachedProfile) {
         try { profile = JSON.parse(cachedProfile); } catch (e) {}
       }
 
       setAdminProfile(profile);
 
-      // 💡 第三層終極防線：演算與決定編輯權限
-      // 只要本地歷史快取記錄過他是授權人員 (lastKnownAuth === 'true')，
-      // 或者當前解出的 profile 符合管理資格，就不管此時 userEmail 是否因為離線被初始化為空值，一律維持「已授權」狀態！
-      if (
+      // 3. 💡 權限狀態校正與同步
+      const lastKnownAuth = localStorage.getItem(`auth_${selectedTripId}`);
+      const isAuthorized = 
         lastKnownAuth === 'true' || 
         profile?.role === 'super_admin' || 
-        (profile?.role === 'trip_editor' && profile.trip_id === selectedTripId)
-      ) {
-        setHasEditPermission(true);
-        localStorage.setItem(`auth_${selectedTripId}`, 'true'); // 鞏固快取記憶
-      } else {
-        // 只有在雲端與快取都明確證實「不具備權限」時，才設為 false
-        setHasEditPermission(false);
+        (profile?.role === 'trip_editor' && profile.trip_id === selectedTripId);
+
+      if (hasEditPermission !== isAuthorized) {
+        setHasEditPermission(isAuthorized);
+      }
+      
+      if (isAuthorized) {
+        localStorage.setItem(`auth_${selectedTripId}`, 'true');
       }
 
-      // 3. 讀取記帳資料流 (防禦互不干擾架構)
+      // 4. 讀取記帳資料流
       if (navigator.onLine) {
         try {
           const { data: expenseData, error: expenseError } = await supabase
@@ -264,7 +264,6 @@ export default function App() {
     return () => window.removeEventListener('online', handleOnline);
   }, [selectedTripId]);
 
-  // 新增旅費（100% 雙重防線與自動離線熔斷降級機制）
   const handleAddExpense = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!hasEditPermission) { alert('操作被拒：您沒有編輯此行程的權限！'); return; }
@@ -273,7 +272,6 @@ export default function App() {
     const amountNum = Math.abs(Math.floor(Number(newAmount)))
     const newExpenseData = { trip_id: selectedTripId, title: newTitle, amount: amountNum, payer: newPayer };
     
-    // 💡 定義內置的離線備援處置器，確保不論哪條路徑失敗都能完美接住
     const saveToOfflineSandbox = () => {
       let localQueue: any[] = [];
       try {
@@ -290,23 +288,20 @@ export default function App() {
       localQueue.push(offlineItem);
       localStorage.setItem('offline_expenses', JSON.stringify(localQueue));
 
-      // 重新從沙盒載入，保證資料流 100% 正確
       loadLocalExpensesFallback(selectedTripId);
       setNewTitle('');
       setNewAmount('');
       alert('已自動安全儲存在本地暫存箱，連線後會自動同步。');
     };
 
-    // 1️⃣ 第一防線：瀏覽器直接回報離線狀態
     if (!navigator.onLine) {
       saveToOfflineSandbox();
       return;
     }
 
-    // 2️⃣ 第二防線：瀏覽器誤報連線（假線上），實質發送失敗時，由 catch 無縫降級接管
     try {
       const { data, error } = await supabase.from('expenses').insert([newExpenseData]).select()
-      if (error) throw error; // 只要有任何雲端錯誤，直接觸發 throw
+      if (error) throw error;
       
       if (data) {
         const currentExpenses = Array.isArray(expenses) ? expenses : [];
@@ -318,16 +313,13 @@ export default function App() {
       }
     } catch (error) {
       console.warn('雲端發送失敗，正在自動切換為本地離線沙盒儲存...', error);
-      // 💥 關鍵熔斷：雲端失敗時，不對使用者報錯，直接無縫改存本地！
       saveToOfflineSandbox();
     }
   }
 
-  // 刪除旅費（同樣加入實質網路熔斷防護）
   const handleDeleteExpense = async (id: string) => {
     if (!hasEditPermission) { alert('操作被拒：您沒有修改此行程資料的權限。'); return; }
 
-    // 本地暫存帳目的刪除，不需要網路，直接處理
     if (String(id).startsWith('local_')) {
       let localQueue: any[] = [];
       try {
@@ -342,7 +334,6 @@ export default function App() {
       return;
     }
 
-    // 雲端歷史帳目的刪除防線
     if (!navigator.onLine) {
       alert('目前處於離線狀態，無法刪除雲端歷史帳目。');
       return;
@@ -362,7 +353,6 @@ export default function App() {
     }
   }
 
-  // 安全計算邏輯 (加入嚴格防護陣列校驗)
   const safeExpenses = Array.isArray(expenses) ? expenses : [];
   
   const totalExpense = safeExpenses.reduce((sum, item) => {
