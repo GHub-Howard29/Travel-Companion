@@ -104,7 +104,7 @@ export default function App() {
       .catch(err => console.error(err))
   }, [])
 
-  // 📡 獨立出來的本地/離線資料加載核心，確保隨時可安全重刷而不崩潰
+  // 📡 獨立出來的本地/離線資料加載核心，確保隨時可 safe 重刷而不崩潰
   const loadLocalExpensesFallback = (tripId: string) => {
     const cachedData = localStorage.getItem(`cached_expenses_${tripId}`);
     let parsedData: ExpenseItem[] = [];
@@ -165,10 +165,12 @@ export default function App() {
         }
       } catch (err) { console.error(err); }
 
-      // 2. 還原與驗證白名單權限
+      // 2. 還原與驗證白名單權限（🛡️ 100% 離線記憶盾牌防護）
       let profile: AdminUser | null = null;
       const cachedProfile = localStorage.getItem(`admin_profile_${selectedTripId}`);
+      const lastKnownAuth = localStorage.getItem(`auth_${selectedTripId}`);
       
+      // 💡 第一層防線：如果是在線上且有登入帳號，優先向雲端同步最新白名單資料
       if (userEmail && navigator.onLine) {
         try {
           const { data, error } = await supabase.from('admin_users').select('email, role, trip_id').eq('email', userEmail).maybeSingle();
@@ -176,21 +178,28 @@ export default function App() {
             profile = data as AdminUser;
             localStorage.setItem(`admin_profile_${selectedTripId}`, JSON.stringify(data));
           }
-        } catch (err) { console.warn(err); }
+        } catch (err) { console.warn('向雲端驗證權限失敗，將改用快取驗證。', err); }
       }
 
+      // 💡 第二層防線：如果雲端沒回應或處於離線狀態，嘗試從本地快取中還原 profile
       if (!profile && cachedProfile) {
         try { profile = JSON.parse(cachedProfile); } catch (e) {}
       }
 
       setAdminProfile(profile);
 
-      // 演算權限狀態
-      const lastKnownAuth = localStorage.getItem(`auth_${selectedTripId}`);
-      if (profile?.role === 'super_admin' || (profile?.role === 'trip_editor' && profile.trip_id === selectedTripId) || lastKnownAuth === 'true') {
+      // 💡 第三層終極防線：演算與決定編輯權限
+      // 只要本地歷史快取記錄過他是授權人員 (lastKnownAuth === 'true')，
+      // 或者當前解出的 profile 符合管理資格，就不管此時 userEmail 是否因為離線被初始化為空值，一律維持「已授權」狀態！
+      if (
+        lastKnownAuth === 'true' || 
+        profile?.role === 'super_admin' || 
+        (profile?.role === 'trip_editor' && profile.trip_id === selectedTripId)
+      ) {
         setHasEditPermission(true);
-        localStorage.setItem(`auth_${selectedTripId}`, 'true');
+        localStorage.setItem(`auth_${selectedTripId}`, 'true'); // 鞏固快取記憶
       } else {
+        // 只有在雲端與快取都明確證實「不具備權限」時，才設為 false
         setHasEditPermission(false);
       }
 
