@@ -229,12 +229,14 @@ export default function App() {
   // 💡 修正後的網路恢復自動同步機制：初始化與切換行程時主動檢測
   useEffect(() => {
     const syncOfflineData = async () => {
+      // 確保連線狀態才執行
       if (!navigator.onLine) return;
 
       let localQueue: any[] = [];
       try {
         const localDataStr = localStorage.getItem('offline_expenses');
         localQueue = localDataStr ? JSON.parse(localDataStr) : [];
+        // 若沒有待同步資料，直接結束
         if (!Array.isArray(localQueue) || localQueue.length === 0) return;
       } catch (e) { return; }
 
@@ -245,8 +247,12 @@ export default function App() {
           localStorage.removeItem('offline_expenses');
           alert('系統提示：您在離線時記下的帳目，已成功同步上傳至雲端！');
           
+          // 同步成功後，重新抓取並更新畫面資料
           if (selectedTripId) {
-            const { data } = await supabase.from('expenses').select('*').eq('trip_id', selectedTripId).order('created_at', { ascending: true });
+            const { data } = await supabase.from('expenses')
+              .select('*')
+              .eq('trip_id', selectedTripId)
+              .order('created_at', { ascending: true });
             if (data) {
               setExpenses(data as ExpenseItem[]);
               localStorage.setItem(`cached_expenses_${selectedTripId}`, JSON.stringify(data));
@@ -256,11 +262,17 @@ export default function App() {
       } catch (err) { console.error('同步失敗', err); }
     };
 
+    // 1. 監聽網路恢復事件
     window.addEventListener('online', syncOfflineData);
-    // 主動執行一次檢查
-    syncOfflineData();
+    
+    // 2. 關鍵修正：元件載入（Mount）時主動呼叫一次檢查
+    // 使用 setTimeout 延遲 1 秒，確保網路狀態在重整後已正確被系統讀取
+    const timer = setTimeout(syncOfflineData, 1000);
 
-    return () => window.removeEventListener('online', syncOfflineData);
+    return () => {
+      window.removeEventListener('online', syncOfflineData);
+      clearTimeout(timer);
+    };
   }, [selectedTripId]);
 
   const handleAddExpense = async (e: React.FormEvent) => {
