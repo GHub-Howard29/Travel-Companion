@@ -1,12 +1,14 @@
 [
   {
     "id": "free-travel",
-    "name": "九州放鬆自由行",
-    "isPublic": true
+    "title": "沖繩自駕自由行",
+    "departureDate": "2026-02-20",
+    "detailPath": "/trips/free-travel.json"
   },
   {
     "id": "group-tour",
-    "name": "九州豪華跟團 5 日",
-    "isPublic": false
+    "title": "英鈦日本九州極上五日",
+    "departureDate": "2026-10-03",
+    "detailPath": "/trips/group-tour.json"
   }
 ]

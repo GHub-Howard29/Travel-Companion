@@ -2,39 +2,33 @@ import { useState, useEffect } from 'react'
 import { Menu, X, Calendar, CheckSquare, Home, Wallet, MapPin, ExternalLink, Check, Plus, Trash2, FolderOpen, LogIn, LogOut, ShieldAlert } from 'lucide-react'
 import { createClient } from '@supabase/supabase-js'
 
+// 💡 引入我們在步驟 2、3 建立的型別與工具函式
+// 加上 type 關鍵字，且移除沒用到的 ItineraryItem 與 ChecklistItem
+import type { TripMeta, TripDetail } from './types/trip'
+import { sortTripsByDateDesc, findDefaultTrip } from './utils/tripHelpers'
+
 // --- 初始化 Supabase 雲端客戶端 ---
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
-// --- TypeScript 型態定義 ---
-interface TripOption { id: string; name: string; isPublic: boolean; }
-interface SidebarItem { id: string; title: string; type: 'itinerary' | 'checklist' | 'expense' | 'text'; }
-interface EventItem { time: string; title: string; type: '交通' | '自駕' | '午餐/休息' | '景點' | '住宿'; typeColor: string; desc?: string; location?: string; }
-interface ChecklistItem { id: string; category: string; label: string; }
 interface ExpenseItem { id: string; trip_id: string; title: string; amount: number; payer: string; }
 
-interface TripData {
-  id: string;
-  title: string;
-  isPublic: boolean;
-  sidebarConfig: SidebarItem[];
-  content: {
-    days: number[];
-    custom_tab_1?: { subtitle: string; mainText: string; };
-    daysData?: { [dayNumber: string]: EventItem[] };
-    checklistData?: ChecklistItem[];
-  };
+// 白名單管理員型別定義
+interface AdminUser {
+  email: string;
+  role: 'super_admin' | 'trip_editor';
+  trip_id: string | null;
 }
 
 export default function App() {
   // 1. 使用者登入狀態 (Google Auth)
   const [userEmail, setUserEmail] = useState<string | null>(null)
   
-  // 2. 行程基礎設定狀態 (來自本地 JSON)
-  const [tripOptions, setTripOptions] = useState<TripOption[]>([])
+  // 2. 行程基礎設定狀態 (全面升級對應新 JSON 架構)
+  const [tripOptions, setTripOptions] = useState<TripMeta[]>([])
   const [selectedTripId, setSelectedTripId] = useState<string>('')
-  const [currentTrip, setCurrentTrip] = useState<TripData | null>(null)
+  const [currentTrip, setCurrentTrip] = useState<TripDetail | null>(null)
   const [isLoading, setIsLoading] = useState<boolean>(true)
 
   // 3. 畫面控制狀態
@@ -43,8 +37,11 @@ export default function App() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
 
   // 4. 雲端同步狀態 (讀寫自 Supabase)
-  const [checkedItems, setCheckedItems] = useState<string[]>([]) // 清單勾選暫時維持前端體驗
+  const [checkedItems, setCheckedItems] = useState<string[]>([]) 
   const [expenses, setExpenses] = useState<ExpenseItem[]>([])
+  
+  // 核心：全域管理員快照與權限狀態
+  const [adminProfile, setAdminProfile] = useState<AdminUser | null>(null)
   const [hasEditPermission, setHasEditPermission] = useState<boolean>(false)
 
   // 新增帳目表單狀態
@@ -65,12 +62,10 @@ export default function App() {
 
   // --- 🔒 監聽 Google 登入狀態變更 ---
   useEffect(() => {
-    // 取得初始登入狀態
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUserEmail(session?.user?.email || null)
     })
 
-    // 監聽狀態即時改變
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUserEmail(session?.user?.email || null)
     })
@@ -80,25 +75,28 @@ export default function App() {
 
   // --- 🔒 登入 / 登出處理函式 ---
   const handleGoogleLogin = async () => {
-    // 自動抓取當前網頁的網域（可能是 localhost:5173 或 yourname.github.io）並加上 base 路徑
     const currentRedirectUrl = window.location.origin + getBasePath();
-    console.log("登入後重新導向目標:", currentRedirectUrl); // 供除錯檢視
+    console.log("登入後重新導向目標:", currentRedirectUrl);
     
     await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: currentRedirectUrl
+        redirectTo: currentRedirectUrl,
+        queryParams: {
+          prompt: 'select_account'
+        }
       }
-    })
-  }
-
+    });
+  };
+  
   const handleLogout = async () => {
     await supabase.auth.signOut()
     setUserEmail(null)
+    setAdminProfile(null)
     setHasEditPermission(false)
   }
 
-  // --- 串接行程資料庫清單 (修正路徑 Bug) ---
+  // --- 串接行程資料庫清單（融入自動日期排序與預設首頁邏輯） ---
   useEffect(() => {
     const basePath = getBasePath();
     const url = `${basePath}trips/list.json`.replace(/\/+/g, '/');
@@ -108,10 +106,17 @@ export default function App() {
         if (!res.ok) throw new Error(`找不到清單檔案，狀態碼: ${res.status}`);
         return res.json();
       })
-      .then((data: TripOption[]) => {
-        setTripOptions(data)
-        if (data.length > 0) {
-          setSelectedTripId(data[0].id)
+      .then((data: TripMeta[]) => {
+        const sortedTrips = sortTripsByDateDesc(data);
+        setTripOptions(sortedTrips);
+        
+        if (sortedTrips.length > 0) {
+          const defaultTrip = findDefaultTrip(sortedTrips);
+          if (defaultTrip) {
+            setSelectedTripId(defaultTrip.id);
+          } else {
+            setSelectedTripId(sortedTrips[0].id);
+          }
         }
       })
       .catch(err => console.error('無法載入行程清單:', err))
@@ -125,76 +130,125 @@ export default function App() {
     const basePath = getBasePath();
     const url = `${basePath}trips/${selectedTripId}.json`.replace(/\/+/g, '/');
 
-    // 同步執行：抓取行程結構 與 校驗雲端權限
+    console.log("正在嘗試讀取行程檔案:", url);
+
     Promise.all([
-      fetch(url).then(res => res.json()),
-      // 💡 雲端防禦：維持原設計，同時比對 email 與 trip_id，精準切割每個行程的獨立白名單
+      // 請求 A: 行程 JSON 設定
+      fetch(url).then(res => {
+        if (!res.ok) throw new Error(`找不到該行程的詳細 JSON 檔案 (${selectedTripId}.json)`);
+        return res.json();
+      }),
+      // 請求 B: 精準撈取白名單權限（改進點：不加上單一行程限制，好抓取出超級管理員的全貌設定）
       userEmail 
-        ? supabase.from('admin_users').select('*').eq('email', userEmail).eq('trip_id', selectedTripId)
-        : Promise.resolve({ data: [] })
+        ? supabase.from('admin_users').select('email, role, trip_id').eq('email', userEmail).maybeSingle()
+        : Promise.resolve({ data: null, error: null })
     ])
     .then(([tripData, authResult]) => {
-      setCurrentTrip(tripData)
+      setCurrentTrip(tripData as TripDetail)
       setActiveDay(1)
-      if (tripData.sidebarConfig.length > 0) {
+      if (tripData.sidebarConfig && tripData.sidebarConfig.length > 0) {
         setCurrentScreen(tripData.sidebarConfig[0].id)
       }
 
-      // 如果資料庫查得到對應行程的資料，代表在該行程白名單內，解鎖編輯權限
-      if (authResult.data && authResult.data.length > 0) {
-        setHasEditPermission(true)
-      } else {
-        setHasEditPermission(false)
+      if (authResult.error) {
+        console.error("Supabase 權限查詢失敗:", authResult.error);
       }
 
-      // 💡 雲端同步：從 Supabase 的 expenses 資料表撈取屬於該行程的帳目
+      // 💡 雙層架構前端實時權限演算
+      const profile = authResult.data as AdminUser | null;
+      setAdminProfile(profile);
+
+      if (profile) {
+        if (profile.role === 'super_admin') {
+          setHasEditPermission(true); // 第一層：超級管理員直接開綠燈
+        } else if (profile.role === 'trip_editor' && profile.trip_id === selectedTripId) {
+          setHasEditPermission(true); // 第二層：特定行程編輯者，必須和當前選定 trip_id 完全吻合
+        } else {
+          setHasEditPermission(false);
+        }
+      } else {
+        setHasEditPermission(false); // 不在白名單內或未登入
+      }
+
+      // 嘗試抓取費用，若失敗不應擋掉整個行程載入
       return supabase.from('expenses').select('*').eq('trip_id', selectedTripId).order('created_at', { ascending: true })
     })
     .then((res) => {
       if (res && res.data) {
         setExpenses(res.data as ExpenseItem[])
+      } else if (res && res.error) {
+        console.error("Supabase 費用讀取失敗，可能資料表未設定好:", res.error);
       }
       setIsLoading(false)
     })
     .catch(err => {
+      alert(`載入失敗原因: ${err.message || err}`);
       console.error('資料流加載失敗:', err)
       setIsLoading(false)
     })
   }, [selectedTripId, userEmail])
 
-  // --- 💡 雲端寫入：新增一筆旅費至 Supabase ---
+  // --- 💡 雲端寫入：新增一筆旅費 ---
   const handleAddExpense = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!hasEditPermission || !newTitle || !newAmount || isNaN(Number(newAmount))) return
+    
+    // 防禦第一關：前端防禦性安全檢查
+    if (!hasEditPermission) {
+      alert('操作被拒：您沒有編輯此行程的權限！')
+      return
+    }
+    if (!newTitle || !newAmount || isNaN(Number(newAmount))) return
 
     const amountNum = Math.abs(Math.floor(Number(newAmount)))
     
-    const { data, error } = await supabase
-      .from('expenses')
-      .insert([{ trip_id: selectedTripId, title: newTitle, amount: amountNum, payer: newPayer }])
-      .select()
+    try {
+      const { data, error } = await supabase
+        .from('expenses')
+        .insert([{ trip_id: selectedTripId, title: newTitle, amount: amountNum, payer: newPayer }])
+        .select()
 
-    if (error) {
-      alert('寫入雲端失敗，請確認資料庫權限設定！')
-      console.error(error)
-    } else if (data) {
-      setExpenses([...expenses, data[0] as ExpenseItem])
-      setNewTitle('')
-      setNewAmount('')
+      // 防禦第二關：處理雲端 RLS 策略拒絕的商務錯誤
+      if (error) {
+        if (error.code === '42501') {
+          throw new Error('雲端安全策略拒絕寫入。請確認您的管理員身分與對應行程權限。')
+        }
+        throw error
+      }
+
+      if (data) {
+        setExpenses([...expenses, data[0] as ExpenseItem])
+        setNewTitle('')
+        setNewAmount('')
+      }
+    } catch (error: any) {
+      console.error('新增記帳失敗詳細資料:', error)
+      alert(`系統提示: ${error.message || '連線雲端資料庫時發生未知錯誤，請稍後再試。'}`)
     }
   }
 
-  // --- 💡 雲端刪除：自 Supabase 移除旅費 ---
+  // --- 💡 雲端刪除：移除旅費 ---
   const handleDeleteExpense = async (id: string) => {
-    if (!hasEditPermission) return
+    // 防禦第一關：前端基礎校驗
+    if (!hasEditPermission) {
+      alert('操作被拒：您沒有修改此行程資料的權限。')
+      return
+    }
 
-    const { error } = await supabase.from('expenses').delete().eq('id', id)
+    try {
+      const { error } = await supabase.from('expenses').delete().eq('id', id)
 
-    if (error) {
-      alert('刪除失敗！')
-      console.error(error)
-    } else {
+      // 防禦第二關：處理雲端刪除 RLS 安全規則拒絕
+      if (error) {
+        if (error.code === '42501') {
+          throw new Error('安全防禦提示：雲端政策阻擋此項刪除，您不具備此行程的修改資歷。')
+        }
+        throw error
+      }
+
       setExpenses(expenses.filter(item => item.id !== id))
+    } catch (error: any) {
+      console.error('刪除記帳失敗詳細資料:', error)
+      alert(`系統提示: ${error.message || '無法完成雲端刪除，請重試。'}`)
     }
   }
 
@@ -207,6 +261,7 @@ export default function App() {
   const handleNavigate = (location: string) => { if (!location) return; window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(location)}`, '_blank'); };
   const toggleChecklistItem = (id: string) => { checkedItems.includes(id) ? setCheckedItems(checkedItems.filter(item => item !== id)) : setCheckedItems([...checkedItems, id]) }
 
+  // 💡 安全串接新 JSON 欄位對應
   const currentDayEvents = currentTrip?.content?.daysData?.[String(activeDay)] || [];
   const checklistData = currentTrip?.content?.checklistData || [];
   const categories = Array.from(new Set(checklistData.map(item => item.category)))
@@ -256,7 +311,7 @@ export default function App() {
             >
               {tripOptions.map(option => (
                 <option key={option.id} value={option.id}>
-                  {option.name} {!option.isPublic ? '🔒(私密)' : ''}
+                  {option.title} ({option.departureDate})
                 </option>
               ))}
             </select>
@@ -283,20 +338,20 @@ export default function App() {
           })}
         </nav>
 
-        {/* 🔒 側邊欄最底部的 Google 帳號管理專區 */}
         <div className="p-4 border-t border-slate-100 bg-slate-50/50 text-xs">
           {userEmail ? (
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <span className="text-slate-400">目 前登入：</span>
+                <span className="text-slate-400">目前登入：</span>
                 <button onClick={handleLogout} className="text-rose-600 font-bold flex items-center gap-0.5 hover:underline"><LogOut size={12} /> 登出</button>
               </div>
               <p className="font-semibold text-slate-700 truncate">{userEmail}</p>
               <div className="mt-1">
-                {/* 💡 貼心小防呆：只有當確實抓到行程資料時，才進行白名單狀態比對，否則提示先選擇行程 */}
                 {selectedTripId && currentTrip ? (
                   hasEditPermission ? (
-                    <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 font-bold rounded-full text-[10px]">🟢 本行程可編輯者</span>
+                    <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 font-bold rounded-full text-[10px]">
+                      🟢 本行程可編輯者 {adminProfile?.role === 'super_admin' ? '(超級管理員)' : ''}
+                    </span>
                   ) : (
                     <span className="px-2 py-0.5 bg-amber-100 text-amber-800 font-bold rounded-full text-[10px]">👁️ 唯讀模式 (非授權人員)</span>
                   )
@@ -324,8 +379,14 @@ export default function App() {
               <h1 className="text-xl font-bold tracking-wide">
                 {currentTrip ? currentTrip.title : '載入中...'}
               </h1>
-              <p className="text-xs text-slate-100 mt-0.5 flex items-center gap-1">
-                {hasEditPermission ? '🌍 雲端多人同步中' : '🔒 安全唯讀模式'}
+              <p className="text-xs text-slate-100 mt-0.5 flex items-center gap-1 flex-wrap">
+                <span>{hasEditPermission ? '🌍 雲端多人同步中' : '🔒 安全唯讀模式'}</span>
+                {currentTrip?.departureDate && (
+                  <>
+                    <span className="opacity-60">•</span>
+                    <span>📅 出發：{currentTrip.departureDate}</span>
+                  </>
+                )}
               </p>
             </div>
           </div>
@@ -482,7 +543,6 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* 🔒 權限防禦：有權限才顯示記帳表單，沒權限則顯示警告條 */}
                 {hasEditPermission ? (
                   <form onSubmit={handleAddExpense} className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm space-y-3">
                     <h3 className="text-sm font-bold text-slate-800">新增一筆旅費</h3>
@@ -521,7 +581,6 @@ export default function App() {
                           </div>
                           <div className="flex items-center gap-3">
                             <span className="font-mono font-bold text-slate-800 text-sm">￥ {item.amount.toLocaleString()}</span>
-                            {/* 🔒 只有管理員白名單看得到且能按刪除 */}
                             {hasEditPermission && (
                               <button type="button" onClick={() => handleDeleteExpense(item.id)} className="p-1 text-slate-300 hover:text-rose-600"><Trash2 size={16} /></button>
                             )}
