@@ -2,8 +2,7 @@ import { useState, useEffect } from 'react'
 import { Menu, X, Calendar, CheckSquare, Home, Wallet, MapPin, ExternalLink, Check, Plus, Trash2, FolderOpen, LogIn, LogOut, ShieldAlert } from 'lucide-react'
 import { createClient } from '@supabase/supabase-js'
 
-// 💡 引入我們在步驟 2、3 建立的型別與工具函式
-// 加上 type 關鍵字，且移除沒用到的 ItineraryItem 與 ChecklistItem
+// 💡 引入型別與工具函式
 import type { TripMeta, TripDetail } from './types/trip'
 import { sortTripsByDateDesc, findDefaultTrip } from './utils/tripHelpers'
 
@@ -14,7 +13,6 @@ const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
 interface ExpenseItem { id: string; trip_id: string; title: string; amount: number; payer: string; }
 
-// 白名單管理員型別定義
 interface AdminUser {
   email: string;
   role: 'super_admin' | 'trip_editor';
@@ -22,10 +20,10 @@ interface AdminUser {
 }
 
 export default function App() {
-  // 1. 使用者登入狀態 (Google Auth)
+  // 1. 使用者登入狀態
   const [userEmail, setUserEmail] = useState<string | null>(null)
   
-  // 2. 行程基礎設定狀態 (全面升級對應新 JSON 架構)
+  // 2. 行程基礎設定狀態
   const [tripOptions, setTripOptions] = useState<TripMeta[]>([])
   const [selectedTripId, setSelectedTripId] = useState<string>('')
   const [currentTrip, setCurrentTrip] = useState<TripDetail | null>(null)
@@ -36,11 +34,11 @@ export default function App() {
   const [activeDay, setActiveDay] = useState(1)
   const [isMenuOpen, setIsMenuOpen] = useState(false)
 
-  // 4. 雲端同步狀態 (讀寫自 Supabase)
+  // 4. 雲端與離線記帳同步狀態
   const [checkedItems, setCheckedItems] = useState<string[]>([]) 
   const [expenses, setExpenses] = useState<ExpenseItem[]>([])
   
-  // 核心：全域管理員快照與權限狀態
+  // 5. 權限狀態
   const [adminProfile, setAdminProfile] = useState<AdminUser | null>(null)
   const [hasEditPermission, setHasEditPermission] = useState<boolean>(false)
 
@@ -51,296 +49,332 @@ export default function App() {
 
   const members = ['我', '小明', '小華']
 
-  // 取得基礎 Base 路徑位置 (GitHub Pages 部署相容)
   const getBasePath = () => {
     const path = window.location.pathname;
-    if (path.includes('/Travel-Companion')) {
-      return '/Travel-Companion/';
-    }
+    if (path.includes('/Travel-Companion')) return '/Travel-Companion/';
     return '/';
   };
 
-  // --- 🔒 監聽 Google 登入狀態變更 ---
+  // 監聽登入狀態
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUserEmail(session?.user?.email || null)
     })
-
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUserEmail(session?.user?.email || null)
     })
-
     return () => subscription.unsubscribe()
   }, [])
 
-  // --- 🔒 登入 / 登出處理函式 ---
+  // 登入 / 登出
   const handleGoogleLogin = async () => {
     const currentRedirectUrl = window.location.origin + getBasePath();
-    console.log("登入後重新導向目標:", currentRedirectUrl);
-    
     await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: {
-        redirectTo: currentRedirectUrl,
-        queryParams: {
-          prompt: 'select_account'
-        }
-      }
+      options: { redirectTo: currentRedirectUrl, queryParams: { prompt: 'select_account' } }
     });
   };
   
   const handleLogout = async () => {
     await supabase.auth.signOut()
+    Object.keys(localStorage).forEach(key => {
+      if (key.startsWith('auth_') || key.startsWith('admin_profile_')) {
+        localStorage.removeItem(key);
+      }
+    });
     setUserEmail(null)
     setAdminProfile(null)
     setHasEditPermission(false)
   }
 
-  // --- 串接行程資料庫清單（融入自動日期排序與預設首頁邏輯） ---
+  // 載入行程清單
   useEffect(() => {
     const basePath = getBasePath();
     const url = `${basePath}trips/list.json`.replace(/\/+/g, '/');
-    
     fetch(url)
-      .then(res => {
-        if (!res.ok) throw new Error(`找不到清單檔案，狀態碼: ${res.status}`);
-        return res.json();
-      })
+      .then(res => { if (!res.ok) throw new Error(); return res.json(); })
       .then((data: TripMeta[]) => {
         const sortedTrips = sortTripsByDateDesc(data);
         setTripOptions(sortedTrips);
-        
         if (sortedTrips.length > 0) {
           const defaultTrip = findDefaultTrip(sortedTrips);
-          if (defaultTrip) {
-            setSelectedTripId(defaultTrip.id);
-          } else {
-            setSelectedTripId(sortedTrips[0].id);
-          }
+          setSelectedTripId(defaultTrip ? defaultTrip.id : sortedTrips[0].id);
         }
       })
-      .catch(err => console.error('無法載入行程清單:', err))
+      .catch(err => console.error(err))
   }, [])
 
-  // --- 當切換行程、或登入狀態改變時：抓取詳細行程與「雲端權限校驗」 ---
+  // 📡 獨立出來的本地/離線資料加載核心，確保隨時可安全重刷而不崩潰
+  const loadLocalExpensesFallback = (tripId: string) => {
+    const cachedData = localStorage.getItem(`cached_expenses_${tripId}`);
+    let parsedData: ExpenseItem[] = [];
+    if (cachedData) {
+      try {
+        const rawParsed = JSON.parse(cachedData);
+        if (Array.isArray(rawParsed)) {
+          parsedData = rawParsed.map((item: any) => ({
+            id: item?.id || `cached_${Math.random()}`,
+            trip_id: item?.trip_id || tripId,
+            title: item?.title || '未命名消費',
+            amount: Number(item?.amount) || 0,
+            payer: item?.payer || '我'
+          }));
+        }
+      } catch (e) { parsedData = []; }
+    }
+
+    let localQueue: any[] = [];
+    try {
+      const localDataStr = localStorage.getItem('offline_expenses');
+      localQueue = localDataStr ? JSON.parse(localDataStr) : [];
+      if (!Array.isArray(localQueue)) localQueue = [];
+    } catch (e) { localQueue = []; }
+
+    const currentTripOffline = localQueue
+      .filter((item: any) => item && item.trip_id === tripId)
+      .map((item: any) => ({
+        id: item?.id || `local_${Math.random()}`,
+        trip_id: item?.trip_id || tripId,
+        title: item?.title || '未命名消費',
+        amount: Number(item?.amount) || 0,
+        payer: item?.payer || '我'
+      }));
+
+    setExpenses([...parsedData, ...currentTripOffline]);
+  };
+
+  // 主要的行程與權限載入副作用
   useEffect(() => {
-    if (!selectedTripId) return
-    setIsLoading(true)
+    if (!selectedTripId) return;
+    setIsLoading(true);
     
-    const basePath = getBasePath();
-    const url = `${basePath}trips/${selectedTripId}.json`.replace(/\/+/g, '/');
+    async function loadTripAndAuthData() {
+      const basePath = getBasePath();
+      const url = `${basePath}trips/${selectedTripId}.json`.replace(/\/+/g, '/');
 
-    console.log("正在嘗試讀取行程檔案:", url);
+      // 1. 讀取靜態 JSON 行程
+      try {
+        const res = await fetch(url);
+        if (res.ok) {
+          const tripData = await res.json();
+          setCurrentTrip(tripData);
+          setActiveDay(1);
+          if (tripData.sidebarConfig?.length > 0) {
+            setCurrentScreen(tripData.sidebarConfig[0].id);
+          }
+        }
+      } catch (err) { console.error(err); }
 
-    Promise.all([
-      // 請求 A: 行程 JSON 設定
-      fetch(url).then(res => {
-        if (!res.ok) throw new Error(`找不到該行程的詳細 JSON 檔案 (${selectedTripId}.json)`);
-        return res.json();
-      }),
-      // 請求 B: 精準撈取白名單權限
-      userEmail 
-        ? supabase.from('admin_users').select('email, role, trip_id').eq('email', userEmail).maybeSingle()
-        : Promise.resolve({ data: null, error: null })
-    ])
-    .then(([tripData, authResult]) => {
-      setCurrentTrip(tripData as TripDetail)
-      setActiveDay(1)
-      if (tripData.sidebarConfig && tripData.sidebarConfig.length > 0) {
-        setCurrentScreen(tripData.sidebarConfig[0].id)
+      // 2. 還原與驗證白名單權限
+      let profile: AdminUser | null = null;
+      const cachedProfile = localStorage.getItem(`admin_profile_${selectedTripId}`);
+      
+      if (userEmail && navigator.onLine) {
+        try {
+          const { data, error } = await supabase.from('admin_users').select('email, role, trip_id').eq('email', userEmail).maybeSingle();
+          if (!error && data) {
+            profile = data as AdminUser;
+            localStorage.setItem(`admin_profile_${selectedTripId}`, JSON.stringify(data));
+          }
+        } catch (err) { console.warn(err); }
       }
 
-      if (authResult.error) {
-        console.error("Supabase 權限查詢失敗:", authResult.error);
+      if (!profile && cachedProfile) {
+        try { profile = JSON.parse(cachedProfile); } catch (e) {}
       }
 
-      // 💡 雙層架構前端實時權限演算
-      const profile = authResult.data as AdminUser | null;
       setAdminProfile(profile);
 
-      if (profile) {
-        if (profile.role === 'super_admin') {
-          setHasEditPermission(true); // 第一層：超級管理員直接開綠燈
-        } else if (profile.role === 'trip_editor' && profile.trip_id === selectedTripId) {
-          setHasEditPermission(true); // 第二層：特定行程編輯者，必須和當前選定 trip_id 完全吻合
-        } else {
-          setHasEditPermission(false);
+      // 演算權限狀態
+      const lastKnownAuth = localStorage.getItem(`auth_${selectedTripId}`);
+      if (profile?.role === 'super_admin' || (profile?.role === 'trip_editor' && profile.trip_id === selectedTripId) || lastKnownAuth === 'true') {
+        setHasEditPermission(true);
+        localStorage.setItem(`auth_${selectedTripId}`, 'true');
+      } else {
+        setHasEditPermission(false);
+      }
+
+      // 3. 讀取記帳資料流 (防禦互不干擾架構)
+      if (navigator.onLine) {
+        try {
+          const { data: expenseData, error: expenseError } = await supabase
+            .from('expenses')
+            .select('*')
+            .eq('trip_id', selectedTripId)
+            .order('created_at', { ascending: true });
+
+          if (!expenseError && expenseData) {
+            setExpenses(expenseData as ExpenseItem[]);
+            localStorage.setItem(`cached_expenses_${selectedTripId}`, JSON.stringify(expenseData));
+          } else {
+            loadLocalExpensesFallback(selectedTripId);
+          }
+        } catch (err) {
+          loadLocalExpensesFallback(selectedTripId);
         }
       } else {
-        setHasEditPermission(false); // 不在白名單內或未登入
+        loadLocalExpensesFallback(selectedTripId);
       }
 
-      // 嘗試抓取費用，若失敗不應擋掉整個行程載入
-      return supabase.from('expenses').select('*').eq('trip_id', selectedTripId).order('created_at', { ascending: true })
-    })
-    .then((res) => {
-      if (res && res.data) {
-        setExpenses(res.data as ExpenseItem[])
-      } else if (res && res.error) {
-        console.error("Supabase 費用讀取失敗，可能資料表未設定好:", res.error);
-      }
-      setIsLoading(false)
-    })
-    .catch(err => {
-      alert(`載入失敗原因: ${err.message || err}`);
-      console.error('資料流加載失敗:', err)
-      setIsLoading(false)
-    })
+      setIsLoading(false);
+    }
+
+    loadTripAndAuthData();
   }, [selectedTripId, userEmail])
 
-  // --- 🔄 監聽網路恢復：自動倒回同步本地暫存帳目至 Supabase ---
+  // 網路恢復自動同步
   useEffect(() => {
     const handleOnline = async () => {
-      const localQueue = JSON.parse(localStorage.getItem('offline_expenses') || '[]');
+      let localQueue: any[] = [];
+      try {
+        const localDataStr = localStorage.getItem('offline_expenses');
+        localQueue = localDataStr ? JSON.parse(localDataStr) : [];
+        if (!Array.isArray(localQueue)) localQueue = [];
+      } catch (e) { localQueue = []; }
+
       if (localQueue.length === 0) return;
 
-      console.log('偵測到網路恢復，開始自動同步離線帳目...');
-
-      // 剔除本地端生成用來防止 React Key 重複的暫時性 id，讓雲端資料庫自增 id
       const syncData = localQueue.map(({ id, ...rest }: any) => rest);
-
       try {
-        const { error } = await supabase
-          .from('expenses')
-          .insert(syncData);
-
+        const { error } = await supabase.from('expenses').insert(syncData);
         if (!error) {
           localStorage.removeItem('offline_expenses');
-          alert('系統提示：您在離線時記下的帳目，已成功同步上傳至雲端資料庫！');
-          
-          // 同步成功後，重新向雲端同步拉取最新的帳目清單刷新畫面
+          alert('系統提示：您在離線時記下的帳目，已成功同步上傳至雲端！');
           if (selectedTripId) {
-            const { data } = await supabase
-              .from('expenses')
-              .select('*')
-              .eq('trip_id', selectedTripId)
-              .order('created_at', { ascending: true });
-            if (data) setExpenses(data as ExpenseItem[]);
+            const { data } = await supabase.from('expenses').select('*').eq('trip_id', selectedTripId).order('created_at', { ascending: true });
+            if (data) {
+              setExpenses(data as ExpenseItem[]);
+              localStorage.setItem(`cached_expenses_${selectedTripId}`, JSON.stringify(data));
+            }
           }
-        } else {
-          console.error('上傳離線帳目時發生 RLS 或資料庫錯誤:', error);
         }
-      } catch (err) {
-        console.error('自動同步網路請求失敗：', err);
-      }
+      } catch (err) { console.error(err); }
     };
 
     window.addEventListener('online', handleOnline);
     return () => window.removeEventListener('online', handleOnline);
   }, [selectedTripId]);
 
-  // --- 💡 雲端寫入：新增一筆旅費（升級支援斷網防禦與本地暫存） ---
+  // 新增旅費（100% 雙重防線與自動離線熔斷降級機制）
   const handleAddExpense = async (e: React.FormEvent) => {
     e.preventDefault()
-    
-    // 防禦第一關：前端防禦性安全檢查
-    if (!hasEditPermission) {
-      alert('操作被拒：您沒有編輯此行程的權限！')
-      return
-    }
+    if (!hasEditPermission) { alert('操作被拒：您沒有編輯此行程的權限！'); return; }
     if (!newTitle || !newAmount || isNaN(Number(newAmount))) return
 
     const amountNum = Math.abs(Math.floor(Number(newAmount)))
     const newExpenseData = { trip_id: selectedTripId, title: newTitle, amount: amountNum, payer: newPayer };
     
-    try {
-      // 📡 核心離線分支攔截
-      if (!navigator.onLine) {
-        const localQueue = JSON.parse(localStorage.getItem('offline_expenses') || '[]');
-        const localId = `local_${Date.now()}`; // 產生本地端渲染防衝突 ID
-        
-        const offlineItem = {
-          id: localId,
-          created_at: new Date().toISOString(),
-          ...newExpenseData
-        };
-        
-        localQueue.push(offlineItem);
-        localStorage.setItem('offline_expenses', JSON.stringify(localQueue));
+    // 💡 定義內置的離線備援處置器，確保不論哪條路徑失敗都能完美接住
+    const saveToOfflineSandbox = () => {
+      let localQueue: any[] = [];
+      try {
+        const localDataStr = localStorage.getItem('offline_expenses');
+        localQueue = localDataStr ? JSON.parse(localDataStr) : [];
+        if (!Array.isArray(localQueue)) localQueue = [];
+      } catch (e) { localQueue = []; }
 
-        // 樂觀更新 UI 狀態，讓使用者斷網依然有完成操作的流暢感
-        setExpenses([...expenses, offlineItem as ExpenseItem]);
-        
+      const offlineItem = { 
+        id: `local_${Date.now()}_${Math.random()}`, 
+        created_at: new Date().toISOString(), 
+        ...newExpenseData 
+      };
+      localQueue.push(offlineItem);
+      localStorage.setItem('offline_expenses', JSON.stringify(localQueue));
+
+      // 重新從沙盒載入，保證資料流 100% 正確
+      loadLocalExpensesFallback(selectedTripId);
+      setNewTitle('');
+      setNewAmount('');
+      alert('已自動安全儲存在本地暫存箱，連線後會自動同步。');
+    };
+
+    // 1️⃣ 第一防線：瀏覽器直接回報離線狀態
+    if (!navigator.onLine) {
+      saveToOfflineSandbox();
+      return;
+    }
+
+    // 2️⃣ 第二防線：瀏覽器誤報連線（假線上），實質發送失敗時，由 catch 無縫降級接管
+    try {
+      const { data, error } = await supabase.from('expenses').insert([newExpenseData]).select()
+      if (error) throw error; // 只要有任何雲端錯誤，直接觸發 throw
+      
+      if (data) {
+        const currentExpenses = Array.isArray(expenses) ? expenses : [];
+        const updated = [...currentExpenses, data[0] as ExpenseItem];
+        setExpenses(updated);
+        localStorage.setItem(`cached_expenses_${selectedTripId}`, JSON.stringify(updated));
         setNewTitle('');
         setNewAmount('');
-        alert('目前處於離線狀態！此筆帳目已妥善儲存在手機本地暫存箱，連上網路時小幫手會自動上傳同步。');
-        return;
       }
-
-      // 正常連網狀態：走雲端資料庫寫入
-      const { data, error } = await supabase
-        .from('expenses')
-        .insert([newExpenseData])
-        .select()
-
-      // 防禦第二關：處理雲端 RLS 策略拒絕的商務錯誤
-      if (error) {
-        if (error.code === '42501') {
-          throw new Error('雲端安全策略拒絕寫入。請確認您的管理員身分與對應行程權限。')
-        }
-        throw error
-      }
-
-      if (data) {
-        setExpenses([...expenses, data[0] as ExpenseItem])
-        setNewTitle('')
-        setNewAmount('')
-      }
-    } catch (error: any) {
-      console.error('新增記帳失敗詳細資料:', error)
-      alert(`系統提示: ${error.message || '連線雲端資料庫時發生未知錯誤，請稍後再試。'}`)
+    } catch (error) {
+      console.warn('雲端發送失敗，正在自動切換為本地離線沙盒儲存...', error);
+      // 💥 關鍵熔斷：雲端失敗時，不對使用者報錯，直接無縫改存本地！
+      saveToOfflineSandbox();
     }
   }
 
-  // --- 💡 雲端刪除：移除旅費 ---
+  // 刪除旅費（同樣加入實質網路熔斷防護）
   const handleDeleteExpense = async (id: string) => {
-    // 防禦第一關：前端基礎校驗
-    if (!hasEditPermission) {
-      alert('操作被拒：您沒有修改此行程資料的權限。')
-      return
+    if (!hasEditPermission) { alert('操作被拒：您沒有修改此行程資料的權限。'); return; }
+
+    // 本地暫存帳目的刪除，不需要網路，直接處理
+    if (String(id).startsWith('local_')) {
+      let localQueue: any[] = [];
+      try {
+        const localDataStr = localStorage.getItem('offline_expenses');
+        localQueue = localDataStr ? JSON.parse(localDataStr) : [];
+        if (!Array.isArray(localQueue)) localQueue = [];
+      } catch (e) { localQueue = []; }
+
+      const filteredQueue = localQueue.filter((item: any) => item && item.id !== id);
+      localStorage.setItem('offline_expenses', JSON.stringify(filteredQueue));
+      loadLocalExpensesFallback(selectedTripId);
+      return;
     }
 
-    // 離線刪除防禦
-    if (!navigator.onLine && String(id).startsWith('local_')) {
-      // 如果刪除的是尚未同步的本地暫存項目
-      const localQueue = JSON.parse(localStorage.getItem('offline_expenses') || '[]');
-      const filteredQueue = localQueue.filter((item: any) => item.id !== id);
-      localStorage.setItem('offline_expenses', JSON.stringify(filteredQueue));
-      setExpenses(expenses.filter(item => item.id !== id));
-      return;
-    } else if (!navigator.onLine) {
-      alert('刪除失敗：您無法在離線狀態下刪除已上傳至雲端的歷史帳目。');
+    // 雲端歷史帳目的刪除防線
+    if (!navigator.onLine) {
+      alert('目前處於離線狀態，無法刪除雲端歷史帳目。');
       return;
     }
 
     try {
       const { error } = await supabase.from('expenses').delete().eq('id', id)
-
-      // 防禦第二關：處理雲端刪除 RLS 安全規則拒絕
-      if (error) {
-        if (error.code === '42501') {
-          throw new Error('安全防禦提示：雲端政策阻擋此項刪除，您不具備此行程的修改資歷。')
-        }
-        throw error
-      }
-
-      setExpenses(expenses.filter(item => item.id !== id))
-    } catch (error: any) {
-      console.error('刪除記帳失敗詳細資料:', error)
-      alert(`系統提示: ${error.message || '無法完成雲端刪除，請重試。'}`)
+      if (error) throw error;
+      
+      const currentExpenses = Array.isArray(expenses) ? expenses : [];
+      const updated = currentExpenses.filter(item => item && item.id !== id);
+      setExpenses(updated);
+      localStorage.setItem(`cached_expenses_${selectedTripId}`, JSON.stringify(updated));
+    } catch (error) {
+      console.warn('刪除雲端資料失敗，可能為實質離線。', error);
+      alert('無法連接雲端資料庫，目前無法刪除雲端歷史帳目。');
     }
   }
 
-  // --- 拆帳核心計算邏輯 ---
-  const totalExpense = expenses.reduce((sum, item) => sum + item.amount, 0)
-  const averageExpense = Math.round(totalExpense / members.length)
-  const paitAmounts: { [key: string]: number } = { '我': 0, '小明': 0, '小華': 0 }
-  expenses.forEach(item => { if (paitAmounts[item.payer] !== undefined) paitAmounts[item.payer] += item.amount })
+  // 安全計算邏輯 (加入嚴格防護陣列校驗)
+  const safeExpenses = Array.isArray(expenses) ? expenses : [];
+  
+  const totalExpense = safeExpenses.reduce((sum, item) => {
+    if (!item || !item.amount) return sum;
+    const val = Number(item.amount);
+    return sum + (isNaN(val) ? 0 : val);
+  }, 0);
+  
+  const averageExpense = Math.round(totalExpense / members.length);
+  const paitAmounts: { [key: string]: number } = { '我': 0, '小明': 0, '小華': 0 };
+  
+  safeExpenses.forEach(item => { 
+    if (item && item.payer && paitAmounts[item.payer] !== undefined) {
+      const val = Number(item.amount);
+      paitAmounts[item.payer] += (isNaN(val) ? 0 : val);
+    } 
+  });
 
   const handleNavigate = (location: string) => { if (!location) return; window.open(`http://googleusercontent.com/maps.google.com/?q=${encodeURIComponent(location)}`, '_blank'); };
   const toggleChecklistItem = (id: string) => { checkedItems.includes(id) ? setCheckedItems(checkedItems.filter(item => item !== id)) : setCheckedItems([...checkedItems, id]) }
 
-  // 💡 安全串接新 JSON 欄位對應
   const currentDayEvents = currentTrip?.content?.daysData?.[String(activeDay)] || [];
   const checklistData = currentTrip?.content?.checklistData || [];
   const categories = Array.from(new Set(checklistData.map(item => item.category)))
@@ -441,10 +475,19 @@ export default function App() {
             </div>
           ) : (
             <div className="text-center py-2">
-              <p className="text-slate-400 mb-2">登入後解鎖雲端同步記帳</p>
-              <button onClick={handleGoogleLogin} className="w-full flex items-center justify-center gap-1.5 py-2 px-3 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-lg transition-colors shadow-sm">
-                <LogIn size={14} /> 使用 Google 登入
-              </button>
+              {hasEditPermission ? (
+                <div className="space-y-2 text-left bg-slate-100 p-2 rounded-lg">
+                  <p className="text-slate-500 font-medium">📡 目前處於離線狀態</p>
+                  <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 font-bold rounded-full text-[10px]">🛡️ 已開啟離線編輯權限</span>
+                </div>
+              ) : (
+                <>
+                  <p className="text-slate-400 mb-2">登入後解鎖雲端同步記帳</p>
+                  <button onClick={handleGoogleLogin} className="w-full flex items-center justify-center gap-1.5 py-2 px-3 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-lg transition-colors shadow-sm">
+                    <LogIn size={14} /> 使用 Google 登入
+                  </button>
+                </>
+              )}
             </div>
           )}
         </div>
@@ -590,7 +633,7 @@ export default function App() {
                     </div>
                     <div>
                       <span className="text-amber-100/80 text-xs block">雲端總記帳筆數</span>
-                      <span className="text-lg font-bold">{expenses.length} 筆</span>
+                      <span className="text-lg font-bold">{safeExpenses.length} 筆</span>
                     </div>
                   </div>
                 </div>
@@ -651,21 +694,24 @@ export default function App() {
 
                 <div className="space-y-2">
                   <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm divide-y divide-slate-100">
-                    {expenses.length > 0 ? (
-                      expenses.map((item) => (
-                        <div key={item.id} className="flex justify-between items-center p-4">
-                          <div>
-                            <h4 className="font-bold text-slate-800 text-sm">{item.title}</h4>
-                            <span className="text-xs font-semibold bg-slate-100 text-slate-500 px-2 py-0.5 rounded mt-1 inline-block">{item.payer} 墊付</span>
+                    {safeExpenses.length > 0 ? (
+                      safeExpenses.map((item) => {
+                        if (!item || !item.title) return null;
+                        return (
+                          <div key={item.id} className="flex justify-between items-center p-4">
+                            <div>
+                              <h4 className="font-bold text-slate-800 text-sm">{item.title}</h4>
+                              <span className="text-xs font-semibold bg-slate-100 text-slate-500 px-2 py-0.5 rounded mt-1 inline-block">{item.payer || '未知'} 墊付</span>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <span className="font-mono font-bold text-slate-800 text-sm">￥ {(item.amount || 0).toLocaleString()}</span>
+                              {hasEditPermission && (
+                                <button type="button" onClick={() => handleDeleteExpense(item.id)} className="p-1 text-slate-300 hover:text-rose-600"><Trash2 size={16} /></button>
+                              )}
+                            </div>
                           </div>
-                          <div className="flex items-center gap-3">
-                            <span className="font-mono font-bold text-slate-800 text-sm">￥ {item.amount.toLocaleString()}</span>
-                            {hasEditPermission && (
-                              <button type="button" onClick={() => handleDeleteExpense(item.id)} className="p-1 text-slate-300 hover:text-rose-600"><Trash2 size={16} /></button>
-                            )}
-                          </div>
-                        </div>
-                      ))
+                        );
+                      })
                     ) : (
                       <div className="text-center py-8 text-slate-400 text-xs">目前雲端尚無記帳資料。</div>
                     )}
