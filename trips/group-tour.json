@@ -1,6 +1,7 @@
 {
-  "id": "group-tour",
-  "title": "九州豪華跟團 5 日",
+  "id": "group-tour-2026",
+  "title": "英鈦日本九州極上五日",
+  "departureDate": "2026-10-03",
   "isPublic": false,
   "sidebarConfig": [
     {"id": "itinerary", "title": "團體每日行程", "type": "itinerary"},
@@ -11,73 +12,185 @@
   "content": {
     "days": [1, 2, 3, 4, 5],
     "custom_tab_1": {
-      "subtitle": "雄獅旅遊・團號：KHH06205D",
-      "mainText": "帶團領隊：陳大明 (手機：0912-345678)\n當地導遊：山田先生 (LINE ID：yamada_guide)\n集合時間：Day 1 05:00 桃園機場第二航廈雄獅櫃檯前。"
+      "subtitle": "星宇航空豪華客機・北九州秋楓出遊",
+      "mainText": "去程航班：星宇航空 JX846 | 桃園機場 07:30 ➡️ 熊本機場 10:45\n回程航班：星宇航空 JX841 | 福岡機場 14:15 ➡️ 桃園機場 15:45\n團體叮嚀：請於出發當天 05:30 前抵達桃園機場指定櫃檯找領隊集合辦理登機。"
     },
     "checklistData": [
-      { "id": "gt-1", "category": "必備證件", "label": "護照正本（確認沒有過期）" },
-      { "id": "gt-2", "category": "必備證件", "label": "團體換匯日幣（跟團少許即可）" },
-      { "id": "gt-3", "category": "跟團專屬", "label": "給導遊領隊的每日小費 (NT$ 300/天)" },
-      { "id": "gt-4", "category": "隨身行李", "label": "舒適好走的球鞋（景點走路用）" },
-      { "id": "gt-5", "category": "隨身行李", "label": "保溫瓶（遊覽車上喝熱水）" }
+      { "id": "gt-1", "category": "必備證件", "label": "護照正本（確認效期大於 6 個月）" },
+      { "id": "gt-2", "category": "必備證件", "label": "團體換匯日幣（準備個人自費/購物部分即可）" },
+      { "id": "gt-3", "category": "跟團專屬", "label": "給導遊領隊的每日小費（依旅行社規定準備）" },
+      { "id": "gt-4", "category": "隨身行李", "label": "舒適好走的球鞋（多個神社與峽谷步道需步行）" },
+      { "id": "gt-5", "category": "隨身行李", "label": "薄外套或輕便雨具（秋季阿蘇山區早晚溫差較大）" }
     ],
     "daysData": {
       "1": [
         {
-          "time": "05:00",
-          "title": "桃園機場雄獅櫃檯集合",
+          "time": "05:30",
+          "title": "桃園國際機場集合",
           "type": "交通",
           "typeColor": "bg-emerald-50 text-emerald-700 border-emerald-200",
-          "desc": "團體聯辦登機，領取行李託運條與登機證。",
-          "location": "桃園國際機場第二航廈"
+          "desc": "於指定櫃檯集合，辦理團體登機與行李託運。搭乘星宇航空 JX846（07:30 起飛）。",
+          "location": "桃園國際機場"
         },
         {
-          "time": "11:00",
-          "title": "抵達福岡空港 ➡️ 專車前往豪斯登堡",
+          "time": "10:45",
+          "title": "抵達熊本空港 ➡️ 前往熊本城",
           "type": "交通",
           "typeColor": "bg-emerald-50 text-emerald-700 border-emerald-200",
-          "desc": "搭乘豪華遊覽車前往歐洲主題樂園。",
-          "location": "豪斯登堡"
+          "desc": "專車迎賓出發，前往參觀名列日本三大名城之一的「熊本城」，特別登臨氣勢磅礡的黑色天守閣。",
+          "location": "熊本城"
+        },
+        {
+          "time": "13:30",
+          "title": "櫻之馬場‧城彩苑",
+          "type": "景點",
+          "typeColor": "bg-purple-50 text-purple-700 border-purple-200",
+          "desc": "漫步在重現江戶時代城下町風貌的復古老街，可自行品嚐各式熊本在地傳統點心與美食。",
+          "location": "櫻之馬場‧城彩苑"
+        },
+        {
+          "time": "15:00",
+          "title": "特別安排 ★ 熊本熊電鐵體驗",
+          "type": "景點",
+          "typeColor": "bg-purple-50 text-purple-700 border-purple-200",
+          "desc": "搭乘極具人氣、車廂外觀彩繪著滿滿萌樣營業部長的「熊本熊地方路面電車」。",
+          "location": "熊本熊電鐵"
+        },
+        {
+          "time": "18:00",
+          "title": "夜訪熊本上下通商店街 & 飯店",
+          "type": "景點",
+          "typeColor": "bg-purple-50 text-purple-700 border-purple-200",
+          "desc": "入住市區飯店後，可自由漫步全九州最大的拱廊商店街「下通、上通」，自由逛街購物與享用道地晚餐。",
+          "location": "熊本上、下通商店街"
         }
       ],
       "2": [
         {
-          "time": "09:00",
-          "title": "九十九島遊覽船體驗",
+          "time": "09:30",
+          "title": "峽谷秘境～高千穗峽散策",
           "type": "景點",
           "typeColor": "bg-purple-50 text-purple-700 border-purple-200",
-          "desc": "乘船欣賞珍珠群島美景，包含挖珍珠體驗。",
-          "location": "九十九島"
+          "desc": "漫步在神話之鄉的自然芬多精步道，欣賞由阿蘇火山噴發冷卻形成的壯麗柱狀節理斷崖。",
+          "location": "高千穗峽"
+        },
+        {
+          "time": "11:00",
+          "title": "日本瀑布百選～真名井瀑布",
+          "type": "景點",
+          "typeColor": "bg-purple-50 text-purple-700 border-purple-200",
+          "desc": "親眼見證從高達 17 公尺的高處傾瀉而下的絕美飛瀑，也是高千穗峽最經典的地標景致。",
+          "location": "真名井瀑布"
+        },
+        {
+          "time": "13:30",
+          "title": "天岩戶神社參拜",
+          "type": "景點",
+          "typeColor": "bg-purple-50 text-purple-700 border-purple-200",
+          "desc": "參拜充滿日本神話色彩的神社，遠眺天照大神曾經隱居的神祕洞窟（天岩戶）。",
+          "location": "天岩戶神社"
+        },
+        {
+          "time": "15:30",
+          "title": "夢幻異世界～上色見熊野座神社",
+          "type": "景點",
+          "typeColor": "bg-purple-50 text-purple-700 border-purple-200",
+          "desc": "拾級而上穿過宛如動漫、電影場景般的深綠色青苔石燈籠參道，走入隱密夢幻的神聖結界空間。",
+          "location": "上色見熊野座神社"
+        },
+        {
+          "time": "18:00",
+          "title": "抵達阿蘇溫泉區飯店",
+          "type": "住宿",
+          "typeColor": "bg-amber-50 text-amber-700 border-amber-200",
+          "desc": "入住大自然懷抱中的溫泉旅館，享用精緻會席料理，並體驗舒適溫泉徹底放鬆身心。",
+          "location": "阿蘇溫泉旅館"
         }
       ],
       "3": [
         {
-          "time": "10:00",
-          "title": "阿蘇火山直升機體驗（自費行程）",
+          "time": "09:30",
+          "title": "九州自然動物園～叢林巴士探險",
           "type": "景點",
           "typeColor": "bg-purple-50 text-purple-700 border-purple-200",
-          "desc": "天氣許可時，可自費搭乘直升機俯瞰火山口。",
-          "location": "阿蘇山"
+          "desc": "搭乘特製專屬的獅子、大象造型叢林巴士出發，在開放園區內近距離親手餵食猛獸與草食動物！",
+          "location": "九州自然動物園 African Safari"
+        },
+        {
+          "time": "13:00",
+          "title": "由布院金鱗湖 ＆ 湯之坪街道散策",
+          "type": "景點",
+          "typeColor": "bg-purple-50 text-purple-700 border-purple-200",
+          "desc": "漫步於如夢似幻、半溫泉半冷水交互湧出的金鱗湖畔；隨後前往充滿歐風童話與文青小店的湯之坪街道自由探索。",
+          "location": "由布院"
+        },
+        {
+          "time": "16:00",
+          "title": "別府海地獄巡禮",
+          "type": "景點",
+          "typeColor": "bg-purple-50 text-purple-700 border-purple-200",
+          "desc": "參觀著名的別府地獄溫泉。海地獄因富含硫酸鐵，呈現如Tiffany藍一般的神祕澄澈蔚藍色，卻是高達 98 度的滾燙溫泉。",
+          "location": "別府海地獄"
+        },
+        {
+          "time": "18:00",
+          "title": "入住別府溫泉飯店",
+          "type": "住宿",
+          "typeColor": "bg-amber-50 text-amber-700 border-amber-200",
+          "desc": "入住全日本湧泉量第一的別府溫泉區，享用在地豐盛料理，今晚繼續享受極上湯泉溫養。",
+          "location": "別府溫泉飯店"
         }
       ],
       "4": [
         {
           "time": "09:30",
-          "title": "免稅店購物行程",
+          "title": "SAPPORO 啤酒九州日田工廠見學",
           "type": "景點",
           "typeColor": "bg-purple-50 text-purple-700 border-purple-200",
-          "desc": "市區免稅店採購綜合酵素與各類伴手禮。",
-          "location": "福岡市"
+          "desc": "特別安排工廠導覽，深入瞭解知名日系啤酒的釀造與包裝製程，結束後提供新鮮出廠的美味啤酒試飲體驗。",
+          "location": "SAPPORO 啤酒日田工廠"
+        },
+        {
+          "time": "12:30",
+          "title": "太宰府天滿宮參拜",
+          "type": "景點",
+          "typeColor": "bg-purple-50 text-purple-700 border-purple-200",
+          "desc": "前往供奉日本學問之神菅原道真的總本宮參拜，祈求考運與順利。推薦在表參道購買現烤的「梅枝餅」品嚐。",
+          "location": "太宰府天滿宮"
+        },
+        {
+          "time": "15:00",
+          "title": "免稅店採購時間",
+          "type": "景點",
+          "typeColor": "bg-purple-50 text-purple-700 border-purple-200",
+          "desc": "停留約一小時。這裡提供豐富的日系健康保健品、美妝護膚及在地特色名產伴手禮，可輕鬆一次購足。",
+          "location": "福岡市內免稅店"
+        },
+        {
+          "time": "17:00",
+          "title": "夜訪天神中洲不夜城 ＆ 飯店入住",
+          "type": "景點",
+          "typeColor": "bg-purple-50 text-purple-700 border-purple-200",
+          "desc": "入住福岡市區飯店。傍晚可自行前往福岡最繁華的天神商圈購物，或沿著那珂川散步至「中洲屋台街」品嚐經典的博多豚骨拉麵宵夜。",
+          "location": "天神 / 中洲屋台"
         }
       ],
       "5": [
         {
-          "time": "14:00",
-          "title": "大濠公園散策 ➡️ 前往機場",
-          "type": "景點",
-          "typeColor": "bg-purple-50 text-purple-700 border-purple-200",
-          "desc": "享用最後的博多拉麵後，前往機場搭機返台。",
+          "time": "11:30",
+          "title": "抵達福岡空港",
+          "type": "交通",
+          "typeColor": "bg-emerald-50 text-emerald-700 border-emerald-200",
+          "desc": "專車前往福岡國際機場，由領隊協助團體辦理劃位登機及行李託運手續，免稅店進行最後採買。",
           "location": "福岡空港"
+        },
+        {
+          "time": "14:15",
+          "title": "搭機返台 ➡️ 抵達桃園國際機場",
+          "type": "交通",
+          "typeColor": "bg-emerald-50 text-emerald-700 border-emerald-200",
+          "desc": "搭乘星宇航空豪華客機 JX841，預計於台灣時間 15:45 抵達桃園機場，圓滿結束精彩的北九州極上五日遊！",
+          "location": "桃園國際機場"
         }
       ]
     }

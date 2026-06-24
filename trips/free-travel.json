@@ -1,6 +1,7 @@
 {
-  "id": "free-travel",
-  "title": "九州放鬆自由行",
+  "id": "free-travel-2026",
+  "title": "沖繩自駕自由行",
+  "departureDate": "2026-01-22",
   "isPublic": true,
   "sidebarConfig": [
     {"id": "itinerary", "title": "每日詳細行程", "type": "itinerary"},
@@ -9,10 +10,10 @@
     {"id": "expense", "title": "旅費記帳幫手", "type": "expense"}
   ],
   "content": {
-    "days": [1, 2, 3],
+    "days": [1, 2, 3, 4, 5, 6],
     "custom_tab_1": {
-      "subtitle": "Budget 租車・博多口店",
-      "mainText": "預約號碼：TYO-9876543\n取車時間：Day 1 11:30\n注意事項：記得出示台灣駕照正本＋日文譯本，檢查車身刮痕再簽名。"
+      "subtitle": "OTS租車・臨空豐崎營業所（那覇機場）",
+      "mainText": "預約號碼：OTS1398816\n車款：YARISCROSS級\n取車時間：2026-01-23 (五) 14:00\n還車時間：2026-01-27 (二) 13:30\n預約包含：尊爵安心險\n加價購：定額ETC卡\n注意事項：記得出示台灣駕照正本＋日文譯本，檢查車身刮痕再簽名。"
     },
     "checklistData": [
       { "id": "ft-1", "category": "核心證件", "label": "護照正本（效期大於 6 個月）" },
@@ -25,72 +26,294 @@
     "daysData": {
       "1": [
         {
-          "time": "04:00",
-          "title": "桃園機場第一航廈集合",
+          "time": "07:45",
+          "title": "桃園機場第二航廈集合",
           "type": "交通",
           "typeColor": "bg-emerald-50 text-emerald-700 border-emerald-200",
-          "desc": "搭乘星宇航空 JX840，預計 06:30 起飛，別遲到囉！",
-          "location": "桃園國際機場第一航廈"
+          "desc": "搭乘台灣樂桃航空，預計 09:45 起飛，請務必提早2個小時到機場辦理登機手續。",
+          "location": "桃園國際機場第二航廈"
         },
         {
-          "time": "09:35",
-          "title": "抵達福岡機場 (入境與取車)",
-          "type": "自駕",
-          "typeColor": "bg-blue-50 text-blue-700 border-blue-200",
-          "desc": "辦理入境，搭乘接駁車前往 Budget 租車博多口店辦理取車手續。",
-          "location": "福岡機場"
-        },
-        {
-          "time": "13:00",
-          "title": "太宰府天滿宮 (吃梅枝餅)",
-          "type": "景點",
-          "typeColor": "bg-purple-50 text-purple-700 border-purple-200",
-          "desc": "參觀表參道與星巴克概念店，正殿參拜求個好運。",
-          "location": "太宰府天滿宮"
-        },
-        {
-          "time": "18:30",
-          "title": "由布院溫泉旅館 check-in",
+          "time": "14:00",
+          "title": "抵達沖繩 ➡️ 前往飯店 Check-in",
           "type": "住宿",
           "typeColor": "bg-amber-50 text-amber-700 border-amber-200",
-          "desc": "入住「由布院壽花之莊」，享用豐後牛溫泉會席料理。",
-          "location": "由布院壽花之莊"
+          "desc": "經由輕軌於「JAL/牧志站」下車，前往「那霸日航城市飯店 (hotel aqua citty naha)」辦理入住或寄放行李。",
+          "location": "那霸日航城市飯店"
+        },
+        {
+          "time": "14:45",
+          "title": "牧志公設市場",
+          "type": "景點",
+          "typeColor": "bg-purple-50 text-purple-700 border-purple-200",
+          "desc": "從飯店走路前往，感受沖繩當地廚房的熱鬧氛圍與新鮮海鮮、在地小吃。",
+          "location": "牧志公設市場"
+        },
+        {
+          "time": "16:45",
+          "title": "西來院 (達磨寺)",
+          "type": "景點",
+          "typeColor": "bg-purple-50 text-purple-700 border-purple-200",
+          "desc": "搭乘輕軌至「首里站」下車前往。古色古香的寺廟，注意關門時間為 18:00。",
+          "location": "西來院"
+        },
+        {
+          "time": "17:30",
+          "title": "首里城",
+          "type": "景點",
+          "typeColor": "bg-purple-50 text-purple-700 border-purple-200",
+          "desc": "從西來院步行前往首里城，欣賞黃昏與傍晚點燈的琉球王國歷史遺跡。",
+          "location": "首里城"
+        },
+        {
+          "time": "19:00",
+          "title": "國際通逛街 + 晚餐時間",
+          "type": "餐飲",
+          "typeColor": "bg-blue-50 text-blue-700 border-blue-200",
+          "desc": "前往熱鬧的國際通散步購物。晚餐建議：1.「七輪燒肉安安 牧志站前店」 或 2.「在地拉麵店」。",
+          "location": "國際通"
+        },
+        {
+          "time": "21:00",
+          "title": "回飯店休息",
+          "type": "住宿",
+          "typeColor": "bg-amber-50 text-amber-700 border-amber-200",
+          "desc": "返回 hotel aqua citty naha 休息，養精蓄銳準備明天的豐富行程。",
+          "location": "那霸日航城市飯店"
         }
       ],
       "2": [
         {
           "time": "09:00",
-          "title": "金鱗湖與湯之坪街道散策",
+          "title": "福助玉子燒飯糰",
+          "type": "餐飲",
+          "typeColor": "bg-blue-50 text-blue-700 border-blue-200",
+          "desc": "享用沖繩超人氣的厚蛋飯糰，開啟美好的一天。",
+          "location": "福助玉子燒飯糰"
+        },
+        {
+          "time": "10:00",
+          "title": "波上宮",
           "type": "景點",
           "typeColor": "bg-purple-50 text-purple-700 border-purple-200",
-          "desc": "清晨的金鱗湖霧氣超美，接著沿路吃 B-Speak 瑞士捲。",
-          "location": "金鱗湖"
+          "desc": "參拜建在懸崖上的沖繩總鎮守「波上宮」，購買御守、到旁邊沙灘走走。",
+          "location": "波上宮"
+        },
+        {
+          "time": "11:00",
+          "title": "沖宮神社",
+          "type": "景點",
+          "typeColor": "bg-purple-50 text-purple-700 border-purple-200",
+          "desc": "搭乘輕軌至「奧武山公園站」下車，步行前往琉球八社之一的沖宮神社參拜。",
+          "location": "沖宮"
+        },
+        {
+          "time": "12:00",
+          "title": "午餐：傳統沖繩麵",
+          "type": "餐飲",
+          "typeColor": "bg-blue-50 text-blue-700 border-blue-200",
+          "desc": "品嚐經典的沖繩麵（Soba），搭配滷得軟嫩的五花肉或排骨。",
+          "location": "那霸市區"
         },
         {
           "time": "14:00",
-          "title": "別府地獄溫泉巡禮",
+          "title": "OTS 臨空豐崎營業所取車",
+          "type": "自駕",
+          "typeColor": "bg-orange-50 text-orange-700 border-orange-200",
+          "desc": "辦理自駕取車手續。預約號：OTS1398816 (車款 YARISCROSS)。確認尊爵險、ETC卡，並檢查外觀刮痕再簽名。",
+          "location": "OTS 臨空豐崎營業所"
+        },
+        {
+          "time": "15:30",
+          "title": "瀨長島（幸福鬆餅 + 手做戒指）",
           "type": "景點",
           "typeColor": "bg-purple-50 text-purple-700 border-purple-200",
-          "desc": "參觀海地獄、血池地獄，體驗極熱地熱奇景。",
-          "location": "海地獄"
+          "desc": "開車前往純白地中海風的瀨長島。享用美味的「幸福鬆餅」，並體驗「itosina 手做戒指」。",
+          "location": "瀨長島 Umikaji Terrace"
+        },
+        {
+          "time": "20:00",
+          "title": "晚餐：琉球新麵 通堂 小祿本店",
+          "type": "餐飲",
+          "typeColor": "bg-blue-50 text-blue-700 border-blue-200",
+          "desc": "必吃經典的「男人麵（濃郁豚骨）」與「女人麵（清爽鹽味）」，配份煎餃！",
+          "location": "琉球新麵 通堂 小祿本店"
+        },
+        {
+          "time": "22:00",
+          "title": "返回飯店休息",
+          "type": "住宿",
+          "typeColor": "bg-amber-50 text-amber-700 border-amber-200",
+          "desc": "開車返回那霸市區 hotel aqua citty naha 休息。",
+          "location": "那霸日航城市飯店"
         }
       ],
       "3": [
         {
-          "time": "10:00",
-          "title": "博多運河城購物",
+          "time": "10:30",
+          "title": "許田休息站",
           "type": "景點",
           "typeColor": "bg-purple-50 text-purple-700 border-purple-200",
-          "desc": "最後採買藥妝與伴手禮，看整點的水舞秀。",
-          "location": "博多運河城"
+          "desc": "往北自駕的必經中繼站，可以在這裡買到優惠的水族館門票，順便品嚐在地小吃與炸物。",
+          "location": "許田休息站"
         },
         {
-          "time": "16:00",
-          "title": "前往福岡機場搭機返台",
+          "time": "13:00",
+          "title": "美麗海水族館（海豚劇場）",
+          "type": "景點",
+          "typeColor": "bg-purple-50 text-purple-700 border-purple-200",
+          "desc": "觀賞壯觀的黑潮之海大水槽與鯨鯊，記得提早卡位看精采免費的「海豚秀劇場」。",
+          "location": "沖繩美麗海水族館"
+        },
+        {
+          "time": "16:30",
+          "title": "名護市飯店 Check-in",
+          "type": "住宿",
+          "typeColor": "bg-amber-50 text-amber-700 border-amber-200",
+          "desc": "前往北部住宿點辦理入住：Lieta Nakayama 飯店，體驗舒適空間。",
+          "location": "Lieta Nakayama"
+        },
+        {
+          "time": "18:30",
+          "title": "晚餐：肉餐廳 肉久 名護店",
+          "type": "餐飲",
+          "typeColor": "bg-blue-50 text-blue-700 border-blue-200",
+          "desc": "在名護享用美味的肉料理，大口吃肉補充自駕能量。",
+          "location": "肉餐廳 肉久 名護店"
+        }
+      ],
+      "4": [
+        {
+          "time": "09:30",
+          "title": "名護鳳梨園",
+          "type": "景點",
+          "typeColor": "bg-purple-50 text-purple-700 border-purple-200",
+          "desc": "搭乘可愛的無人駕駛鳳梨遊園車，穿梭在熱帶植物園中，適合拍照與採購伴手禮。",
+          "location": "名護鳳梨園"
+        },
+        {
+          "time": "11:30",
+          "title": "古宇利大橋 ➡️ 古宇利島",
+          "type": "景點",
+          "typeColor": "bg-purple-50 text-purple-700 border-purple-200",
+          "desc": "開車駛過筆直、兩側皆是漸層果凍藍海的古宇利大橋，欣賞沖繩絕美海景。",
+          "location": "古宇利大橋"
+        },
+        {
+          "time": "12:30",
+          "title": "午餐：古宇利島蝦蝦飯",
+          "type": "餐飲",
+          "typeColor": "bg-blue-50 text-blue-700 border-blue-200",
+          "desc": "品嚐名揚海外的大蒜奶油蝦飯，看著海景享受極致美味。",
+          "location": "KOURI SHRIMP (蝦蝦飯)"
+        },
+        {
+          "time": "15:00",
+          "title": "二訪美麗海水族館 / 周邊散策",
+          "type": "景點",
+          "typeColor": "bg-purple-50 text-purple-700 border-purple-200",
+          "desc": "繼續探索蔚藍海洋世界，或在海洋博公園內的海灘、設施悠閒散步。",
+          "location": "沖繩美麗海水族館"
+        },
+        {
+          "time": "18:30",
+          "title": "晚餐：暖暮拉麵 名護店",
+          "type": "餐飲",
+          "typeColor": "bg-blue-50 text-blue-700 border-blue-200",
+          "desc": "品嚐曾獲九州拉麵總選舉第一名的暖暮拉麵，可依喜好客製化湯頭與麵條硬度。",
+          "location": "暖暮拉麵 名護店"
+        },
+        {
+          "time": "21:30",
+          "title": "宵夜：A&W meio store",
+          "type": "餐飲",
+          "typeColor": "bg-blue-50 text-blue-700 border-blue-200",
+          "desc": "體驗沖繩限定的美式速食 A&W，來杯獨特的麥根沙士（Root Beer）和捲捲薯條。",
+          "location": "A&W meio store"
+        }
+      ],
+      "5": [
+        {
+          "time": "10:00",
+          "title": "萬座毛",
+          "type": "景點",
+          "typeColor": "bg-purple-50 text-purple-700 border-purple-200",
+          "desc": "欣賞著名的象鼻奇岩，矗立在湛藍開闊的遼闊海面上，是大自然的鬼斧神工。",
+          "location": "萬座毛"
+        },
+        {
+          "time": "12:00",
+          "title": "午餐：浜之家海鮮料理",
+          "type": "餐飲",
+          "typeColor": "bg-blue-50 text-blue-700 border-blue-200",
+          "desc": "恩納村超人氣海鮮食堂，招牌黃油烤魚與各式新鮮生魚片定食不容錯過。",
+          "location": "浜之家海鮮料理"
+        },
+        {
+          "time": "14:30",
+          "title": "星野集團 BANTA CAFE",
+          "type": "景點",
+          "typeColor": "bg-purple-50 text-purple-700 border-purple-200",
+          "desc": "全日本規模最大的海邊咖啡廳之一，坐在崖邊塌塌米席或海灘席，喝飲料聽海浪聲。",
+          "location": "BANTA CAFE"
+        },
+        {
+          "time": "16:30",
+          "title": "美國村散策 & 飯店入住",
+          "type": "景點",
+          "typeColor": "bg-purple-50 text-purple-700 border-purple-200",
+          "desc": "充滿美式異國風情的 Depot Island 園區，入住美國村一帶飯店（depot island區），欣賞迷人海濱落日。",
+          "location": "北谷美國村"
+        },
+        {
+          "time": "18:30",
+          "title": "晚餐：京都北白川拉麵魁力屋 北谷店",
+          "type": "餐飲",
+          "typeColor": "bg-blue-50 text-blue-700 border-blue-200",
+          "desc": "享用經典的京都醬油熟成拉麵，佐以大量青蔥與酥脆唐揚雞。",
+          "location": "拉麵魁力屋 北谷店"
+        }
+      ],
+      "6": [
+        {
+          "time": "09:30",
+          "title": "普天滿宮",
+          "type": "景點",
+          "typeColor": "bg-purple-50 text-purple-700 border-purple-200",
+          "desc": "參拜著名的宜野灣神社「普天滿宮」，其最具特色的是藏於正殿後方的神祕天然鐘乳石洞穴。",
+          "location": "普天滿宮"
+        },
+        {
+          "time": "10:40",
+          "title": "ASHIBINAA 沖繩奧特萊斯購物城",
+          "type": "景點",
+          "typeColor": "bg-purple-50 text-purple-700 border-purple-200",
+          "desc": "回台前的最後瘋狂採買，各大國際品牌、運動用品與日系服飾一次滿足。",
+          "location": "ASHIBINAA Outlet"
+        },
+        {
+          "time": "12:30",
+          "title": "午餐：Yappari Steak 牛排館",
+          "type": "餐飲",
+          "typeColor": "bg-blue-50 text-blue-700 border-blue-200",
+          "desc": "沖繩代表性的熔岩石板牛排，外焦內嫩，白飯與沙拉湯品無限供應，大飽口福！",
+          "location": "Yappari Steak (熔岩牛排)"
+        },
+        {
+          "time": "13:30",
+          "title": "OTS 臨空豐崎營業所還車",
+          "type": "自駕",
+          "typeColor": "bg-orange-50 text-orange-700 border-orange-200",
+          "desc": "依約定時間回到營業所，記得先將油箱加滿，現場點交確認無誤後結算 ETC 卡費用。",
+          "location": "OTS 臨空豐崎營業所"
+        },
+        {
+          "time": "14:30",
+          "title": "抵達那霸機場辦理登機",
           "type": "交通",
           "typeColor": "bg-emerald-50 text-emerald-700 border-emerald-200",
-          "desc": "提早兩小時抵達機場辦理登機，免稅店做最後衝刺！",
-          "location": "福岡空港"
+          "desc": "搭乘租車公司接駁車抵達機場，進行託運與出境手續，準備飛回台灣桃園機場，圓滿結束沖繩自由行！",
+          "location": "那霸機場"
         }
       ]
     }
