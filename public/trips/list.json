@@ -3,12 +3,22 @@
     "id": "free-travel",
     "title": "沖繩自駕自由行",
     "departureDate": "2026-02-20",
-    "detailPath": "/trips/free-travel.json"
+    "detailPath": "/trips/free-travel.json",
+    "participants": ["Howard", "Carol", "Brian", "Dora"],
+    "currencyConfig": {
+      "code": "JPY",
+      "symbol": "￥"
+    }
   },
   {
     "id": "group-tour",
     "title": "英鈦日本九州極上五日",
     "departureDate": "2026-10-03",
-    "detailPath": "/trips/group-tour.json"
+    "detailPath": "/trips/group-tour.json",
+    "participants": ["Howard", "Carol", "Brian", "Dora"],
+    "currencyConfig": {
+      "code": "JPY",
+      "symbol": "￥"
+    }
   }
 ]
