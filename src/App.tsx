@@ -382,7 +382,11 @@ export default function App() {
     } 
   });
 
-  const handleNavigate = (location: string) => { if (!location) return; window.open(`http://googleusercontent.com/maps.google.com/?q=${encodeURIComponent(location)}`, '_blank'); };
+ const handleNavigate = (location: string) => { 
+  if (!location) return; 
+  // 修正為標準的 Google 地圖搜尋 API
+  window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(location)}`, '_blank'); 
+};
   const toggleChecklistItem = (id: string) => { checkedItems.includes(id) ? setCheckedItems(checkedItems.filter(item => item !== id)) : setCheckedItems([...checkedItems, id]) }
 
   const currentDayEvents = currentTrip?.content?.daysData?.[String(activeDay)] || [];
