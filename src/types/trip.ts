@@ -4,6 +4,11 @@ export interface TripMeta {
   title: string;
   departureDate: string; // 格式統一為 YYYY-MM-DD
   detailPath: string;
+  participants: string[];
+  currencyConfig: {
+    code: string;
+    symbol: string;
+  };
 }
 
 // 2. 對應詳細行程中的單一時間軸項目

@@ -20,6 +20,10 @@ interface ExpenseItem {
   currency?: string; 
 }
 
+interface StoredExpenseItem extends ExpenseItem {
+  created_at?: string;
+}
+
 interface AdminUser {
   email: string;
   role: 'super_admin' | 'trip_editor';
@@ -32,6 +36,61 @@ const SUPPORTED_CURRENCIES = [
   { code: 'TWD', symbol: '$', name: '新台幣' },
   { code: 'USD', symbol: '$', name: '美金' },
 ];
+
+const isRecord = (value: unknown): value is Record<string, unknown> => {
+  return typeof value === 'object' && value !== null;
+};
+
+const readStorageArray = (key: string): unknown[] => {
+  const rawValue = localStorage.getItem(key);
+  if (!rawValue) return [];
+
+  try {
+    const parsed = JSON.parse(rawValue);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+};
+
+const toStoredExpenseItem = (
+  value: unknown,
+  fallbackTripId: string,
+  fallbackCurrency: string
+): StoredExpenseItem | null => {
+  if (!isRecord(value)) return null;
+
+  const tripId = typeof value.trip_id === 'string' ? value.trip_id : fallbackTripId;
+  if (!tripId) return null;
+
+  return {
+    id: typeof value.id === 'string' ? value.id : `cached_${Math.random()}`,
+    trip_id: tripId,
+    title: typeof value.title === 'string' && value.title ? value.title : '未命名消費',
+    amount: Number(value.amount) || 0,
+    payer: typeof value.payer === 'string' && value.payer ? value.payer : '我',
+    currency: typeof value.currency === 'string' ? value.currency : fallbackCurrency,
+    created_at: typeof value.created_at === 'string' ? value.created_at : undefined,
+  };
+};
+
+const readStoredExpenses = (
+  key: string,
+  fallbackTripId: string,
+  fallbackCurrency: string
+): StoredExpenseItem[] => {
+  return readStorageArray(key)
+    .map((item) => toStoredExpenseItem(item, fallbackTripId, fallbackCurrency))
+    .filter((item): item is StoredExpenseItem => item !== null);
+};
+
+const getStoredExpensesForTrip = (tripId: string, fallbackCurrency: string): StoredExpenseItem[] => {
+  const cachedExpenses = readStoredExpenses(`cached_expenses_${tripId}`, tripId, fallbackCurrency);
+  const offlineExpenses = readStoredExpenses('offline_expenses', '', fallbackCurrency)
+    .filter((item) => item.trip_id === tripId);
+
+  return [...cachedExpenses, ...offlineExpenses];
+};
 
 export default function App() {
   // 1. 使用者登入狀態
@@ -71,18 +130,17 @@ export default function App() {
 
   // 動態衍生變數：即時從變動後的 list.json 抽取參與成員與目的地幣別
   const selectedTripMeta = tripOptions.find(t => t.id === selectedTripId);
-  const currentMembers = (selectedTripMeta as any)?.participants || ['我', '小明', '小華'];
-  const currentCurrencyCode = (selectedTripMeta as any)?.currencyConfig?.code || 'JPY';
-  const currentCurrencySymbol = (selectedTripMeta as any)?.currencyConfig?.symbol || '￥';
+  const currentMembers = selectedTripMeta?.participants || ['我', '小明', '小華'];
+  const currentCurrencyCode = selectedTripMeta?.currencyConfig.code || 'JPY';
+  const currentCurrencySymbol = selectedTripMeta?.currencyConfig.symbol || '￥';
 
-  // 行程切換監聽器：初始化表單與頁籤預設值
-  useEffect(() => {
-    if (currentMembers.length > 0) {
-      setNewPayer(currentMembers[0]);
+  const applyTripDefaults = (trip: TripMeta) => {
+    if (trip.participants.length > 0) {
+      setNewPayer(trip.participants[0]);
     }
-    setActiveCurrency(currentCurrencyCode);
-    setFormCurrency(currentCurrencyCode); // 初始化表單記帳幣別
-  }, [selectedTripId, tripOptions]);
+    setActiveCurrency(trip.currencyConfig.code);
+    setFormCurrency(trip.currencyConfig.code);
+  };
 
   const getBasePath = () => {
     const path = window.location.pathname;
@@ -133,70 +191,31 @@ export default function App() {
         setTripOptions(sortedTrips);
         if (sortedTrips.length > 0) {
           const defaultTrip = findDefaultTrip(sortedTrips);
-          setSelectedTripId(defaultTrip ? defaultTrip.id : sortedTrips[0].id);
+          const initialTrip = defaultTrip || sortedTrips[0];
+          applyTripDefaults(initialTrip);
+          setSelectedTripId(initialTrip.id);
         }
       })
       .catch(err => console.error(err))
   }, [])
 
-  // 📡 獨立出來的本地/離線資料加載核心
-  const loadLocalExpensesFallback = (tripId: string) => {
-    const cachedData = localStorage.getItem(`cached_expenses_${tripId}`);
-    let parsedData: ExpenseItem[] = [];
-    if (cachedData) {
-      try {
-        const rawParsed = JSON.parse(cachedData);
-        if (Array.isArray(rawParsed)) {
-          parsedData = rawParsed.map((item: any) => ({
-            id: item?.id || `cached_${Math.random()}`,
-            trip_id: item?.trip_id || tripId,
-            title: item?.title || '未命名消費',
-            amount: Number(item?.amount) || 0,
-            payer: item?.payer || '我',
-            currency: item?.currency
-          }));
-        }
-      } catch (e) { parsedData = []; }
-    }
-
-    let localQueue: any[] = [];
-    try {
-      const localDataStr = localStorage.getItem('offline_expenses');
-      localQueue = localDataStr ? JSON.parse(localDataStr) : [];
-      if (!Array.isArray(localQueue)) localQueue = [];
-    } catch (e) { localQueue = []; }
-
-    const currentTripOffline = localQueue
-      .filter((item: any) => item && item.trip_id === tripId)
-      .map((item: any) => ({
-        id: item?.id || `local_${Math.random()}`,
-        trip_id: item?.trip_id || tripId,
-        title: item?.title || '未命名消費',
-        amount: Number(item?.amount) || 0,
-        payer: item?.payer || '我',
-        currency: item?.currency || currentCurrencyCode
-      }));
-
-    setExpenses([...parsedData, ...currentTripOffline]);
-  };
-
   // 主要的行程與權限載入副作用
   useEffect(() => {
     if (!selectedTripId) return;
-    setIsLoading(true);
     
     async function loadTripAndAuthData() {
       const basePath = getBasePath();
-      const url = `${basePath}trips/${selectedTripId}.json`.replace(/\/+/g, '/');
+      const detailPath = selectedTripMeta?.detailPath || `/trips/${selectedTripId}.json`;
+      const url = `${basePath}${detailPath.replace(/^\//, '')}`.replace(/\/+/g, '/');
 
       try {
         const res = await fetch(url);
         if (res.ok) {
-          const tripData = await res.json();
+          const tripData = await res.json() as TripDetail;
           setCurrentTrip(tripData);
           setActiveDay(1);
           if (tripData.sidebarConfig?.length > 0) {
-            const validScreenIds = tripData.sidebarConfig.map((s: any) => s.id);
+            const validScreenIds = tripData.sidebarConfig.map((screen) => screen.id);
             if (!validScreenIds.includes(currentScreen)) {
               setCurrentScreen(tripData.sidebarConfig[0].id);
             }
@@ -218,7 +237,11 @@ export default function App() {
       }
 
       if (!profile && cachedProfile) {
-        try { profile = JSON.parse(cachedProfile); } catch (e) {}
+        try {
+          profile = JSON.parse(cachedProfile) as AdminUser;
+        } catch {
+          profile = null;
+        }
       }
 
       setAdminProfile(profile);
@@ -249,36 +272,35 @@ export default function App() {
             setExpenses(expenseData as ExpenseItem[]);
             localStorage.setItem(`cached_expenses_${selectedTripId}`, JSON.stringify(expenseData));
           } else {
-            loadLocalExpensesFallback(selectedTripId);
+            setExpenses(getStoredExpensesForTrip(selectedTripId, currentCurrencyCode));
           }
-        } catch (err) {
-          loadLocalExpensesFallback(selectedTripId);
+        } catch {
+          setExpenses(getStoredExpensesForTrip(selectedTripId, currentCurrencyCode));
         }
       } else {
-        loadLocalExpensesFallback(selectedTripId);
+        setExpenses(getStoredExpensesForTrip(selectedTripId, currentCurrencyCode));
       }
 
       setIsLoading(false);
     }
 
     loadTripAndAuthData();
-  }, [selectedTripId, userEmail])
+  }, [currentCurrencyCode, currentScreen, hasEditPermission, selectedTripId, selectedTripMeta?.detailPath, userEmail])
 
   // 📡 智慧恢復網路自動同步機制
   useEffect(() => {
     const syncOfflineData = async () => {
       if (!navigator.onLine) return;
 
-      let localQueue: any[] = [];
-      try {
-        const localDataStr = localStorage.getItem('offline_expenses');
-        localQueue = localDataStr ? JSON.parse(localDataStr) : [];
-        if (!Array.isArray(localQueue) || localQueue.length === 0) return;
-      } catch (e) { return; }
+      const localQueue = readStoredExpenses('offline_expenses', '', 'JPY');
+      if (localQueue.length === 0) return;
 
-      const syncData = localQueue.map(({ id, ...rest }: any) => ({
-        ...rest,
-        currency: rest.currency || 'JPY'
+      const syncData = localQueue.map((item) => ({
+        trip_id: item.trip_id,
+        title: item.title,
+        amount: item.amount,
+        payer: item.payer,
+        currency: item.currency || 'JPY'
       }));
 
       try {
@@ -328,12 +350,7 @@ export default function App() {
     };
     
     const saveToOfflineSandbox = () => {
-      let localQueue: any[] = [];
-      try {
-        const localDataStr = localStorage.getItem('offline_expenses');
-        localQueue = localDataStr ? JSON.parse(localDataStr) : [];
-        if (!Array.isArray(localQueue)) localQueue = [];
-      } catch (e) { localQueue = []; }
+      const localQueue = readStoredExpenses('offline_expenses', '', currentCurrencyCode);
 
       const offlineItem = { 
         id: `local_${Date.now()}_${Math.random()}`, 
@@ -343,7 +360,7 @@ export default function App() {
       localQueue.push(offlineItem);
       localStorage.setItem('offline_expenses', JSON.stringify(localQueue));
 
-      loadLocalExpensesFallback(selectedTripId);
+      setExpenses(getStoredExpensesForTrip(selectedTripId, currentCurrencyCode));
       setNewTitle('');
       setNewAmount('');
       alert('已自動安全儲存在本地暫存箱，連線後會自動同步。');
@@ -366,7 +383,7 @@ export default function App() {
         setNewTitle('');
         setNewAmount('');
       }
-    } catch (error) {
+    } catch {
       saveToOfflineSandbox();
     }
   }
@@ -375,16 +392,10 @@ export default function App() {
     if (!hasEditPermission) { alert('操作被拒：您沒有修改此行程資料的權限。'); return; }
 
     if (String(id).startsWith('local_')) {
-      let localQueue: any[] = [];
-      try {
-        const localDataStr = localStorage.getItem('offline_expenses');
-        localQueue = localDataStr ? JSON.parse(localDataStr) : [];
-        if (!Array.isArray(localQueue)) localQueue = [];
-      } catch (e) { localQueue = []; }
-
-      const filteredQueue = localQueue.filter((item: any) => item && item.id !== id);
+      const localQueue = readStoredExpenses('offline_expenses', '', currentCurrencyCode);
+      const filteredQueue = localQueue.filter((item) => item.id !== id);
       localStorage.setItem('offline_expenses', JSON.stringify(filteredQueue));
-      loadLocalExpensesFallback(selectedTripId);
+      setExpenses(getStoredExpensesForTrip(selectedTripId, currentCurrencyCode));
       return;
     }
 
@@ -401,7 +412,7 @@ export default function App() {
       const updated = currentExpenses.filter(item => item && item.id !== id);
       setExpenses(updated);
       localStorage.setItem(`cached_expenses_${selectedTripId}`, JSON.stringify(updated));
-    } catch (error) {
+    } catch {
       alert('無法連接雲端資料庫，目前無法刪除雲端歷史帳目。');
     }
   }
@@ -448,9 +459,11 @@ export default function App() {
 
   // 打包清單事件 (完全保留)
   const toggleChecklistItem = (id: string) => { 
-    checkedItems.includes(id) 
-      ? setCheckedItems(checkedItems.filter(item => item !== id)) 
-      : setCheckedItems([...checkedItems, id]) 
+    if (checkedItems.includes(id)) {
+      setCheckedItems(checkedItems.filter(item => item !== id));
+      return;
+    }
+    setCheckedItems([...checkedItems, id]);
   }
 
   const currentDayEvents = currentTrip?.content?.daysData?.[String(activeDay)] || [];
@@ -498,7 +511,13 @@ export default function App() {
             </label>
             <select
               value={selectedTripId}
-              onChange={(e) => setSelectedTripId(e.target.value)}
+              onChange={(e) => {
+                const nextTrip = tripOptions.find((trip) => trip.id === e.target.value);
+                if (!nextTrip) return;
+                setIsLoading(true);
+                applyTripDefaults(nextTrip);
+                setSelectedTripId(nextTrip.id);
+              }}
               className="w-full text-sm p-2 bg-white border border-slate-200 rounded-lg font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500"
             >
               {tripOptions.map(option => (
@@ -854,7 +873,7 @@ export default function App() {
                 <div className="space-y-2">
                   <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm divide-y divide-slate-100">
                     {filteredExpenses.length > 0 ? (
-                      filteredExpenses.map((item: any) => {
+                      filteredExpenses.map((item) => {
                         if (!item || !item.title) return null;
 
                         // 💡 動態抓取每筆資料自己當初存入的幣別，正確呈現符號
