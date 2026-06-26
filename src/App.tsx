@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react'
-import { Menu, X, Calendar, CheckSquare, Home, Wallet, MapPin, ExternalLink, Check, Plus, Trash2, FolderOpen, LogIn, LogOut, ShieldAlert } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { Menu, X, Calendar, CheckSquare, Home, Wallet, MapPin, ExternalLink, Check, Plus, Trash2, FolderOpen, LogIn, LogOut, ShieldAlert, Download, Edit3, Save } from 'lucide-react'
 import { createClient } from '@supabase/supabase-js'
 
 // 💡 引入型別與工具函式
@@ -28,6 +28,13 @@ interface AdminUser {
   email: string;
   role: 'super_admin' | 'trip_editor';
   trip_id: string | null;
+}
+
+interface EditExpenseDraft {
+  title: string;
+  amount: string;
+  payer: string;
+  currency: string;
 }
 
 // 支援手動切換的常用幣別選單配置
@@ -92,6 +99,32 @@ const getStoredExpensesForTrip = (tripId: string, fallbackCurrency: string): Sto
   return [...cachedExpenses, ...offlineExpenses];
 };
 
+const toBookStorageKey = (bookTripId: string) => {
+  return `cached_expenses_${bookTripId}`;
+};
+
+const toPersonalBookTripId = (tripId: string, email: string) => {
+  return `${tripId}::personal::${email.trim().toLowerCase()}`;
+};
+
+const isPersonalBookTripId = (tripId: string) => {
+  return tripId.includes('::personal::');
+};
+
+const sanitizeFilePart = (value: string) => {
+  return value
+    .replace(/[\\/:*?"<>|]+/g, '-')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 80) || 'travel-expenses';
+};
+
+const escapeCsvCell = (value: string | number | undefined) => {
+  const text = String(value ?? '');
+  return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+};
+
 export default function App() {
   // 1. 使用者登入狀態
   const [userEmail, setUserEmail] = useState<string | null>(null)
@@ -116,11 +149,16 @@ export default function App() {
   const [hasEditPermission, setHasEditPermission] = useState<boolean>(() => {
     return localStorage.getItem(`auth_${selectedTripId}`) === 'true';
   });
+  const [expenseBookTripId, setExpenseBookTripId] = useState<string>('');
 
   // 新增帳目表單狀態
   const [newTitle, setNewTitle] = useState('')
   const [newAmount, setNewAmount] = useState('')
   const [newPayer, setNewPayer] = useState('')
+  const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null)
+  const [editDraft, setEditDraft] = useState<EditExpenseDraft>({ title: '', amount: '', payer: '', currency: 'JPY' })
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
+  const deleteConfirmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   
   // ✨ 核心修改點：將「檢視分頁頁籤(activeCurrency)」與「表單新增用幣別(formCurrency)」完全拆開
   // activeCurrency 可以是 'ALL'、'JPY'、'TWD'、'USD'
@@ -133,6 +171,9 @@ export default function App() {
   const currentMembers = selectedTripMeta?.participants || ['我', '小明', '小華'];
   const currentCurrencyCode = selectedTripMeta?.currencyConfig.code || 'JPY';
   const currentCurrencySymbol = selectedTripMeta?.currencyConfig.symbol || '￥';
+  const canUseExpense = Boolean(userEmail);
+  const isUsingSharedExpenseBook = canUseExpense && hasEditPermission;
+  const expenseMembers = isUsingSharedExpenseBook || !userEmail ? currentMembers : [userEmail];
 
   const applyTripDefaults = (trip: TripMeta) => {
     if (trip.participants.length > 0) {
@@ -158,6 +199,14 @@ export default function App() {
     })
     return () => subscription.unsubscribe()
   }, [])
+
+  useEffect(() => {
+    return () => {
+      if (deleteConfirmTimerRef.current) {
+        clearTimeout(deleteConfirmTimerRef.current);
+      }
+    };
+  }, []);
 
   // 登入 / 登出
   const handleGoogleLogin = async () => {
@@ -228,17 +277,24 @@ export default function App() {
       
       if (userEmail && navigator.onLine) {
         try {
-          const { data, error } = await supabase.from('admin_users').select('email, role, trip_id').eq('email', userEmail).maybeSingle();
+          const { data, error } = await supabase.from('admin_users').select('email, role, trip_id').eq('email', userEmail);
           if (!error && data) {
-            profile = data as AdminUser;
-            localStorage.setItem(`admin_profile_${selectedTripId}`, JSON.stringify(data));
+            const profiles = data as AdminUser[];
+            profile =
+              profiles.find((item) => item.role === 'super_admin') ||
+              profiles.find((item) => item.role === 'trip_editor' && item.trip_id === selectedTripId) ||
+              null;
+            if (profile) {
+              localStorage.setItem(`admin_profile_${selectedTripId}`, JSON.stringify(profile));
+            }
           }
         } catch (err) { console.warn(err); }
       }
 
       if (!profile && cachedProfile) {
         try {
-          profile = JSON.parse(cachedProfile) as AdminUser;
+          const parsedProfile = JSON.parse(cachedProfile) as AdminUser;
+          profile = parsedProfile.email === userEmail ? parsedProfile : null;
         } catch {
           profile = null;
         }
@@ -246,9 +302,7 @@ export default function App() {
 
       setAdminProfile(profile);
 
-      const lastKnownAuth = localStorage.getItem(`auth_${selectedTripId}`);
       const isAuthorized = 
-        lastKnownAuth === 'true' || 
         profile?.role === 'super_admin' || 
         (profile?.role === 'trip_editor' && profile.trip_id === selectedTripId);
 
@@ -260,25 +314,37 @@ export default function App() {
         localStorage.setItem(`auth_${selectedTripId}`, 'true');
       }
 
-      if (navigator.onLine) {
+      if (!userEmail) {
+        setExpenseBookTripId('');
+        setExpenses([]);
+        setIsLoading(false);
+        return;
+      }
+
+      const bookTripId = isAuthorized
+        ? selectedTripId
+        : toPersonalBookTripId(selectedTripId, userEmail);
+      setExpenseBookTripId(bookTripId);
+
+      if (isAuthorized && navigator.onLine) {
         try {
           const { data: expenseData, error: expenseError } = await supabase
             .from('expenses')
             .select('*')
-            .eq('trip_id', selectedTripId)
+            .eq('trip_id', bookTripId)
             .order('created_at', { ascending: true });
 
           if (!expenseError && expenseData) {
             setExpenses(expenseData as ExpenseItem[]);
-            localStorage.setItem(`cached_expenses_${selectedTripId}`, JSON.stringify(expenseData));
+            localStorage.setItem(toBookStorageKey(bookTripId), JSON.stringify(expenseData));
           } else {
-            setExpenses(getStoredExpensesForTrip(selectedTripId, currentCurrencyCode));
+            setExpenses(getStoredExpensesForTrip(bookTripId, currentCurrencyCode));
           }
         } catch {
-          setExpenses(getStoredExpensesForTrip(selectedTripId, currentCurrencyCode));
+          setExpenses(getStoredExpensesForTrip(bookTripId, currentCurrencyCode));
         }
       } else {
-        setExpenses(getStoredExpensesForTrip(selectedTripId, currentCurrencyCode));
+        setExpenses(getStoredExpensesForTrip(bookTripId, currentCurrencyCode));
       }
 
       setIsLoading(false);
@@ -290,12 +356,15 @@ export default function App() {
   // 📡 智慧恢復網路自動同步機制
   useEffect(() => {
     const syncOfflineData = async () => {
-      if (!navigator.onLine) return;
+      if (!navigator.onLine || !userEmail || !expenseBookTripId || !isUsingSharedExpenseBook) return;
 
       const localQueue = readStoredExpenses('offline_expenses', '', 'JPY');
-      if (localQueue.length === 0) return;
+      const sharedQueue = localQueue.filter((item) => {
+        return item.trip_id === expenseBookTripId && !isPersonalBookTripId(item.trip_id);
+      });
+      if (sharedQueue.length === 0) return;
 
-      const syncData = localQueue.map((item) => ({
+      const syncData = sharedQueue.map((item) => ({
         trip_id: item.trip_id,
         title: item.title,
         amount: item.amount,
@@ -306,17 +375,22 @@ export default function App() {
       try {
         const { error } = await supabase.from('expenses').insert(syncData);
         if (!error) {
-          localStorage.removeItem('offline_expenses');
-          alert('系統提示：您在離線時記下的帳目，已成功同步上傳至雲端！');
+          const syncedIds = new Set(sharedQueue.map((item) => item.id));
+          const remainingQueue = localQueue.filter((item) => !syncedIds.has(item.id));
+          if (remainingQueue.length > 0) {
+            localStorage.setItem('offline_expenses', JSON.stringify(remainingQueue));
+          } else {
+            localStorage.removeItem('offline_expenses');
+          }
           
-          if (selectedTripId) {
+          if (expenseBookTripId) {
             const { data } = await supabase.from('expenses')
               .select('*')
-              .eq('trip_id', selectedTripId)
+              .eq('trip_id', expenseBookTripId)
               .order('created_at', { ascending: true });
             if (data) {
               setExpenses(data as ExpenseItem[]);
-              localStorage.setItem(`cached_expenses_${selectedTripId}`, JSON.stringify(data));
+              localStorage.setItem(toBookStorageKey(expenseBookTripId), JSON.stringify(data));
             }
           }
         }
@@ -330,41 +404,62 @@ export default function App() {
       window.removeEventListener('online', syncOfflineData);
       clearTimeout(timer);
     };
-  }, [selectedTripId]);
+  }, [expenseBookTripId, isUsingSharedExpenseBook, userEmail]);
 
   // 新增與刪除旅費
   const handleAddExpense = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!hasEditPermission) { alert('操作被拒：您沒有編輯此行程的權限！'); return; }
+    if (!userEmail || !expenseBookTripId) { alert('此功能須先登入'); return; }
     if (!newTitle || !newAmount || isNaN(Number(newAmount))) return
 
     const amountNum = Math.abs(Math.floor(Number(newAmount)))
     
     // ✨ 核心修改點：寫入資料庫與快取的幣別，完全綁定 formCurrency 狀態，不再跟隨 activeCurrency 分頁
     const newExpenseData = { 
-      trip_id: selectedTripId, 
+      trip_id: expenseBookTripId,
       title: newTitle, 
       amount: amountNum, 
-      payer: newPayer,
+      payer: isUsingSharedExpenseBook ? (newPayer || expenseMembers[0]) : userEmail,
       currency: formCurrency
     };
     
+    const createLocalExpenseItem = () => ({
+      id: `local_${Date.now()}_${Math.random()}`,
+      created_at: new Date().toISOString(),
+      ...newExpenseData
+    });
+
+    const saveToPersonalBook = () => {
+      const storageKey = toBookStorageKey(expenseBookTripId);
+      const localBook = readStoredExpenses(storageKey, expenseBookTripId, currentCurrencyCode);
+      const localItem = createLocalExpenseItem();
+
+      localBook.push(localItem);
+      localStorage.setItem(storageKey, JSON.stringify(localBook));
+
+      setExpenses(getStoredExpensesForTrip(expenseBookTripId, currentCurrencyCode));
+      setNewTitle('');
+      setNewAmount('');
+      alert('已儲存在此裝置的個人帳本，不會上傳到共用雲端。你仍可匯出 CSV 備份或分享。');
+    };
+
     const saveToOfflineSandbox = () => {
       const localQueue = readStoredExpenses('offline_expenses', '', currentCurrencyCode);
 
-      const offlineItem = { 
-        id: `local_${Date.now()}_${Math.random()}`, 
-        created_at: new Date().toISOString(), 
-        ...newExpenseData 
-      };
+      const offlineItem = createLocalExpenseItem();
       localQueue.push(offlineItem);
       localStorage.setItem('offline_expenses', JSON.stringify(localQueue));
 
-      setExpenses(getStoredExpensesForTrip(selectedTripId, currentCurrencyCode));
+      setExpenses(getStoredExpensesForTrip(expenseBookTripId, currentCurrencyCode));
       setNewTitle('');
       setNewAmount('');
-      alert('已自動安全儲存在本地暫存箱，連線後會自動同步。');
+      alert('已先儲存在本機暫存箱；恢復連線後會自動同步到共用帳本。');
     };
+
+    if (!isUsingSharedExpenseBook) {
+      saveToPersonalBook();
+      return;
+    }
 
     if (!navigator.onLine) {
       saveToOfflineSandbox();
@@ -379,7 +474,7 @@ export default function App() {
         const currentExpenses = Array.isArray(expenses) ? expenses : [];
         const updated = [...currentExpenses, data[0] as ExpenseItem];
         setExpenses(updated);
-        localStorage.setItem(`cached_expenses_${selectedTripId}`, JSON.stringify(updated));
+        localStorage.setItem(toBookStorageKey(expenseBookTripId), JSON.stringify(updated));
         setNewTitle('');
         setNewAmount('');
       }
@@ -388,34 +483,246 @@ export default function App() {
     }
   }
 
-  const handleDeleteExpense = async (id: string) => {
-    if (!hasEditPermission) { alert('操作被拒：您沒有修改此行程資料的權限。'); return; }
+  const replaceExpenseInStorage = (updatedExpense: ExpenseItem) => {
+    const targetId = String(updatedExpense.id);
 
-    if (String(id).startsWith('local_')) {
+    if (targetId.startsWith('local_') && isUsingSharedExpenseBook) {
       const localQueue = readStoredExpenses('offline_expenses', '', currentCurrencyCode);
-      const filteredQueue = localQueue.filter((item) => item.id !== id);
+      const updatedQueue = localQueue.map((item) => String(item.id) === targetId ? updatedExpense : item);
+      localStorage.setItem('offline_expenses', JSON.stringify(updatedQueue));
+      return;
+    }
+
+    const storageKey = toBookStorageKey(expenseBookTripId);
+    const localBook = readStoredExpenses(storageKey, expenseBookTripId, currentCurrencyCode);
+    const updatedBook = localBook.map((item) => String(item.id) === targetId ? updatedExpense : item);
+    localStorage.setItem(storageKey, JSON.stringify(updatedBook));
+  };
+
+  const removeExpenseFromStorage = (removedExpense: ExpenseItem) => {
+    const targetId = String(removedExpense.id);
+
+    if (targetId.startsWith('local_') && isUsingSharedExpenseBook) {
+      const localQueue = readStoredExpenses('offline_expenses', '', currentCurrencyCode);
+      const filteredQueue = localQueue.filter((item) => String(item.id) !== targetId);
       localStorage.setItem('offline_expenses', JSON.stringify(filteredQueue));
-      setExpenses(getStoredExpensesForTrip(selectedTripId, currentCurrencyCode));
+      return;
+    }
+
+    const storageKey = toBookStorageKey(expenseBookTripId);
+    const localBook = readStoredExpenses(storageKey, expenseBookTripId, currentCurrencyCode);
+    const filteredBook = localBook.filter((item) => String(item.id) !== targetId);
+    localStorage.setItem(storageKey, JSON.stringify(filteredBook));
+  };
+
+  const cancelPendingDelete = () => {
+    setPendingDeleteId(null);
+    if (deleteConfirmTimerRef.current) {
+      clearTimeout(deleteConfirmTimerRef.current);
+      deleteConfirmTimerRef.current = null;
+    }
+  };
+
+  const finalizeDeleteExpense = async (removedExpense: ExpenseItem, restoreIndex: number) => {
+    const targetId = String(removedExpense.id);
+
+    try {
+      if (!targetId.startsWith('local_') && isUsingSharedExpenseBook) {
+        if (!navigator.onLine) throw new Error('offline');
+
+        const { error } = await supabase.from('expenses').delete().eq('id', removedExpense.id);
+        if (error) throw error;
+      }
+
+      removeExpenseFromStorage(removedExpense);
+    } catch {
+      setExpenses((current) => {
+        if (current.some((expense) => String(expense.id) === targetId)) return current;
+
+        const restored = [...current];
+        restored.splice(Math.min(restoreIndex, restored.length), 0, removedExpense);
+        return restored;
+      });
+      alert('無法完成刪除，已將帳目放回清單。');
+    }
+  };
+
+  const startEditExpense = (item: ExpenseItem) => {
+    setPendingDeleteId(null);
+    if (deleteConfirmTimerRef.current) {
+      clearTimeout(deleteConfirmTimerRef.current);
+      deleteConfirmTimerRef.current = null;
+    }
+
+    setEditingExpenseId(String(item.id));
+    setEditDraft({
+      title: item.title || '',
+      amount: String(item.amount || ''),
+      payer: item.payer || expenseMembers[0] || '',
+      currency: item.currency || currentCurrencyCode
+    });
+  };
+
+  const cancelEditExpense = () => {
+    setEditingExpenseId(null);
+    setEditDraft({ title: '', amount: '', payer: '', currency: currentCurrencyCode });
+  };
+
+  const handleSaveEditExpense = async (id: string) => {
+    if (!userEmail || !expenseBookTripId) { alert('此功能須先登入'); return; }
+    if (!editDraft.title || !editDraft.amount || isNaN(Number(editDraft.amount))) return;
+
+    const targetExpense = expenses.find((item) => String(item.id) === String(id));
+    if (!targetExpense) return;
+
+    const updatedExpense: ExpenseItem = {
+      ...targetExpense,
+      title: editDraft.title,
+      amount: Math.abs(Math.floor(Number(editDraft.amount))),
+      payer: isUsingSharedExpenseBook ? editDraft.payer : userEmail,
+      currency: editDraft.currency
+    };
+
+    if (String(id).startsWith('local_') || !isUsingSharedExpenseBook) {
+      replaceExpenseInStorage(updatedExpense);
+      setExpenses((current) => current.map((item) => String(item.id) === String(id) ? updatedExpense : item));
+      cancelEditExpense();
       return;
     }
 
     if (!navigator.onLine) {
-      alert('目前處於離線狀態，無法刪除雲端歷史帳目。');
+      alert('目前處於離線狀態，無法修改雲端歷史帳目。');
       return;
     }
 
     try {
-      const { error } = await supabase.from('expenses').delete().eq('id', id)
+      const { data, error } = await supabase
+        .from('expenses')
+        .update({
+          title: updatedExpense.title,
+          amount: updatedExpense.amount,
+          payer: updatedExpense.payer,
+          currency: updatedExpense.currency
+        })
+        .eq('id', id)
+        .select()
+        .single();
+
       if (error) throw error;
-      
-      const currentExpenses = Array.isArray(expenses) ? expenses : [];
-      const updated = currentExpenses.filter(item => item && item.id !== id);
-      setExpenses(updated);
-      localStorage.setItem(`cached_expenses_${selectedTripId}`, JSON.stringify(updated));
+
+      const savedExpense = (data || updatedExpense) as ExpenseItem;
+      setExpenses((current) => {
+        const updated = current.map((item) => String(item.id) === String(id) ? savedExpense : item);
+        localStorage.setItem(toBookStorageKey(expenseBookTripId), JSON.stringify(updated));
+        return updated;
+      });
+      cancelEditExpense();
     } catch {
-      alert('無法連接雲端資料庫，目前無法刪除雲端歷史帳目。');
+      alert('無法連接雲端資料庫，目前無法修改雲端歷史帳目。');
     }
+  };
+
+  const handleDeleteExpense = (id: string) => {
+    if (!userEmail || !expenseBookTripId) { alert('此功能須先登入'); return; }
+
+    const targetId = String(id);
+    if (pendingDeleteId !== targetId) {
+      setEditingExpenseId(null);
+      setPendingDeleteId(targetId);
+      if (deleteConfirmTimerRef.current) {
+        clearTimeout(deleteConfirmTimerRef.current);
+      }
+      deleteConfirmTimerRef.current = setTimeout(() => {
+        setPendingDeleteId((current) => current === targetId ? null : current);
+        deleteConfirmTimerRef.current = null;
+      }, 3000);
+      return;
+    }
+
+    const currentExpenses = Array.isArray(expenses) ? expenses : [];
+    const targetIndex = currentExpenses.findIndex((item) => String(item.id) === targetId);
+    const targetExpense = currentExpenses[targetIndex];
+    if (!targetExpense) return;
+
+    if (!String(targetExpense.id).startsWith('local_') && isUsingSharedExpenseBook && !navigator.onLine) {
+      alert('目前處於離線狀態，無法刪除雲端歷史帳目。');
+      return;
+    }
+
+    if (deleteConfirmTimerRef.current) {
+      clearTimeout(deleteConfirmTimerRef.current);
+      deleteConfirmTimerRef.current = null;
+    }
+
+    setPendingDeleteId(null);
+    setExpenses(currentExpenses.filter((item) => String(item.id) !== targetId));
+    void finalizeDeleteExpense(targetExpense, targetIndex);
   }
+
+  const buildExpenseCsv = () => {
+    const rows = [
+      ['消費項目', '支出人', '幣別代碼', '幣別符號', '金額'],
+      ...filteredExpenses.map((item) => {
+        const currencyCode = item.currency || currentCurrencyCode;
+        const targetConfig = SUPPORTED_CURRENCIES.find(c => c.code === currencyCode);
+        return [
+          item.title,
+          item.payer || '未知',
+          currencyCode,
+          targetConfig?.symbol || currentCurrencySymbol,
+          item.amount || 0
+        ];
+      })
+    ];
+
+    return rows.map((row) => row.map(escapeCsvCell).join(',')).join('\r\n');
+  };
+
+  const getExportFileName = () => {
+    const tripName = currentTrip?.title || selectedTripMeta?.title || selectedTripId || 'travel';
+    const scope = isUsingSharedExpenseBook ? 'shared' : 'personal';
+    return `${sanitizeFilePart(tripName)}-${scope}-expenses.csv`;
+  };
+
+  const handleExportCsv = async () => {
+    if (!userEmail) { alert('此功能須先登入'); return; }
+    if (filteredExpenses.length === 0) { alert('目前沒有可匯出的帳本資料'); return; }
+
+    const csv = `\uFEFF${buildExpenseCsv()}`;
+    const suggestedName = getExportFileName();
+
+    try {
+      const picker = (window as Window & {
+        showSaveFilePicker?: (options: {
+          suggestedName: string;
+          types: Array<{ description: string; accept: Record<string, string[]> }>;
+        }) => Promise<{ createWritable: () => Promise<{ write: (data: Blob) => Promise<void>; close: () => Promise<void> }> }>;
+      }).showSaveFilePicker;
+
+      if (picker) {
+        const handle = await picker({
+          suggestedName,
+          types: [{ description: 'CSV file', accept: { 'text/csv': ['.csv'] } }]
+        });
+        const writable = await handle.createWritable();
+        await writable.write(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+        await writable.close();
+        return;
+      }
+    } catch (error) {
+      if ((error as DOMException).name === 'AbortError') return;
+    }
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = suggestedName;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  };
 
   // ----------------------------------------------------
   // 📊 數據計算：支援「ALL (全部顯示)」與各幣別分頁過濾
@@ -444,10 +751,10 @@ export default function App() {
     return sum + (isNaN(val) ? 0 : val);
   }, 0);
   
-  const averageExpense = currentMembers.length > 0 ? Math.round(totalExpense / currentMembers.length) : 0;
+  const averageExpense = expenseMembers.length > 0 ? Math.round(totalExpense / expenseMembers.length) : 0;
   
   const paitAmounts: { [key: string]: number } = {};
-  currentMembers.forEach((m: string) => { paitAmounts[m] = 0; });
+  expenseMembers.forEach((m: string) => { paitAmounts[m] = 0; });
   
   filteredExpenses.forEach(item => { 
     if (item && item.payer && paitAmounts[item.payer] !== undefined) {
@@ -474,6 +781,11 @@ export default function App() {
   }
 
   const handleScreenSelect = (item: TripDetail['sidebarConfig'][number]) => {
+    if (item.type === 'expense' && !userEmail) {
+      alert('此功能須先登入');
+      setIsMenuOpen(false);
+      return;
+    }
     setCurrentScreen(item.id);
     if (item.type === 'expense') {
       setActiveCurrency('ALL');
@@ -531,7 +843,10 @@ export default function App() {
                 if (!nextTrip) return;
                 setIsLoading(true);
                 applyTripDefaults(nextTrip);
+                setCurrentScreen('itinerary');
+                setActiveDay(1);
                 setSelectedTripId(nextTrip.id);
+                setIsMenuOpen(false);
               }}
               className="w-full text-sm p-2 bg-white border border-slate-200 rounded-lg font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500"
             >
@@ -579,7 +894,7 @@ export default function App() {
                       🟢 本行程可編輯者 {adminProfile?.role === 'super_admin' ? '(超級管理員)' : ''}
                     </span>
                   ) : (
-                    <span className="px-2 py-0.5 bg-amber-100 text-amber-800 font-bold rounded-full text-[10px]">👁️ 唯讀模式 (非授權人員)</span>
+                    <span className="px-2 py-0.5 bg-sky-100 text-sky-800 font-bold rounded-full text-[10px]">個人帳本模式</span>
                   )
                 ) : (
                   <span className="px-2 py-0.5 bg-slate-100 text-slate-600 font-bold rounded-full text-[10px]">請先選擇上方行程</span>
@@ -616,7 +931,7 @@ export default function App() {
                 {currentTrip ? currentTrip.title : '載入中...'}
               </h1>
               <p className="text-xs text-slate-100 mt-0.5 flex items-center gap-1 flex-wrap">
-                <span>{hasEditPermission ? '🌍 雲端多人同步中' : '🔒 安全唯讀模式'}</span>
+                <span>{isUsingSharedExpenseBook ? '🌍 共用帳本同步中' : userEmail ? '個人帳本模式' : '🔒 未登入瀏覽模式'}</span>
                 {currentTrip?.departureDate && (
                   <>
                     <span className="opacity-60">•</span>
@@ -791,15 +1106,19 @@ export default function App() {
                     </div>
                   ) : (
                     <>
-                      <h2 className="text-3xl font-black mt-1">{activeCurrencySymbol} {totalExpense.toLocaleString()}</h2>
+                      <h2 className="mt-1 min-w-0 break-words text-2xl font-black leading-tight [overflow-wrap:anywhere]">
+                        {activeCurrencySymbol} {totalExpense.toLocaleString()}
+                      </h2>
                       <div className="grid grid-cols-2 gap-4 mt-4 pt-4 border-t border-white/20 text-sm">
-                        <div>
-                          <span className="text-amber-100/80 text-xs block">{currentMembers.length} 人平攤 (每人)</span>
-                          <span className="text-lg font-bold">{activeCurrencySymbol} {averageExpense.toLocaleString()}</span>
+                        <div className="min-w-0">
+                          <span className="text-amber-100/80 text-xs block">{expenseMembers.length} 人平攤 (每人)</span>
+                          <span className="block min-w-0 break-words text-base font-bold leading-snug [overflow-wrap:anywhere]">
+                            {activeCurrencySymbol} {averageExpense.toLocaleString()}
+                          </span>
                         </div>
-                        <div>
+                        <div className="min-w-0">
                           <span className="text-amber-100/80 text-xs block">記帳筆數</span>
-                          <span className="text-lg font-bold">{filteredExpenses.length} 筆</span>
+                          <span className="block text-lg font-bold">{filteredExpenses.length} 筆</span>
                         </div>
                       </div>
                     </>
@@ -813,20 +1132,22 @@ export default function App() {
                       {effectiveActiveCurrency} 分攤結算狀態
                     </h3>
                     <div className="space-y-3">
-                      {currentMembers.map((member: string) => {
+                      {expenseMembers.map((member: string) => {
                         const paid = paitAmounts[member] || 0
                         const status = paid - averageExpense
                         return (
-                          <div key={member} className="flex justify-between items-center p-2.5 rounded-lg bg-slate-50">
-                            <div>
-                              <span className="font-bold text-slate-700">{member}</span>
-                              <span className="text-xs text-slate-400 block">已墊：{activeCurrencySymbol}{paid.toLocaleString()}</span>
+                          <div key={member} className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] gap-3 p-2.5 rounded-lg bg-slate-50">
+                            <div className="min-w-0">
+                              <span className="block break-words font-bold text-slate-700 [overflow-wrap:anywhere]">{member}</span>
+                              <span className="block min-w-0 break-words text-xs text-slate-400 [overflow-wrap:anywhere]">
+                                已墊：{activeCurrencySymbol}{paid.toLocaleString()}
+                              </span>
                             </div>
-                            <div className="text-right">
+                            <div className="min-w-0 text-right">
                               {status > 0 ? (
-                                <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full">應收回 {activeCurrencySymbol}{status.toLocaleString()}</span>
+                                <span className="inline-block max-w-full break-words rounded-lg bg-emerald-50 px-2.5 py-1 text-xs font-bold leading-snug text-emerald-600 [overflow-wrap:anywhere]">應收回 {activeCurrencySymbol}{status.toLocaleString()}</span>
                               ) : status < 0 ? (
-                                <span className="text-xs font-bold text-rose-600 bg-rose-50 px-2.5 py-1 rounded-full">應補繳 {activeCurrencySymbol}{Math.abs(status).toLocaleString()}</span>
+                                <span className="inline-block max-w-full break-words rounded-lg bg-rose-50 px-2.5 py-1 text-xs font-bold leading-snug text-rose-600 [overflow-wrap:anywhere]">應補繳 {activeCurrencySymbol}{Math.abs(status).toLocaleString()}</span>
                               ) : (
                                 <span className="text-xs font-bold text-slate-500 bg-slate-200 px-2.5 py-1 rounded-full">已平帳</span>
                               )}
@@ -842,8 +1163,22 @@ export default function App() {
                   </div>
                 )}
 
+                <div className="bg-white rounded-xl border border-slate-200 p-3 shadow-sm">
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <h3 className="text-sm font-bold text-slate-800">帳本匯出</h3>
+                      <p className="text-[11px] text-slate-500 mt-0.5">依目前清單與幣別篩選匯出 CSV</p>
+                    </div>
+                    <div className="flex gap-2">
+                      <button type="button" onClick={handleExportCsv} className="inline-flex items-center gap-1 rounded-lg bg-slate-800 px-3 py-2 text-xs font-bold text-white hover:bg-slate-700">
+                        <Download size={14} /> CSV
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
                 {/* 新增表單區：✨ 下拉選單改為 formCurrency，完全與最上方的 Tabs 分離 */}
-                {hasEditPermission ? (
+                {canUseExpense ? (
                   <form onSubmit={handleAddExpense} className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm space-y-3">
                     <div className="flex justify-between items-center">
                       <h3 className="text-sm font-bold text-slate-800">新增一筆旅費</h3>
@@ -873,8 +1208,8 @@ export default function App() {
                     <div className="flex gap-2 items-center flex-wrap">
                       <span className="text-xs text-slate-500 font-medium">付款人：</span>
                       <div className="flex gap-1.5 flex-wrap">
-                        {currentMembers.map((m: string) => (
-                          <button key={m} type="button" onClick={() => setNewPayer(m)} className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${newPayer === m ? 'bg-amber-600 border-amber-600 text-white' : 'bg-white border-slate-200 text-slate-600'}`}>{m}</button>
+                        {expenseMembers.map((m: string) => (
+                          <button key={m} type="button" onClick={() => setNewPayer(m)} className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${newPayer === m || (!isUsingSharedExpenseBook && m === userEmail) ? 'bg-amber-600 border-amber-600 text-white' : 'bg-white border-slate-200 text-slate-600'}`}>{m}</button>
                         ))}
                       </div>
                       <button type="submit" className="ml-auto flex items-center gap-1 bg-slate-800 text-white font-bold text-xs px-3 py-2 rounded-lg"><Plus size={14} /> 記帳</button>
@@ -884,8 +1219,8 @@ export default function App() {
                   <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex gap-3 text-amber-900 text-xs">
                     <ShieldAlert size={18} className="text-amber-600 shrink-0" />
                     <div>
-                      <p className="font-bold mb-0.5">目前處於「唯讀模式」</p>
-                      <p className="text-amber-700/90 leading-relaxed">請先點選左側選單完成 Google 登入。如果已登入但仍看到此提示，代表您的帳號未在此行程的共同編輯白名單內。</p>
+                      <p className="font-bold mb-0.5">此功能須先登入</p>
+                      <p className="text-amber-700/90 leading-relaxed">請先點選左側選單完成 Google 登入。登入後若不在核准名單內，系統會自動建立你的個人帳本。</p>
                     </div>
                   </div>
                 )}
@@ -901,27 +1236,107 @@ export default function App() {
                         const targetConfig = SUPPORTED_CURRENCIES.find(c => c.code === item.currency);
                         const itemSymbol = targetConfig ? targetConfig.symbol : currentCurrencySymbol;
                         const itemCurrencyCode = item.currency || currentCurrencyCode;
+                        const isEditing = editingExpenseId === String(item.id);
+                        const isPendingDelete = pendingDeleteId === String(item.id);
 
                         return (
-                          <div key={item.id} className="flex justify-between items-center p-4">
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <h4 className="font-bold text-slate-800 text-sm">{item.title}</h4>
-                                {/* ✨ 當全部顯示時，在項目旁邊加上精緻的小角標標明幣別 */}
-                                {effectiveActiveCurrency === 'ALL' && (
-                                  <span className="text-[10px] bg-slate-100 text-slate-600 px-1 py-0.2 rounded font-mono font-bold">
-                                    {itemCurrencyCode}
+                          <div key={item.id} className="relative p-4">
+                            {isEditing ? (
+                              <div className="space-y-3 rounded-lg border border-amber-200 bg-amber-50/60 p-3">
+                                <input
+                                  type="text"
+                                  value={editDraft.title}
+                                  onChange={(e) => setEditDraft((draft) => ({ ...draft, title: e.target.value }))}
+                                  className="w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                                  placeholder="消費項目"
+                                />
+                                <div className="grid grid-cols-[6.5rem_minmax(0,1fr)] gap-2">
+                                  <select
+                                    value={editDraft.currency}
+                                    onChange={(e) => setEditDraft((draft) => ({ ...draft, currency: e.target.value }))}
+                                    className="rounded-lg border border-amber-200 bg-white px-2 py-2 text-sm font-bold text-amber-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                                  >
+                                    {SUPPORTED_CURRENCIES.map(c => (
+                                      <option key={c.code} value={c.code}>{c.code} ({c.symbol})</option>
+                                    ))}
+                                  </select>
+                                  <input
+                                    type="number"
+                                    value={editDraft.amount}
+                                    onChange={(e) => setEditDraft((draft) => ({ ...draft, amount: e.target.value }))}
+                                    className="min-w-0 rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                                    placeholder="金額"
+                                  />
+                                </div>
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className="text-xs font-medium text-slate-500">付款人：</span>
+                                  {expenseMembers.map((m: string) => (
+                                    <button
+                                      key={m}
+                                      type="button"
+                                      onClick={() => setEditDraft((draft) => ({ ...draft, payer: m }))}
+                                      className={`rounded-lg border px-3 py-1.5 text-xs font-bold transition-all ${editDraft.payer === m || (!isUsingSharedExpenseBook && m === userEmail) ? 'border-amber-600 bg-amber-600 text-white' : 'border-slate-200 bg-white text-slate-600'}`}
+                                    >
+                                      {m}
+                                    </button>
+                                  ))}
+                                </div>
+                                <div className="flex justify-end gap-2">
+                                  <button type="button" onClick={cancelEditExpense} className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50">
+                                    <X size={14} /> 取消
+                                  </button>
+                                  <button type="button" onClick={() => handleSaveEditExpense(item.id)} className="inline-flex items-center gap-1 rounded-lg bg-slate-800 px-3 py-2 text-xs font-bold text-white hover:bg-slate-700">
+                                    <Save size={14} /> 儲存
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="space-y-2">
+                                <h4 className="min-w-0 whitespace-pre-wrap break-words text-sm font-medium leading-6 text-slate-950 [overflow-wrap:anywhere]">{item.title}</h4>
+                                <div className="flex min-w-0">
+                                  <span className="max-w-full break-words rounded bg-sky-50 px-2 py-1 text-[11px] font-semibold leading-snug text-sky-800 [overflow-wrap:anywhere]">支出人：{item.payer || '未知'}</span>
+                                </div>
+                                <div className="flex min-w-0 flex-wrap items-center gap-2">
+                                  <span className="rounded bg-slate-100 px-2 py-1 font-mono text-[10px] font-bold text-slate-500">{itemCurrencyCode}</span>
+                                  <span className="rounded bg-amber-50 px-2 py-1 font-mono text-[10px] font-bold text-amber-800">{itemSymbol}</span>
+                                  <span className="min-w-0 max-w-full break-words font-mono text-sm font-black leading-6 text-slate-950 [overflow-wrap:anywhere]">
+                                    {(item.amount || 0).toLocaleString()}
                                   </span>
+                                </div>
+                                {canUseExpense && (
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <button type="button" title="編輯這筆帳目" onClick={() => startEditExpense(item)} className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-bold text-slate-500 hover:border-sky-200 hover:bg-sky-50 hover:text-sky-700">
+                                      <Edit3 size={14} /> 編輯
+                                    </button>
+                                    <button
+                                      type="button"
+                                      title="刪除這筆帳目"
+                                      onClick={() => handleDeleteExpense(item.id)}
+                                      className={`inline-flex items-center gap-1 rounded-lg border bg-white px-2.5 py-1.5 text-xs font-bold transition-colors ${
+                                        isPendingDelete
+                                          ? 'border-rose-300 bg-rose-50 text-rose-600'
+                                          : 'border-rose-100 text-rose-300 hover:border-rose-300 hover:bg-rose-50 hover:text-rose-600'
+                                      }`}
+                                    >
+                                      <Trash2 size={14} /> 刪除
+                                    </button>
+                                  </div>
+                                )}
+                                {isPendingDelete && (
+                                  <div className="absolute left-4 top-[calc(100%-0.5rem)] z-20 w-[min(18rem,calc(100%-2rem))] rounded-xl border border-rose-200 bg-white p-3 text-left shadow-2xl">
+                                    <p className="text-xs font-semibold leading-relaxed text-rose-700">確定要刪除這筆帳目嗎？3 秒內未選擇將自動取消。</p>
+                                    <div className="mt-3 flex justify-end gap-2">
+                                      <button type="button" onClick={cancelPendingDelete} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50">
+                                        復原
+                                      </button>
+                                      <button type="button" onClick={() => handleDeleteExpense(item.id)} className="inline-flex items-center gap-1 rounded-lg bg-rose-600 px-3 py-2 text-xs font-bold text-white hover:bg-rose-700">
+                                        <Trash2 size={14} /> 確認刪除
+                                      </button>
+                                    </div>
+                                  </div>
                                 )}
                               </div>
-                              <span className="text-xs font-semibold bg-slate-100 text-slate-500 px-2 py-0.5 rounded mt-1 inline-block">{item.payer || '未知'} 墊付</span>
-                            </div>
-                            <div className="flex items-center gap-3">
-                              <span className="font-mono font-bold text-slate-800 text-sm">{itemSymbol} {(item.amount || 0).toLocaleString()}</span>
-                              {hasEditPermission && (
-                                <button type="button" onClick={() => handleDeleteExpense(item.id)} className="p-1 text-slate-300 hover:text-rose-600"><Trash2 size={16} /></button>
-                              )}
-                            </div>
+                            )}
                           </div>
                         );
                       })
