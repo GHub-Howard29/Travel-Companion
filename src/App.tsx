@@ -1323,7 +1323,7 @@ export default function App() {
                                   </div>
                                 )}
                                 {isPendingDelete && (
-                                  <div className="absolute left-4 top-[calc(100%-0.5rem)] z-20 w-[min(18rem,calc(100%-2rem))] rounded-xl border border-rose-200 bg-white p-3 text-left shadow-2xl">
+                                  <div className="w-full max-w-[18rem] rounded-xl border border-rose-200 bg-white p-3 text-left shadow-lg">
                                     <p className="text-xs font-semibold leading-relaxed text-rose-700">確定要刪除這筆帳目嗎？3 秒內未選擇將自動取消。</p>
                                     <div className="mt-3 flex justify-end gap-2">
                                       <button type="button" onClick={cancelPendingDelete} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50">
