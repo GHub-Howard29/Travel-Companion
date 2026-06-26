@@ -124,7 +124,7 @@ export default function App() {
   
   // ✨ 核心修改點：將「檢視分頁頁籤(activeCurrency)」與「表單新增用幣別(formCurrency)」完全拆開
   // activeCurrency 可以是 'ALL'、'JPY'、'TWD'、'USD'
-  const [activeCurrency, setActiveCurrency] = useState('JPY')
+  const [activeCurrency, setActiveCurrency] = useState('ALL')
   // formCurrency 專門用在表單輸入上，獨立控制
   const [formCurrency, setFormCurrency] = useState('JPY')
 
@@ -138,7 +138,7 @@ export default function App() {
     if (trip.participants.length > 0) {
       setNewPayer(trip.participants[0]);
     }
-    setActiveCurrency(trip.currencyConfig.code);
+    setActiveCurrency('ALL');
     setFormCurrency(trip.currencyConfig.code);
   };
 
@@ -421,13 +421,20 @@ export default function App() {
   // 📊 數據計算：支援「ALL (全部顯示)」與各幣別分頁過濾
   // ----------------------------------------------------
   const safeExpenses = Array.isArray(expenses) ? expenses : [];
+  const availableCurrencies = SUPPORTED_CURRENCIES.filter((currency) =>
+    safeExpenses.some((expense) => (expense.currency || currentCurrencyCode) === currency.code)
+  );
+  const effectiveActiveCurrency =
+    activeCurrency === 'ALL' || availableCurrencies.some((currency) => currency.code === activeCurrency)
+      ? activeCurrency
+      : 'ALL';
   
   // 💡 根據 activeCurrency 過濾歷史明細：如果為 'ALL' 則保留全部
   const filteredExpenses = safeExpenses.filter(item => {
     if (!item) return false;
-    if (activeCurrency === 'ALL') return true; // 全部顯示支出
+    if (effectiveActiveCurrency === 'ALL') return true; // 全部顯示支出
     const itemCurrency = item.currency || currentCurrencyCode;
-    return itemCurrency === activeCurrency;
+    return itemCurrency === effectiveActiveCurrency;
   });
 
   // 計算特定單一幣別總金額（若為 ALL，此處純計算，看板會有專屬防混淆顯示）
@@ -449,7 +456,7 @@ export default function App() {
     } 
   });
 
-  const activeCurrencySymbol = SUPPORTED_CURRENCIES.find(c => c.code === activeCurrency)?.symbol || currentCurrencySymbol;
+  const activeCurrencySymbol = SUPPORTED_CURRENCIES.find(c => c.code === effectiveActiveCurrency)?.symbol || currentCurrencySymbol;
 
   // 地圖導航事件 (完全保留)
   const handleNavigate = (location: string) => { 
@@ -465,6 +472,14 @@ export default function App() {
     }
     setCheckedItems([...checkedItems, id]);
   }
+
+  const handleScreenSelect = (item: TripDetail['sidebarConfig'][number]) => {
+    setCurrentScreen(item.id);
+    if (item.type === 'expense') {
+      setActiveCurrency('ALL');
+    }
+    setIsMenuOpen(false);
+  };
 
   const currentDayEvents = currentTrip?.content?.daysData?.[String(activeDay)] || [];
   const checklistData = currentTrip?.content?.checklistData || [];
@@ -535,7 +550,7 @@ export default function App() {
             return (
               <button
                 key={item.id}
-                onClick={() => { setCurrentScreen(item.id); setIsMenuOpen(false); }}
+                onClick={() => handleScreenSelect(item)}
                 className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-xl text-left font-medium transition-all ${
                   isActive ? 'bg-slate-900 text-white font-bold shadow-md' : 'text-slate-700 hover:bg-slate-50'
                 }`}
@@ -734,20 +749,20 @@ export default function App() {
                     type="button"
                     onClick={() => setActiveCurrency('ALL')}
                     className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${
-                      activeCurrency === 'ALL'
+                      effectiveActiveCurrency === 'ALL'
                         ? 'bg-white text-slate-900 shadow-sm'
                         : 'text-slate-500 hover:text-slate-800 hover:bg-white/40'
                     }`}
                   >
                     全部顯示
                   </button>
-                  {SUPPORTED_CURRENCIES.map((c) => (
+                  {availableCurrencies.map((c) => (
                     <button
                       key={c.code}
                       type="button"
                       onClick={() => setActiveCurrency(c.code)}
                       className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${
-                        activeCurrency === c.code
+                        effectiveActiveCurrency === c.code
                           ? 'bg-white text-slate-900 shadow-sm'
                           : 'text-slate-500 hover:text-slate-800 hover:bg-white/40'
                       }`}
@@ -760,13 +775,19 @@ export default function App() {
                 {/* 總覽看板 */}
                 <div className="bg-gradient-to-br from-amber-500 to-amber-600 p-5 rounded-2xl text-white shadow-md">
                   <span className="text-xs text-amber-100 font-bold tracking-wider uppercase">
-                    {activeCurrency === 'ALL' ? '總明細預覽看板' : `雲端分流統計 (${activeCurrency} 頁籤)`}
+                    {effectiveActiveCurrency === 'ALL' ? '總明細預覽看板' : `雲端分流統計 (${effectiveActiveCurrency} 頁籤)`}
                   </span>
                   
-                  {activeCurrency === 'ALL' ? (
+                  {effectiveActiveCurrency === 'ALL' ? (
                     <div>
-                      <h2 className="text-2xl font-black mt-1">混合多幣別清單</h2>
-                      <p className="text-xs text-amber-100/90 mt-1">目前為混合檢視，下方可查閱各幣別的歷史明細項目。</p>
+                      <h2 className="text-2xl font-black mt-1">
+                        {safeExpenses.length > 0 ? '混合多幣別清單' : '目前尚無記帳資料'}
+                      </h2>
+                      <p className="text-xs text-amber-100/90 mt-1">
+                        {safeExpenses.length > 0
+                          ? '目前為混合檢視，下方可查閱各幣別的歷史明細項目。'
+                          : '新增第一筆旅費後，這裡會自動顯示可篩選的幣別。'}
+                      </p>
                     </div>
                   ) : (
                     <>
@@ -786,10 +807,10 @@ export default function App() {
                 </div>
 
                 {/* 分攤結算狀態：✨ 僅在非 ALL 時顯示，以防幣別混合造成計算錯誤 */}
-                {activeCurrency !== 'ALL' ? (
+                {effectiveActiveCurrency !== 'ALL' ? (
                   <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
                     <h3 className="text-sm font-bold text-slate-400 mb-3 uppercase tracking-wider">
-                      {activeCurrency} 分攤結算狀態
+                      {effectiveActiveCurrency} 分攤結算狀態
                     </h3>
                     <div className="space-y-3">
                       {currentMembers.map((member: string) => {
@@ -887,7 +908,7 @@ export default function App() {
                               <div className="flex items-center gap-2">
                                 <h4 className="font-bold text-slate-800 text-sm">{item.title}</h4>
                                 {/* ✨ 當全部顯示時，在項目旁邊加上精緻的小角標標明幣別 */}
-                                {activeCurrency === 'ALL' && (
+                                {effectiveActiveCurrency === 'ALL' && (
                                   <span className="text-[10px] bg-slate-100 text-slate-600 px-1 py-0.2 rounded font-mono font-bold">
                                     {itemCurrencyCode}
                                   </span>
@@ -905,7 +926,9 @@ export default function App() {
                         );
                       })
                     ) : (
-                      <div className="text-center py-8 text-slate-400 text-xs">目前尚無此分類下的記帳資料。</div>
+                      <div className="text-center py-8 text-slate-400 text-xs">
+                        {safeExpenses.length === 0 ? '目前尚無記帳資料' : '目前尚無此分類下的記帳資料。'}
+                      </div>
                     )}
                   </div>
                 </div>
