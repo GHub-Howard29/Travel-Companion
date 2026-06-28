@@ -242,6 +242,33 @@ const updateLocalAttachmentExpenseId = async (
   db.close();
 };
 
+const findLocalAttachmentIdByExpense = async (expenseId: string, tripId: string): Promise<string | null> => {
+  const db = await openAttachmentDb();
+  const id = await new Promise<string | null>((resolve, reject) => {
+    const tx = db.transaction(ATTACHMENT_STORE_NAME, 'readonly');
+    const store = tx.objectStore(ATTACHMENT_STORE_NAME);
+    const request = store.openCursor();
+
+    request.onsuccess = (event) => {
+      const cursor = (event.target as IDBRequest).result as IDBCursorWithValue | null;
+      if (!cursor) {
+        resolve(null);
+        return;
+      }
+      const record = cursor.value as LocalAttachmentRecord;
+      if (record.expenseId === expenseId && record.tripId === tripId) {
+        resolve(record.id);
+        return;
+      }
+      cursor.continue();
+    };
+
+    request.onerror = () => reject(request.error);
+  });
+  db.close();
+  return id;
+};
+
 const deleteLocalAttachment = async (id?: string | null) => {
   if (!id) return;
   const db = await openAttachmentDb();
@@ -580,9 +607,19 @@ export default function App() {
           if (!expenseError && expenseData) {
             const cachedBook = readStoredExpenses(toBookStorageKey(bookTripId), bookTripId, currentCurrencyCode);
             const cachedAttachmentIds = new Map(cachedBook.map((item) => [String(item.id), item.local_attachment_id || null]));
-            const hydratedExpenses = (expenseData as ExpenseItem[]).map((item) => ({
-              ...item,
-              local_attachment_id: cachedAttachmentIds.get(String(item.id)) || item.local_attachment_id || null
+            const hydratedExpenses = await Promise.all((expenseData as ExpenseItem[]).map(async (item) => {
+              const existingLocalAttachmentId = cachedAttachmentIds.get(String(item.id)) || item.local_attachment_id || null;
+              if (!existingLocalAttachmentId && item.attachment_status === 'local_pending') {
+                const recoveredId = await findLocalAttachmentIdByExpense(String(item.id), bookTripId);
+                return {
+                  ...item,
+                  local_attachment_id: recoveredId || null
+                };
+              }
+              return {
+                ...item,
+                local_attachment_id: existingLocalAttachmentId
+              };
             }));
             setExpenses(hydratedExpenses);
             localStorage.setItem(toBookStorageKey(bookTripId), JSON.stringify(hydratedExpenses));
@@ -667,10 +704,15 @@ export default function App() {
                 ...item,
                 local_attachment_id: syncedLocalAttachmentIds.get(String(item.id)) || item.local_attachment_id || null
               }));
-              setExpenses(hydratedData);
               localStorage.setItem(toBookStorageKey(expenseBookTripId), JSON.stringify(hydratedData));
+              setExpenses([...hydratedData, ...remainingQueue]);
             }
           }
+        }
+
+        if (expenseBookTripId) {
+          const refreshedExpenses = getStoredExpensesForTrip(expenseBookTripId, currentCurrencyCode);
+          setExpenses(refreshedExpenses);
         }
       } catch (err) { console.error(err); }
     };
@@ -759,8 +801,8 @@ export default function App() {
       setExpenses(getStoredExpensesForTrip(expenseBookTripId, currentCurrencyCode));
       clearAddForm();
       alert(selectedFile
-        ? '已儲存在此裝置的個人帳本，照片也只保存在本機。CSV 會標註附件名稱，但不會產生雲端下載網址。'
-        : '已儲存在此裝置的個人帳本，不會上傳到共用雲端。你仍可匯出 CSV 備份或分享。');
+        ? '已儲存在此裝置的個人帳本，照片也只保存在本機。Excel 內會標註附件名稱，但不會產生雲端下載網址。'
+        : '已儲存在此裝置的個人帳本，不會上傳到共用雲端。你仍可匯出 Excel 備份或分享。');
     };
 
     const saveToOfflineSandbox = async () => {
@@ -1073,13 +1115,21 @@ export default function App() {
       return;
     }
 
-    const pendingItems = expenses.filter((item): item is ExpenseItem & { local_attachment_id: string } =>
-      hasLocalAttachmentId(item) &&
-      item.attachment_status !== 'synced' &&
-      !String(item.id).startsWith('local_')
-    );
+    const pendingItems = await Promise.all(expenses.map(async (item) => {
+      if (item.attachment_status === 'synced' || String(item.id).startsWith('local_')) return null;
+      if (hasLocalAttachmentId(item)) return item;
+      if (item.attachment_status === 'local_pending') {
+        const recoveredId = await findLocalAttachmentIdByExpense(String(item.id), expenseBookTripId);
+        if (recoveredId) {
+          return { ...item, local_attachment_id: recoveredId } as ExpenseItem & { local_attachment_id: string };
+        }
+      }
+      return null;
+    }));
 
-    if (pendingItems.length === 0) {
+    const filteredPendingItems = pendingItems.filter((item): item is ExpenseItem & { local_attachment_id: string } => Boolean(item));
+
+    if (filteredPendingItems.length === 0) {
       alert('目前沒有尚未同步的照片。');
       return;
     }
@@ -1087,14 +1137,13 @@ export default function App() {
     setIsSyncingAttachments(true);
     const savedItems: ExpenseItem[] = [];
 
-    for (const item of pendingItems) {
+    for (const item of filteredPendingItems) {
       try {
         const attachment = await getLocalAttachment(item.local_attachment_id);
         if (!attachment) {
           const errorMessage = 'local-attachment-not-found';
           const failedExpense: ExpenseItem = {
             ...item,
-            local_attachment_id: null,
             attachment_status: 'upload_failed',
             attachment_last_error: errorMessage
           };
@@ -1173,6 +1222,23 @@ export default function App() {
       return updated;
     });
 
+    if (expenseBookTripId) {
+      const { data: refreshedData } = await supabase.from('expenses')
+        .select('*')
+        .eq('trip_id', expenseBookTripId)
+        .order('created_at', { ascending: true });
+      if (refreshedData) {
+        const hydrated = (refreshedData as ExpenseItem[]).map((item) => ({
+          ...item,
+          local_attachment_id: localStorage.getItem(toBookStorageKey(expenseBookTripId))
+            ? JSON.parse(localStorage.getItem(toBookStorageKey(expenseBookTripId)) || '[]').find((x: ExpenseItem) => String(x.id) === String(item.id))?.local_attachment_id || item.local_attachment_id || null
+            : item.local_attachment_id || null
+        }));
+        setExpenses(hydrated);
+        localStorage.setItem(toBookStorageKey(expenseBookTripId), JSON.stringify(hydrated));
+      }
+    }
+
     const now = new Date().toISOString();
     localStorage.setItem(`attachment_last_sync_${expenseBookTripId}`, now);
     setLastAttachmentSyncStamp({ bookId: expenseBookTripId, value: now });
@@ -1181,12 +1247,18 @@ export default function App() {
   };
 
   const buildExpenseXlsx = async () => {
-    const rows: Array<Array<string | number>> = [];
-    rows.push(['消費項目', '支出人', '幣別代碼', '幣別符號', '金額', '附件下載連結']);
+    const exportItems = isUsingSharedExpenseBook ? filteredExpenses : safeExpenses;
 
-    const hyperlinkCells: Array<{ r: number; c: number; url: string; text: string }> = [];
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Expenses');
 
-    for (const [index, item] of filteredExpenses.entries()) {
+    const rows: Array<(string | number)[]> = [
+      ['消費項目', '支出人', '幣別代碼', '幣別符號', '金額', '附件下載連結']
+    ];
+
+    const hyperlinkRows: Array<{ index: number; url: string; text: string }> = [];
+
+    for (const item of exportItems) {
       const currencyCode = item.currency || currentCurrencyCode;
       const targetConfig = SUPPORTED_CURRENCIES.find(c => c.code === currencyCode);
       let attachmentUrl = '';
@@ -1209,33 +1281,22 @@ export default function App() {
       ]);
 
       if (attachmentUrl) {
-        hyperlinkCells.push({
-          r: index + 1,
-          c: 5,
+        hyperlinkRows.push({
+          index: rows.length,
           url: attachmentUrl,
           text: attachmentName
         });
       }
     }
 
-    const workbook = new ExcelJS.Workbook();
-    const worksheet = workbook.addWorksheet('Expenses');
+    rows.forEach((rowData) => worksheet.addRow(rowData));
 
-    worksheet.addRow(['消費項目', '支出人', '幣別代碼', '幣別符號', '金額', '附件下載連結']);
-
-    for (const cell of hyperlinkCells) {
-      const row = worksheet.addRow([
-        rows[cell.r][0],
-        rows[cell.r][1],
-        rows[cell.r][2],
-        rows[cell.r][3],
-        rows[cell.r][4],
-        cell.text
-      ]);
+    for (const link of hyperlinkRows) {
+      const row = worksheet.getRow(link.index);
       const hyperlinkCell = row.getCell(6);
       hyperlinkCell.value = {
-        text: cell.text,
-        hyperlink: cell.url
+        text: link.text,
+        hyperlink: link.url
       };
       hyperlinkCell.font = {
         color: { argb: 'FF0000FF' },
@@ -1254,7 +1315,8 @@ export default function App() {
 
   const handleExportXlsx = async () => {
     if (!userEmail) { alert('此功能須先登入'); return; }
-    if (filteredExpenses.length === 0) { alert('目前沒有可匯出的帳本資料'); return; }
+    const exportItems = isUsingSharedExpenseBook ? filteredExpenses : safeExpenses;
+    if (exportItems.length === 0) { alert('目前沒有可匯出的帳本資料'); return; }
 
     const workbook = await buildExpenseXlsx();
     const suggestedName = getExportFileNameXlsx();
@@ -1310,15 +1372,17 @@ export default function App() {
     const itemCurrency = item.currency || currentCurrencyCode;
     return itemCurrency === effectiveActiveCurrency;
   });
-  const pendingAttachmentCount = safeExpenses.filter((item) =>
+  const pendingAttachmentCount = isUsingSharedExpenseBook ? safeExpenses.filter((item) =>
     item.local_attachment_id &&
     item.attachment_status !== 'synced' &&
+    item.attachment_status !== 'none' &&
     !String(item.id).startsWith('local_')
-  ).length;
+  ).length : 0;
   const hasUnsyncedLocalExpenseAttachments = safeExpenses.some((item) =>
     item.local_attachment_id &&
     item.attachment_status !== 'synced' &&
-    String(item.id).startsWith('local_')
+    String(item.id).startsWith('local_') &&
+    isUsingSharedExpenseBook
   );
   const storedAttachmentSyncAt = expenseBookTripId
     ? localStorage.getItem(`attachment_last_sync_${expenseBookTripId}`)
@@ -1754,7 +1818,11 @@ export default function App() {
                   <div className="flex items-center justify-between gap-2">
                     <div>
                       <h3 className="text-sm font-bold text-slate-800">帳本匯出</h3>
-                      <p className="text-[11px] text-slate-500 mt-0.5">依目前清單與幣別篩選匯出 XLSX，附件欄位會顯示可點擊的下載連結</p>
+                      <p className="text-[11px] text-slate-500 mt-0.5">
+                        {isUsingSharedExpenseBook
+                          ? '依目前清單與幣別篩選匯出 XLSX，附件欄位會顯示可點擊的下載連結'
+                          : '已儲存在此裝置的個人帳本，照片也只保存在本機。Excel 內會標註附件名稱，但不會產生雲端下載網址。'}
+                      </p>
                     </div>
                     <div className="flex gap-2">
                       <button type="button" onClick={handleExportXlsx} className="inline-flex items-center gap-1 rounded-lg bg-slate-800 px-3 py-2 text-xs font-bold text-white hover:bg-slate-700">
@@ -1770,7 +1838,7 @@ export default function App() {
                           <p className="mt-0.5 text-[11px] leading-relaxed text-slate-500">
                             最後上傳：{attachmentSyncLabel}。照片會自動壓縮至 1MB 以內，建議在 Wi-Fi 環境下再上傳以節省流量。
                           </p>
-                          {hasUnsyncedLocalExpenseAttachments && (
+                          {isUsingSharedExpenseBook && hasUnsyncedLocalExpenseAttachments && (
                             <p className="mt-1 text-[11px] font-semibold text-orange-700">有離線新增的照片，請先連線讓帳目自動同步後，再按同步照片。</p>
                           )}
                         </div>
@@ -1834,7 +1902,11 @@ export default function App() {
                           accept="image/*"
                           capture="environment"
                           className="hidden"
-                          onChange={(e) => void handleAttachmentSelection(e.target.files?.[0], setNewAttachmentFile)}
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            void handleAttachmentSelection(file, setNewAttachmentFile);
+                            e.currentTarget.value = '';
+                          }}
                         />
                       </label>
                       {newAttachmentFile && (
@@ -1935,7 +2007,11 @@ export default function App() {
                                     accept="image/*"
                                     capture="environment"
                                     className="hidden"
-                                    onChange={(e) => void handleAttachmentSelection(e.target.files?.[0], setEditAttachmentFile)}
+                                    onChange={(e) => {
+                                      const file = e.target.files?.[0];
+                                      void handleAttachmentSelection(file, setEditAttachmentFile);
+                                      e.currentTarget.value = '';
+                                    }}
                                   />
                                 </label>
                                 <div className="flex justify-end gap-2">
@@ -1974,7 +2050,9 @@ export default function App() {
                                         ? '照片已同步'
                                         : item.attachment_status === 'upload_failed'
                                           ? '照片同步失敗'
-                                          : `照片待同步${item.attachment_name ? `：${item.attachment_name}` : ''}`}
+                                          : isUsingSharedExpenseBook
+                                            ? `照片待同步${item.attachment_name ? `：${item.attachment_name}` : ''}`
+                                            : '照片僅存本機'}
                                     </span>
                                   </div>
                                 )}
