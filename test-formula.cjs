@@ -1,0 +1,10 @@
+const fs = require('fs');
+const XLSX = require('xlsx');
+const wb = XLSX.utils.book_new();
+const ws = XLSX.utils.aoa_to_sheet([['A','B'],['Google','']]);
+const ref = 'B2';
+ws[ref] = { f: 'HYPERLINK("https://www.google.com","Google")' };
+XLSX.utils.book_append_sheet(wb, ws, 'Sheet1');
+const data = XLSX.write(wb, { bookType: 'xlsx', type: 'buffer' });
+fs.writeFileSync('test-formula.xlsx', data);
+console.log('wrote test-formula.xlsx', data.length);

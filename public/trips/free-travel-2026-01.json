@@ -7,7 +7,7 @@
     {"id": "itinerary", "title": "每日詳細行程", "type": "itinerary"},
     {"id": "checklist", "title": "行前檢查清單", "type": "checklist"},
     {"id": "custom_info", "title": "自駕租車須知", "type": "text"},
-    {"id": "expense", "title": "旅費記帳幫手", "type": "expense"}
+    {"id": "expense", "title": "旅費記帳本", "type": "expense"}
   ],
   "content": {
     "days": [1, 2, 3, 4, 5, 6],
