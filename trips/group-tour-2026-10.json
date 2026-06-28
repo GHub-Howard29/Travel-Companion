@@ -7,7 +7,7 @@
     {"id": "itinerary", "title": "團體每日行程", "type": "itinerary"},
     {"id": "checklist", "title": "跟團準備物品", "type": "checklist"},
     {"id": "leader_info", "title": "領隊導遊聯絡資訊", "type": "text"},
-    {"id": "expense", "title": "自費/公帳記帳", "type": "expense"}
+    {"id": "expense", "title": "旅費記帳本", "type": "expense"}
   ],
   "content": {
     "days": [1, 2, 3, 4, 5],
