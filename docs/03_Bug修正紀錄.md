@@ -4,28 +4,28 @@
 
 ### BUG001
 
-問題
+問題:local_attachment_id 消失。
 
-local_attachment_id 消失。
+原因:expenses 被重新覆蓋。
 
-原因
-
-expenses 被重新覆蓋。
-
-狀態
-
-待重構。
+狀態:待重構。
 
 ---
 
 ### BUG002
 
-同步數量錯誤。
+問題:同步數量錯誤。
 
-原因
+原因:pendingAttachmentCount 計算來源不一致。
 
-pendingAttachmentCount 計算來源不一致。
+狀態:待修正。
 
-狀態
+---
 
-待修正。
+### BUG003
+
+行前清單或是跟團準備事項，裡面的勾選會影響其他行程的勾選紀錄，而且重整網頁後，以勾選的進度會被清空
+
+原因:未知
+
+狀態:待修正。
