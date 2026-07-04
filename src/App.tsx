@@ -10,6 +10,17 @@ import { createClient } from '@supabase/supabase-js'
 // Excel 匯出
 import ExcelJS from 'exceljs'
 
+// Excel 匯出工具
+import {
+  getExportFileNameXlsx,
+} from './utils/exportUtils';
+
+// 帳目操作工具
+import {
+  startEditExpense,
+  cancelEditExpense,
+} from './utils/expenseActions';
+
 // 旅程型別
 import type { TripMeta, TripDetail } from './types'
 
@@ -56,23 +67,15 @@ import {
   compressImageFile,
 } from './utils/attachmentUtils';
 
+// 導航工具
+import {
+  handleNavigate,
+} from './utils/navigationUtils';
+
 // --- 初始化 Supabase 雲端客戶端 ---
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 const supabase = createClient(supabaseUrl, supabaseAnonKey)
-
-const sanitizeFilePart = (value: string) => {
-  return value
-    .replace(/[\\/:*?"<>|]+/g, '-')
-    .replace(/\s+/g, '-')
-    .replace(/-+/g, '-')
-    .replace(/^-|-$/g, '')
-    .slice(0, 80) || 'travel-expenses';
-};
-
-
-
-
 
 export default function App() {
   // 1. 使用者登入狀態
@@ -597,29 +600,6 @@ removeExpenseFromStorage(
     }
   };
 
-  const startEditExpense = (item: ExpenseItem) => {
-    setPendingDeleteId(null);
-    if (deleteConfirmTimerRef.current) {
-      clearTimeout(deleteConfirmTimerRef.current);
-      deleteConfirmTimerRef.current = null;
-    }
-
-    setEditingExpenseId(String(item.id));
-    setEditAttachmentFile(null);
-    setEditDraft({
-      title: item.title || '',
-      amount: String(item.amount || ''),
-      payer: item.payer || expenseMembers[0] || '',
-      currency: item.currency || currentCurrencyCode
-    });
-  };
-
-  const cancelEditExpense = () => {
-    setEditingExpenseId(null);
-    setEditDraft({ title: '', amount: '', payer: '', currency: currentCurrencyCode });
-    setEditAttachmentFile(null);
-  };
-
   const handleSaveEditExpense = async (id: string) => {
     if (!userEmail || !expenseBookTripId) { alert('此功能須先登入'); return; }
     if (!editDraft.title || !editDraft.amount || isNaN(Number(editDraft.amount))) return;
@@ -665,7 +645,12 @@ removeExpenseFromStorage(
   currentCurrencyCode
 );
       setExpenses((current) => current.map((item) => String(item.id) === String(id) ? updatedExpense : item));
-      cancelEditExpense();
+      cancelEditExpense(
+  currentCurrencyCode,
+  setEditingExpenseId,
+  setEditDraft,
+  setEditAttachmentFile
+);
       return;
     }
 
@@ -704,7 +689,12 @@ removeExpenseFromStorage(
         localStorage.setItem(toBookStorageKey(expenseBookTripId), JSON.stringify(updated));
         return updated;
       });
-      cancelEditExpense();
+      cancelEditExpense(
+  currentCurrencyCode,
+  setEditingExpenseId,
+  setEditDraft,
+  setEditAttachmentFile
+);
     } catch {
       alert('無法連接雲端資料庫，目前無法修改雲端歷史帳目。');
     }
@@ -989,19 +979,19 @@ removeExpenseFromStorage(
     return workbook;
   };
 
-  const getExportFileNameXlsx = () => {
-    const tripName = currentTrip?.title || selectedTripMeta?.title || selectedTripId || 'travel';
-    const scope = isUsingSharedExpenseBook ? 'shared' : 'personal';
-    return `${sanitizeFilePart(tripName)}-${scope}-expenses.xlsx`;
-  };
-
   const handleExportXlsx = async () => {
     if (!userEmail) { alert('此功能須先登入'); return; }
     const exportItems = isUsingSharedExpenseBook ? filteredExpenses : safeExpenses;
     if (exportItems.length === 0) { alert('目前沒有可匯出的帳本資料'); return; }
 
     const workbook = await buildExpenseXlsx();
-    const suggestedName = getExportFileNameXlsx();
+    const suggestedName = getExportFileNameXlsx(
+  currentTrip?.title ||
+  selectedTripMeta?.title ||
+  selectedTripId ||
+  'travel',
+  isUsingSharedExpenseBook
+);
     const buffer = await workbook.xlsx.writeBuffer();
     const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
 
@@ -1097,12 +1087,6 @@ removeExpenseFromStorage(
   });
 
   const activeCurrencySymbol = SUPPORTED_CURRENCIES.find(c => c.code === effectiveActiveCurrency)?.symbol || currentCurrencySymbol;
-
-  // 地圖導航事件 (完全保留)
-  const handleNavigate = (location: string) => { 
-    if (!location) return; 
-    window.open(`https://maps.google.com/?q=${encodeURIComponent(location)}`, '_blank'); 
-  };
 
   // 打包清單事件 (完全保留)
   const toggleChecklistItem = (id: string) => { 
@@ -1697,7 +1681,14 @@ removeExpenseFromStorage(
                                   />
                                 </label>
                                 <div className="flex justify-end gap-2">
-                                  <button type="button" onClick={cancelEditExpense} className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50">
+                                  <button type="button" onClick={() =>
+  cancelEditExpense(
+    currentCurrencyCode,
+    setEditingExpenseId,
+    setEditDraft,
+    setEditAttachmentFile
+  )
+} className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50">
                                     <X size={14} /> 取消
                                   </button>
                                   <button type="button" onClick={() => handleSaveEditExpense(item.id)} className="inline-flex items-center gap-1 rounded-lg bg-slate-800 px-3 py-2 text-xs font-bold text-white hover:bg-slate-700">
@@ -1750,7 +1741,18 @@ removeExpenseFromStorage(
                                 </div>
                                 {canUseExpense && (
                                   <div className="flex flex-wrap items-center gap-2">
-                                    <button type="button" title="編輯這筆帳目" onClick={() => startEditExpense(item)} className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-bold text-slate-500 hover:border-sky-200 hover:bg-sky-50 hover:text-sky-700">
+                                    <button type="button" title="編輯這筆帳目" onClick={() =>
+  startEditExpense(
+    item,
+    expenseMembers,
+    currentCurrencyCode,
+    deleteConfirmTimerRef,
+    setPendingDeleteId,
+    setEditingExpenseId,
+    setEditAttachmentFile,
+    setEditDraft
+  )
+} className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-bold text-slate-500 hover:border-sky-200 hover:bg-sky-50 hover:text-sky-700">
                                       <Edit3 size={14} /> 編輯
                                     </button>
                                     <button
