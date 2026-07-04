@@ -152,3 +152,106 @@ export const toPersonalBookTripId = (tripId: string, email: string) => {
 export const isPersonalBookTripId = (tripId: string) => {
   return tripId.includes('::personal::');
 };
+
+/**
+ * 更新 LocalStorage 中指定帳目。
+ *
+ * 若為離線共用帳本，更新 offline_expenses；
+ * 否則更新目前帳本快取。
+ */
+export const replaceExpenseInStorage = (
+  updatedExpense: StoredExpenseItem,
+  isUsingSharedExpenseBook: boolean,
+  expenseBookTripId: string,
+  currentCurrencyCode: string
+) => {
+  const targetId = String(updatedExpense.id);
+
+  if (targetId.startsWith('local_') && isUsingSharedExpenseBook) {
+    const localQueue = readStoredExpenses(
+      'offline_expenses',
+      '',
+      currentCurrencyCode
+    );
+
+    const updatedQueue = localQueue.map((item) =>
+      String(item.id) === targetId ? updatedExpense : item
+    );
+
+    localStorage.setItem(
+      'offline_expenses',
+      JSON.stringify(updatedQueue)
+    );
+
+    return;
+  }
+
+  const storageKey = toBookStorageKey(expenseBookTripId);
+
+  const localBook = readStoredExpenses(
+    storageKey,
+    expenseBookTripId,
+    currentCurrencyCode
+  );
+
+  const updatedBook = localBook.map((item) =>
+    String(item.id) === targetId ? updatedExpense : item
+  );
+
+  localStorage.setItem(
+    storageKey,
+    JSON.stringify(updatedBook)
+  );
+};
+
+/**
+ * 自 LocalStorage 移除指定帳目。
+ *
+ * 若為離線共用帳本，
+ * 移除 offline_expenses；
+ * 否則移除目前帳本快取。
+ */
+export const removeExpenseFromStorage = (
+  removedExpense: StoredExpenseItem,
+  isUsingSharedExpenseBook: boolean,
+  expenseBookTripId: string,
+  currentCurrencyCode: string
+) => {
+  const targetId = String(removedExpense.id);
+
+  if (targetId.startsWith('local_') && isUsingSharedExpenseBook) {
+    const localQueue = readStoredExpenses(
+      'offline_expenses',
+      '',
+      currentCurrencyCode
+    );
+
+    const filteredQueue = localQueue.filter(
+      (item) => String(item.id) !== targetId
+    );
+
+    localStorage.setItem(
+      'offline_expenses',
+      JSON.stringify(filteredQueue)
+    );
+
+    return;
+  }
+
+  const storageKey = toBookStorageKey(expenseBookTripId);
+
+  const localBook = readStoredExpenses(
+    storageKey,
+    expenseBookTripId,
+    currentCurrencyCode
+  );
+
+  const filteredBook = localBook.filter(
+    (item) => String(item.id) !== targetId
+  );
+
+  localStorage.setItem(
+    storageKey,
+    JSON.stringify(filteredBook)
+  );
+};

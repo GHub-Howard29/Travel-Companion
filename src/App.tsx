@@ -28,7 +28,9 @@ import {
   getStoredExpensesForTrip,
   toBookStorageKey,
   toPersonalBookTripId,
-  isPersonalBookTripId
+  isPersonalBookTripId,
+  replaceExpenseInStorage,
+  removeExpenseFromStorage,
 } from './storage/expenseStorage';
 
 // 型別宣告
@@ -553,38 +555,6 @@ export default function App() {
     }
   }
 
-  const replaceExpenseInStorage = (updatedExpense: ExpenseItem) => {
-    const targetId = String(updatedExpense.id);
-
-    if (targetId.startsWith('local_') && isUsingSharedExpenseBook) {
-      const localQueue = readStoredExpenses('offline_expenses', '', currentCurrencyCode);
-      const updatedQueue = localQueue.map((item) => String(item.id) === targetId ? updatedExpense : item);
-      localStorage.setItem('offline_expenses', JSON.stringify(updatedQueue));
-      return;
-    }
-
-    const storageKey = toBookStorageKey(expenseBookTripId);
-    const localBook = readStoredExpenses(storageKey, expenseBookTripId, currentCurrencyCode);
-    const updatedBook = localBook.map((item) => String(item.id) === targetId ? updatedExpense : item);
-    localStorage.setItem(storageKey, JSON.stringify(updatedBook));
-  };
-
-  const removeExpenseFromStorage = (removedExpense: ExpenseItem) => {
-    const targetId = String(removedExpense.id);
-
-    if (targetId.startsWith('local_') && isUsingSharedExpenseBook) {
-      const localQueue = readStoredExpenses('offline_expenses', '', currentCurrencyCode);
-      const filteredQueue = localQueue.filter((item) => String(item.id) !== targetId);
-      localStorage.setItem('offline_expenses', JSON.stringify(filteredQueue));
-      return;
-    }
-
-    const storageKey = toBookStorageKey(expenseBookTripId);
-    const localBook = readStoredExpenses(storageKey, expenseBookTripId, currentCurrencyCode);
-    const filteredBook = localBook.filter((item) => String(item.id) !== targetId);
-    localStorage.setItem(storageKey, JSON.stringify(filteredBook));
-  };
-
   const cancelPendingDelete = () => {
     setPendingDeleteId(null);
     if (deleteConfirmTimerRef.current) {
@@ -608,7 +578,12 @@ export default function App() {
         }
       }
 
-      removeExpenseFromStorage(removedExpense);
+removeExpenseFromStorage(
+  removedExpense,
+  isUsingSharedExpenseBook,
+  expenseBookTripId,
+  currentCurrencyCode
+);
       void deleteLocalAttachment(removedExpense.local_attachment_id);
     } catch {
       setExpenses((current) => {
@@ -683,7 +658,12 @@ export default function App() {
     }
 
     if (String(id).startsWith('local_') || !isUsingSharedExpenseBook) {
-      replaceExpenseInStorage(updatedExpense);
+      replaceExpenseInStorage(
+  updatedExpense,
+  isUsingSharedExpenseBook,
+  expenseBookTripId,
+  currentCurrencyCode
+);
       setExpenses((current) => current.map((item) => String(item.id) === String(id) ? updatedExpense : item));
       cancelEditExpense();
       return;
