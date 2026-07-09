@@ -40,9 +40,12 @@ export interface Permission {
   canEditReference: boolean;
 
   canViewSharedChecklist: boolean;
-  canEditSharedChecklist: boolean;
+  canToggleSharedChecklist: boolean;
 
-  canUseMyChecklist: boolean;
+  canViewPrivateChecklist: boolean;
+  canTogglePrivateChecklist: boolean;
+  canEditPrivateChecklist: boolean;
+  canSyncPrivateChecklist: boolean;
 }
 
 /**
@@ -51,24 +54,28 @@ export interface Permission {
 export function createPermission(
   context: PermissionContext,
 ): Permission {
-  const isEditor =
-    context.role === ROLE.SUPER_ADMIN ||
-    (context.role === ROLE.TRIP_EDITOR && context.isAssignedTrip);
+  const isSuperAdmin = context.role === ROLE.SUPER_ADMIN;
+  const isAssignedTripEditor =
+    context.role === ROLE.TRIP_EDITOR && context.isAssignedTrip;
+  const canEditSharedTripData = isSuperAdmin || isAssignedTripEditor;
 
   return {
     // Expense（記帳）
-    canUseCloudExpense: isEditor,
+    canUseCloudExpense: canEditSharedTripData,
     canUseLocalExpense: context.isSignedIn,
 
     // Reference（旅行資訊）
     canViewReference: true,
-    canEditReference: context.role === ROLE.SUPER_ADMIN,
+    canEditReference: isSuperAdmin,
 
     // Shared Checklist（共用清單）
     canViewSharedChecklist: true,
-    canEditSharedChecklist: isEditor,
+    canToggleSharedChecklist: canEditSharedTripData,
 
-    // My Checklist（我的清單）
-    canUseMyChecklist: true,
+    // Private Checklist（私人清單）
+    canViewPrivateChecklist: context.isSignedIn,
+    canTogglePrivateChecklist: context.isSignedIn,
+    canEditPrivateChecklist: context.isSignedIn,
+    canSyncPrivateChecklist: isAssignedTripEditor || isSuperAdmin,
   };
 }

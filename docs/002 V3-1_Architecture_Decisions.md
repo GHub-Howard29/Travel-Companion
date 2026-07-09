@@ -268,8 +268,12 @@ V3-1
 - `checklistService` 負責進度資料與資料操作
 - `checklistStorage` 負責 localStorage 讀寫與執行期資料驗證
 - `checklist.ts` 定義 `ChecklistProgress`
+- `PrivateChecklistPage` 負責私人確認清單畫面
+- `usePrivateChecklistState` 負責私人確認清單畫面狀態轉接
+- `privateChecklistService` 負責私人確認清單本機資料操作
+- `privateChecklistStorage` 負責 `userId + tripId` localStorage 讀寫與執行期資料驗證
 
-資料流：
+共同檢查清單資料流：
 
 ```text
 ChecklistPage
@@ -283,23 +287,76 @@ checklistStorage
 localStorage
 ```
 
+私人確認清單本機資料流：
+
+```text
+PrivateChecklistPage
+↓
+usePrivateChecklistState
+↓
+privateChecklistService
+↓
+privateChecklistStorage
+↓
+localStorage
+```
+
 目前資料：
 
 - Trip JSON 的 `checklistData` 仍作為共同檢查清單 seed
 - 勾選狀態依 `tripId` 寫入 localStorage
+- 私人確認清單依 `userId + tripId` 寫入 localStorage
+- 私人確認清單目前只保存於本機，尚未同步 Supabase
 - F5 後保留勾選狀態
 - 不同 Trip 各自保留勾選狀態
 - 進度計算忽略已不存在的 checked item id
 
 V3-1 第一階段尚不提供：
 
-- 共同檢查清單 / 私人檢查清單實體資料拆分
-- App 內新增檢查清單項目
-- App 內編輯檢查清單項目
-- App 內刪除檢查清單項目
-- 雲端同步
-- Pending Queue
-- 權限過濾
+- 共同檢查清單 App 內新增檢查清單項目
+- 共同檢查清單 App 內編輯檢查清單項目
+- 共同檢查清單 App 內刪除檢查清單項目
+- 共同檢查清單雲端同步
+- 私人確認清單雲端同步
+- Checklist Pending Queue
+- Checklist sync policy
+
+---
+
+## Checklist Supabase Schema
+
+已建立 SQL 設計檔：
+
+```text
+docs/sql/001_checklist_cloud_schema.sql
+```
+
+資料表：
+
+- `checklists`
+- `checklist_items`
+
+權限來源沿用既有 Supabase `admin_users`。
+
+程式不寫死任何 `trip_editor` 名單。
+
+新增旅程或新增 `trip_editor` 時，只需維護 Supabase `admin_users` 資料。
+
+私人確認清單雲端資料 ownership：
+
+```text
+owner_user_id = auth.uid()
+trip_id = 目前旅程 id
+```
+
+規則：
+
+- `guest` / `user` 不使用私人確認清單雲端同步。
+- `trip_editor` / `super_admin` 可同步自己的私人確認清單。
+- `trip_editor` / `super_admin` 不可讀取其他使用者私人確認清單。
+- `super_admin` 的管理權不包含查看所有私人確認清單內容。
+
+目前尚未執行 SQL 至 Supabase，也尚未接前端雲端同步流程。
 
 ---
 
@@ -340,25 +397,25 @@ Trip 共同準備事項。
 
 目前待建立。
 
-| 角色 | 可見 | 勾選 | 編輯（新增 / 刪除） |
-|---|---|---|---|
-| guest | 不可 | 不可 | 不可 |
-| user | 不可 | 不可 | 可，本機保存 |
-| trip_editor | 可 | 可 | 可 |
-| super_admin | 可 | 可 | 可 |
+| 角色 | 功能選單 | 可見 | 勾選 | 編輯（新增 / 刪除） | 雲端同步 |
+|---|---|---|---|---|---|
+| guest | 不顯示，或點選時要求登入 | 不可 | 不可 | 不可 | 不可 |
+| user | 顯示 | 可，僅自己的私人清單 | 可，僅自己的私人清單 | 可，本機保存 | 不可 |
+| trip_editor | 顯示 | 可，僅自己的私人清單 | 可，僅自己的私人清單 | 可 | 可 |
+| super_admin | 顯示 | 可，僅自己的私人清單 | 可，僅自己的私人清單 | 可 | 可 |
 
 規則：
 
 - `guest` 不可使用私人檢查清單。
-- `user` 可建立自己的私人檢查清單，但資料先保存於本機。
-- `trip_editor` 可使用與管理自己的私人檢查清單。
+- `guest` 在左上角功能選單中不顯示私人檢查清單；若未來保留入口，點選時需要求登入。
+- `user` 可進入私人檢查清單，可新增、編輯、刪除自己的私人項目，但資料僅保存於本機。
+- `trip_editor` 可使用與管理自己的私人檢查清單，並可自動同步到雲端。
 - `trip_editor` 不可查看其他成員的私人檢查清單。
-- `super_admin` 可使用與管理所有私人檢查清單。
-
-待確認：
-
-- `user` 的私人檢查清單是否要顯示在目前 Trip 畫面，或獨立於 Trip。
-- 私人檢查清單未來若同步雲端，資料歸屬應以 `userId + tripId` 或僅 `userId` 定義。
+- `super_admin` 可使用與管理自己的私人檢查清單，並可自動同步到雲端。
+- `super_admin` 不可查看其他使用者的私人檢查清單。
+- 私人檢查清單 ownership 使用 `userId + tripId`。
+- 私人檢查清單是獨立 Travel Tool，放在左上角功能選單內，位置在共同檢查清單下方。
+- 共同檢查清單頁面不增加私人清單分頁或第二層選擇；目前共同清單進入後仍直接可勾選。
 
 ---
 
@@ -426,7 +483,7 @@ Checklist 權限以第八節為準。
 目前已定案：
 
 - 共同檢查清單：`guest` / `user` 可見不可勾選，`trip_editor` / `super_admin` 可見可勾選。
-- 私人檢查清單：`guest` 不可使用，`user` 可本機建立，`trip_editor` 僅可使用自己的，`super_admin` 可管理全部。
+- 私人檢查清單：`guest` 不可使用，`user` 可本機建立並管理自己的私人清單，`trip_editor` / `super_admin` 可管理自己的私人清單並同步雲端；所有角色都不可讀取其他使用者的私人清單。
 
 ---
 

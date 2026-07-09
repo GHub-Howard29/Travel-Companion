@@ -6,11 +6,15 @@ import { useChecklistState } from "../hooks/useChecklistState";
 interface ChecklistPageProps {
   tripId: string;
   checklistData: ChecklistItem[];
+  canViewSharedChecklist: boolean;
+  canToggleSharedChecklist: boolean;
 }
 
 export const ChecklistPage = ({
   tripId,
   checklistData,
+  canViewSharedChecklist,
+  canToggleSharedChecklist,
 }: ChecklistPageProps) => {
   const { checkedItemIds, toggleChecklistItem } = useChecklistState(tripId);
   const visibleCheckedItemIds = checkedItemIds.filter((checkedItemId) =>
@@ -23,6 +27,14 @@ export const ChecklistPage = ({
     checklistData.length > 0
       ? (visibleCheckedItemIds.length / checklistData.length) * 100
       : 0;
+
+  if (!canViewSharedChecklist) {
+    return (
+      <div className="text-center py-12 text-slate-400 bg-white border border-dashed border-slate-200 rounded-xl shadow-sm">
+        目前角色無法查看共同檢查清單。
+      </div>
+    );
+  }
 
   if (checklistData.length === 0) {
     return (
@@ -48,6 +60,11 @@ export const ChecklistPage = ({
             style={{ width: `${progressPercent}%` }}
           />
         </div>
+        {!canToggleSharedChecklist && (
+          <p className="mt-3 text-xs font-medium text-slate-500">
+            目前角色可查看共同檢查清單，但不可勾選。
+          </p>
+        )}
       </div>
 
       {categories.map((category) => (
@@ -65,8 +82,16 @@ export const ChecklistPage = ({
                   <button
                     key={item.id}
                     type="button"
-                    onClick={() => toggleChecklistItem(item.id)}
-                    className="flex w-full items-center gap-3 p-4 text-left hover:bg-slate-50/80 cursor-pointer transition-colors select-none"
+                    disabled={!canToggleSharedChecklist}
+                    onClick={() => {
+                      if (!canToggleSharedChecklist) return;
+                      toggleChecklistItem(item.id);
+                    }}
+                    className={`flex w-full items-center gap-3 p-4 text-left transition-colors select-none ${
+                      canToggleSharedChecklist
+                        ? "hover:bg-slate-50/80 cursor-pointer"
+                        : "cursor-not-allowed bg-slate-50/40"
+                    }`}
                   >
                     <span
                       className={`w-5 h-5 rounded-md border flex items-center justify-center transition-all ${

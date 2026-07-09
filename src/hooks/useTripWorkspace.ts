@@ -1,14 +1,17 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { AdminUser, TripDetail, TripMeta } from "../types";
 import { findDefaultTrip, sortTripsByDateDesc } from "../utils/tripHelpers";
 import { toPersonalBookTripId } from "../storage/expenseStorage";
+import { createPermission } from "../permissions/permission";
+import { mapRole } from "../permissions/roleMapper";
 
 interface UseTripWorkspaceOptions {
   supabase: SupabaseClient;
 }
 
 export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) {
+  const [userId, setUserId] = useState<string | null>(null);
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [tripOptions, setTripOptions] = useState<TripMeta[]>([]);
   const [selectedTripId, setSelectedTripId] = useState<string>("");
@@ -29,6 +32,27 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
   const isUsingSharedExpenseBook = canUseExpense && hasEditPermission;
   const expenseMembers =
     isUsingSharedExpenseBook || !userEmail ? currentMembers : [userEmail];
+  const isSignedIn = Boolean(userEmail);
+  const isAssignedTrip =
+    adminProfile?.role === "trip_editor" && adminProfile.trip_id === selectedTripId;
+  const role = useMemo(
+    () =>
+      mapRole({
+        isSignedIn,
+        adminRole: adminProfile?.role ?? null,
+        isAssignedTrip,
+      }),
+    [adminProfile?.role, isAssignedTrip, isSignedIn],
+  );
+  const permission = useMemo(
+    () =>
+      createPermission({
+        role,
+        isSignedIn,
+        isAssignedTrip,
+      }),
+    [isAssignedTrip, isSignedIn, role],
+  );
 
   const getBasePath = () => {
     const path = window.location.pathname;
@@ -38,12 +62,14 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
+      setUserId(session?.user?.id || null);
       setUserEmail(session?.user?.email || null);
     });
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUserId(session?.user?.id || null);
       setUserEmail(session?.user?.email || null);
     });
 
@@ -92,7 +118,10 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
           setActiveDay(1);
 
           if (tripData.sidebarConfig?.length > 0) {
-            const validScreenIds = tripData.sidebarConfig.map((screen) => screen.id);
+            const validScreenIds = [
+              ...tripData.sidebarConfig.map((screen) => screen.id),
+              "privateChecklist",
+            ];
             if (!validScreenIds.includes(currentScreen)) {
               setCurrentScreen(tripData.sidebarConfig[0].id);
             }
@@ -174,6 +203,8 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
 
   return {
     userEmail,
+    userId,
+    setUserId,
     setUserEmail,
     tripOptions,
     selectedTripId,
@@ -200,5 +231,9 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
     canUseExpense,
     isUsingSharedExpenseBook,
     expenseMembers,
+    isSignedIn,
+    isAssignedTrip,
+    role,
+    permission,
   };
 }

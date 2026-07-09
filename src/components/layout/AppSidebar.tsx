@@ -10,6 +10,8 @@ import {
 } from "lucide-react";
 import type { AdminUser, TripDetail, TripMeta } from "../../types";
 
+type SidebarItem = TripDetail["sidebarConfig"][number];
+
 interface AppSidebarProps {
   isMenuOpen: boolean;
   onClose: () => void;
@@ -23,7 +25,7 @@ interface AppSidebarProps {
   onTripSelect: (tripId: string) => void;
   onLogout: () => Promise<void>;
   onGoogleLogin: () => Promise<void>;
-  onScreenSelect: (item: TripDetail["sidebarConfig"][number]) => void;
+  onScreenSelect: (item: SidebarItem) => void;
 }
 
 const renderSidebarIcon = (type: string) => {
@@ -56,6 +58,21 @@ export default function AppSidebar({
   onGoogleLogin,
   onScreenSelect,
 }: AppSidebarProps) {
+  const sidebarItems = currentTrip?.sidebarConfig.flatMap((item) => {
+    if (item.type !== "checklist" || !userEmail) {
+      return [item];
+    }
+
+    return [
+      item,
+      {
+        id: "privateChecklist",
+        title: "私人確認清單",
+        type: "privateChecklist",
+      },
+    ];
+  });
+
   return (
     <>
       {isMenuOpen && (
@@ -103,7 +120,7 @@ export default function AppSidebar({
         </div>
 
         <nav className="p-3 flex-1 space-y-1 overflow-y-auto">
-          {currentTrip?.sidebarConfig.map((item) => {
+          {sidebarItems?.map((item) => {
             const isActive = currentScreen === item.id;
             return (
               <button

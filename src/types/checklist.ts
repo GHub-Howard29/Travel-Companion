@@ -10,3 +10,20 @@ export interface ChecklistProgress {
   checkedItemIds: string[];
   updatedAt: string;
 }
+
+export interface PrivateChecklistItem {
+  id: string;
+  tripId: string;
+  userId: string;
+  label: string;
+  isChecked: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PrivateChecklist {
+  tripId: string;
+  userId: string;
+  items: PrivateChecklistItem[];
+  updatedAt: string;
+}

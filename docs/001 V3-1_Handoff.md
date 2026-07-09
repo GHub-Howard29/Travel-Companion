@@ -39,13 +39,21 @@ V3-1 已完成底層架構建立，並已完成其他資訊 / 參考資訊簡易
 - checklist.ts
 - checklistStorage.ts
 - checklistService.ts
+- privateChecklistStorage.ts
+- privateChecklistService.ts
 - useChecklistState.ts
+- usePrivateChecklistState.ts
 - ChecklistPage.tsx
+- PrivateChecklistPage.tsx
 - App.tsx 檢查清單畫面抽出
 
 目前：
 
-- 「共同檢查清單」勾選狀態已依 tripId 寫入 localStorage
+- 「共同檢查清單」勾選狀態已依 `tripId` 寫入 localStorage
+- 「私人確認清單」已建立獨立功能選單入口，位於共同檢查清單下方
+- 私人確認清單已依 `userId + tripId` 寫入 localStorage
+- 私人確認清單支援新增、編輯、刪除、勾選與進度顯示
+- 未登入使用者不顯示私人確認清單入口
 - 重新整理後可保留已勾選項目
 - 自由行 / 跟團各自保留勾選狀態
 - App.tsx 不再直接持有 checkedItems state
@@ -57,12 +65,13 @@ V3-1 已完成底層架構建立，並已完成其他資訊 / 參考資訊簡易
 
 尚未完成：
 
-- 共同檢查清單 / 私人檢查清單實體拆分
-- App 內新增 / 編輯 / 刪除 checklist item
-- 雲端同步
-- 權限過濾
+- 共同檢查清單 App 內新增 / 編輯 / 刪除 item
+- 共同檢查清單雲端同步
+- 私人確認清單雲端同步
+- Supabase SQL Editor 尚未執行 checklist schema
+- Checklist sync policy 尚未接進前端
 
-權限草案：
+權限定案：
 
 共同檢查清單：
 
@@ -75,19 +84,21 @@ V3-1 已完成底層架構建立，並已完成其他資訊 / 參考資訊簡易
 
 私人檢查清單：
 
-| 角色 | 可見 | 勾選 | 編輯（新增 / 刪除） |
-|---|---|---|---|
-| guest | 不可 | 不可 | 不可 |
-| user | 不可 | 不可 | 可，本機保存 |
-| trip_editor | 可 | 可 | 可 |
-| super_admin | 可 | 可 | 可 |
+| 角色 | 功能選單 | 可見 | 勾選 | 編輯（新增 / 刪除） | 雲端同步 |
+|---|---|---|---|---|---|
+| guest | 不顯示，或點選時要求登入 | 不可 | 不可 | 不可 | 不可 |
+| user | 顯示 | 可，僅自己的私人清單 | 可，僅自己的私人清單 | 可，本機保存 | 不可 |
+| trip_editor | 顯示 | 可，僅自己的私人清單 | 可，僅自己的私人清單 | 可 | 可 |
+| super_admin | 顯示 | 可，僅自己的私人清單 | 可，僅自己的私人清單 | 可 | 可 |
 
-待確認：
+已定案：
 
 - `trip_editor` 依 `tripId` 分別定義。
-- `user` 的私人檢查清單目前規劃為本機保存。
-- `trip_editor` 不可查看其他成員私人檢查清單。
-- 私人檢查清單 ownership 以個人為核心。
+- 私人檢查清單 ownership 使用 `userId + tripId`。
+- `user` 可進入私人檢查清單，可新增 / 編輯 / 刪除，但只能保存於本機。
+- `trip_editor` / `super_admin` 可新增 / 編輯 / 刪除自己的私人檢查清單，並可自動同步到雲端。
+- `trip_editor` / `super_admin` 都不可查看其他使用者的私人檢查清單。
+- 私人檢查清單放在左上角功能選單中，位置在共同檢查清單下方；不放進共同檢查清單頁面內。
 
 ---
 
@@ -141,6 +152,28 @@ OtherInfoService
 
 ---
 
+## Supabase Checklist Schema
+
+已新增 SQL 設計檔：
+
+- `docs/sql/001_checklist_cloud_schema.sql`
+
+目前尚未直接執行到 Supabase。
+
+此 SQL 採用目前既有的 `admin_users(email, role, trip_id)` 作為權限來源。
+
+新增旅程或新增 `trip_editor` 時，只需維護 Supabase `admin_users` 資料，不需要修改程式。
+
+私人確認清單雲端 RLS 以 `owner_user_id = auth.uid()` 限制。
+
+因此：
+
+- `super_admin` 不可查看其他使用者私人確認清單。
+- `trip_editor` 不可查看其他使用者私人確認清單。
+- `trip_editor` / `super_admin` 只可同步自己的私人確認清單。
+
+---
+
 # 已完成檔案
 
 src/types/
@@ -156,6 +189,7 @@ src/storage/
 - otherInfoStorage.ts
 - otherInfoRepository.ts
 - checklistStorage.ts
+- privateChecklistStorage.ts
 
 src/utils/
 
@@ -167,10 +201,12 @@ src/services/
 
 - otherInfoService.ts
 - checklistService.ts
+- privateChecklistService.ts
 
 src/hooks/
 
 - useChecklistState.ts
+- usePrivateChecklistState.ts
 - useOtherInfoForm.ts
 
 src/components/

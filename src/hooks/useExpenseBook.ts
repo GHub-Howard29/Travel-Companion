@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import ExcelJS from "exceljs";
 import {
@@ -59,11 +59,11 @@ export default function useExpenseBook({
    從 LocalStorage 讀取帳目，
    並重新補回 IndexedDB 的附件關聯。
    ========================================= */
-const reloadExpenses = async () => {
-  if (!expenseBookTripId) return;
+const reloadExpenses = useCallback(async (bookId = expenseBookTripId) => {
+  if (!bookId) return;
 
   const local = getStoredExpensesForTrip(
-    expenseBookTripId,
+    bookId,
     currentCurrencyCode,
   );
 
@@ -80,7 +80,7 @@ const reloadExpenses = async () => {
 
       const recoveredId = await findLocalAttachmentIdByExpense(
         String(item.id),
-        expenseBookTripId,
+        bookId,
       );
 
       return {
@@ -91,7 +91,7 @@ const reloadExpenses = async () => {
   );
 
   setExpenses(hydrated);
-};
+}, [currentCurrencyCode, expenseBookTripId]);
 
   const [newTitle, setNewTitle] = useState("");
   const [newAmount, setNewAmount] = useState("");
@@ -128,7 +128,7 @@ const reloadExpenses = async () => {
  * 3. 離線資料整合
  * 4. state 統一更新（避免分散 setExpenses）
  */
-const loadExpenseBook = async (bookId: string) => {
+const loadExpenseBook = useCallback(async (bookId: string) => {
   if (!bookId) return;
 
   try {
@@ -166,7 +166,7 @@ const loadExpenseBook = async (bookId: string) => {
           JSON.stringify(hydrated)
         );
 
-        await reloadExpenses();
+        await reloadExpenses(bookId);
         return;
       }
     }
@@ -184,7 +184,12 @@ const loadExpenseBook = async (bookId: string) => {
   } catch (error) {
     console.error("loadExpenseBook failed:", error);
   }
-};
+}, [
+  currentCurrencyCode,
+  isUsingSharedExpenseBook,
+  reloadExpenses,
+  supabase,
+]);
 
 /* =========================================
    📦 帳本載入 useEffect（統一入口）
@@ -192,8 +197,12 @@ const loadExpenseBook = async (bookId: string) => {
 useEffect(() => {
   if (!expenseBookTripId) return;
 
-  void loadExpenseBook(expenseBookTripId);
-}, [expenseBookTripId, currentCurrencyCode]);
+  const timer = window.setTimeout(() => {
+    void loadExpenseBook(expenseBookTripId);
+  }, 0);
+
+  return () => window.clearTimeout(timer);
+}, [expenseBookTripId, loadExpenseBook]);
 
   const handleAttachmentSelection = async (
     file: File | undefined,
@@ -340,9 +349,9 @@ useEffect(() => {
       clearTimeout(timer);
     };
   }, [
-    currentCurrencyCode,
     expenseBookTripId,
     isUsingSharedExpenseBook,
+    reloadExpenses,
     selectedTripId,
     supabase,
     userEmail,

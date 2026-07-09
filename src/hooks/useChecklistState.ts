@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 import {
   getChecklistProgress,
@@ -6,23 +6,32 @@ import {
 } from "../services/checklistService";
 
 export const useChecklistState = (tripId: string) => {
-  const [checkedItemIds, setCheckedItemIds] = useState<string[]>(() =>
-    getChecklistProgress(tripId).checkedItemIds,
+  const [checkedItemIdsByTripId, setCheckedItemIdsByTripId] = useState<
+    Record<string, string[]>
+  >({});
+
+  const checkedItemIds = useMemo(
+    () =>
+      checkedItemIdsByTripId[tripId] ??
+      getChecklistProgress(tripId).checkedItemIds,
+    [checkedItemIdsByTripId, tripId],
   );
 
-  useEffect(() => {
-    setCheckedItemIds(getChecklistProgress(tripId).checkedItemIds);
-  }, [tripId]);
-
   const toggleChecklistItem = useCallback((itemId: string) => {
-    setCheckedItemIds((currentIds) => {
+    setCheckedItemIdsByTripId((currentIdsByTripId) => {
+      const currentIds =
+        currentIdsByTripId[tripId] ??
+        getChecklistProgress(tripId).checkedItemIds;
       const nextProgress = toggleChecklistItemProgress(
         tripId,
         itemId,
         currentIds,
       );
 
-      return nextProgress.checkedItemIds;
+      return {
+        ...currentIdsByTripId,
+        [tripId]: nextProgress.checkedItemIds,
+      };
     });
   }, [tripId]);
 

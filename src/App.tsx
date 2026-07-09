@@ -1,5 +1,5 @@
 // React 核心
-import { useEffect } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 
 // Icon 圖示
 import { MapPin, ExternalLink } from "lucide-react";
@@ -18,9 +18,11 @@ import AppSidebar from "./components/layout/AppSidebar";
 import AppHeader from "./components/layout/AppHeader";
 import ExpenseScreen from "./components/expense/ExpenseScreen";
 import { ChecklistPage } from "./components/ChecklistPage";
+import { PrivateChecklistPage } from "./components/PrivateChecklistPage";
 import { OtherInfoPage } from "./components/OtherInfoPage";
 import useExpenseBook from "./hooks/useExpenseBook";
 import useTripWorkspace from "./hooks/useTripWorkspace";
+import { AppContext } from "./app/context/AppContext";
 
 // --- 初始化 Supabase 雲端客戶端 ---
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
@@ -30,6 +32,8 @@ const supabase = createClient(supabaseUrl, supabaseAnonKey);
 export default function App() {
   const {
     userEmail,
+    userId,
+    setUserId,
     setUserEmail,
     tripOptions,
     selectedTripId,
@@ -54,6 +58,10 @@ export default function App() {
     canUseExpense,
     isUsingSharedExpenseBook,
     expenseMembers,
+    isSignedIn,
+    isAssignedTrip,
+    role,
+    permission,
   } = useTripWorkspace({ supabase });
 
   const {
@@ -108,13 +116,13 @@ export default function App() {
     tripTitle: currentTrip?.title || selectedTripMeta?.title || selectedTripId || "travel",
   });
 
-  const applyTripDefaults = (trip: TripMeta) => {
+  const applyTripDefaults = useCallback((trip: TripMeta) => {
     if (trip.participants.length > 0) {
       setNewPayer(trip.participants[0]);
     }
     setActiveCurrency("ALL");
     setFormCurrency(trip.currencyConfig.code);
-  };
+  }, [setActiveCurrency, setFormCurrency, setNewPayer]);
 
   const getBasePath = () => {
     const path = window.location.pathname;
@@ -141,6 +149,7 @@ export default function App() {
         localStorage.removeItem(key);
       }
     });
+    setUserId(null);
     setUserEmail(null);
     setAdminProfile(null);
     setHasEditPermission(false);
@@ -149,10 +158,10 @@ export default function App() {
   useEffect(() => {
     if (!selectedTripMeta) return;
     applyTripDefaults(selectedTripMeta);
-  }, [selectedTripMeta]);
+  }, [applyTripDefaults, selectedTripMeta]);
 
   const handleScreenSelect = (item: TripDetail["sidebarConfig"][number]) => {
-    if (item.type === "expense" && !userEmail) {
+    if ((item.type === "expense" || item.type === "privateChecklist") && !userEmail) {
       alert("此功能須先登入");
       setIsMenuOpen(false);
       return;
@@ -167,14 +176,38 @@ export default function App() {
   const currentDayEvents =
     currentTrip?.content?.daysData?.[String(activeDay)] || [];
   const checklistData = currentTrip?.content?.checklistData || [];
+  const appContextValue = useMemo(
+    () => ({
+      userEmail,
+      userId,
+      selectedTripId,
+      isSignedIn,
+      isAssignedTrip,
+      role,
+      permission,
+    }),
+    [
+      isAssignedTrip,
+      isSignedIn,
+      permission,
+      role,
+      selectedTripId,
+      userEmail,
+      userId,
+    ],
+  );
+
+  const getCurrentScreenType = () => {
+    if (currentScreen === "privateChecklist") return "privateChecklist";
+
+    return currentTrip?.sidebarConfig.find((s) => s.id === currentScreen)?.type;
+  };
+  const currentScreenType = getCurrentScreenType();
 
   const getHeaderBgColor = () => {
-    const activeConfig = currentTrip?.sidebarConfig.find(
-      (item) => item.id === currentScreen,
-    );
-    if (!activeConfig) return "bg-emerald-700";
-    switch (activeConfig.type) {
+    switch (currentScreenType) {
       case "checklist":
+      case "privateChecklist":
         return "bg-rose-700";
       case "expense":
         return "bg-amber-600";
@@ -188,6 +221,7 @@ export default function App() {
   };
 
   return (
+    <AppContext.Provider value={appContextValue}>
     <div className="min-h-screen bg-slate-50 text-slate-800 font-sans antialiased overflow-x-hidden">
       <AppSidebar
         isMenuOpen={isMenuOpen}
@@ -232,8 +266,7 @@ export default function App() {
         ) : (
           <>
             {/* 1. 行程規劃模組 */}
-            {currentTrip?.sidebarConfig.find((s) => s.id === currentScreen)
-              ?.type === "itinerary" && (
+            {currentScreenType === "itinerary" && (
               <>
                 <div className="grid grid-cols-5 gap-1.5 mb-6">
                   {currentTrip.content.days.map((day) => (
@@ -305,17 +338,28 @@ export default function App() {
             )}
 
             {/* 2. 行李清單檢查模組 */}
-            {currentTrip?.sidebarConfig.find((s) => s.id === currentScreen)
-              ?.type === "checklist" && (
+            {currentScreenType === "checklist" && (
               <ChecklistPage
                 tripId={selectedTripId}
                 checklistData={checklistData}
+                canViewSharedChecklist={permission.canViewSharedChecklist}
+                canToggleSharedChecklist={permission.canToggleSharedChecklist}
+              />
+            )}
+
+            {currentScreenType === "privateChecklist" && (
+              <PrivateChecklistPage
+                tripId={selectedTripId}
+                userId={userId}
+                canViewPrivateChecklist={permission.canViewPrivateChecklist}
+                canEditPrivateChecklist={permission.canEditPrivateChecklist}
+                canTogglePrivateChecklist={permission.canTogglePrivateChecklist}
+                canSyncPrivateChecklist={permission.canSyncPrivateChecklist}
               />
             )}
 
             {/* 3. 純文字/備忘錄模組 */}
-            {currentTrip?.sidebarConfig.find((s) => s.id === currentScreen)
-              ?.type === "text" && (
+            {currentScreenType === "text" && (
               <div className="space-y-4">
                 <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden p-5">
                   <h3 className="text-xl font-bold text-slate-800 mb-1">
@@ -331,17 +375,16 @@ export default function App() {
             )}
 
             {/* 4. 其他資訊模組 */}
-            {currentTrip?.sidebarConfig.find((s) => s.id === currentScreen)
-              ?.type === "otherInfo" && (
+            {currentScreenType === "otherInfo" && (
               <OtherInfoPage
+                key={selectedTripId}
                 tripId={selectedTripId}
                 canEdit={hasEditPermission}
               />
             )}
 
             {/* 5. 智慧多幣別記帳模組 */}
-            {currentTrip?.sidebarConfig.find((s) => s.id === currentScreen)
-              ?.type === "expense" && (
+            {currentScreenType === "expense" && (
               <ExpenseScreen
                 canUseExpense={canUseExpense}
                 isUsingSharedExpenseBook={isUsingSharedExpenseBook}
@@ -394,5 +437,6 @@ export default function App() {
         )}
       </main>
     </div>
+    </AppContext.Provider>
   );
 }

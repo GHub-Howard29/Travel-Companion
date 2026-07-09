@@ -10,7 +10,10 @@ import type { Role } from "../../permissions/roles";
 
 export interface AppContextValue {
   userEmail: string | null;
+  userId: string | null;
   selectedTripId: string;
+  isSignedIn: boolean;
+  isAssignedTrip: boolean;
   role: Role;
   permission: Permission;
 }

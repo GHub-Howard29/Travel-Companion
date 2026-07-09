@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   FileText,
   FolderOpen,
@@ -69,7 +69,6 @@ export const OtherInfoPage = ({ tripId, canEdit }: OtherInfoPageProps) => {
     closeForm,
     openCreateForm,
     openEditForm,
-    resetForm,
     syncFolderWhenNotEditing,
     updateForm,
   } = useOtherInfoForm(folders[0]?.id ?? "");
@@ -79,14 +78,6 @@ export const OtherInfoPage = ({ tripId, canEdit }: OtherInfoPageProps) => {
     () => getOtherInfoItemsByFolderId(items, activeFolderId),
     [items, activeFolderId],
   );
-
-  useEffect(() => {
-    const firstFolderId = folders[0]?.id ?? "";
-
-    setItems(getItems(tripId));
-    setActiveFolderId(firstFolderId);
-    resetForm(firstFolderId);
-  }, [folders, resetForm, tripId]);
 
   const handleSave = () => {
     const title = form.title.trim();

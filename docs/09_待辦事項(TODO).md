@@ -139,14 +139,19 @@ Expense Module
 
 後續：
 
-- [ ] 將目前功能權限矩陣落地到 permission.ts
-- [ ] 將畫面顯示與操作統一改由權限控制
-- [ ] 將共同檢查清單 / 私人檢查清單權限矩陣落地到 permission.ts
-- [ ] 建立私人檢查清單畫面與 localStorage 持久化
+- [x] 將目前功能權限矩陣落地到 permission.ts
+- [x] 將共同檢查清單顯示與勾選操作改由權限控制
+- [x] 將共同檢查清單 / 私人檢查清單權限矩陣落地到 permission.ts
+- [x] 建立私人檢查清單畫面與 localStorage 持久化
+- [x] 定案私人檢查清單 ownership 使用 `userId + tripId`
+- [x] 定案私人檢查清單放在左上角功能選單中，位於共同檢查清單下方
+- [x] 定案 super_admin 不可查看其他使用者私人檢查清單
 - [x] 確認 trip_editor 不可查看其他成員私人檢查清單
-- [ ] 評估 App 內新增 / 編輯 / 刪除檢查清單項目
-- [ ] 評估雲端同步 / 待同步佇列
-- [ ] 補上權限過濾
+- [ ] 評估共同檢查清單 App 內新增 / 編輯 / 刪除項目
+- [x] 設計 Supabase checklist tables / RLS
+- [ ] 在 Supabase SQL Editor 執行 `docs/sql/001_checklist_cloud_schema.sql`
+- [ ] 設計私人檢查清單雲端同步
+- [x] 補上共同檢查清單權限過濾
 
 ---
 
