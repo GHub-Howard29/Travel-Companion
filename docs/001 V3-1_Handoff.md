@@ -6,8 +6,8 @@
 
 # 目前開發狀態
 
-V3-1 已完成底層架構建立，並已完成 Other Info / Reference 簡易本機管理工具第一階段串接。
-Checklist Module 也已完成第一階段拆分與 Trip-scoped local persistence。
+V3-1 已完成底層架構建立，並已完成其他資訊 / 參考資訊簡易本機管理工具第一階段串接。
+檢查清單模組也已完成第一階段拆分與依旅程區分的本機持久化。
 
 目前已完成：
 
@@ -41,18 +41,18 @@ Checklist Module 也已完成第一階段拆分與 Trip-scoped local persistence
 - checklistService.ts
 - useChecklistState.ts
 - ChecklistPage.tsx
-- App.tsx checklist UI 抽出
+- App.tsx 檢查清單畫面抽出
 
 目前：
 
 - 「共同檢查清單」勾選狀態已依 tripId 寫入 localStorage
-- F5 後可保留已勾選項目
+- 重新整理後可保留已勾選項目
 - 自由行 / 跟團各自保留勾選狀態
 - App.tsx 不再直接持有 checkedItems state
 - ChecklistPage 自行管理分類、進度、空狀態與 item toggle
 - Hook 只透過 checklistService 取得 / 更新資料
-- checklistService 統一處理 progress payload
-- checklistStorage 負責 localStorage 讀寫與 runtime validation
+- checklistService 統一處理進度資料
+- checklistStorage 負責 localStorage 讀寫與執行期資料驗證
 - 進度計算會忽略已不存在的 item id
 
 尚未完成：
@@ -66,7 +66,7 @@ Checklist Module 也已完成第一階段拆分與 Trip-scoped local persistence
 
 共同檢查清單：
 
-| Role | 可見 | 勾選 |
+| 角色 | 可見 | 勾選 |
 |---|---|---|
 | guest | 可 | 不可 |
 | user | 可 | 不可 |
@@ -75,7 +75,7 @@ Checklist Module 也已完成第一階段拆分與 Trip-scoped local persistence
 
 私人檢查清單：
 
-| Role | 可見 | 勾選 | 編輯（新增 / 刪除） |
+| 角色 | 可見 | 勾選 | 編輯（新增 / 刪除） |
 |---|---|---|---|
 | guest | 不可 | 不可 | 不可 |
 | user | 不可 | 不可 | 可，本機保存 |
@@ -91,7 +91,7 @@ Checklist Module 也已完成第一階段拆分與 Trip-scoped local persistence
 
 ---
 
-## Other Info
+## 其他資訊
 
 已完成：
 
@@ -100,20 +100,20 @@ Checklist Module 也已完成第一階段拆分與 Trip-scoped local persistence
 - otherInfoStorage.ts
 - otherInfoRepository.ts
 - otherInfoService.ts
-- otherInfoData.ts（第一批 seed data）
-- OtherInfoPage 簡易管理 UI
+- otherInfoData.ts（第一批預設資料）
+- OtherInfoPage 簡易管理畫面
 - App.tsx otherInfo 類型串接
 - AppSidebar.tsx otherInfo icon mapping
 - Trip sidebarConfig 新增「其他資訊」
-- Other Info 內容 URL 自動轉換為可點擊超連結
+- 其他資訊內容 URL 自動轉換為可點擊超連結
 
 目前：
 
 - 自由行與跟團旅程皆已顯示「其他資訊」
-- Reference 資料由 seed data + local stored data 合併後呈現
-- 可新增、編輯、刪除 Other Info item
+- 參考資訊資料由預設資料 + 本機儲存資料合併後呈現
+- 可新增、編輯、刪除其他資訊項目
 - 目前只存 localStorage，不同步雲端
-- seed data 保留為預設資料
+- 預設資料保留為預設內容
 - 編輯 seed item 會以 localStorage 覆蓋
 - 刪除 seed item 會寫入 `isDeleted` 標記
 - Folder chips 自動換行，不使用水平 scrollbar
@@ -137,7 +137,7 @@ OtherInfoService
 - updateOtherInfoItem()
 - deleteOtherInfoItem()
 
-作為 UI 唯一資料入口。
+作為畫面唯一資料入口。
 
 ---
 
@@ -200,7 +200,7 @@ npm.cmd run build
 
 建議流程：
 
-1. 瀏覽器手測 Other Info：
+1. 瀏覽器手測其他資訊：
    - 左側是否出現「其他資訊」
    - 自由行 / 跟團切換後資料是否各自正確
    - folder chips 是否換行整齊
@@ -210,7 +210,7 @@ npm.cmd run build
    - 原本文字頁是否仍維持 Text Page 呈現
 
 2. 瀏覽器手測 Checklist：
-   - 勾選項目後 F5 是否保留
+   - 勾選項目後重新整理是否保留
    - 自由行 / 跟團切換後是否各自保留
    - 勾選進度是否正確
    - 若 trip seed item 變動，已不存在的 checked id 是否不影響進度
@@ -218,8 +218,8 @@ npm.cmd run build
 3. 下一步建議：
    - 先暫停新增功能，優先定案權限模型
    - 依目前功能權限矩陣調整 permission.ts
-   - 將 UI 顯示與操作統一改由 permission 控制
+   - 將畫面顯示與操作統一改由權限控制
    - 依共同 / 私人檢查清單權限矩陣設計資料模型
    - 將 permission.ts 的 checklist 權限調整為 guest / user / trip_editor / super_admin
-   - 再決定是否提供 APP 內新增 / 編輯 / 刪除 checklist item
-   - 評估 Checklist 是否需要 cloud sync / pending queue
+   - 再決定是否提供 App 內新增 / 編輯 / 刪除檢查清單項目
+   - 評估檢查清單是否需要雲端同步 / 待同步佇列

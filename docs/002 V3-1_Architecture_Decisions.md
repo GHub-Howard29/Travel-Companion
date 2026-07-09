@@ -52,16 +52,16 @@ Folder 採用純 Tree 架構。
 
 V3-1 第一階段：
 
-採 Reference 簡易本機管理工具。
+採參考資訊簡易本機管理工具。
 
 已落地：
 
 - 左側工具列顯示「其他資訊」
-- 主畫面顯示 Reference / 旅行資訊
+- 主畫面顯示參考資訊 / 旅行資訊
 - 第一層固定分類以 folder chips 呈現
 - Chips 自動換行
 - 顯示資料筆數、空狀態與 item card
-- 可新增、編輯、刪除 Other Info item
+- 可新增、編輯、刪除其他資訊項目
 - 內容中的 `http` / `https` URL 自動轉為可點擊超連結
 - 超連結以新分頁開啟
 - `text` 類型維持原本文字頁
@@ -137,7 +137,7 @@ V3-1 第一階段尚不提供：
 
 系統固定。
 
-不可由 APP 編輯。
+不可由 App 編輯。
 
 使用固定 ID。
 
@@ -159,9 +159,9 @@ other-info-flights
 
 定位為：
 
-seed data 預設資料 + localStorage 本機覆寫資料。
+預設資料 + localStorage 本機覆寫資料。
 
-seed data 維護流程：
+預設資料維護流程：
 
 修改資料
 
@@ -177,7 +177,7 @@ Deploy
 
 使用者查看
 
-APP 內簡易管理流程：
+App 內簡易管理流程：
 
 新增 item
 
@@ -205,7 +205,7 @@ APP 內簡易管理流程：
 
 ---
 
-# 六、Role
+# 六、角色
 
 V3 權限分級草案：
 
@@ -223,7 +223,7 @@ V3 權限分級草案：
 
 目前程式：
 
-保留 Role 擴充能力。
+保留角色擴充能力。
 
 OtherInfoItem：
 
@@ -237,7 +237,7 @@ V3-1
 
 不實作：
 
-Role 判斷。
+角色判斷。
 
 不實作：
 
@@ -257,16 +257,16 @@ Role 判斷。
 
 # 七、Checklist 第一階段
 
-Checklist Module 第一階段採：
+檢查清單模組第一階段採：
 
-Trip-scoped local persistence。
+依旅程區分的本機持久化。
 
 已落地：
 
-- `ChecklistPage` 負責 checklist UI
-- `useChecklistState` 負責 UI state adapter
-- `checklistService` 負責 progress payload 與資料操作
-- `checklistStorage` 負責 localStorage 讀寫與 runtime validation
+- `ChecklistPage` 負責檢查清單畫面
+- `useChecklistState` 負責畫面狀態轉接
+- `checklistService` 負責進度資料與資料操作
+- `checklistStorage` 負責 localStorage 讀寫與執行期資料驗證
 - `checklist.ts` 定義 `ChecklistProgress`
 
 資料流：
@@ -293,10 +293,10 @@ localStorage
 
 V3-1 第一階段尚不提供：
 
-- Public Checklist / Private Checklist 實體資料拆分
-- APP 內新增 checklist item
-- APP 內編輯 checklist item
-- APP 內刪除 checklist item
+- 共同檢查清單 / 私人檢查清單實體資料拆分
+- App 內新增檢查清單項目
+- App 內編輯檢查清單項目
+- App 內刪除檢查清單項目
 - 雲端同步
 - Pending Queue
 - 權限過濾
@@ -318,7 +318,7 @@ Trip 共同準備事項。
 
 目前已建立。
 
-| Role | 可見 | 勾選 |
+| 角色 | 可見 | 勾選 |
 |---|---|---|
 | guest | 可 | 不可 |
 | user | 可 | 不可 |
@@ -340,7 +340,7 @@ Trip 共同準備事項。
 
 目前待建立。
 
-| Role | 可見 | 勾選 | 編輯（新增 / 刪除） |
+| 角色 | 可見 | 勾選 | 編輯（新增 / 刪除） |
 |---|---|---|---|
 | guest | 不可 | 不可 | 不可 |
 | user | 不可 | 不可 | 可，本機保存 |
@@ -358,7 +358,7 @@ Trip 共同準備事項。
 待確認：
 
 - `user` 的私人檢查清單是否要顯示在目前 Trip 畫面，或獨立於 Trip。
-- 私人檢查清單未來若同步雲端，資料 ownership 應以 `userId + tripId` 或僅 `userId` 定義。
+- 私人檢查清單未來若同步雲端，資料歸屬應以 `userId + tripId` 或僅 `userId` 定義。
 
 ---
 
@@ -368,7 +368,7 @@ Trip 共同準備事項。
 
 ## 行程
 
-| Role | 可見 | 編輯 |
+| 角色 | 可見 | 編輯 |
 |---|---|---|
 | guest | 可 | 不可 |
 | user | 可 | 不可 |
@@ -382,16 +382,16 @@ Trip 共同準備事項。
 - 自駕租車須知
 - 領隊導遊聯絡資訊
 
-| Role | 可見 | 編輯 |
+| 角色 | 可見 | 編輯 |
 |---|---|---|
 | guest | 可 | 不可 |
 | user | 可 | 不可 |
 | trip_editor | 可 | 不可 |
 | super_admin | 可 | 可 |
 
-## Other Info / Reference
+## 其他資訊 / 參考資訊
 
-| Role | 可見 | 新增 | 編輯 | 刪除 |
+| 角色 | 可見 | 新增 | 編輯 | 刪除 |
 |---|---|---|---|---|
 | guest | 可 | 不可 | 不可 | 不可 |
 | user | 可 | 不可 | 不可 | 不可 |
@@ -400,13 +400,13 @@ Trip 共同準備事項。
 
 規則：
 
-- Reference 類資料由 `super_admin` 維護。
+- 參考資訊類資料由 `super_admin` 維護。
 - `guest`、`user`、`trip_editor` 皆為唯讀。
-- 目前 APP 內修改仍保存於 localStorage，尚未同步雲端。
+- 目前 App 內修改仍保存於 localStorage，尚未同步雲端。
 
 ## Expense
 
-| Role | 可見 | 新增 | 編輯 | 刪除 | 同步 |
+| 角色 | 可見 | 新增 | 編輯 | 刪除 | 同步 |
 |---|---|---|---|---|---|
 | guest | 不可 | 不可 | 不可 | 不可 | 不可 |
 | user | 可，僅本機個人帳本 | 可，本機離線 | 可，僅自己的本機資料 | 可，僅自己的本機資料 | 不可 |
