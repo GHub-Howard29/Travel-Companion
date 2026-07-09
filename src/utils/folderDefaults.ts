@@ -1,8 +1,10 @@
 /**
- * Folder Defaults（預設資料夾）
+ * Folder Defaults（其他資訊預設分類）
  *
- * 負責建立每個 Trip 預設需要的系統資料夾。
- * 例如機票、飯店、交通、票券、保險、簽證等。
+ * 負責建立「其他資訊」功能下方的第一層固定分類。
+ *
+ * 第一層為系統固定分類，例如景點、機票、飯店。
+ * 第二層開始由使用者依照本次旅程自由建立。
  *
  * 此檔案只負責產生預設 Folder 資料，
  * 不負責儲存，也不直接操作 localStorage。
@@ -12,7 +14,7 @@
 // Import
 // ================================
 
-import type { Folder, FolderType } from "../types";
+import type { Folder } from "../types";
 import { createFolder } from "./folderUtils";
 
 // ================================
@@ -21,7 +23,6 @@ import { createFolder } from "./folderUtils";
 
 interface DefaultFolderConfig {
   title: string;
-  type: FolderType;
   order: number;
 }
 
@@ -30,15 +31,16 @@ interface DefaultFolderConfig {
 // ================================
 
 const DEFAULT_FOLDER_CONFIGS: DefaultFolderConfig[] = [
-  { title: "機票", type: "flight", order: 1 },
-  { title: "飯店", type: "hotel", order: 2 },
-  { title: "交通", type: "transport", order: 3 },
-  { title: "票券", type: "ticket", order: 4 },
-  { title: "保險", type: "insurance", order: 5 },
-  { title: "簽證", type: "visa", order: 6 },
-  { title: "Reference", type: "reference", order: 7 },
-  { title: "Checklist", type: "checklist", order: 8 },
-  { title: "Expense", type: "expense", order: 9 },
+  { title: "景點", order: 1 },
+  { title: "機票", order: 2 },
+  { title: "飯店", order: 3 },
+  { title: "交通", order: 4 },
+  { title: "票券", order: 5 },
+  { title: "保險", order: 6 },
+  { title: "簽證", order: 7 },
+  { title: "美食", order: 8 },
+  { title: "購物", order: 9 },
+  { title: "其他", order: 99 },
 ];
 
 // ================================
@@ -46,23 +48,16 @@ const DEFAULT_FOLDER_CONFIGS: DefaultFolderConfig[] = [
 // ================================
 
 /**
- * 建立指定 Trip 的預設系統 Folder
+ * 建立指定 Trip 的「其他資訊」第一層固定分類
  */
 export const createDefaultFoldersForTrip = (tripId: string): Folder[] => {
   return DEFAULT_FOLDER_CONFIGS.map((config) =>
-    createFolder(
-      tripId,
-      null,
-      config.title,
-      config.type,
-      config.order,
-      true,
-    ),
+    createFolder(tripId, null, config.title, config.order, true),
   );
 };
 
 /**
- * 確保指定 Trip 已包含預設系統 Folder
+ * 確保指定 Trip 已包含「其他資訊」第一層固定分類
  */
 export const ensureDefaultFoldersForTrip = (
   tripId: string,
@@ -74,7 +69,7 @@ export const ensureDefaultFoldersForTrip = (
         (folder) =>
           folder.isSystem === true &&
           folder.parentId === null &&
-          folder.type === config.type,
+          folder.title === config.title,
       ),
   );
 
@@ -83,14 +78,7 @@ export const ensureDefaultFoldersForTrip = (
   }
 
   const newDefaultFolders = missingDefaultFolders.map((config) =>
-    createFolder(
-      tripId,
-      null,
-      config.title,
-      config.type,
-      config.order,
-      true,
-    ),
+    createFolder(tripId, null, config.title, config.order, true),
   );
 
   return [...folders, ...newDefaultFolders];
