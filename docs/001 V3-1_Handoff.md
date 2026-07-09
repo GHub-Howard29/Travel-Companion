@@ -57,10 +57,37 @@ Checklist Module 也已完成第一階段拆分與 Trip-scoped local persistence
 
 尚未完成：
 
-- Public Checklist / Private Checklist 拆分
+- 共同檢查清單 / 私人檢查清單實體拆分
 - App 內新增 / 編輯 / 刪除 checklist item
 - 雲端同步
 - 權限過濾
+
+權限草案：
+
+共同檢查清單：
+
+| Role | 可見 | 勾選 |
+|---|---|---|
+| guest | 可 | 不可 |
+| user | 可 | 不可 |
+| trip_editor | 可 | 可 |
+| super_admin | 可 | 可 |
+
+私人檢查清單：
+
+| Role | 可見 | 勾選 | 編輯（新增 / 刪除） |
+|---|---|---|---|
+| guest | 不可 | 不可 | 不可 |
+| user | 不可 | 不可 | 可，本機保存 |
+| trip_editor | 可 | 可 | 可 |
+| super_admin | 可 | 可 | 可 |
+
+待確認：
+
+- `trip_editor` 依 `tripId` 分別定義。
+- `user` 的私人檢查清單目前規劃為本機保存。
+- `trip_editor` 不可查看其他成員私人檢查清單。
+- 私人檢查清單 ownership 以個人為核心。
 
 ---
 
@@ -189,6 +216,10 @@ npm.cmd run build
    - 若 trip seed item 變動，已不存在的 checked id 是否不影響進度
 
 3. 下一步建議：
-   - 規劃 Public Checklist / Private Checklist 資料模型
+   - 先暫停新增功能，優先定案權限模型
+   - 依目前功能權限矩陣調整 permission.ts
+   - 將 UI 顯示與操作統一改由 permission 控制
+   - 依共同 / 私人檢查清單權限矩陣設計資料模型
+   - 將 permission.ts 的 checklist 權限調整為 guest / user / trip_editor / super_admin
    - 再決定是否提供 APP 內新增 / 編輯 / 刪除 checklist item
    - 評估 Checklist 是否需要 cloud sync / pending queue

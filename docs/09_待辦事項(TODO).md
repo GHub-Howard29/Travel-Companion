@@ -77,6 +77,7 @@
 - Other Info 已支援新增、編輯、刪除與 URL 超連結顯示
 - Checklist Module 已完成第一階段拆分
 - Checklist 勾選狀態已支援 Trip-scoped localStorage persistence
+- 已建立目前功能權限矩陣草案
 
 目前開始：
 
@@ -134,10 +135,15 @@ Checklist Module
 - [x] F5 後保留勾選狀態
 - [x] 自由行 / 跟團各自保留勾選狀態
 - [x] 進度計算忽略已不存在的 checked item id
+- [x] 初步定義共同檢查清單 / 私人檢查清單權限矩陣
 
 後續：
 
-- [ ] 規劃 Public Checklist / Private Checklist
+- [ ] 將目前功能權限矩陣落地到 permission.ts
+- [ ] 將 UI 顯示與操作統一改由 permission 控制
+- [ ] 將共同檢查清單 / 私人檢查清單權限矩陣落地到 permission.ts
+- [ ] 建立私人檢查清單 UI 與 localStorage persistence
+- [x] 確認 trip_editor 不可查看其他成員私人檢查清單
 - [ ] 評估 APP 內新增 / 編輯 / 刪除 checklist item
 - [ ] 評估 cloud sync / pending queue
 - [ ] 補上權限過濾
