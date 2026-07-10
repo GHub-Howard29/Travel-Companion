@@ -1,6 +1,6 @@
 # Travel Companion V3-1 Handoff
 
-更新日期：2026-07-10
+更新日期：2026-07-11
 
 ---
 
@@ -8,6 +8,7 @@
 
 V3-1 已完成底層架構建立，並已完成其他資訊 / 參考資訊簡易本機管理工具第一階段串接。
 檢查清單模組已完成第一階段拆分、依旅程區分的本機持久化，以及私人確認清單最小雲端同步。
+Trip 管理第一階段已完成，旅程清單切換前會重新同步 Supabase，避免選到其他設備已刪除的旅程。
 
 目前已完成：
 
@@ -62,6 +63,8 @@ V3-1 已完成底層架構建立，並已完成其他資訊 / 參考資訊簡易
 - 共同檢查清單會用 Trip JSON `checklistData` 初始化 Supabase shared checklist rows
 - `trip_editor` / `super_admin` 可同步共同檢查清單勾選狀態
 - `guest` / `user` 查看共同檢查清單時顯示乾淨未勾選版本，用於自行準備
+- 共同檢查清單已支援 App 內新增 / 編輯 / 刪除 item
+- 共同檢查清單與私人確認清單管理操作已收合為「管理 / 退出」模式
 - 未登入使用者不顯示私人確認清單入口
 - 未登入狀態停留在私人確認清單或記帳本時，會自動導回行程頁
 - 重新整理後可保留已勾選項目
@@ -75,10 +78,12 @@ V3-1 已完成底層架構建立，並已完成其他資訊 / 參考資訊簡易
 
 尚未完成：
 
-- 共同檢查清單 App 內新增 / 編輯 / 刪除 item
 - Checklist Pending Queue / Conflict Resolution 尚未實作
 - Other Info / Reference 權限過濾尚未完成
+- Other Info / Reference 與領隊導遊聯絡資訊 / 自駕租車須知尚未改為「管理 / 退出」模式
 - Other Info / Reference 雲端同步尚未完成
+- 記帳本編輯既有帳目時，附件尚不能單獨刪除
+- 手機新增帳目附件入口尚需補齊拍照與選擇既有照片 / 檔案流程
 
 權限定案：
 
@@ -140,6 +145,7 @@ V3-1 已完成底層架構建立，並已完成其他資訊 / 參考資訊簡易
 - Folder chips 自動換行，不使用水平 scrollbar
 - 顯示資料筆數、空狀態與 item card
 - 內容中的 `http` / `https` URL 會自動轉為超連結並以新分頁開啟
+- 後續需改為預設瀏覽模式，有權限者先點「管理」才顯示新增、編輯、刪除，並提供「退出」按鈕
 
 ---
 
@@ -257,18 +263,21 @@ npm.cmd run build
 
 建議流程：
 
-1. 新對話先接「Other Info / Reference 權限過濾與雲端同步設計」。
-2. Other Info / Reference 建議範圍：
+1. 新對話先接近期 Bug Backlog 與管理入口一致化。
+2. 近期 Bug Backlog：
+   - 領隊導遊聯絡資訊 / 自駕租車須知與其他資訊改為「瀏覽模式 → 管理入口 → 編輯層 → 退出」。
+   - 旅費記帳本編輯既有帳目時，補上既有附件單獨刪除功能。
+   - 記帳本新增帳目附件入口補齊手機拍照與選擇既有照片 / 檔案流程。
+3. Other Info / Reference 建議範圍：
    - 先定義權限矩陣。
    - 落地 UI 權限過濾。
    - 設計 Supabase schema / RLS。
    - 實作最小雲端同步。
    - 暫時不做完整 Pending Queue / Conflict Resolution。
-3. 暫緩項目：
+4. 暫緩項目：
    - Checklist Pending Queue：離線或同步失敗時暫存待上傳操作的佇列。
    - Conflict Resolution：本機與雲端同一筆資料都被修改時的合併或取捨規則。
-   - 共同清單 item 管理。
    - 新 Travel Tool。
-4. 下一輪交付前執行：
+5. 下一輪交付前執行：
    - `npm run lint`
    - `npm run build`

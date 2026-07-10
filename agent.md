@@ -1,14 +1,14 @@
 # Travel Companion Agent Guide
 
-## 最新交接摘要（2026-07-10）
+## 最新交接摘要（2026-07-11）
 
 本節是給另一台電腦 / 新 Codex thread 接續用的最新狀態。進入專案後請先讀本節，再依任務查閱 `docs/001 V3-1_Handoff.md`、`docs/002 V3-1_Architecture_Decisions.md`、`docs/04_資料庫設計.md`、`docs/09_待辦事項(TODO).md`。
 
 ### 目前 Git 狀態
 
 - Branch：`develop`
-- 最新已知 commit：`0532277 完成共同清單同步與提交規範更新`
-- 前一個功能 commit：`59ccc06 新增私人清單雲端同步並整理交接文件`
+- 最新已知 commit：`3e60c9f 切換旅程前同步資料庫`
+- 前一個功能 commit：`0293bfe 收合清單管理並同步旅程快取`
 - 目前工作樹可能有未提交變更；完成文件或程式修改並驗證通過後，Codex 應直接建立繁體中文 commit。
 - 尚未確認是否已 push 到遠端。
 - commit message 規則：使用者已要求「中文 commit」，後續 Codex 完成文件或程式修改後一律直接使用繁體中文 commit message 建立 commit，並回報實際使用的中文 commit message。
@@ -137,6 +137,9 @@ V3-1 目前已完成：
 
 最高優先：
 
+- 領隊導遊聯絡資訊 / 自駕租車須知與其他資訊需改為「瀏覽模式 → 管理入口 → 編輯層 → 退出」。
+- 旅費記帳本編輯既有帳目時，若已有附件，需補上單獨刪除附件功能，刪除附件時不可刪除帳目本身。
+- 記帳本新增帳目附件入口需修正手機端流程：需同時支援使用手機拍照與選擇既有照片 / 檔案。
 - 實機測試 `super_admin` 新增旅程、`trip_editor` 編輯旅程、Guest 瀏覽旅程。
 - Trip Cloud 驗證完成後，再接續 Other Info / Reference 權限過濾與雲端同步設計。
 
@@ -204,6 +207,7 @@ Trip Management：
 
 1. 新對話先確認文件是否已同步到共同清單最新狀態。
 2. 建議範圍：
+   - 先處理 `docs/03_Bug修正紀錄.md` 內 BUG003、BUG006、BUG008。
    - 更新 `docs/10_新對話交接文件.md`、`docs/09_待辦事項(TODO).md`、`docs/02_產品開發路線圖.md`。
    - 接 Other Info / Reference 權限過濾。
    - 設計 Other Info Supabase schema / RLS。
