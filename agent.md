@@ -55,6 +55,7 @@ V3-1 目前已完成：
   - 可編輯者 Email 由 `admin_users` 管理。
   - Trip Cloud schema / validation SQL 已透過 Supabase connector 執行並驗證。
   - 已補充 `harden_trip_cloud_grants` migration，移除舊的寬鬆 `admin_users` read policy 並收斂 grants。
+  - 已補充 `tune_trip_cloud_advisor_findings` migration，處理 Trip Cloud 的 Supabase advisor findings。
 
 ### 本輪已完成修改
 

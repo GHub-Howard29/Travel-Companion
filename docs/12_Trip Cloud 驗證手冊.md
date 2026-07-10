@@ -50,6 +50,7 @@ Migration：
 ```text
 20260710101530 add_trip_cloud_schema
 20260710101638 harden_trip_cloud_grants
+20260710104919 tune_trip_cloud_advisor_findings
 ```
 
 此 SQL 會建立或更新：

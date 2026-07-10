@@ -71,6 +71,7 @@ where schemaname = 'public'
   and indexname in (
     'trips_pkey',
     'trips_departure_date_idx',
+    'trips_created_by_idx',
     'admin_users_one_role_per_trip_email'
   )
 order by tablename, indexname;

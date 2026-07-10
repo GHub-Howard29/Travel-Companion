@@ -34,6 +34,9 @@ create table if not exists public.trips (
 create index if not exists trips_departure_date_idx
 on public.trips (departure_date desc);
 
+create index if not exists trips_created_by_idx
+on public.trips (created_by);
+
 drop trigger if exists trips_touch_updated_at on public.trips;
 create trigger trips_touch_updated_at
 before update on public.trips
@@ -53,10 +56,10 @@ create policy trips_insert_policy
 on public.trips
 for insert
 with check (
-  auth.uid() is not null
+  (select auth.uid()) is not null
   and (
-    public.tc_is_super_admin()
-    or public.tc_is_trip_editor(id)
+    (select public.tc_is_super_admin())
+    or (select public.tc_is_trip_editor(id))
   )
 );
 
@@ -65,19 +68,19 @@ create policy trips_update_policy
 on public.trips
 for update
 using (
-  public.tc_is_super_admin()
-  or public.tc_is_trip_editor(id)
+  (select public.tc_is_super_admin())
+  or (select public.tc_is_trip_editor(id))
 )
 with check (
-  public.tc_is_super_admin()
-  or public.tc_is_trip_editor(id)
+  (select public.tc_is_super_admin())
+  or (select public.tc_is_trip_editor(id))
 );
 
 drop policy if exists trips_delete_policy on public.trips;
 create policy trips_delete_policy
 on public.trips
 for delete
-using (public.tc_is_super_admin());
+using ((select public.tc_is_super_admin()));
 
 create unique index if not exists admin_users_one_role_per_trip_email
 on public.admin_users (email, role, trip_id);

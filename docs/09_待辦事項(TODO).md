@@ -194,6 +194,7 @@ Trip 管理
 - [x] 透過 Supabase connector 執行 `docs/sql/003_trip_cloud_schema.sql`
 - [x] 透過 Supabase connector 執行 `docs/sql/004_trip_cloud_validation.sql`
 - [x] 補上 `harden_trip_cloud_grants` migration 收斂 grants
+- [x] 補上 `tune_trip_cloud_advisor_findings` migration 處理 Trip Cloud advisor findings
 - [ ] 實機測試 `super_admin` 新增旅程
 - [ ] 實機測試 `trip_editor` 編輯被指派旅程
 - [ ] 實機測試 Guest 瀏覽旅程
