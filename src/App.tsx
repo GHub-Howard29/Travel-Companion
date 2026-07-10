@@ -8,7 +8,7 @@ import { MapPin, ExternalLink } from "lucide-react";
 import { createClient } from "@supabase/supabase-js";
 
 // 旅程型別
-import type { TripMeta, TripDetail } from "./types";
+import type { SidebarItemConfig, TripMeta } from "./types";
 
 // 導航工具
 import { handleNavigate } from "./utils/navigationUtils";
@@ -162,7 +162,7 @@ export default function App() {
     applyTripDefaults(selectedTripMeta);
   }, [applyTripDefaults, selectedTripMeta]);
 
-  const handleScreenSelect = (item: TripDetail["sidebarConfig"][number]) => {
+  const handleScreenSelect = (item: SidebarItemConfig) => {
     if ((item.type === "expense" || item.type === "privateChecklist") && !userEmail) {
       alert("此功能須先登入");
       setIsMenuOpen(false);

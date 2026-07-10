@@ -9,9 +9,13 @@ import {
   Wallet,
   X,
 } from "lucide-react";
-import type { AdminUser, TripDetail, TripMeta } from "../../types";
-
-type SidebarItem = TripDetail["sidebarConfig"][number];
+import type {
+  AdminUser,
+  SidebarItemConfig,
+  SidebarItemType,
+  TripDetail,
+  TripMeta,
+} from "../../types";
 
 interface AppSidebarProps {
   isMenuOpen: boolean;
@@ -26,10 +30,10 @@ interface AppSidebarProps {
   onTripSelect: (tripId: string) => void;
   onLogout: () => Promise<void>;
   onGoogleLogin: () => Promise<void>;
-  onScreenSelect: (item: SidebarItem) => void;
+  onScreenSelect: (item: SidebarItemConfig) => void;
 }
 
-const renderSidebarIcon = (type: string) => {
+const renderSidebarIcon = (type: SidebarItemType) => {
   switch (type) {
     case "itinerary":
       return <Calendar size={18} />;
@@ -61,7 +65,7 @@ export default function AppSidebar({
   onGoogleLogin,
   onScreenSelect,
 }: AppSidebarProps) {
-  const sidebarItems = currentTrip?.sidebarConfig.flatMap((item) => {
+  const sidebarItems = currentTrip?.sidebarConfig.flatMap<SidebarItemConfig>((item) => {
     if (item.type !== "checklist" || !userEmail) {
       return [item];
     }
