@@ -1,9 +1,12 @@
+import type { OtherInfoItem } from "./otherInfo";
+
 // 1. 對應 list.json 的行程元資料型別
 export interface TripMeta {
   id: string;
   title: string;
   departureDate: string; // 格式統一為 YYYY-MM-DD
   dayCount?: number;
+  mode?: TripMode;
   detailPath?: string;
   participants: string[];
   currencyConfig: {
@@ -16,6 +19,7 @@ export interface TripEditorInput {
   title: string;
   departureDate: string;
   dayCount: number;
+  mode: TripMode;
   participants: string[];
   editorEmails: string[];
   currencyCode: string;
@@ -38,6 +42,8 @@ export interface ChecklistItem {
   category: string;
   label: string;
 }
+
+export type TripMode = "guided" | "selfGuided";
 
 // 4. 對應詳細行程中的自駕/客製化區塊
 export interface CustomTabConfig {
@@ -67,9 +73,11 @@ export interface TripDetail {
   isPublic: boolean;
   sidebarConfig: SidebarItemConfig[];
   content: {
+    mode?: TripMode;
     days: number[];
     custom_tab_1: CustomTabConfig;
     checklistData: ChecklistItem[];
+    otherInfoItems?: OtherInfoItem[];
     daysData: {
       [dayNumber: string]: ItineraryItem[]; // 動態對應 "1", "2", "3" 等天數的行程陣列
     };

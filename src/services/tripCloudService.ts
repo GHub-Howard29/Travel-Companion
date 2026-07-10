@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { SidebarItemConfig, TripDetail, TripMeta } from "../types";
+import type { SidebarItemConfig, TripDetail, TripMeta, TripMode } from "../types";
 import type { StoredTripRecord } from "../storage/tripStorage";
 
 interface CloudTripRow {
@@ -37,6 +37,27 @@ const isTripContent = (value: unknown): value is TripDetail["content"] => {
   );
 };
 
+const inferTripMode = (
+  sidebarConfig: SidebarItemConfig[],
+  content: TripDetail["content"],
+): TripMode => {
+  const rawMode = (content as { mode?: unknown }).mode;
+
+  if (rawMode === "guided" || rawMode === "selfGuided") {
+    return rawMode;
+  }
+
+  const specialTitle = sidebarConfig.find(
+    (item) => item.id === "trip_special_info" || item.type === "otherInfo",
+  )?.title;
+
+  if (specialTitle?.includes("自駕") || specialTitle?.includes("租車")) {
+    return "selfGuided";
+  }
+
+  return "guided";
+};
+
 const toTripRecord = (row: CloudTripRow): StoredTripRecord | null => {
   const participants = Array.isArray(row.participants)
     ? row.participants.filter((item): item is string => typeof item === "string")
@@ -50,11 +71,13 @@ const toTripRecord = (row: CloudTripRow): StoredTripRecord | null => {
     return null;
   }
 
+  const mode = inferTripMode(row.sidebar_config, row.content);
   const meta: TripMeta = {
     id: row.id,
     title: row.title,
     departureDate: row.departure_date,
     dayCount: row.content.days.length,
+    mode,
     participants,
     currencyConfig: row.currency_config,
   };
@@ -64,7 +87,10 @@ const toTripRecord = (row: CloudTripRow): StoredTripRecord | null => {
     departureDate: row.departure_date,
     isPublic: true,
     sidebarConfig: row.sidebar_config,
-    content: row.content,
+    content: {
+      ...row.content,
+      mode,
+    },
   };
 
   return {
@@ -113,7 +139,10 @@ export const upsertCloudTripRecord = async (
         participants: record.meta.participants,
         currency_config: record.meta.currencyConfig,
         sidebar_config: record.detail.sidebarConfig,
-        content: record.detail.content,
+        content: {
+          ...record.detail.content,
+          mode: record.meta.mode ?? "guided",
+        },
       },
       { onConflict: "id" },
     )

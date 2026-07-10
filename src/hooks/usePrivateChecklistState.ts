@@ -253,6 +253,44 @@ export const usePrivateChecklistState = (
     tripId,
   ]);
 
+  const replaceItems = useCallback((labels: string[]) => {
+    if (!canUsePrivateChecklist) {
+      return;
+    }
+
+    const now = new Date().toISOString();
+    const nextChecklist: PrivateChecklist = {
+      tripId,
+      userEmail: ownerEmail,
+      items: labels
+        .map((label) => label.trim())
+        .filter(Boolean)
+        .map((label) => ({
+          id: crypto.randomUUID(),
+          tripId,
+          userEmail: ownerEmail,
+          label,
+          isChecked: false,
+          createdAt: now,
+          updatedAt: now,
+        })),
+      updatedAt: now,
+    };
+
+    writeStoredPrivateChecklist(nextChecklist);
+    setItemsByScope((currentItemsByScope) => ({
+      ...currentItemsByScope,
+      [scopeKey]: nextChecklist.items,
+    }));
+    void syncChecklistToCloud(nextChecklist);
+  }, [
+    canUsePrivateChecklist,
+    ownerEmail,
+    scopeKey,
+    syncChecklistToCloud,
+    tripId,
+  ]);
+
   return {
     items,
     syncStatus: canSyncToCloud ? syncStatus : "local",
@@ -261,5 +299,6 @@ export const usePrivateChecklistState = (
     toggleItem,
     renameItem,
     removeItem,
+    replaceItems,
   };
 };

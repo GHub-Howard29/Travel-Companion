@@ -1,9 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
+  OtherInfoItem,
   SidebarItemConfig,
   TripDetail,
   TripEditorInput,
   TripMeta,
+  TripMode,
 } from "../types";
 import {
   readStoredTripRecords,
@@ -16,12 +18,99 @@ import {
 } from "./tripCloudService";
 import { sortTripsByDateDesc } from "../utils/tripHelpers";
 
-const DEFAULT_SIDEBAR_CONFIG: SidebarItemConfig[] = [
+const SPECIAL_INFO_SCREEN_ID = "trip_special_info";
+
+const createSpecialInfoSidebarItem = (mode: TripMode): SidebarItemConfig => ({
+  id: SPECIAL_INFO_SCREEN_ID,
+  title: mode === "guided" ? "領隊導遊聯絡資訊" : "自駕租車須知",
+  type: "otherInfo",
+});
+
+const createSidebarConfig = (mode: TripMode): SidebarItemConfig[] => [
   { id: "itinerary", title: "每日詳細行程", type: "itinerary" },
   { id: "checklist", title: "共同檢查清單", type: "checklist" },
+  createSpecialInfoSidebarItem(mode),
   { id: "other_info", title: "其他資訊", type: "otherInfo" },
   { id: "expense", title: "旅費記帳本", type: "expense" },
 ];
+
+const inferTripMode = (
+  meta: Pick<TripMeta, "mode"> | null | undefined,
+  detail: Pick<TripDetail, "sidebarConfig"> | null | undefined,
+): TripMode => {
+  if (meta?.mode === "guided" || meta?.mode === "selfGuided") {
+    return meta.mode;
+  }
+
+  const specialTitle = detail?.sidebarConfig.find(
+    (item) => item.id === SPECIAL_INFO_SCREEN_ID || item.type === "otherInfo",
+  )?.title;
+
+  if (specialTitle?.includes("自駕") || specialTitle?.includes("租車")) {
+    return "selfGuided";
+  }
+
+  return "guided";
+};
+
+const normalizeSidebarConfig = (
+  sidebarConfig: SidebarItemConfig[],
+  mode: TripMode,
+): SidebarItemConfig[] => {
+  const specialItem = createSpecialInfoSidebarItem(mode);
+  const hasSpecialItem = sidebarConfig.some((item) => item.id === SPECIAL_INFO_SCREEN_ID);
+  const normalizedItems = sidebarConfig
+    .filter((item) => item.id !== SPECIAL_INFO_SCREEN_ID)
+    .map((item) =>
+      item.id === "other_info" && item.type === "otherInfo"
+        ? { ...item, title: "其他資訊" }
+        : item,
+    );
+  const checklistIndex = normalizedItems.findIndex((item) => item.type === "checklist");
+  const nextItems = [...normalizedItems];
+
+  if (hasSpecialItem || checklistIndex >= 0) {
+    nextItems.splice(checklistIndex >= 0 ? checklistIndex + 1 : 2, 0, specialItem);
+  }
+
+  return nextItems.length > 0 ? nextItems : createSidebarConfig(mode);
+};
+
+const createSpecialInfoItem = (
+  tripId: string,
+  mode: TripMode,
+): OtherInfoItem => {
+  const now = new Date().toISOString();
+
+  return {
+    id: `${tripId}-${mode}-special-info`,
+    tripId,
+    folderId: mode === "guided" ? "other-info-other" : "other-info-transport",
+    title: mode === "guided" ? "領隊導遊聯絡資訊" : "自駕租車資訊",
+    content:
+      mode === "guided"
+        ? "領隊：\n電話：\n導遊：\n電話：\n集合提醒："
+        : "租車公司：\n取車地點：\n取車時間：\n還車地點：\n還車時間：\n注意事項：",
+    order: 1,
+    createdAt: now,
+    updatedAt: now,
+  };
+};
+
+const ensureSpecialInfoItems = (
+  tripId: string,
+  mode: TripMode,
+  items: OtherInfoItem[] | undefined,
+): OtherInfoItem[] => {
+  const title = mode === "guided" ? "領隊導遊聯絡資訊" : "自駕租車資訊";
+  const currentItems = (items ?? []).filter((item) => item.tripId === tripId);
+
+  if (currentItems.some((item) => item.title === title)) {
+    return currentItems;
+  }
+
+  return [createSpecialInfoItem(tripId, mode), ...currentItems];
+};
 
 const toSlug = (value: string): string => {
   const normalized = value
@@ -67,8 +156,11 @@ const fetchJson = async <T>(url: string): Promise<T | null> => {
 };
 
 const withDayCount = (trip: TripMeta, detail: TripDetail | null): TripMeta => {
+  const mode = inferTripMode(trip, detail);
+
   return {
     ...trip,
+    mode,
     dayCount: detail?.content.days.length ?? trip.dayCount ?? 1,
   };
 };
@@ -174,11 +266,13 @@ export const createTripRecord = (input: TripEditorInput): StoredTripRecord => {
   const id = createTripId(input.title, input.departureDate);
   const days = createDays(input.dayCount);
   const editorEmails = normalizeEmails(input.editorEmails);
+  const mode = input.mode;
   const meta: TripMeta = {
     id,
     title: input.title.trim(),
     departureDate: input.departureDate,
     dayCount: input.dayCount,
+    mode,
     participants: input.participants.map((item) => item.trim()).filter(Boolean),
     currencyConfig: {
       code: input.currencyCode.trim().toUpperCase(),
@@ -190,14 +284,16 @@ export const createTripRecord = (input: TripEditorInput): StoredTripRecord => {
     title: meta.title,
     departureDate: meta.departureDate,
     isPublic: true,
-    sidebarConfig: DEFAULT_SIDEBAR_CONFIG,
+    sidebarConfig: createSidebarConfig(mode),
     content: {
+      mode,
       days,
       custom_tab_1: {
         subtitle: "旅程備忘錄",
         mainText: "",
       },
       checklistData: [],
+      otherInfoItems: ensureSpecialInfoItems(id, mode, []),
       daysData: createEmptyDaysData(days),
     },
   };
@@ -221,6 +317,7 @@ export const updateTripRecord = (
 
   const days = createDays(input.dayCount);
   const currentDaysData = currentRecord.detail.content.daysData;
+  const mode = input.mode;
   const nextDaysData = days.reduce<TripDetail["content"]["daysData"]>(
     (result, day) => {
       result[String(day)] = currentDaysData[String(day)] ?? [];
@@ -233,6 +330,7 @@ export const updateTripRecord = (
     title: input.title.trim(),
     departureDate: input.departureDate,
     dayCount: input.dayCount,
+    mode,
     participants: input.participants.map((item) => item.trim()).filter(Boolean),
     currencyConfig: {
       code: input.currencyCode.trim().toUpperCase(),
@@ -243,9 +341,16 @@ export const updateTripRecord = (
     ...currentRecord.detail,
     title: meta.title,
     departureDate: meta.departureDate,
+    sidebarConfig: normalizeSidebarConfig(currentRecord.detail.sidebarConfig, mode),
     content: {
       ...currentRecord.detail.content,
+      mode,
       days,
+      otherInfoItems: ensureSpecialInfoItems(
+        currentRecord.detail.id,
+        mode,
+        currentRecord.detail.content.otherInfoItems,
+      ),
       daysData: nextDaysData,
     },
   };
@@ -264,6 +369,7 @@ export const createTripRecordFromExisting = (
   input: TripEditorInput,
 ): StoredTripRecord => {
   const days = createDays(input.dayCount);
+  const mode = input.mode;
   const nextDaysData = days.reduce<TripDetail["content"]["daysData"]>(
     (result, day) => {
       result[String(day)] = detail.content.daysData[String(day)] ?? [];
@@ -276,6 +382,7 @@ export const createTripRecordFromExisting = (
     title: input.title.trim(),
     departureDate: input.departureDate,
     dayCount: input.dayCount,
+    mode,
     participants: input.participants.map((item) => item.trim()).filter(Boolean),
     currencyConfig: {
       code: input.currencyCode.trim().toUpperCase(),
@@ -286,9 +393,16 @@ export const createTripRecordFromExisting = (
     ...detail,
     title: nextMeta.title,
     departureDate: nextMeta.departureDate,
+    sidebarConfig: normalizeSidebarConfig(detail.sidebarConfig, mode),
     content: {
       ...detail.content,
+      mode,
       days,
+      otherInfoItems: ensureSpecialInfoItems(
+        detail.id,
+        mode,
+        detail.content.otherInfoItems,
+      ),
       daysData: nextDaysData,
     },
   };
@@ -331,6 +445,7 @@ export const createTripRecordFromDetail = (
       title: detail.title,
       departureDate: detail.departureDate,
       dayCount: detail.content.days.length,
+      mode: inferTripMode(meta, detail),
     },
     detail,
     editorEmails: normalizeEmails(editorEmails),

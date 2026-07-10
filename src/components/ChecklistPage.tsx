@@ -1,5 +1,5 @@
 import { FormEvent, useState } from "react";
-import { Check, Pencil, Plus, Trash2, X } from "lucide-react";
+import { Check, Copy, Pencil, Plus, Trash2, X } from "lucide-react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { ChecklistItem } from "../types";
@@ -12,6 +12,11 @@ interface ChecklistPageProps {
   canViewSharedChecklist: boolean;
   canToggleSharedChecklist: boolean;
   canManageSharedChecklist: boolean;
+  copySources: Array<{
+    tripId: string;
+    title: string;
+    items: ChecklistItem[];
+  }>;
   onSaveChecklistData: (items: ChecklistItem[]) => Promise<void>;
 }
 
@@ -22,9 +27,12 @@ export const ChecklistPage = ({
   canViewSharedChecklist,
   canToggleSharedChecklist,
   canManageSharedChecklist,
+  copySources,
   onSaveChecklistData,
 }: ChecklistPageProps) => {
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [isCopyOpen, setIsCopyOpen] = useState(false);
+  const [copySourceTripId, setCopySourceTripId] = useState("");
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [draftCategory, setDraftCategory] = useState("其他");
   const [draftLabel, setDraftLabel] = useState("");
@@ -50,6 +58,12 @@ export const ChecklistPage = ({
     items.length > 0
       ? (visibleCheckedItemIds.length / items.length) * 100
       : 0;
+  const availableCopySources = copySources.filter(
+    (source) => source.tripId !== tripId && source.items.length > 0,
+  );
+  const selectedCopySource =
+    availableCopySources.find((source) => source.tripId === copySourceTripId) ??
+    availableCopySources[0];
 
   if (!canViewSharedChecklist) {
     return (
@@ -124,6 +138,21 @@ export const ChecklistPage = ({
     resetForm();
   };
 
+  const copyChecklistItems = async () => {
+    if (!selectedCopySource) return;
+
+    setIsSavingList(true);
+    await onSaveChecklistData(
+      selectedCopySource.items.map((item, index) => ({
+        id: `shared_copy_${Date.now().toString(36)}_${index}`,
+        category: item.category,
+        label: item.label,
+      })),
+    );
+    setIsSavingList(false);
+    setIsCopyOpen(false);
+  };
+
   return (
     <div className="space-y-6">
       <div className="bg-white p-4 rounded-xl border border-slate-200/80 shadow-sm">
@@ -153,7 +182,71 @@ export const ChecklistPage = ({
             {syncStatus === "local" && "目前資料先保存於本機。"}
           </p>
         )}
+        {canManageSharedChecklist && (
+          <div className="mt-3 flex justify-end">
+            <button
+              type="button"
+              onClick={() => {
+                setCopySourceTripId(selectedCopySource?.tripId ?? "");
+                setIsCopyOpen(true);
+              }}
+              disabled={availableCopySources.length === 0}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Copy size={14} />
+              複製清單
+            </button>
+          </div>
+        )}
       </div>
+
+      {canManageSharedChecklist && isCopyOpen && (
+        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="mb-3 flex items-center justify-between">
+            <h3 className="text-sm font-bold text-slate-800">複製共同清單</h3>
+            <button
+              type="button"
+              onClick={() => setIsCopyOpen(false)}
+              className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100"
+              aria-label="關閉"
+              title="關閉"
+            >
+              <X size={15} />
+            </button>
+          </div>
+          <div className="space-y-3">
+            <select
+              value={selectedCopySource?.tripId ?? ""}
+              onChange={(event) => setCopySourceTripId(event.target.value)}
+              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 outline-none focus:border-rose-500"
+            >
+              {availableCopySources.map((source) => (
+                <option key={source.tripId} value={source.tripId}>
+                  {source.title}
+                </option>
+              ))}
+            </select>
+            <div className="max-h-56 space-y-2 overflow-y-auto rounded-lg border border-slate-100 bg-slate-50 p-3">
+              {selectedCopySource?.items.map((item) => (
+                <div key={item.id} className="text-sm text-slate-700">
+                  <span className="font-bold text-slate-500">{item.category}</span>
+                  <span className="mx-1 text-slate-300">/</span>
+                  {item.label}
+                </div>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={() => void copyChecklistItems()}
+              disabled={!selectedCopySource || isSavingList}
+              className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-rose-700 px-4 py-2.5 text-sm font-bold text-white hover:bg-rose-800 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <Copy size={16} />
+              複製到目前旅程
+            </button>
+          </div>
+        </div>
+      )}
 
       {canManageSharedChecklist && (
         <form

@@ -15,6 +15,12 @@ interface CloudChecklistItemRow {
   sort_order: number;
   created_at: string;
   updated_at: string;
+  deleted_at?: string | null;
+}
+
+interface CloudPrivateChecklistCopyRow {
+  trip_id: string;
+  checklist_items: CloudChecklistItemRow[];
 }
 
 const PRIVATE_CHECKLIST_TITLE = "私人確認清單";
@@ -227,4 +233,56 @@ export const pushPrivateChecklistToCloud = async (
   if (deleteError) {
     throw deleteError;
   }
+};
+
+export const listCloudPrivateChecklistCopies = async (
+  supabase: SupabaseClient,
+  userEmail: string,
+): Promise<PrivateChecklist[]> => {
+  const userId = await getCurrentUserId(supabase);
+
+  if (!userId) {
+    return [];
+  }
+
+  const { data, error } = await supabase
+    .from("checklists")
+    .select(
+      "trip_id, checklist_items(id, client_item_id, label, is_checked, sort_order, created_at, updated_at, deleted_at)",
+    )
+    .eq("scope", "private")
+    .eq("owner_user_id", userId)
+    .order("trip_id", { ascending: true });
+
+  if (error) {
+    throw error;
+  }
+
+  return ((data ?? []) as CloudPrivateChecklistCopyRow[])
+    .map((row): PrivateChecklist => {
+      const items = (row.checklist_items ?? [])
+        .filter((item) => Boolean(item.client_item_id) && !item.deleted_at)
+        .sort((left, right) => left.sort_order - right.sort_order)
+        .map((item): PrivateChecklistItem => ({
+          id: item.client_item_id ?? `cloud_${item.id}`,
+          tripId: row.trip_id,
+          userEmail,
+          label: item.label,
+          isChecked: item.is_checked,
+          createdAt: item.created_at,
+          updatedAt: item.updated_at,
+        }));
+
+      return {
+        tripId: row.trip_id,
+        userEmail,
+        items,
+        updatedAt:
+          items.reduce(
+            (latest, item) => (item.updatedAt > latest ? item.updatedAt : latest),
+            "",
+          ) || "",
+      };
+    })
+    .filter((checklist) => checklist.items.length > 0);
 };

@@ -11,6 +11,7 @@ import { createClient } from "@supabase/supabase-js";
 import type {
   ChecklistItem,
   ItineraryItem,
+  OtherInfoItem,
   SidebarItemConfig,
   TripEditorInput,
   TripMeta,
@@ -30,6 +31,7 @@ import { TripEditorModal } from "./components/TripEditorModal";
 import useExpenseBook from "./hooks/useExpenseBook";
 import useTripWorkspace from "./hooks/useTripWorkspace";
 import { AppContext } from "./app/context/AppContext";
+import { getTripDetail } from "./services/tripRepository";
 
 // --- 初始化 Supabase 雲端客戶端 ---
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
@@ -95,6 +97,9 @@ export default function App() {
   } = useTripWorkspace({ supabase });
   const [tripEditorMode, setTripEditorMode] = useState<"create" | "edit">("create");
   const [isTripEditorOpen, setIsTripEditorOpen] = useState(false);
+  const [checklistCopySources, setChecklistCopySources] = useState<
+    Array<{ tripId: string; title: string; items: ChecklistItem[] }>
+  >([]);
   const [isItineraryManageMode, setIsItineraryManageMode] = useState(false);
   const [isItineraryFormOpen, setIsItineraryFormOpen] = useState(false);
   const [editingItineraryIndex, setEditingItineraryIndex] = useState<number | null>(null);
@@ -285,6 +290,17 @@ export default function App() {
       },
     });
   };
+  const handleSaveOtherInfoItems = async (items: OtherInfoItem[]) => {
+    if (!currentTrip) return;
+
+    await saveCurrentTripDetail({
+      ...currentTrip,
+      content: {
+        ...currentTrip.content,
+        otherInfoItems: items,
+      },
+    });
+  };
   const resetItineraryForm = () => {
     setIsItineraryFormOpen(false);
     setEditingItineraryIndex(null);
@@ -375,6 +391,35 @@ export default function App() {
     resetItineraryForm();
   };
   const currentScreenType = getCurrentScreenType();
+
+  useEffect(() => {
+    let isActive = true;
+
+    const loadChecklistCopySources = async () => {
+      const basePath = getBasePath();
+      const sources = await Promise.all(
+        tripOptions.map(async (trip) => {
+          const detail = await getTripDetail(supabase, basePath, trip.id, trip);
+
+          return {
+            tripId: trip.id,
+            title: `${trip.title} (${trip.departureDate})`,
+            items: detail?.content.checklistData ?? [],
+          };
+        }),
+      );
+
+      if (isActive) {
+        setChecklistCopySources(sources);
+      }
+    };
+
+    void loadChecklistCopySources();
+
+    return () => {
+      isActive = false;
+    };
+  }, [tripOptions]);
 
   useEffect(() => {
     if (
@@ -664,6 +709,7 @@ export default function App() {
                 canViewSharedChecklist={permission.canViewSharedChecklist}
                 canToggleSharedChecklist={permission.canToggleSharedChecklist}
                 canManageSharedChecklist={hasEditPermission}
+                copySources={checklistCopySources}
                 onSaveChecklistData={handleSaveChecklistData}
               />
             )}
@@ -677,6 +723,7 @@ export default function App() {
                 canEditPrivateChecklist={permission.canEditPrivateChecklist}
                 canTogglePrivateChecklist={permission.canTogglePrivateChecklist}
                 canSyncPrivateChecklist={permission.canSyncPrivateChecklist}
+                tripOptions={tripOptions}
               />
             )}
 
@@ -702,6 +749,8 @@ export default function App() {
                 key={selectedTripId}
                 tripId={selectedTripId}
                 canEdit={hasEditPermission}
+                items={currentTrip.content.otherInfoItems}
+                onSaveItems={handleSaveOtherInfoItems}
               />
             )}
 

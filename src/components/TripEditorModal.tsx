@@ -1,6 +1,6 @@
 import { FormEvent, useState } from "react";
 import { Save, X } from "lucide-react";
-import type { TripDetail, TripEditorInput, TripMeta } from "../types";
+import type { TripDetail, TripEditorInput, TripMeta, TripMode } from "../types";
 
 interface TripEditorModalProps {
   mode: "create" | "edit";
@@ -30,6 +30,30 @@ const splitLines = (value: string): string[] => {
 
 const toTextareaValue = (items: string[]): string => items.join("\n");
 
+const getInitialTripMode = (
+  trip: TripMeta | null,
+  tripDetail: TripDetail | null,
+): TripMode => {
+  if (trip?.mode === "guided" || trip?.mode === "selfGuided") {
+    return trip.mode;
+  }
+
+  if (
+    tripDetail?.content.mode === "guided" ||
+    tripDetail?.content.mode === "selfGuided"
+  ) {
+    return tripDetail.content.mode;
+  }
+
+  const specialTitle = tripDetail?.sidebarConfig.find(
+    (item) => item.id === "trip_special_info" || item.type === "otherInfo",
+  )?.title;
+
+  return specialTitle?.includes("自駕") || specialTitle?.includes("租車")
+    ? "selfGuided"
+    : "guided";
+};
+
 export const TripEditorModal = ({
   mode,
   trip,
@@ -46,6 +70,9 @@ export const TripEditorModal = ({
     trip?.departureDate ?? new Date().toISOString().slice(0, 10),
   );
   const [dayCount, setDayCount] = useState(tripDetail?.content.days.length ?? 1);
+  const [tripMode, setTripMode] = useState<TripMode>(() =>
+    getInitialTripMode(trip, tripDetail),
+  );
   const [participants, setParticipants] = useState(
     toTextareaValue(trip?.participants ?? []),
   );
@@ -104,6 +131,7 @@ export const TripEditorModal = ({
       title,
       departureDate,
       dayCount,
+      mode: tripMode,
       participants: nextParticipants,
       editorEmails: nextEditorEmails,
       currencyCode,
@@ -173,6 +201,18 @@ export const TripEditorModal = ({
             />
           </label>
         </div>
+
+        <label className="block">
+          <span className="text-xs font-bold text-slate-500">旅程型態</span>
+          <select
+            value={tripMode}
+            onChange={(event) => setTripMode(event.target.value as TripMode)}
+            className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          >
+            <option value="guided">跟團</option>
+            <option value="selfGuided">自助 / 自駕</option>
+          </select>
+        </label>
 
         <label className="block">
           <span className="text-xs font-bold text-slate-500">參與者</span>

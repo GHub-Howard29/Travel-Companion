@@ -1,8 +1,10 @@
-import { useState, type FormEvent, type KeyboardEvent } from "react";
+import { useEffect, useState, type FormEvent, type KeyboardEvent } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { Check, Pencil, Plus, Save, Trash2, X } from "lucide-react";
+import { Check, Copy, Pencil, Plus, Save, Trash2, X } from "lucide-react";
 
 import { usePrivateChecklistState } from "../hooks/usePrivateChecklistState";
+import { listCloudPrivateChecklistCopies } from "../services/privateChecklistCloudService";
+import type { PrivateChecklist, TripMeta } from "../types";
 
 interface PrivateChecklistPageProps {
   tripId: string;
@@ -12,6 +14,7 @@ interface PrivateChecklistPageProps {
   canEditPrivateChecklist: boolean;
   canTogglePrivateChecklist: boolean;
   canSyncPrivateChecklist: boolean;
+  tripOptions: TripMeta[];
 }
 
 export const PrivateChecklistPage = ({
@@ -22,6 +25,7 @@ export const PrivateChecklistPage = ({
   canEditPrivateChecklist,
   canTogglePrivateChecklist,
   canSyncPrivateChecklist,
+  tripOptions,
 }: PrivateChecklistPageProps) => {
   const {
     items,
@@ -31,6 +35,7 @@ export const PrivateChecklistPage = ({
     toggleItem,
     renameItem,
     removeItem,
+    replaceItems,
   } = usePrivateChecklistState(
     tripId,
     userEmail,
@@ -38,11 +43,50 @@ export const PrivateChecklistPage = ({
     canSyncPrivateChecklist,
   );
   const [newLabel, setNewLabel] = useState("");
+  const [copySources, setCopySources] = useState<PrivateChecklist[]>([]);
+  const [isCopyOpen, setIsCopyOpen] = useState(false);
+  const [copySourceTripId, setCopySourceTripId] = useState("");
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [editingLabel, setEditingLabel] = useState("");
   const checkedCount = items.filter((item) => item.isChecked).length;
   const progressPercent =
     items.length > 0 ? (checkedCount / items.length) * 100 : 0;
+  const availableCopySources = copySources.filter(
+    (source) => source.tripId !== tripId && source.items.length > 0,
+  );
+  const selectedCopySource =
+    availableCopySources.find((source) => source.tripId === copySourceTripId) ??
+    availableCopySources[0];
+  const getTripTitle = (sourceTripId: string): string => {
+    const trip = tripOptions.find((option) => option.id === sourceTripId);
+    return trip ? `${trip.title} (${trip.departureDate})` : sourceTripId;
+  };
+
+  useEffect(() => {
+    if (!userEmail || !canSyncPrivateChecklist) {
+      return;
+    }
+
+    let isActive = true;
+
+    const loadSources = async () => {
+      try {
+        const sources = await listCloudPrivateChecklistCopies(supabase, userEmail);
+
+        if (isActive) {
+          setCopySources(sources);
+        }
+      } catch (error) {
+        console.warn(error);
+      }
+    };
+
+    void loadSources();
+
+    return () => {
+      isActive = false;
+    };
+  }, [canSyncPrivateChecklist, supabase, userEmail]);
 
   if (!canViewPrivateChecklist || !userEmail) {
     return (
@@ -85,6 +129,13 @@ export const PrivateChecklistPage = ({
     cancelEdit();
   };
 
+  const copyPrivateChecklist = () => {
+    if (!selectedCopySource) return;
+
+    replaceItems(selectedCopySource.items.map((item) => item.label));
+    setIsCopyOpen(false);
+  };
+
   const handleEditKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
     if (event.key === "Enter") {
       event.preventDefault();
@@ -122,7 +173,69 @@ export const PrivateChecklistPage = ({
           {canSyncPrivateChecklist && syncStatus === "error" && syncError}
           {canSyncPrivateChecklist && syncStatus === "local" && "目前資料先保存於本機。"}
         </p>
+        {canEditPrivateChecklist && (
+          <div className="mt-3 flex justify-end">
+            <button
+              type="button"
+              onClick={() => {
+                setCopySourceTripId(selectedCopySource?.tripId ?? "");
+                setIsCopyOpen(true);
+              }}
+              disabled={availableCopySources.length === 0}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Copy size={14} />
+              複製清單
+            </button>
+          </div>
+        )}
       </div>
+
+      {canEditPrivateChecklist && isCopyOpen && (
+        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="mb-3 flex items-center justify-between">
+            <h3 className="text-sm font-bold text-slate-800">複製私人清單</h3>
+            <button
+              type="button"
+              onClick={() => setIsCopyOpen(false)}
+              className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100"
+              aria-label="關閉"
+              title="關閉"
+            >
+              <X size={15} />
+            </button>
+          </div>
+          <div className="space-y-3">
+            <select
+              value={selectedCopySource?.tripId ?? ""}
+              onChange={(event) => setCopySourceTripId(event.target.value)}
+              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 outline-none focus:border-rose-500"
+            >
+              {availableCopySources.map((source) => (
+                <option key={source.tripId} value={source.tripId}>
+                  {getTripTitle(source.tripId)}
+                </option>
+              ))}
+            </select>
+            <div className="max-h-56 space-y-2 overflow-y-auto rounded-lg border border-slate-100 bg-slate-50 p-3">
+              {selectedCopySource?.items.map((item) => (
+                <div key={item.id} className="text-sm text-slate-700">
+                  {item.label}
+                </div>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={copyPrivateChecklist}
+              disabled={!selectedCopySource}
+              className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-rose-700 px-4 py-2.5 text-sm font-bold text-white hover:bg-rose-800 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <Copy size={16} />
+              複製到目前旅程
+            </button>
+          </div>
+        </div>
+      )}
 
       {canEditPrivateChecklist && (
         <form

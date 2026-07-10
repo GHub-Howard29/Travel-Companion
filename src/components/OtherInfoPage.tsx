@@ -26,6 +26,8 @@ import { useOtherInfoForm } from "../hooks/useOtherInfoForm";
 interface OtherInfoPageProps {
   tripId: string;
   canEdit: boolean;
+  items?: OtherInfoItem[];
+  onSaveItems?: (items: OtherInfoItem[]) => Promise<void>;
 }
 
 const renderContentWithLinks = (content: string) => {
@@ -57,9 +59,15 @@ const renderContentWithLinks = (content: string) => {
   });
 };
 
-export const OtherInfoPage = ({ tripId, canEdit }: OtherInfoPageProps) => {
+export const OtherInfoPage = ({
+  tripId,
+  canEdit,
+  items: syncedItems,
+  onSaveItems,
+}: OtherInfoPageProps) => {
   const folders = useMemo<Folder[]>(() => getFolders(tripId), [tripId]);
-  const [items, setItems] = useState<OtherInfoItem[]>(() => getItems(tripId));
+  const [localItems, setLocalItems] = useState<OtherInfoItem[]>(() => getItems(tripId));
+  const items = syncedItems ?? localItems;
   const [activeFolderId, setActiveFolderId] = useState(() => folders[0]?.id ?? "");
   const {
     editingItemId,
@@ -79,7 +87,37 @@ export const OtherInfoPage = ({ tripId, canEdit }: OtherInfoPageProps) => {
     [items, activeFolderId],
   );
 
-  const handleSave = () => {
+  const persistItems = async (nextItems: OtherInfoItem[]) => {
+    if (onSaveItems) {
+      await onSaveItems(nextItems);
+      return;
+    }
+
+    setLocalItems(nextItems);
+  };
+
+  const createSyncedOtherInfoItem = (
+    folderId: string,
+    title: string,
+    content: string,
+  ): OtherInfoItem => {
+    const now = new Date().toISOString();
+    const nextOrder =
+      items.filter((item) => item.folderId === folderId && !item.isDeleted).length + 1;
+
+    return {
+      id: crypto.randomUUID(),
+      tripId,
+      folderId,
+      title,
+      content,
+      order: nextOrder,
+      createdAt: now,
+      updatedAt: now,
+    };
+  };
+
+  const handleSave = async () => {
     const title = form.title.trim();
     const content = form.content.trim();
 
@@ -87,21 +125,39 @@ export const OtherInfoPage = ({ tripId, canEdit }: OtherInfoPageProps) => {
       return;
     }
 
-    const nextItems = editingItemId
-      ? updateOtherInfoItem(tripId, editingItemId, {
-          folderId: form.folderId,
-          title,
-          content,
-        })
-      : createOtherInfoItem(tripId, form.folderId, title, content);
+    const nextItems = onSaveItems
+      ? editingItemId
+        ? items.map((item) =>
+            item.id === editingItemId
+              ? {
+                  ...item,
+                  folderId: form.folderId,
+                  title,
+                  content,
+                  updatedAt: new Date().toISOString(),
+                }
+              : item,
+          )
+        : [...items, createSyncedOtherInfoItem(form.folderId, title, content)]
+      : editingItemId
+        ? updateOtherInfoItem(tripId, editingItemId, {
+            folderId: form.folderId,
+            title,
+            content,
+          })
+        : createOtherInfoItem(tripId, form.folderId, title, content);
 
-    setItems(nextItems);
+    await persistItems(nextItems);
     setActiveFolderId(form.folderId);
     closeForm(form.folderId);
   };
 
-  const handleDelete = (item: OtherInfoItem) => {
-    setItems(deleteOtherInfoItem(tripId, item.id));
+  const handleDelete = async (item: OtherInfoItem) => {
+    const nextItems = onSaveItems
+      ? items.filter((currentItem) => currentItem.id !== item.id)
+      : deleteOtherInfoItem(tripId, item.id);
+
+    await persistItems(nextItems);
 
     if (editingItemId === item.id) {
       closeForm(activeFolderId);
@@ -274,7 +330,7 @@ export const OtherInfoPage = ({ tripId, canEdit }: OtherInfoPageProps) => {
                     </button>
                     <button
                       type="button"
-                      onClick={() => handleDelete(item)}
+                      onClick={() => void handleDelete(item)}
                       className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-rose-50 hover:text-rose-700"
                       aria-label="刪除"
                       title="刪除"

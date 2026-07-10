@@ -1,9 +1,11 @@
 import {
   Calendar,
+  CarFront,
   CheckSquare,
   ClipboardCheck,
   FolderOpen,
   Home,
+  IdCard,
   LogIn,
   LogOut,
   Pencil,
@@ -39,7 +41,17 @@ interface AppSidebarProps {
   onScreenSelect: (item: SidebarItemConfig) => void;
 }
 
-const renderSidebarIcon = (type: SidebarItemType) => {
+const renderSidebarIcon = (item: SidebarItemConfig) => {
+  if (item.id === "trip_special_info") {
+    return item.title.includes("自駕") || item.title.includes("租車") ? (
+      <CarFront size={18} />
+    ) : (
+      <IdCard size={18} />
+    );
+  }
+
+  const type: SidebarItemType = item.type;
+
   switch (type) {
     case "itinerary":
       return <Calendar size={18} />;
@@ -177,7 +189,7 @@ export default function AppSidebar({
                 }`}
               >
                 <div className={isActive ? "text-white" : "text-slate-400"}>
-                  {renderSidebarIcon(item.type)}
+                  {renderSidebarIcon(item)}
                 </div>
                 <span>{item.title}</span>
               </button>
