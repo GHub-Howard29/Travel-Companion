@@ -153,6 +153,8 @@ export default function App() {
     setUserEmail(null);
     setAdminProfile(null);
     setHasEditPermission(false);
+    setCurrentScreen("itinerary");
+    setIsMenuOpen(false);
   };
 
   useEffect(() => {
@@ -203,6 +205,17 @@ export default function App() {
     return currentTrip?.sidebarConfig.find((s) => s.id === currentScreen)?.type;
   };
   const currentScreenType = getCurrentScreenType();
+
+  useEffect(() => {
+    if (
+      userEmail ||
+      (currentScreenType !== "expense" && currentScreenType !== "privateChecklist")
+    ) {
+      return;
+    }
+
+    setCurrentScreen("itinerary");
+  }, [currentScreenType, setCurrentScreen, userEmail]);
 
   const getHeaderBgColor = () => {
     switch (currentScreenType) {
