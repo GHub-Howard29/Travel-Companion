@@ -30,13 +30,13 @@ export const ChecklistPage = ({
   copySources,
   onSaveChecklistData,
 }: ChecklistPageProps) => {
+  const [isManageMode, setIsManageMode] = useState(false);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isCopyOpen, setIsCopyOpen] = useState(false);
   const [copySourceTripId, setCopySourceTripId] = useState("");
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [draftCategory, setDraftCategory] = useState("其他");
   const [draftLabel, setDraftLabel] = useState("");
-  const [newLabel, setNewLabel] = useState("");
   const [isSavingList, setIsSavingList] = useState(false);
   const { items, syncStatus, syncError, toggleChecklistItem } =
     useChecklistState(
@@ -80,29 +80,26 @@ export const ChecklistPage = ({
     setDraftLabel("");
   };
 
+  const closeManageMode = () => {
+    setIsManageMode(false);
+    setIsCopyOpen(false);
+    resetForm();
+  };
+
+  const startCreateItem = () => {
+    setEditingItemId(null);
+    setDraftCategory(categories[0] ?? "其他");
+    setDraftLabel("");
+    setIsCopyOpen(false);
+    setIsFormOpen(true);
+  };
+
   const startEditItem = (item: ChecklistItem) => {
     setEditingItemId(item.id);
     setDraftCategory(item.category);
     setDraftLabel(item.label);
+    setIsCopyOpen(false);
     setIsFormOpen(true);
-  };
-
-  const createChecklistItem = async (event: FormEvent) => {
-    event.preventDefault();
-    const label = newLabel.trim();
-    if (!label) return;
-
-    setIsSavingList(true);
-    await onSaveChecklistData([
-      ...checklistData,
-      {
-        id: `shared_${Date.now().toString(36)}`,
-        category: "其他",
-        label,
-      },
-    ]);
-    setIsSavingList(false);
-    setNewLabel("");
   };
 
   const saveChecklistItem = async (event: FormEvent) => {
@@ -112,15 +109,24 @@ export const ChecklistPage = ({
     if (!label) return;
 
     setIsSavingList(true);
-    const nextItems = checklistData.map((item) =>
-      item.id === editingItemId
-        ? {
-            ...item,
+    const nextItems = editingItemId
+      ? checklistData.map((item) =>
+          item.id === editingItemId
+            ? {
+                ...item,
+                category,
+                label,
+              }
+            : item,
+        )
+      : [
+          ...checklistData,
+          {
+            id: `shared_${Date.now().toString(36)}`,
             category,
             label,
-          }
-        : item,
-    );
+          },
+        ];
 
     await onSaveChecklistData(nextItems);
     setIsSavingList(false);
@@ -183,29 +189,65 @@ export const ChecklistPage = ({
           </p>
         )}
         {canManageSharedChecklist && (
-          <div className="mt-3 space-y-2">
-            <p className="rounded-lg border border-amber-300 bg-amber-100 px-3 py-2 text-xs font-bold text-amber-900">
-              如需複製使用舊有清單，請勿提早建立任何清單
-            </p>
-            <div className="flex justify-end">
+          <div className="mt-3 flex justify-end">
             <button
               type="button"
-              onClick={() => {
-                setCopySourceTripId(selectedCopySource?.tripId ?? "");
-                setIsCopyOpen(true);
-              }}
-              disabled={availableCopySources.length === 0}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+              onClick={isManageMode ? closeManageMode : () => setIsManageMode(true)}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-50"
             >
-              <Copy size={14} />
-              複製清單
+              {isManageMode ? <X size={14} /> : <Pencil size={14} />}
+              {isManageMode ? "退出" : "管理"}
             </button>
-            </div>
           </div>
         )}
       </div>
 
-      {canManageSharedChecklist && isCopyOpen && (
+      {canManageSharedChecklist && isManageMode && (
+        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="mb-3 flex items-center justify-between">
+            <h3 className="text-sm font-bold text-slate-800">共同清單管理</h3>
+            <button
+              type="button"
+              onClick={closeManageMode}
+              className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100"
+              aria-label="退出"
+              title="退出"
+            >
+              <X size={15} />
+            </button>
+          </div>
+          <div className="space-y-3">
+            <p className="rounded-lg border border-amber-300 bg-amber-100 px-3 py-2 text-xs font-bold text-amber-900">
+              如需複製使用舊有清單，請勿提早建立任何清單
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={startCreateItem}
+                className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white hover:bg-slate-800"
+              >
+                <Plus size={14} />
+                新增項目
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setCopySourceTripId(selectedCopySource?.tripId ?? "");
+                  setIsFormOpen(false);
+                  setIsCopyOpen(true);
+                }}
+                disabled={availableCopySources.length === 0}
+                className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Copy size={14} />
+                複製清單
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {canManageSharedChecklist && isManageMode && isCopyOpen && (
         <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="mb-3 flex items-center justify-between">
             <h3 className="text-sm font-bold text-slate-800">複製共同清單</h3>
@@ -253,33 +295,12 @@ export const ChecklistPage = ({
         </div>
       )}
 
-      {canManageSharedChecklist && (
-        <form
-          onSubmit={createChecklistItem}
-          className="flex gap-2 rounded-xl border border-slate-200 bg-white p-3 shadow-sm"
-        >
-          <input
-            value={newLabel}
-            onChange={(event) => setNewLabel(event.target.value)}
-            className="min-w-0 flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 outline-none focus:border-rose-500"
-            placeholder="新增共同檢查事項"
-          />
-          <button
-            type="submit"
-            disabled={!newLabel.trim() || isSavingList}
-            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-slate-900 text-white transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:bg-slate-300"
-            aria-label="新增"
-            title="新增"
-          >
-            <Plus size={18} />
-          </button>
-        </form>
-      )}
-
-      {canManageSharedChecklist && isFormOpen && (
+      {canManageSharedChecklist && isManageMode && isFormOpen && (
         <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm p-4 space-y-3">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-bold text-slate-800">編輯共同檢查事項</h3>
+            <h3 className="text-sm font-bold text-slate-800">
+              {editingItemId ? "編輯共同檢查事項" : "新增共同檢查事項"}
+            </h3>
             <button
               type="button"
               onClick={resetForm}
@@ -309,7 +330,7 @@ export const ChecklistPage = ({
                 disabled={isSavingList}
                 className="w-full rounded-lg bg-rose-700 px-3 py-2 text-sm font-bold text-white hover:bg-rose-800 disabled:opacity-60"
               >
-                {isSavingList ? "儲存中..." : "儲存修改"}
+                {isSavingList ? "儲存中..." : editingItemId ? "儲存修改" : "新增項目"}
               </button>
             </form>
         </div>
@@ -335,7 +356,7 @@ export const ChecklistPage = ({
                 return (
                   <div
                     key={item.id}
-                    className={`flex w-full items-center gap-3 p-4 text-left transition-colors select-none ${
+                    className={`flex w-full items-start gap-3 p-4 text-left transition-colors select-none ${
                       canToggleSharedChecklist
                         ? "hover:bg-slate-50/80 cursor-pointer"
                         : "cursor-not-allowed bg-slate-50/40"
@@ -348,7 +369,7 @@ export const ChecklistPage = ({
                         if (!canToggleSharedChecklist) return;
                         toggleChecklistItem(item.id);
                       }}
-                      className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                      className="flex min-w-0 flex-1 items-start gap-3 text-left"
                     >
                       <span
                         className={`w-5 h-5 rounded-md border flex items-center justify-center transition-all ${
@@ -360,14 +381,14 @@ export const ChecklistPage = ({
                         {isChecked && <Check size={14} strokeWidth={3} />}
                       </span>
                       <span
-                        className={`text-sm font-medium transition-all ${
+                        className={`min-w-0 flex-1 break-words text-sm font-medium leading-relaxed transition-all ${
                           isChecked ? "text-slate-400 line-through" : "text-slate-700"
                         }`}
                       >
                         {item.label}
                       </span>
                     </button>
-                    {canManageSharedChecklist && (
+                    {canManageSharedChecklist && isManageMode && (
                       <div className="flex shrink-0 items-center gap-1">
                         <button
                           type="button"

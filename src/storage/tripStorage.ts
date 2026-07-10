@@ -59,3 +59,10 @@ export const deleteStoredTripRecord = (tripId: string): StoredTripRecord[] => {
   writeStoredTripRecords(nextRecords);
   return nextRecords;
 };
+
+export const replaceStoredTripRecords = (
+  records: StoredTripRecord[],
+): StoredTripRecord[] => {
+  writeStoredTripRecords(records);
+  return records;
+};

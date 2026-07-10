@@ -9,6 +9,7 @@ import type {
 } from "../types";
 import {
   deleteStoredTripRecord,
+  replaceStoredTripRecords,
   readStoredTripRecords,
   upsertStoredTripRecord,
   type StoredTripRecord,
@@ -239,7 +240,10 @@ export const getTripMetas = async (
     (await fetchJson<TripMeta[]>(seedUrl)) ?? [],
   );
   const cloudRecords = await getCloudTripRecords(supabase);
-  const storedRecords = readStoredTripRecords();
+  const storedRecords =
+    cloudRecords.length > 0
+      ? replaceStoredTripRecords(cloudRecords)
+      : readStoredTripRecords();
 
   return mergeTripRecords(seedTrips, cloudRecords, storedRecords);
 };
