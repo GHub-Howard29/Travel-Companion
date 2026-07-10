@@ -28,6 +28,7 @@ export const ChecklistPage = ({
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [draftCategory, setDraftCategory] = useState("其他");
   const [draftLabel, setDraftLabel] = useState("");
+  const [newLabel, setNewLabel] = useState("");
   const [isSavingList, setIsSavingList] = useState(false);
   const { items, syncStatus, syncError, toggleChecklistItem } =
     useChecklistState(
@@ -65,18 +66,29 @@ export const ChecklistPage = ({
     setDraftLabel("");
   };
 
-  const startCreateItem = () => {
-    setEditingItemId(null);
-    setDraftCategory(categories[0] ?? "其他");
-    setDraftLabel("");
-    setIsFormOpen(true);
-  };
-
   const startEditItem = (item: ChecklistItem) => {
     setEditingItemId(item.id);
     setDraftCategory(item.category);
     setDraftLabel(item.label);
     setIsFormOpen(true);
+  };
+
+  const createChecklistItem = async (event: FormEvent) => {
+    event.preventDefault();
+    const label = newLabel.trim();
+    if (!label) return;
+
+    setIsSavingList(true);
+    await onSaveChecklistData([
+      ...checklistData,
+      {
+        id: `shared_${Date.now().toString(36)}`,
+        category: "其他",
+        label,
+      },
+    ]);
+    setIsSavingList(false);
+    setNewLabel("");
   };
 
   const saveChecklistItem = async (event: FormEvent) => {
@@ -86,24 +98,15 @@ export const ChecklistPage = ({
     if (!label) return;
 
     setIsSavingList(true);
-    const nextItems = editingItemId
-      ? checklistData.map((item) =>
-          item.id === editingItemId
-            ? {
-                ...item,
-                category,
-                label,
-              }
-            : item,
-        )
-      : [
-          ...checklistData,
-          {
-            id: `shared_${Date.now().toString(36)}`,
+    const nextItems = checklistData.map((item) =>
+      item.id === editingItemId
+        ? {
+            ...item,
             category,
             label,
-          },
-        ];
+          }
+        : item,
+    );
 
     await onSaveChecklistData(nextItems);
     setIsSavingList(false);
@@ -153,20 +156,43 @@ export const ChecklistPage = ({
       </div>
 
       {canManageSharedChecklist && (
+        <form
+          onSubmit={createChecklistItem}
+          className="flex gap-2 rounded-xl border border-slate-200 bg-white p-3 shadow-sm"
+        >
+          <input
+            value={newLabel}
+            onChange={(event) => setNewLabel(event.target.value)}
+            className="min-w-0 flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 outline-none focus:border-rose-500"
+            placeholder="新增共同檢查事項"
+          />
+          <button
+            type="submit"
+            disabled={!newLabel.trim() || isSavingList}
+            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-slate-900 text-white transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+            aria-label="新增"
+            title="新增"
+          >
+            <Plus size={18} />
+          </button>
+        </form>
+      )}
+
+      {canManageSharedChecklist && isFormOpen && (
         <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm p-4 space-y-3">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-bold text-slate-800">共同清單管理</h3>
+            <h3 className="text-sm font-bold text-slate-800">編輯共同檢查事項</h3>
             <button
               type="button"
-              onClick={isFormOpen ? resetForm : startCreateItem}
-              className="inline-flex items-center justify-center rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white hover:bg-slate-800"
+              onClick={resetForm}
+              className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+              aria-label="取消"
+              title="取消"
             >
-              {isFormOpen ? <X size={14} /> : <Plus size={14} />}
+              <X size={15} />
             </button>
           </div>
-
-          {isFormOpen && (
-            <form onSubmit={saveChecklistItem} className="space-y-2">
+          <form onSubmit={saveChecklistItem} className="space-y-2">
               <input
                 value={draftCategory}
                 onChange={(event) => setDraftCategory(event.target.value)}
@@ -185,10 +211,9 @@ export const ChecklistPage = ({
                 disabled={isSavingList}
                 className="w-full rounded-lg bg-rose-700 px-3 py-2 text-sm font-bold text-white hover:bg-rose-800 disabled:opacity-60"
               >
-                {isSavingList ? "儲存中..." : editingItemId ? "儲存修改" : "新增項目"}
+                {isSavingList ? "儲存中..." : "儲存修改"}
               </button>
             </form>
-          )}
         </div>
       )}
 
