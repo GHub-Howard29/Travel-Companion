@@ -84,6 +84,8 @@ on public.admin_users (email, role, trip_id);
 
 alter table public.admin_users enable row level security;
 
+drop policy if exists "Allow read for everyon" on public.admin_users;
+
 drop policy if exists admin_users_select_policy on public.admin_users;
 create policy admin_users_select_policy
 on public.admin_users
@@ -112,6 +114,11 @@ create policy admin_users_delete_policy
 on public.admin_users
 for delete
 using (public.tc_is_super_admin());
+
+revoke all on public.trips from anon;
+revoke all on public.trips from authenticated;
+revoke all on public.admin_users from anon;
+revoke all on public.admin_users from authenticated;
 
 grant select on public.trips to anon, authenticated;
 grant insert, update, delete on public.trips to authenticated;

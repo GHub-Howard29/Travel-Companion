@@ -31,15 +31,7 @@ select
 from pg_tables
 where schemaname = 'public'
   and tablename in ('trips', 'admin_users')
-  and (
-    tablename = 'trips'
-    or policyname in (
-      'admin_users_select_policy',
-      'admin_users_insert_policy',
-      'admin_users_update_policy',
-      'admin_users_delete_policy'
-    )
-  );
+order by tablename;
 
 -- 4. Policies
 select
@@ -53,8 +45,19 @@ select
   with_check
 from pg_policies
 where schemaname = 'public'
-  and tablename = 'trips'
-order by policyname;
+  and (
+    tablename = 'trips'
+    or (
+      tablename = 'admin_users'
+      and policyname in (
+        'admin_users_select_policy',
+        'admin_users_insert_policy',
+        'admin_users_update_policy',
+        'admin_users_delete_policy'
+      )
+    )
+  )
+order by tablename, policyname;
 
 -- 5. Indexes
 select

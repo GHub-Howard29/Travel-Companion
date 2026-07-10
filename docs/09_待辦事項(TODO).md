@@ -85,7 +85,7 @@
   - `super_admin` 新增旅程
   - `trip_editor` 編輯被指派旅程
   - 可編輯者 Email 由 `admin_users` 管理
-  - 已建立 Trip Cloud schema / validation SQL
+  - Trip Cloud schema / validation SQL 已透過 Supabase connector 執行並驗證
 - 已建立目前功能權限矩陣草案
 
 目前開始：
@@ -191,8 +191,9 @@ Trip 管理
 - [x] 設計 Supabase trips table / RLS
 - [x] 建立 `docs/sql/003_trip_cloud_schema.sql`
 - [x] 建立 `docs/sql/004_trip_cloud_validation.sql`
-- [ ] 在 Supabase SQL Editor 執行 `docs/sql/003_trip_cloud_schema.sql`
-- [ ] 在 Supabase SQL Editor 執行 `docs/sql/004_trip_cloud_validation.sql`
+- [x] 透過 Supabase connector 執行 `docs/sql/003_trip_cloud_schema.sql`
+- [x] 透過 Supabase connector 執行 `docs/sql/004_trip_cloud_validation.sql`
+- [x] 補上 `harden_trip_cloud_grants` migration 收斂 grants
 - [ ] 實機測試 `super_admin` 新增旅程
 - [ ] 實機測試 `trip_editor` 編輯被指派旅程
 - [ ] 實機測試 Guest 瀏覽旅程

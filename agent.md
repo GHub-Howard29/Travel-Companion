@@ -53,7 +53,8 @@ V3-1 目前已完成：
   - `super_admin` 可新增旅程。
   - `trip_editor` 可編輯被指派旅程。
   - 可編輯者 Email 由 `admin_users` 管理。
-  - Trip Cloud schema / validation SQL 已建立於 `docs/sql/003_trip_cloud_schema.sql`、`docs/sql/004_trip_cloud_validation.sql`，尚待 Product Owner 於 Supabase SQL Editor 執行。
+  - Trip Cloud schema / validation SQL 已透過 Supabase connector 執行並驗證。
+  - 已補充 `harden_trip_cloud_grants` migration，移除舊的寬鬆 `admin_users` read policy 並收斂 grants。
 
 ### 本輪已完成修改
 
@@ -129,8 +130,6 @@ V3-1 目前已完成：
 
 最高優先：
 
-- 在 Supabase SQL Editor 執行 `docs/sql/003_trip_cloud_schema.sql`。
-- 執行 `docs/sql/004_trip_cloud_validation.sql` 並人工確認結果。
 - 實機測試 `super_admin` 新增旅程、`trip_editor` 編輯旅程、Guest 瀏覽旅程。
 - Trip Cloud 驗證完成後，再接續 Other Info / Reference 權限過濾與雲端同步設計。
 
@@ -192,6 +191,7 @@ Trip Management：
 - `src/services/tripRepository.ts`
 - `src/services/tripCloudService.ts`
 - `src/storage/tripStorage.ts`
+- `docs/12_Trip Cloud 驗證手冊.md`
 
 ### 下一步建議
 
