@@ -73,8 +73,6 @@ export const useAppUpdate = () => {
     releaseDate: RELEASE_DATE,
     releaseNotes: RELEASE_NOTES,
     forceUpdate: FORCE_UPDATE,
-    primaryActionLabel: updateAvailable ? "立即更新" : "開始使用",
-    secondaryActionLabel: updateAvailable ? "稍後更新" : "稍後查看",
     update,
     dismiss,
   };

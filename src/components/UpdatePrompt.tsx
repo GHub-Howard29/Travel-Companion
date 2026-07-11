@@ -14,8 +14,6 @@ type UpdatePromptProps = {
   releaseDate: string;
   releaseNotes: string[];
   forceUpdate: boolean;
-  primaryActionLabel: string;
-  secondaryActionLabel: string;
   onUpdate: () => void;
   onDismiss: () => void;
 };
@@ -28,8 +26,6 @@ export function UpdatePrompt({
   releaseDate,
   releaseNotes,
   forceUpdate,
-  primaryActionLabel,
-  secondaryActionLabel,
   onUpdate,
   onDismiss,
 }: UpdatePromptProps) {
@@ -38,6 +34,8 @@ export function UpdatePrompt({
   const updateMessage = hasServiceWorkerUpdate
     ? "本次更新必須安裝才能繼續使用"
     : "本次為重大更新，請先查看更新內容";
+  const primaryActionLabel = hasServiceWorkerUpdate ? "立即更新" : "我知道了，開始使用";
+  const secondaryActionLabel = hasServiceWorkerUpdate ? "稍後更新" : "稍後查看";
 
   return (
     <div className="fixed inset-0 z-[80] flex h-[100dvh] items-end justify-center bg-black/30 px-4 py-4 sm:items-center sm:px-6">
