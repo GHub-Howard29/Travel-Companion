@@ -5,6 +5,7 @@ import {
   Pencil,
   Plus,
   Save,
+  Settings2,
   Trash2,
   X,
 } from "lucide-react";
@@ -76,6 +77,7 @@ export const OtherInfoPage = ({
   const [localItems, setLocalItems] = useState<OtherInfoItem[]>(() => getItems(tripId));
   const items = syncedItems ?? localItems;
   const [activeFolderId, setActiveFolderId] = useState(initialFolderId);
+  const [isManageMode, setIsManageMode] = useState(false);
   const {
     editingItemId,
     form,
@@ -96,6 +98,20 @@ export const OtherInfoPage = ({
         : getOtherInfoItemsByFolderId(items, activeFolderId),
     [activeFolderId, initialFolderId, isSpecialInfoPage, items],
   );
+
+  const closeManageMode = () => {
+    setIsManageMode(false);
+    closeForm(activeFolderId);
+  };
+
+  const toggleManageMode = () => {
+    if (isManageMode) {
+      closeManageMode();
+      return;
+    }
+
+    setIsManageMode(true);
+  };
 
   const persistItems = async (nextItems: OtherInfoItem[]) => {
     if (onSaveItems) {
@@ -188,12 +204,17 @@ export const OtherInfoPage = ({
         {canEdit && (
           <button
             type="button"
-            onClick={() => openCreateForm(activeFolderId)}
-            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-stone-900 text-white shadow-sm transition-colors hover:bg-stone-700"
-            aria-label="新增資訊"
-            title="新增資訊"
+            onClick={toggleManageMode}
+            className={`inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-bold transition-colors ${
+              isManageMode
+                ? "bg-stone-900 text-white hover:bg-stone-700"
+                : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+            }`}
+            aria-label={isManageMode ? "退出管理" : "管理資訊"}
+            title={isManageMode ? "退出管理" : "管理資訊"}
           >
-            <Plus size={18} />
+            {isManageMode ? <X size={14} /> : <Settings2 size={14} />}
+            {isManageMode ? "退出" : "管理"}
           </button>
         )}
       </div>
@@ -233,7 +254,37 @@ export const OtherInfoPage = ({
       </div>
       )}
 
-      {canEdit && isFormOpen && (
+      {canEdit && isManageMode && (
+        <div className="rounded-lg border border-stone-200 bg-white p-4 shadow-sm">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h3 className="text-sm font-bold text-slate-800">
+                {isSpecialInfoPage ? `${pageTitle}管理` : "其他資訊管理"}
+              </h3>
+              <p className="mt-0.5 text-xs text-slate-400">
+                進入管理後才可新增、編輯或刪除資訊。
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                if (isFormOpen) {
+                  closeForm(activeFolderId);
+                  return;
+                }
+
+                openCreateForm(activeFolderId);
+              }}
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-stone-900 px-3 py-2 text-xs font-bold text-white hover:bg-stone-700"
+            >
+              {isFormOpen ? <X size={14} /> : <Plus size={14} />}
+              {isFormOpen ? "取消" : "新增"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {canEdit && isManageMode && isFormOpen && (
         <div className="rounded-lg border border-stone-200 bg-white p-4 shadow-sm">
           <div className="mb-3 flex items-center justify-between">
             <h3 className="text-base font-bold text-slate-800">
@@ -332,7 +383,7 @@ export const OtherInfoPage = ({
                   </h4>
                 </div>
 
-                {canEdit && (
+                {canEdit && isManageMode && (
                   <div className="flex shrink-0 gap-1">
                     <button
                       type="button"
