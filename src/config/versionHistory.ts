@@ -30,9 +30,9 @@ export const VERSION_HISTORY: VersionHistoryItem[] = [
     date: "2026-07",
     forceUpdate: false,
     notes: [
-      "完成整體系統重構",
-      "整理 Offline First、Storage、Attachment 與 Sync 模組",
-      "建立後續 V3 功能擴充基礎",
+      "讓 App 在網路不穩時也能更安心使用",
+      "改善附件與記帳資料的保存穩定度",
+      "整理系統架構，讓後續新增旅行工具更容易",
     ],
   },
   {
@@ -40,9 +40,9 @@ export const VERSION_HISTORY: VersionHistoryItem[] = [
     date: "2026",
     forceUpdate: false,
     notes: [
-      "建立第一版旅行記帳系統",
-      "支援 Google 登入、帳目管理、附件上傳與 Excel 匯出",
-      "完成 GitHub Pages 部署",
+      "推出第一版旅行記帳功能",
+      "支援登入、建立帳目、上傳附件與匯出 Excel",
+      "完成第一版線上使用入口",
     ],
   },
 ];
