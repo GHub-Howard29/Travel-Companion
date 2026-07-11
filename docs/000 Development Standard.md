@@ -353,7 +353,91 @@ Build 成功：
 
 ---
 
-# 十一、Decision Rules
+# 十一、Release Workflow（發布流程）
+
+本專案採用固定發布流程，避免每次發版重新討論。
+
+版本號採用 SemVer（語意化版本），格式為：
+
+```text
+MAJOR.MINOR.PATCH
+```
+
+說明：
+
+- `MAJOR`：重大版本，包含不相容架構、資料或流程變更。
+- `MINOR`：新增功能，但不破壞既有資料與流程。
+- `PATCH`：Bug 修正、文字調整、小型 UI 修正。
+
+每次發布前，Product Owner 提供或確認四項資訊：
+
+```text
+版本號：
+發布日期：
+更新內容：
+是否強制更新：
+```
+
+AI 需更新：
+
+- `src/config/appVersion.ts`
+- `src/config/versionHistory.ts`
+- 必要時同步更新版本更新紀錄或交接文件
+
+發布設定：
+
+- `APP_VERSION`：目前發布版本。
+- `RELEASE_DATE`：發布日期，格式使用 `YYYY-MM-DD`。
+- `RELEASE_NOTES`：本次更新內容。
+- `FORCE_UPDATE`：是否強制更新。
+
+強制更新原則：
+
+Travel Companion 是旅行中使用的 Offline First App，因此預設不強制更新。
+
+`FORCE_UPDATE` 預設必須為 `false`。
+
+只有以下情況才可考慮設為 `true`：
+
+- Supabase schema / RLS 權限規則變更，舊版 App 會寫錯或讀不到資料。
+- Storage、IndexedDB 或 localStorage 資料結構不相容。
+- Sync 流程或 Pending Queue 有重大修正，舊版可能造成資料遺失。
+- 安全性修正，例如舊版可能暴露不該看的 Trip 或使用者資料。
+- 舊版已知會造成嚴重錯誤，且繼續使用風險高於中斷使用。
+
+若 Product Owner 說：
+
+```text
+通過測試
+```
+
+或：
+
+```text
+測試完成
+```
+
+AI 必須主動回覆：
+
+- 目前版本號。
+- 建議下一個版本號。
+- 要求 Product Owner 提供更新內容，或依本次修改建議更新內容。
+- 詢問是否強制更新，並預設建議「否」，除非符合強制更新條件。
+
+Product Owner 通過發布內容後，AI 才能更新版本設定與相關文件。
+
+版本內容更新、驗證與 Commit 完成後，AI 應提醒 Product Owner 執行：
+
+```text
+合併到主分支
+部署更新
+```
+
+不要由 AI 未經確認自行合併主分支或部署。
+
+---
+
+# 十二、Decision Rules
 
 Product Owner：
 
@@ -376,7 +460,7 @@ AI 不可自行新增需求。
 
 ---
 
-# 十二、AI Behavior（AI 行為準則）
+# 十三、AI Behavior（AI 行為準則）
 
 已定案內容：
 
@@ -405,7 +489,7 @@ AI 不可自行新增需求。
 
 ---
 
-# 十三、誠實原則（Honesty Rules）
+# 十四、誠實原則（Honesty Rules）
 
 AI 不得將：
 
@@ -426,7 +510,7 @@ AI 不得將：
 
 ---
 
-# 十四、專案延續原則（Project Continuity）
+# 十五、專案延續原則（Project Continuity）
 
 同一專案的新對話：
 
@@ -442,7 +526,7 @@ AI 不得將：
 
 ---
 
-# 十五、每次完成 Step 必須提供
+# 十六、每次完成 Step 必須提供
 
 固定格式：
 
@@ -466,7 +550,7 @@ AI 不得將：
 
 ---
 
-# 十六、AI 自我檢查（Self Checklist）
+# 十七、AI 自我檢查（Self Checklist）
 
 在每次回覆前，AI 必須確認：
 
@@ -483,7 +567,7 @@ AI 不得將：
 
 ---
 
-# 十七、持續改善（Continuous Improvement）
+# 十八、持續改善（Continuous Improvement）
 
 Development Standard 的目的是提升開發品質，而不是增加開發負擔。
 

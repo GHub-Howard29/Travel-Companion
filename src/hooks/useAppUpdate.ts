@@ -1,7 +1,18 @@
+/**
+ * PWA 更新偵測 Hook
+ *
+ * 負責註冊既有 Service Worker，並在瀏覽器偵測到新版時通知 UI。
+ * 不自動 reload，需等待使用者在更新提示中確認。
+ */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { registerSW } from "virtual:pwa-register";
 
-import { APP_VERSION, RELEASE_NOTES } from "../config/appVersion";
+import {
+  APP_VERSION,
+  FORCE_UPDATE,
+  RELEASE_DATE,
+  RELEASE_NOTES,
+} from "../config/appVersion";
 
 type UpdateServiceWorker = (reloadPage?: boolean) => Promise<void>;
 
@@ -40,7 +51,9 @@ export const useAppUpdate = () => {
     updateAvailable,
     currentVersion: APP_VERSION,
     latestVersion: APP_VERSION,
+    releaseDate: RELEASE_DATE,
     releaseNotes: RELEASE_NOTES,
+    forceUpdate: FORCE_UPDATE,
     update,
     dismiss,
   };

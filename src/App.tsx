@@ -63,7 +63,9 @@ export default function App() {
     updateAvailable,
     currentVersion,
     latestVersion,
+    releaseDate,
     releaseNotes,
+    forceUpdate,
     update,
     dismiss,
   } = useAppUpdate();
@@ -481,7 +483,9 @@ export default function App() {
       isOpen={updateAvailable}
       currentVersion={currentVersion}
       latestVersion={latestVersion}
+      releaseDate={releaseDate}
       releaseNotes={releaseNotes}
+      forceUpdate={forceUpdate}
       onUpdate={update}
       onDismiss={dismiss}
     />
