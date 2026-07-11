@@ -231,14 +231,15 @@ Trip Management：
 - `FORCE_UPDATE` 預設為 `false`，因為 Travel Companion 是旅行中使用的 Offline First App，強制更新可能打斷行程查看、記帳或清單操作。
 - 只有資料不相容、安全性修正、Supabase schema / RLS 權限規則變更、Sync / Pending Queue 重大資料風險，才建議啟用強制更新。
 - 若 Product Owner 說「通過測試」或「測試完成」，Codex 必須主動告知目前版本號，建議下一個版本號，並要求 Product Owner 提供更新內容，或依本次變更提出建議更新內容。
-- Product Owner 通過版本號、發布日期、更新內容與是否強制更新後，Codex 才更新 `src/config/appVersion.ts`、`src/config/versionHistory.ts` 與必要文件。
-- 每次發布後，App 至少需顯示一次版本更新提示。小更新可稍後，大更新不提供稍後；若使用者已直接進入新版，也需先顯示本次版本資訊。
+- Product Owner 通過版本號、發布日期、更新內容與是否強制更新後，Codex 才更新 `src/config/appVersion.ts`、`src/config/versionHistory.ts`、`public/app-version.json` 與必要文件。
+- 每次發布新版後，若使用者裝置已記錄的版本號與新版不同，App 至少需顯示一次版本更新提示。小更新可稍後，大更新不提供稍後；同版號、第一次瀏覽網站、換瀏覽器或 localStorage 尚未建立版本紀錄時，不得顯示「發現新版本」。
 - 更新提示必須說明已儲存資料不會被更新清除，但編輯中尚未儲存的表單內容會因 reload 遺失，需更新後重新建立。
 - 發布設定欄位：
   - `APP_VERSION`：目前發布版本。
   - `RELEASE_DATE`：發布日期，格式 `YYYY-MM-DD`。
   - `RELEASE_NOTES`：本次更新內容。
   - `FORCE_UPDATE`：是否強制更新。
+- `public/app-version.json` 必須與版本設定欄位一致，並保持不被 PWA precache 快取，讓 Service Worker 偵測更新時可比對真正的最新版版本號。
 - 版本設定與文件更新完成、驗證通過並建立 commit 後，Codex 應提醒 Product Owner 執行合併到主分支並部署更新；未經確認不得自行合併或部署。
 
 ## Terminology Guidance

@@ -3,6 +3,7 @@
  *
  * 此檔案是每次發布新版時的主要修改入口。
  * 更新 APP_VERSION、RELEASE_DATE、RELEASE_NOTES 與 FORCE_UPDATE 後，
+ * 必須同步更新 public/app-version.json，
  * PWA 更新提示會使用這些資訊顯示版本內容。
  */
 export const APP_VERSION = "3.0.0";

@@ -382,9 +382,12 @@ AI 需更新：
 
 - `src/config/appVersion.ts`
 - `src/config/versionHistory.ts`
+- `public/app-version.json`
 - 必要時同步更新版本更新紀錄或交接文件
 
-每次發布後，App 至少需顯示一次版本更新提示，讓使用者知道本次更新內容。
+每次發布新版後，若使用者裝置已記錄的版本號與新版不同，App 至少需顯示一次版本更新提示，讓使用者知道本次更新內容。
+
+同版號不得顯示更新提示；第一次瀏覽網站、換瀏覽器或 localStorage 尚未建立版本紀錄時，只記錄目前版本，不跳出「發現新版本」。
 
 - 小更新：可提供「稍後更新」或「稍後查看」。
 - 大更新：不可提供「稍後更新」；若已直接載入新版，也需先顯示本次版本資訊。
@@ -396,6 +399,8 @@ AI 需更新：
 - `RELEASE_DATE`：發布日期，格式使用 `YYYY-MM-DD`。
 - `RELEASE_NOTES`：本次更新內容。
 - `FORCE_UPDATE`：是否強制更新。
+
+`public/app-version.json` 必須與上述欄位一致，且不可被 PWA precache 快取；Service Worker 偵測更新時會先讀取此檔案，確認最新版版本號真的不同後才顯示更新提示。
 
 強制更新原則：
 

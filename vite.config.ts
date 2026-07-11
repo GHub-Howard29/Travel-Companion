@@ -16,6 +16,7 @@ export default defineConfig({
       // 👇 【關鍵修正】新增 Workbox 設定，確保 json、svg 等檔案納入離線快取
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,json}'],
+        globIgnores: ['**/app-version.json'],
         // 這會強制打包公用資料夾與編譯後的所有靜態與資料檔案
       },
       manifest: {
