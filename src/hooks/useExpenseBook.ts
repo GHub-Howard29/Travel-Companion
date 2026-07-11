@@ -105,6 +105,8 @@ const reloadExpenses = useCallback(async (bookId = expenseBookTripId) => {
   });
   const [newAttachmentFile, setNewAttachmentFile] = useState<File | null>(null);
   const [editAttachmentFile, setEditAttachmentFile] = useState<File | null>(null);
+  const [removedAttachmentExpenseIds, setRemovedAttachmentExpenseIds] =
+    useState<Set<string>>(() => new Set());
   const [isSyncingAttachments, setIsSyncingAttachments] = useState(false);
   const [lastAttachmentSyncStamp, setLastAttachmentSyncStamp] = useState<{
     bookId: string;
@@ -591,6 +593,8 @@ useEffect(() => {
       (item) => String(item.id) === String(id),
     );
     if (!targetExpense) return;
+    const shouldRemoveAttachment =
+      removedAttachmentExpenseIds.has(String(id)) && !editAttachmentFile;
 
     let updatedExpense: ExpenseItem = {
       ...targetExpense,
@@ -620,6 +624,20 @@ useEffect(() => {
         attachment_last_error: null,
         local_attachment_id: attachment.id,
       };
+    } else if (shouldRemoveAttachment) {
+      updatedExpense = {
+        ...updatedExpense,
+        attachment_bucket: ATTACHMENT_BUCKET,
+        attachment_path: null,
+        attachment_name: null,
+        attachment_mime: null,
+        attachment_size: null,
+        attachment_status: "none",
+        attachment_uploaded_at: null,
+        attachment_uploaded_by: null,
+        attachment_last_error: null,
+        local_attachment_id: null,
+      };
     }
 
     if (String(id).startsWith("local_") || !isUsingSharedExpenseBook) {
@@ -634,6 +652,14 @@ useEffect(() => {
           String(item.id) === String(id) ? updatedExpense : item,
         ),
       );
+      if (shouldRemoveAttachment) {
+        void deleteLocalAttachment(targetExpense.local_attachment_id);
+      }
+      setRemovedAttachmentExpenseIds((current) => {
+        const next = new Set(current);
+        next.delete(String(id));
+        return next;
+      });
       cancelEditExpenseHandler();
       return;
     }
@@ -680,6 +706,19 @@ useEffect(() => {
           JSON.stringify(updated),
         );
         return updated;
+      });
+      if (shouldRemoveAttachment) {
+        if (targetExpense.attachment_path) {
+          void supabase.storage
+            .from(ATTACHMENT_BUCKET)
+            .remove([targetExpense.attachment_path]);
+        }
+        void deleteLocalAttachment(targetExpense.local_attachment_id);
+      }
+      setRemovedAttachmentExpenseIds((current) => {
+        const next = new Set(current);
+        next.delete(String(id));
+        return next;
       });
       cancelEditExpenseHandler();
     } catch {
@@ -1179,15 +1218,28 @@ const pendingAttachmentCount = isUsingSharedExpenseBook
       ?.symbol || currentCurrencySymbol;
 
   const cancelEditExpenseHandler = () => {
+    const currentEditingExpenseId = editingExpenseId;
     cancelEditExpense(
       currentCurrencyCode,
       setEditingExpenseId,
       setEditDraft,
       setEditAttachmentFile,
     );
+    if (currentEditingExpenseId) {
+      setRemovedAttachmentExpenseIds((current) => {
+        const next = new Set(current);
+        next.delete(currentEditingExpenseId);
+        return next;
+      });
+    }
   };
 
   const startEditExpenseHandler = (item: ExpenseItem) => {
+    setRemovedAttachmentExpenseIds((current) => {
+      const next = new Set(current);
+      next.delete(String(item.id));
+      return next;
+    });
     startEditExpense(
       item,
       expenseMembers,
@@ -1198,6 +1250,23 @@ const pendingAttachmentCount = isUsingSharedExpenseBook
       setEditAttachmentFile,
       setEditDraft,
     );
+  };
+
+  const markEditAttachmentForRemoval = (id: string) => {
+    setEditAttachmentFile(null);
+    setRemovedAttachmentExpenseIds((current) => {
+      const next = new Set(current);
+      next.add(String(id));
+      return next;
+    });
+  };
+
+  const restoreEditAttachment = (id: string) => {
+    setRemovedAttachmentExpenseIds((current) => {
+      const next = new Set(current);
+      next.delete(String(id));
+      return next;
+    });
   };
 
   return {
@@ -1216,6 +1285,7 @@ const pendingAttachmentCount = isUsingSharedExpenseBook
     setNewAttachmentFile,
     editAttachmentFile,
     setEditAttachmentFile,
+    removedAttachmentExpenseIds: Array.from(removedAttachmentExpenseIds),
     isSyncingAttachments,
     pendingDeleteId,
     activeCurrency,
@@ -1243,5 +1313,7 @@ const pendingAttachmentCount = isUsingSharedExpenseBook
     handleExportXlsx,
     startEditExpenseHandler,
     cancelEditExpenseHandler,
+    markEditAttachmentForRemoval,
+    restoreEditAttachment,
   };
 }

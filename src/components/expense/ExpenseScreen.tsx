@@ -47,6 +47,7 @@ interface ExpenseScreenProps {
   setNewAttachmentFile: Dispatch<SetStateAction<File | null>>;
   editAttachmentFile: File | null;
   setEditAttachmentFile: Dispatch<SetStateAction<File | null>>;
+  removedAttachmentExpenseIds: string[];
   editingExpenseId: string | null;
   editDraft: EditExpenseDraft;
   setEditDraft: Dispatch<SetStateAction<EditExpenseDraft>>;
@@ -64,6 +65,8 @@ interface ExpenseScreenProps {
   onStartEditExpense: (item: ExpenseItem) => void;
   onCancelEditExpense: () => void;
   onCancelPendingDelete: () => void;
+  onRemoveEditAttachment: (id: string) => void;
+  onRestoreEditAttachment: (id: string) => void;
 }
 
 export default function ExpenseScreen({
@@ -98,6 +101,7 @@ export default function ExpenseScreen({
   setNewAttachmentFile,
   editAttachmentFile,
   setEditAttachmentFile,
+  removedAttachmentExpenseIds,
   editingExpenseId,
   editDraft,
   setEditDraft,
@@ -112,6 +116,8 @@ export default function ExpenseScreen({
   onStartEditExpense,
   onCancelEditExpense,
   onCancelPendingDelete,
+  onRemoveEditAttachment,
+  onRestoreEditAttachment,
 }: ExpenseScreenProps) {
   return (
     <div className="space-y-5">
@@ -432,6 +438,8 @@ export default function ExpenseScreen({
                   item.attachment_path ||
                   item.attachment_name,
               );
+              const isAttachmentMarkedForRemoval =
+                removedAttachmentExpenseIds.includes(String(item.id));
 
               return (
                 <div key={item.id} className="relative p-4">
@@ -505,6 +513,8 @@ export default function ExpenseScreen({
                           <span className="truncate">
                             {editAttachmentFile
                               ? editAttachmentFile.name
+                              : isAttachmentMarkedForRemoval
+                                ? "附件將於儲存後移除"
                               : item.attachment_name || "補拍 / 更換照片附件"}
                           </span>
                         </span>
@@ -520,6 +530,9 @@ export default function ExpenseScreen({
                           className="hidden"
                           onChange={(e) => {
                             const file = e.target.files?.[0];
+                            if (file) {
+                              onRestoreEditAttachment(String(item.id));
+                            }
                             void handleAttachmentSelection(
                               file,
                               setEditAttachmentFile,
@@ -528,6 +541,33 @@ export default function ExpenseScreen({
                           }}
                         />
                       </label>
+                      {hasAttachment &&
+                        !editAttachmentFile &&
+                        !isAttachmentMarkedForRemoval && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              onRemoveEditAttachment(String(item.id))
+                            }
+                            className="inline-flex w-fit items-center gap-1 rounded-lg border border-rose-200 bg-white px-3 py-2 text-xs font-bold text-rose-600 hover:bg-rose-50"
+                          >
+                            <Trash2 size={14} /> 移除既有附件
+                          </button>
+                        )}
+                      {isAttachmentMarkedForRemoval && !editAttachmentFile && (
+                        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                          <span>已標記移除，按「儲存」後才會生效。</span>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              onRestoreEditAttachment(String(item.id))
+                            }
+                            className="font-bold text-amber-900 underline-offset-2 hover:underline"
+                          >
+                            取消移除
+                          </button>
+                        </div>
+                      )}
                       <div className="flex justify-end gap-2">
                         <button
                           type="button"

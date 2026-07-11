@@ -137,6 +137,7 @@ export default function App() {
     setNewAttachmentFile,
     editAttachmentFile,
     setEditAttachmentFile,
+    removedAttachmentExpenseIds,
     isSyncingAttachments,
     pendingDeleteId,
     setActiveCurrency,
@@ -163,6 +164,8 @@ export default function App() {
     handleExportXlsx,
     startEditExpenseHandler,
     cancelEditExpenseHandler,
+    markEditAttachmentForRemoval,
+    restoreEditAttachment,
   } = useExpenseBook({
     supabase,
     userEmail,
@@ -855,6 +858,7 @@ export default function App() {
                 setNewAttachmentFile={setNewAttachmentFile}
                 editAttachmentFile={editAttachmentFile}
                 setEditAttachmentFile={setEditAttachmentFile}
+                removedAttachmentExpenseIds={removedAttachmentExpenseIds}
                 editingExpenseId={editingExpenseId}
                 editDraft={editDraft}
                 setEditDraft={setEditDraft}
@@ -869,6 +873,8 @@ export default function App() {
                 onStartEditExpense={startEditExpenseHandler}
                 onCancelEditExpense={cancelEditExpenseHandler}
                 onCancelPendingDelete={cancelPendingDelete}
+                onRemoveEditAttachment={markEditAttachmentForRemoval}
+                onRestoreEditAttachment={restoreEditAttachment}
               />
             )}
           </>
