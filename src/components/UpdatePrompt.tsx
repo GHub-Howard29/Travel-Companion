@@ -40,9 +40,9 @@ export function UpdatePrompt({
     : "本次為重大更新，請先查看更新內容";
 
   return (
-    <div className="fixed inset-x-0 bottom-0 z-[80] px-4 pb-4 sm:bottom-6 sm:px-6">
-      <div className="mx-auto max-w-md rounded-xl border border-emerald-100 bg-white shadow-2xl shadow-slate-900/20">
-        <div className="flex items-start justify-between gap-3 border-b border-slate-100 px-4 py-3">
+    <div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/30 px-4 py-4 sm:items-center sm:px-6">
+      <div className="flex max-h-[88vh] w-full max-w-md flex-col overflow-hidden rounded-xl border border-emerald-100 bg-white shadow-2xl shadow-slate-900/20">
+        <div className="shrink-0 flex items-start justify-between gap-3 border-b border-slate-100 px-4 py-3">
           <div className="flex items-center gap-2">
             <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700">
               <RefreshCw size={17} />
@@ -67,7 +67,7 @@ export function UpdatePrompt({
           )}
         </div>
 
-        <div className="space-y-3 px-4 py-4">
+        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4">
           <div className="grid grid-cols-[72px_1fr] gap-x-3 gap-y-1 text-sm">
             <span className="font-semibold text-slate-500">目前版本：</span>
             <span className="font-bold text-slate-800">{currentVersion}</span>
@@ -95,7 +95,7 @@ export function UpdatePrompt({
         </div>
 
         <div
-          className={`grid gap-2 border-t border-slate-100 p-3 ${
+          className={`shrink-0 grid gap-2 border-t border-slate-100 p-3 ${
             forceUpdate ? "grid-cols-1" : "grid-cols-2"
           }`}
         >
