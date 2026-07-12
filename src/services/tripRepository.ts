@@ -116,6 +116,23 @@ const ensureSpecialInfoItems = (
   return [createSpecialInfoItem(tripId, mode), ...currentItems];
 };
 
+const mergeOtherInfoItems = (
+  baseItems: OtherInfoItem[] | undefined,
+  cloudItems: OtherInfoItem[],
+): OtherInfoItem[] => {
+  const mergedItemsById = new Map<string, OtherInfoItem>();
+
+  (baseItems ?? []).forEach((item) => {
+    mergedItemsById.set(item.id, item);
+  });
+
+  cloudItems.forEach((item) => {
+    mergedItemsById.set(item.id, item);
+  });
+
+  return Array.from(mergedItemsById.values());
+};
+
 const toSlug = (value: string): string => {
   const normalized = value
     .trim()
@@ -298,7 +315,10 @@ export const getTripDetail = async (
           otherInfoItems: ensureSpecialInfoItems(
             latestRecord.detail.id,
             inferTripMode(latestRecord.meta, latestRecord.detail),
-            cloudOtherInfoItems,
+            mergeOtherInfoItems(
+              latestRecord.detail.content.otherInfoItems,
+              cloudOtherInfoItems,
+            ),
           ),
         },
       };
@@ -320,7 +340,7 @@ export const getTripDetail = async (
         otherInfoItems: ensureSpecialInfoItems(
           seedDetail.id,
           inferTripMode(selectedTripMeta, seedDetail),
-          cloudOtherInfoItems,
+          mergeOtherInfoItems(seedDetail.content.otherInfoItems, cloudOtherInfoItems),
         ),
       },
     };
