@@ -24,3 +24,6 @@ dist-ssr
 *.sw?
 
 .env
+
+# Codex conversation attachments
+.codex-remote-attachments/
