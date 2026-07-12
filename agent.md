@@ -1,15 +1,15 @@
 # Travel Companion Agent Guide
 
-## 最新交接摘要（2026-07-11）
+## 最新交接摘要（2026-07-12）
 
 本節是給另一台電腦 / 新 Codex thread 接續用的最新狀態。進入專案後請先讀本節，再依任務查閱 `docs/001 V3-1_Handoff.md`、`docs/002 V3-1_Architecture_Decisions.md`、`docs/04_資料庫設計.md`、`docs/09_待辦事項(TODO).md`。
 
 ### 目前 Git 狀態
 
 - Branch：`develop`
-- 最新已知 commit：`3e60c9f 切換旅程前同步資料庫`
-- 前一個功能 commit：`0293bfe 收合清單管理並同步旅程快取`
-- 目前工作樹可能有未提交變更；完成文件或程式修改並驗證通過後，Codex 應直接建立繁體中文 commit。
+- 最新已知 commit：`9793866 補強安裝提示與記帳本同步`
+- 前一個功能 commit：`54eb14f 發布版本更新為三點一點零`
+- 目前文件整理可能有未提交變更；完成文件或程式修改並驗證通過後，Codex 應直接建立繁體中文 commit。
 - 尚未確認是否已 push 到遠端。
 - commit message 規則：使用者已要求「中文 commit」，後續 Codex 完成文件或程式修改後一律直接使用繁體中文 commit message 建立 commit，並回報實際使用的中文 commit message。
 
@@ -62,6 +62,17 @@ V3-1 目前已完成：
   - 已補充 `harden_trip_cloud_grants` migration，移除舊的寬鬆 `admin_users` read policy 並收斂 grants。
   - 已補充 `tune_trip_cloud_advisor_findings` migration，處理 Trip Cloud 的 Supabase advisor findings。
   - 已完成自動化 smoke test：本機 base path / trip JSON 皆回 200；Supabase anon key 可讀 `trips` 且不可讀 `admin_users`。
+- V3.1.0 追加修正已完成：
+  - 版本資訊分成「本次更新內容」與「版本歷史」，避免重複顯示。
+  - 更新提示只在 App / PWA 安裝模式顯示，一般瀏覽器網頁開啟不提示更新。
+  - 手機瀏覽器未安裝 App 時顯示安裝建議，3 秒後自動收合。
+  - 登入前新增安全提示，說明只使用 Google Email 與登入狀態。
+  - 領隊 / 開車特殊資訊頁補上管理入口。
+  - 記帳本附件入口改為「拍照」與「相簿」兩個明確入口。
+  - 記帳本多人同步加入 Supabase realtime、30 秒輪詢與 focus / online / visibility fallback。
+  - 附件同步失敗後重試時保留並復用本機附件暫存。
+  - 旅程新增「參與者對應登入 Email」，記帳本付款人可依登入帳號鎖定。
+  - 目前仍維持 V3.1.0；後續新的修改或內容追加才增加版本號。
 
 ### 本輪已完成修改
 
