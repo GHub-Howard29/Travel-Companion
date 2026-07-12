@@ -1,6 +1,6 @@
 # 開發進度與待辦事項
 
-> Version：V3.1.1
+> Version：V3.1.2
 >
 > 最後更新：2026-07-12
 
@@ -126,8 +126,12 @@ Travel Tool 模組化落地。
 - [x] 2026-07-12 追加修正已整理為 V3.1.0 的補充說明。
 - [x] V3.1.1 版本資訊同步到 `appVersion.ts`、`app-version.json`、`package.json`、lockfile 與 PWA manifest metadata。
 - [x] Other Info 雲端資料與既有 Trip 內容合併，避免只同步部分雲端資料時蓋掉未同步內容。
+- [x] V3.1.2 修正 iOS PWA Google 登入、照片附件上傳 / 開啟、畫面自動放大問題。
+- [x] V3.1.2 將領隊導遊聯絡資訊 / 自駕租車資訊移到專用資料夾，避免與「其他資訊」一般分類互相污染。
+- [x] V3.1.2 修正舊版 `leader_info` / `custom_info` 側欄重複入口，並在頁首顯示旅程性質。
 - [ ] iOS Safari 實機確認安裝建議與加入主畫面流程。
-- [ ] iOS 實機確認拍照 / 相簿、附件同步失敗後重試、附件連結開啟。
+- [ ] iOS 實機確認 PWA Google 登入、拍照 / 相簿、附件同步失敗後重試、附件連結開啟。
+- [ ] iOS 實機確認點選輸入框後畫面不再自動放大。
 - [ ] 兩台手機實機確認同一帳本新增 / 刪除後即時或 30 秒內更新。
 - [ ] `super_admin` / `trip_editor` 實機確認付款人鎖定不影響原本角色權限。
 
@@ -273,17 +277,18 @@ Trip 管理
 - [x] 執行 Other Info Supabase schema / RLS SQL
 - [x] 驗證 Other Info Supabase schema / RLS SQL
 - [x] 修正 Other Info schema 新增後的 Supabase advisor findings：helper functions 固定 `search_path`，並補上 `created_by` index。
+- [x] 領隊導遊聯絡資訊 / 自駕租車資訊與一般其他資訊分類完成資料隔離。
 - [ ] 實機回歸 Other Info 雲端同步
 - [ ] 多人協作
 
 ---
 
-## 發布前人工收尾（V3.1.1）
+## 發布前人工收尾（V3.1.2）
 
 - [ ] Product Owner 手動將 `develop` 合併到 `main`。
 - [ ] Product Owner 手動執行版本發布 / 部署流程。
-- [ ] 部署後以手機重新安裝 App，確認安裝資訊與 App 內版本皆為 V3.1.1。
-- [ ] 部署後實機回歸 Other Info 新增、編輯、刪除與不同角色瀏覽權限。
+- [ ] 部署後以手機重新安裝 App，確認安裝資訊與 App 內版本皆為 V3.1.2。
+- [ ] 部署後實機回歸 iOS PWA 登入、照片附件、畫面縮放與特殊資訊 / 其他資訊資料隔離。
 
 ---
 

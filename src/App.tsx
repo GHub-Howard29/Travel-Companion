@@ -67,6 +67,19 @@ const LEGACY_SPECIAL_INFO_SCREEN_IDS = new Set([
   "leader_info",
   "custom_info",
 ]);
+const GUIDED_SPECIAL_INFO_FOLDER_ID = "special-info-guided";
+const SELF_GUIDED_SPECIAL_INFO_FOLDER_ID = "special-info-self-guided";
+
+const isIosStandalonePwa = () => {
+  const navigatorWithStandalone = navigator as Navigator & {
+    standalone?: boolean;
+  };
+  const isIosDevice =
+    /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+
+  return isIosDevice && navigatorWithStandalone.standalone === true;
+};
 
 export default function App() {
   const {
@@ -215,11 +228,15 @@ export default function App() {
   const handleGoogleLogin = async () => {
     setIsLoginSafetyOpen(false);
     const currentRedirectUrl = window.location.origin + getBasePath();
+    const queryParams = isIosStandalonePwa()
+      ? undefined
+      : { prompt: "select_account" };
+
     await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
         redirectTo: currentRedirectUrl,
-        queryParams: { prompt: "select_account" },
+        queryParams,
       },
     });
   };
@@ -492,7 +509,9 @@ export default function App() {
     currentSidebarItem?.title.includes("自駕") === true ||
     currentSidebarItem?.title.includes("租車") === true;
   const specialInfoFolderId =
-    isSelfGuidedSpecialInfo ? "other-info-transport" : "other-info-other";
+    isSelfGuidedSpecialInfo
+      ? SELF_GUIDED_SPECIAL_INFO_FOLDER_ID
+      : GUIDED_SPECIAL_INFO_FOLDER_ID;
 
   useEffect(() => {
     let isActive = true;

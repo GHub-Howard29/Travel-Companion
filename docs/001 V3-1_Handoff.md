@@ -21,6 +21,10 @@ Trip 管理第一階段已完成，旅程清單切換前會重新同步 Supabase
 - 附件同步失敗後重試會保留本機暫存，避免第一次失敗後第二次無資料可上傳。
 - 旅程編輯新增 participantEmailMap，格式為 `參與者=Email`；記帳本付款人可依登入 Email 鎖定。
 - 角色與權限仍由 `admin_users.email` 判斷，participantEmailMap 僅用於把登入帳號對應到帳本付款人。
+- V3.1.1 已完成 Other Info / Reference 最小雲端同步、Supabase schema / RLS 與 validation。
+- V3.1.2 已完成 iOS PWA Google 登入、照片附件、畫面縮放與特殊資訊資料隔離修正。
+- 領隊導遊聯絡資訊 / 自駕租車資訊已改用 `special-info-guided` / `special-info-self-guided` 專用資料夾，不再混入一般「其他資訊」分類。
+- App 頁首會顯示旅程性質：「跟團」或「自助 / 自駕」。
 
 目前已完成：
 
@@ -91,8 +95,7 @@ Trip 管理第一階段已完成，旅程清單切換前會重新同步 Supabase
 尚未完成：
 
 - Checklist Pending Queue / Conflict Resolution 尚未實作
-- Other Info / Reference 雲端同步尚未完成
-- Other Info / Reference Supabase schema / RLS 已設計，尚未在 Supabase SQL Editor 執行與驗證
+- Other Info / Reference 已完成最小雲端同步、Supabase schema / RLS 與 validation；尚未完成多人協作衝突處理
 
 權限定案：
 
@@ -147,14 +150,15 @@ Trip 管理第一階段已完成，旅程清單切換前會重新同步 Supabase
 - 自由行與跟團旅程皆已顯示「其他資訊」
 - 參考資訊資料由預設資料 + 本機儲存資料合併後呈現
 - 可新增、編輯、刪除其他資訊項目
-- 目前只存 localStorage，不同步雲端
+- 有權限者新增、編輯、刪除會嘗試同步到 Supabase；雲端失敗時保留既有 Trip content / local fallback
 - 預設資料保留為預設內容
 - 編輯 seed item 會以 localStorage 覆蓋
 - 刪除 seed item 會寫入 `isDeleted` 標記
 - Folder chips 自動換行，不使用水平 scrollbar
 - 顯示資料筆數、空狀態與 item card
 - 內容中的 `http` / `https` URL 會自動轉為超連結並以新分頁開啟
-- 後續需改為預設瀏覽模式，有權限者先點「管理」才顯示新增、編輯、刪除，並提供「退出」按鈕
+- 預設為瀏覽模式，有權限者先點「管理」才顯示新增、編輯、刪除，並提供「退出」按鈕
+- 領隊導遊聯絡資訊 / 自駕租車資訊使用專用資料夾，避免與一般「其他資訊」分類互相污染
 
 ---
 
@@ -282,9 +286,8 @@ npm.cmd run build
    - 兩台手機同一帳本新增 / 刪除後即時或 30 秒內更新。
    - `super_admin` / `trip_editor` participantEmailMap 付款人鎖定。
 3. Other Info / Reference 建議範圍：
-   - 執行 `docs/sql/005_other_info_cloud_schema.sql`。
-   - 執行 `docs/sql/006_other_info_cloud_validation.sql` 驗證。
-   - 實作最小雲端同步。
+   - 實機回歸新增、編輯、刪除是否同步。
+   - 確認領隊導遊聯絡資訊 / 自駕租車資訊與一般「其他資訊」分類互不污染。
    - 暫時不做完整 Pending Queue / Conflict Resolution。
 4. 暫緩項目：
    - Checklist Pending Queue：離線或同步失敗時暫存待上傳操作的佇列。

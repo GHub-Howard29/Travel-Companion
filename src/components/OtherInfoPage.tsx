@@ -76,7 +76,8 @@ export const OtherInfoPage = ({
   specialFolderId,
 }: OtherInfoPageProps) => {
   const folders = useMemo<Folder[]>(() => getFolders(tripId), [tripId]);
-  const initialFolderId = specialFolderId || folders[0]?.id || "";
+  const initialFolderId =
+    isSpecialInfoPage && specialFolderId ? specialFolderId : folders[0]?.id || "";
   const [localItems, setLocalItems] = useState<OtherInfoItem[]>(() => getItems(tripId));
   const items = syncedItems ?? localItems;
   const visibleItems = useMemo(

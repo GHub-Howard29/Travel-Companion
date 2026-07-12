@@ -149,7 +149,7 @@ export const OTHER_INFO_DATA_BY_TRIP_ID: Record<string, OtherInfoTripData> = {
       ),
       createOtherInfoItem(
         "group-tour-2026-10",
-        "other-info-other",
+        "special-info-guided",
         "gt-other-leader-contact",
         "領隊聯絡資料",
         "領隊與導遊聯絡資料請以行前通知或群組公告為準。\n提醒：抵達集合地點後，先確認領隊電話、集合旗幟與群組訊息通知方式。",

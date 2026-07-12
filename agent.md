@@ -7,8 +7,8 @@
 ### 目前 Git 狀態
 
 - Branch：`develop`
-- 最新已知 commit：`1fc8e62 保留未同步其他資訊內容`
-- 前一個功能 commit：`0f55eba 修正安裝版本顯示資訊`
+- 最新收尾版本：V3.1.2（iOS PWA 與特殊資訊修正）
+- 前一個功能 commit：`1fc8e62 保留未同步其他資訊內容`
 - 目前只允許留下 `.codex-remote-attachments/` 這類對話附件暫存未追蹤；程式與文件修改完成後應直接建立繁體中文 commit。
 - 尚未確認是否已 push 到遠端。
 - commit message 規則：使用者已要求「中文 commit」，後續 Codex 完成文件或程式修改後一律直接使用繁體中文 commit message 建立 commit，並回報實際使用的中文 commit message。
@@ -78,6 +78,17 @@ V3-1 目前已完成：
   - Supabase advisors 針對 Other Info 新增 schema 的 `search_path` 與 foreign key index findings 已修正。
   - PWA manifest、`package.json`、`package-lock.json` 與 App 版本設定皆已同步為 V3.1.1。
   - Other Info 雲端資料讀取會和既有 Trip 內容合併，保留尚未同步的本機 / Trip 內容。
+- V3.1.2 已完成：
+  - iOS PWA Google 登入不再強制 Google 帳號選擇提示，降低安裝版 App 重新驗證失敗機率。
+  - iOS 照片附件支援空 MIME、HEIC / HEIF 轉 JPEG 後儲存與上傳。
+  - 照片連結開啟改為使用者點擊當下先建立視窗，再填入 signed URL 或 blob URL，避免 iOS 阻擋 async 後開新視窗。
+  - 全域表單欄位補 16px 字級與 viewport safe-area 設定，避免 iOS 點選輸入框後自動放大畫面。
+  - 登入安全提示移除過長的「會使用」說明區塊。
+  - 領隊導遊聯絡資訊 / 自駕租車資訊改用 `special-info-guided` / `special-info-self-guided` 專用資料夾，與一般「其他資訊」分類隔離。
+  - 旅程載入時移除舊版 `leader_info` / `custom_info` 側欄入口，避免重複特殊資訊功能。
+  - 一般「其他資訊」頁不再使用特殊資訊資料夾作為初始分類，避免分類數量為 0 卻顯示領隊 / 自駕卡片。
+  - App 頁首新增旅程性質標籤，顯示「跟團」或「自助 / 自駕」。
+  - `src/config/appVersion.ts`、`public/app-version.json`、`src/config/versionHistory.ts`、`package.json`、`package-lock.json` 與文件已同步到 V3.1.2。
   - 下一步由 Product Owner 手動將 `develop` 合併到 `main`，再執行發布流程。
 
 ### 本輪已完成修改
@@ -154,8 +165,10 @@ V3-1 目前已完成：
 
 最高優先：
 
-- Product Owner 手動合併 `develop` 到 `main` 並發布 V3.1.1。
-- 部署後以手機重新安裝 App，確認安裝資訊與 App 內版本皆為 V3.1.1。
+- Product Owner 手動合併 `develop` 到 `main` 並發布 V3.1.2。
+- 部署後以手機重新安裝 App，確認安裝資訊與 App 內版本皆為 V3.1.2。
+- 實機回歸 iOS PWA Google 登入、照片附件上傳 / 開啟、輸入框縮放。
+- 實機回歸領隊導遊聯絡資訊 / 自駕租車資訊與一般「其他資訊」分類互不污染。
 - 實機測試 `super_admin` 新增旅程、`trip_editor` 編輯旅程。
 - Guest 瀏覽旅程已於 2026-07-11 本機 App 驗證通過。
 - Other Info / Reference 權限過濾、「管理 / 退出」模式、Supabase schema / RLS 與前端最小雲端同步已完成；下一步是實機回歸。
@@ -224,7 +237,7 @@ Trip Management：
 
 1. 新對話先確認文件是否已同步到共同清單最新狀態。
 2. 建議範圍：
-   - Product Owner 手動合併 `develop` 到 `main` 並發布 V3.1.1。
+   - Product Owner 手動合併 `develop` 到 `main` 並發布 V3.1.2。
    - 使用 `super_admin` / `trip_editor` 帳號完成 Trip Cloud 實機驗證。
    - 使用 `super_admin` / `trip_editor` 帳號完成 Other Info 雲端同步實機回歸。
 3. 每次交付前執行：

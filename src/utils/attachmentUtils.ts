@@ -64,12 +64,34 @@ export const loadImageFromFile = (file: File): Promise<HTMLImageElement> => {
   });
 };
 
+const hasImageFileExtension = (fileName: string) => {
+  return /\.(avif|gif|heic|heif|jpe?g|png|webp)$/i.test(fileName);
+};
+
+const shouldTranscodeImageFile = (file: File) => {
+  const type = file.type.toLowerCase();
+
+  return (
+    !type ||
+    type === 'application/octet-stream' ||
+    type === 'image/heic' ||
+    type === 'image/heif' ||
+    /\.(heic|heif)$/i.test(file.name)
+  );
+};
+
 export const compressImageFile = async (file: File): Promise<File> => {
-  if (!file.type.startsWith('image/')) {
+  const isImageFile =
+    file.type.startsWith('image/') ||
+    (!file.type && hasImageFileExtension(file.name));
+
+  if (!isImageFile) {
     throw new Error('請選擇照片檔案。');
   }
 
-  if (file.size <= MAX_ATTACHMENT_BYTES) return file;
+  if (file.size <= MAX_ATTACHMENT_BYTES && !shouldTranscodeImageFile(file)) {
+    return file;
+  }
 
   let image: HTMLImageElement;
   try {

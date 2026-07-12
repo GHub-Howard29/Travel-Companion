@@ -41,14 +41,6 @@ export function LoginSafetyModal({
           <p>
             登入後，系統只會使用你的 Google 帳號 Email 來辨識使用者與行程權限。
           </p>
-          <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-            <p className="font-bold text-slate-800">會使用：</p>
-            <ul className="mt-1 space-y-1 text-xs">
-              <li>• Email：判斷是否為 super_admin、trip_editor 或一般使用者。</li>
-              <li>• 登入狀態：同步私人確認清單、共用帳本與照片附件。</li>
-              <li>• 行程權限設定：決定你可查看或管理哪些資料。</li>
-            </ul>
-          </div>
           <div className="rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
             不會讀取 Gmail 信件、Google Drive 檔案、通訊錄、相簿或其他 Google 帳號內容。
           </div>

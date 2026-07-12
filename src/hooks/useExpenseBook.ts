@@ -857,27 +857,64 @@ useEffect(() => {
   };
 
   const handleOpenAttachment = async (item: ExpenseItem) => {
+    if (
+      !(
+        (item.attachment_path && item.attachment_status === "synced") ||
+        item.local_attachment_id
+      )
+    ) {
+      alert("這筆支出沒有可開啟的照片。");
+      return;
+    }
+
+    const popup = window.open("about:blank", "_blank");
+    if (popup) {
+      popup.opener = null;
+    }
+    const openUrl = (url: string) => {
+      if (popup) {
+        popup.location.href = url;
+        return;
+      }
+
+      window.location.href = url;
+    };
+
+    const closePopup = () => {
+      if (popup) {
+        popup.close();
+      }
+    };
+
     try {
       if (item.attachment_path && item.attachment_status === "synced") {
         const url = await getSignedAttachmentUrl(item.attachment_path);
-        if (url) window.open(url, "_blank", "noopener,noreferrer");
+        if (url) {
+          openUrl(url);
+        } else {
+          closePopup();
+          alert("無法取得照片連結，請稍後再試。");
+        }
         return;
       }
 
       if (item.local_attachment_id) {
         const attachment = await getLocalAttachment(item.local_attachment_id);
         if (!attachment) {
+          closePopup();
           alert("這張照片只存在原本的瀏覽器本機，目前找不到附件檔。");
           return;
         }
         const url = URL.createObjectURL(attachment.blob);
-        window.open(url, "_blank", "noopener,noreferrer");
+        openUrl(url);
         setTimeout(() => URL.revokeObjectURL(url), 60_000);
         return;
       }
 
+      closePopup();
       alert("這筆支出沒有可開啟的照片。");
     } catch {
+      closePopup();
       alert("無法開啟照片，請確認網路或登入權限。");
     }
   };

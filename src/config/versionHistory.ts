@@ -14,6 +14,17 @@ export type VersionHistoryItem = {
 
 export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
+    version: "3.1.1",
+    date: "2026-07-12",
+    forceUpdate: false,
+    notes: [
+      "其他資訊開始接上雲端同步基礎",
+      "開啟旅程時會合併雲端其他資訊與既有 Trip 內容",
+      "刪除旅程時會一併清理該旅程的其他資訊雲端資料",
+      "PWA manifest、package 與 App 版本設定同步為 V3.1.1",
+    ],
+  },
+  {
     version: "3.1.0",
     date: "2026-07-11",
     forceUpdate: false,

@@ -23,6 +23,25 @@ import { getCloudOtherInfoItems } from "./otherInfoCloudService";
 import { sortTripsByDateDesc } from "../utils/tripHelpers";
 
 const SPECIAL_INFO_SCREEN_ID = "trip_special_info";
+const LEGACY_SPECIAL_INFO_SCREEN_IDS = new Set([
+  "leader_info",
+  "custom_info",
+]);
+const GUIDED_SPECIAL_INFO_FOLDER_ID = "special-info-guided";
+const SELF_GUIDED_SPECIAL_INFO_FOLDER_ID = "special-info-self-guided";
+
+const getSpecialInfoFolderId = (mode: TripMode): string =>
+  mode === "guided"
+    ? GUIDED_SPECIAL_INFO_FOLDER_ID
+    : SELF_GUIDED_SPECIAL_INFO_FOLDER_ID;
+
+const isLegacySpecialInfoItem = (item: SidebarItemConfig): boolean =>
+  LEGACY_SPECIAL_INFO_SCREEN_IDS.has(item.id) ||
+  (item.type === "text" &&
+    (item.title.includes("領隊") ||
+      item.title.includes("導遊") ||
+      item.title.includes("自駕") ||
+      item.title.includes("租車")));
 
 const createSpecialInfoSidebarItem = (mode: TripMode): SidebarItemConfig => ({
   id: SPECIAL_INFO_SCREEN_ID,
@@ -47,7 +66,7 @@ const inferTripMode = (
   }
 
   const specialTitle = detail?.sidebarConfig.find(
-    (item) => item.id === SPECIAL_INFO_SCREEN_ID || item.type === "otherInfo",
+    (item) => item.id === SPECIAL_INFO_SCREEN_ID || isLegacySpecialInfoItem(item),
   )?.title;
 
   if (specialTitle?.includes("自駕") || specialTitle?.includes("租車")) {
@@ -64,7 +83,11 @@ const normalizeSidebarConfig = (
   const specialItem = createSpecialInfoSidebarItem(mode);
   const hasSpecialItem = sidebarConfig.some((item) => item.id === SPECIAL_INFO_SCREEN_ID);
   const normalizedItems = sidebarConfig
-    .filter((item) => item.id !== SPECIAL_INFO_SCREEN_ID)
+    .filter(
+      (item) =>
+        item.id !== SPECIAL_INFO_SCREEN_ID &&
+        !isLegacySpecialInfoItem(item),
+    )
     .map((item) =>
       item.id === "other_info" && item.type === "otherInfo"
         ? { ...item, title: "其他資訊" }
@@ -89,7 +112,7 @@ const createSpecialInfoItem = (
   return {
     id: `${tripId}-${mode}-special-info`,
     tripId,
-    folderId: mode === "guided" ? "other-info-other" : "other-info-transport",
+    folderId: getSpecialInfoFolderId(mode),
     title: mode === "guided" ? "領隊導遊聯絡資訊" : "自駕租車資訊",
     content:
       mode === "guided"
@@ -108,12 +131,25 @@ const ensureSpecialInfoItems = (
 ): OtherInfoItem[] => {
   const title = mode === "guided" ? "領隊導遊聯絡資訊" : "自駕租車資訊";
   const currentItems = (items ?? []).filter((item) => item.tripId === tripId);
+  const specialFolderId = getSpecialInfoFolderId(mode);
+  const normalizedItems = currentItems.map((item) => {
+    const isMatchingSpecialItem =
+      item.title === title ||
+      (mode === "guided" &&
+        (item.title.includes("領隊") || item.title.includes("導遊"))) ||
+      (mode === "selfGuided" &&
+        (item.title.includes("自駕") || item.title.includes("租車")));
 
-  if (currentItems.some((item) => item.title === title)) {
-    return currentItems;
+    return isMatchingSpecialItem
+      ? { ...item, folderId: specialFolderId }
+      : item;
+  });
+
+  if (normalizedItems.some((item) => item.title === title)) {
+    return normalizedItems;
   }
 
-  return [createSpecialInfoItem(tripId, mode), ...currentItems];
+  return [createSpecialInfoItem(tripId, mode), ...normalizedItems];
 };
 
 const mergeOtherInfoItems = (
@@ -131,6 +167,34 @@ const mergeOtherInfoItems = (
   });
 
   return Array.from(mergedItemsById.values());
+};
+
+const normalizeTripDetail = (
+  detail: TripDetail,
+  meta: Pick<TripMeta, "mode"> | null | undefined,
+  otherInfoItems?: OtherInfoItem[],
+): TripDetail => {
+  const mode = inferTripMode(meta, detail);
+  const shouldNormalizeOtherInfoItems =
+    otherInfoItems !== undefined || detail.content.otherInfoItems !== undefined;
+
+  return {
+    ...detail,
+    sidebarConfig: normalizeSidebarConfig(detail.sidebarConfig, mode),
+    content: {
+      ...detail.content,
+      mode,
+      ...(shouldNormalizeOtherInfoItems
+        ? {
+            otherInfoItems: ensureSpecialInfoItems(
+              detail.id,
+              mode,
+              otherInfoItems ?? detail.content.otherInfoItems,
+            ),
+          }
+        : {}),
+    },
+  };
 };
 
 const toSlug = (value: string): string => {
@@ -308,23 +372,17 @@ export const getTripDetail = async (
     const cloudOtherInfoItems = await getCloudOtherInfoItems(supabase, tripId);
 
     if (cloudOtherInfoItems && cloudOtherInfoItems.length > 0) {
-      return {
-        ...latestRecord.detail,
-        content: {
-          ...latestRecord.detail.content,
-          otherInfoItems: ensureSpecialInfoItems(
-            latestRecord.detail.id,
-            inferTripMode(latestRecord.meta, latestRecord.detail),
-            mergeOtherInfoItems(
-              latestRecord.detail.content.otherInfoItems,
-              cloudOtherInfoItems,
-            ),
-          ),
-        },
-      };
+      return normalizeTripDetail(
+        latestRecord.detail,
+        latestRecord.meta,
+        mergeOtherInfoItems(
+          latestRecord.detail.content.otherInfoItems,
+          cloudOtherInfoItems,
+        ),
+      );
     }
 
-    return latestRecord.detail;
+    return normalizeTripDetail(latestRecord.detail, latestRecord.meta);
   }
 
   const detailPath = selectedTripMeta?.detailPath || `/trips/${tripId}.json`;
@@ -333,20 +391,14 @@ export const getTripDetail = async (
   const cloudOtherInfoItems = await getCloudOtherInfoItems(supabase, tripId);
 
   if (seedDetail && cloudOtherInfoItems && cloudOtherInfoItems.length > 0) {
-    return {
-      ...seedDetail,
-      content: {
-        ...seedDetail.content,
-        otherInfoItems: ensureSpecialInfoItems(
-          seedDetail.id,
-          inferTripMode(selectedTripMeta, seedDetail),
-          mergeOtherInfoItems(seedDetail.content.otherInfoItems, cloudOtherInfoItems),
-        ),
-      },
-    };
+    return normalizeTripDetail(
+      seedDetail,
+      selectedTripMeta,
+      mergeOtherInfoItems(seedDetail.content.otherInfoItems, cloudOtherInfoItems),
+    );
   }
 
-  return seedDetail;
+  return seedDetail ? normalizeTripDetail(seedDetail, selectedTripMeta) : null;
 };
 
 export const createTripRecord = (input: TripEditorInput): StoredTripRecord => {
@@ -555,6 +607,7 @@ export const createTripRecordFromDetail = (
   detail: TripDetail,
   editorEmails: string[],
 ): StoredTripRecord => {
+  const mode = inferTripMode(meta, detail);
   const participantEmailMap = normalizeParticipantEmailMap(
     detail.content.participantEmailMap ?? meta.participantEmailMap,
     meta.participants,
@@ -566,14 +619,20 @@ export const createTripRecordFromDetail = (
       title: detail.title,
       departureDate: detail.departureDate,
       dayCount: detail.content.days.length,
-      mode: inferTripMode(meta, detail),
+      mode,
       participantEmailMap,
     },
     detail: {
       ...detail,
+      sidebarConfig: normalizeSidebarConfig(detail.sidebarConfig, mode),
       content: {
         ...detail.content,
         participantEmailMap,
+        otherInfoItems: ensureSpecialInfoItems(
+          detail.id,
+          mode,
+          detail.content.otherInfoItems,
+        ),
       },
     },
     editorEmails: normalizeEmails(editorEmails),
