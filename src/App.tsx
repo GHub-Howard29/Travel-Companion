@@ -121,6 +121,8 @@ export default function App() {
     setNewTitle,
     newAmount,
     setNewAmount,
+    newExpenseDate,
+    setNewExpenseDate,
     newPayer,
     setNewPayer,
     editingExpenseId,
@@ -621,10 +623,12 @@ export default function App() {
                 isSyncingAttachments={isSyncingAttachments}
                 newTitle={newTitle}
                 newAmount={newAmount}
+                newExpenseDate={newExpenseDate}
                 newPayer={newPayer}
                 formCurrency={formCurrency}
                 setNewTitle={setNewTitle}
                 setNewAmount={setNewAmount}
+                setNewExpenseDate={setNewExpenseDate}
                 setNewPayer={setNewPayer}
                 setFormCurrency={setFormCurrency}
                 newAttachmentFile={newAttachmentFile}

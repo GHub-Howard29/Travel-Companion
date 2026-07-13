@@ -14,6 +14,16 @@ export type VersionHistoryItem = {
 
 export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
+    version: "3.1.5",
+    date: "2026-07-13",
+    forceUpdate: false,
+    notes: [
+      "Android PWA 馬上更新加入重新載入備援，降低點擊後未自動更新的情況",
+      "iOS Safari 網頁模式也會顯示版本更新提示，方便未安裝 App 時更新",
+      "保留非強制更新的馬上更新與稍後更新流程，稍後更新後重新整理仍會再次提醒",
+    ],
+  },
+  {
     version: "3.1.4",
     date: "2026-07-13",
     forceUpdate: false,

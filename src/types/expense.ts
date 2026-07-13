@@ -5,6 +5,8 @@ export interface ExpenseItem {
   amount: number; 
   payer: string; 
   currency?: string;
+  expense_date?: string;
+  created_at?: string;
   attachment_bucket?: string | null;
   attachment_path?: string | null;
   attachment_name?: string | null;
@@ -17,13 +19,12 @@ export interface ExpenseItem {
   local_attachment_id?: string | null;
 }
 
-export interface StoredExpenseItem extends ExpenseItem {
-  created_at?: string;
-}
+export type StoredExpenseItem = ExpenseItem;
 
 export interface EditExpenseDraft {
   title: string;
   amount: string;
   payer: string;
   currency: string;
+  expenseDate: string;
 }

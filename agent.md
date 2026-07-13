@@ -7,7 +7,7 @@
 ### 目前 Git 狀態
 
 - Branch：`develop`
-- 最新收尾版本：V3.1.5（Android / iOS 更新提示流程補強）
+- 最新收尾版本：V3.2.0（帳本記帳日期第一階段）
 - 前一個功能 commit：`1fc8e62 保留未同步其他資訊內容`
 - 目前只允許留下 `.codex-remote-attachments/` 這類對話附件暫存未追蹤；程式與文件修改完成後應直接建立繁體中文 commit。
 - 尚未確認是否已 push 到遠端。
@@ -106,7 +106,15 @@ V3-1 目前已完成：
   - Android PWA 馬上更新加入 1.5 秒 reload fallback，降低點擊後提示停住但未更新的情況。
   - iOS Safari 網頁模式也會顯示版本更新提示；桌面一般瀏覽器仍不主動提示。
   - `src/config/appVersion.ts`、`public/app-version.json`、`src/config/versionHistory.ts`、`package.json`、`package-lock.json` 與文件已同步到 V3.1.5。
-  - 下一步由 Product Owner 手動將 `develop` 合併到 `main`，再執行發布流程。
+- V3.2.0 已完成：
+  - 記帳本新增 `expense_date` 記帳日期欄位。
+  - 新增帳目預設今天日期，編輯既有帳目時可調整記帳日期。
+  - 舊帳目讀取時會用 `expense_date -> created_at -> 今天` 補上相容日期。
+  - 帳目列表改為依記帳日期最新優先排序，同日再依建立時間排序。
+  - XLSX 匯出新增「記帳日期」欄位。
+  - 新增 `docs/sql/007_expense_date_schema.sql` 與 `docs/sql/008_expense_date_validation.sql`。
+  - `src/config/appVersion.ts`、`public/app-version.json`、`src/config/versionHistory.ts`、`package.json`、`package-lock.json` 與文件已同步到 V3.2.0。
+  - 發布前 Product Owner 必須先在 Supabase SQL Editor 執行 `007_expense_date_schema.sql`，再執行 `008_expense_date_validation.sql` 確認欄位、index 與資料回填。
 
 ### 本輪已完成修改
 
@@ -182,8 +190,10 @@ V3-1 目前已完成：
 
 最高優先：
 
-- Product Owner 手動合併 `develop` 到 `main` 並發布 V3.1.5。
-- 部署後以手機重新安裝 App，確認安裝資訊與 App 內版本皆為 V3.1.5。
+- Product Owner 手動執行 `docs/sql/007_expense_date_schema.sql`，再執行 `docs/sql/008_expense_date_validation.sql`。
+- Product Owner 手動合併 `develop` 到 `main` 並發布 V3.2.0。
+- 部署後以手機重新安裝 App，確認安裝資訊與 App 內版本皆為 V3.2.0。
+- 實機回歸 V3.2.0 記帳日期新增 / 編輯、舊帳目相容日期、最新日期優先排序與 XLSX 匯出日期欄位。
 - 實機回歸 V3.1.5 Android PWA 馬上更新 reload fallback、iOS Safari 網頁更新提示，以及 V3.1.4 旅程 `名稱=Email` 欄位、幣別清單與 TWD / JPY / KRW 整數分攤。
 - 實機回歸 iOS PWA Google 登入、照片附件上傳 / 開啟、輸入框縮放。
 - 實機回歸領隊導遊聯絡資訊 / 自駕租車資訊與一般「其他資訊」分類互不污染。
@@ -206,8 +216,9 @@ V3-1 目前已完成：
 
 下一步開發順序：
 
-1. 先完成 Travel Tool 模組化落地，只整理程式結構，不改變既有 UI 或使用方式。
-2. 再接帳本 UI 改善、記帳日期、日期分頁 / 分組、最新排序與附件管理改善。
+1. 先完成 V3.2.0 SQL 執行與實機回歸。
+2. 再接帳本依記帳日期分頁 / 分組。
+3. 後續再做帳本 UI 改善與附件管理改善。
 
 ### 重要檔案
 
@@ -262,7 +273,9 @@ Trip Management：
 
 1. 新對話先確認文件是否已同步到共同清單最新狀態。
 2. 建議範圍：
-   - Product Owner 手動合併 `develop` 到 `main` 並發布 V3.1.5。
+   - Product Owner 手動執行 V3.2.0 Expense Date SQL。
+   - Product Owner 手動合併 `develop` 到 `main` 並發布 V3.2.0。
+   - 使用共用帳本完成記帳日期新增 / 編輯 / 排序 / 匯出回歸。
    - 使用 `super_admin` / `trip_editor` 帳號完成 Trip Cloud 實機驗證。
    - 使用 `super_admin` / `trip_editor` 帳號完成 Other Info 雲端同步實機回歸。
 3. 每次交付前執行：

@@ -39,10 +39,12 @@ interface ExpenseScreenProps {
   isSyncingAttachments: boolean;
   newTitle: string;
   newAmount: string;
+  newExpenseDate: string;
   newPayer: string;
   formCurrency: string;
   setNewTitle: Dispatch<SetStateAction<string>>;
   setNewAmount: Dispatch<SetStateAction<string>>;
+  setNewExpenseDate: Dispatch<SetStateAction<string>>;
   setNewPayer: Dispatch<SetStateAction<string>>;
   setFormCurrency: Dispatch<SetStateAction<string>>;
   newAttachmentFile: File | null;
@@ -95,10 +97,12 @@ export default function ExpenseScreen({
   isSyncingAttachments,
   newTitle,
   newAmount,
+  newExpenseDate,
   newPayer,
   formCurrency,
   setNewTitle,
   setNewAmount,
+  setNewExpenseDate,
   setNewPayer,
   setFormCurrency,
   newAttachmentFile,
@@ -335,6 +339,16 @@ export default function ExpenseScreen({
               className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-slate-50"
               required
             />
+            <label className="space-y-1 text-xs font-bold text-slate-500">
+              <span>記帳日期</span>
+              <input
+                type="date"
+                value={newExpenseDate}
+                onChange={(e) => setNewExpenseDate(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-slate-50 text-slate-800"
+                required
+              />
+            </label>
 
             <div className="flex gap-2">
               <select
@@ -496,6 +510,20 @@ export default function ExpenseScreen({
                         className="w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
                         placeholder="消費項目"
                       />
+                      <label className="space-y-1 text-xs font-bold text-slate-500">
+                        <span>記帳日期</span>
+                        <input
+                          type="date"
+                          value={editDraft.expenseDate}
+                          onChange={(e) =>
+                            setEditDraft((draft) => ({
+                              ...draft,
+                              expenseDate: e.target.value,
+                            }))
+                          }
+                          className="w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                        />
+                      </label>
                       <div className="grid grid-cols-[6.5rem_minmax(0,1fr)] gap-2">
                         <select
                           value={editDraft.currency}
@@ -651,6 +679,11 @@ export default function ExpenseScreen({
                     </div>
                   ) : (
                     <div className="space-y-2">
+                      <div className="flex min-w-0">
+                        <span className="rounded bg-slate-100 px-2 py-1 text-[11px] font-bold text-slate-600">
+                          記帳日期：{item.expense_date || item.created_at?.slice(0, 10) || "未設定"}
+                        </span>
+                      </div>
                       {hasAttachment ? (
                         <button
                           type="button"

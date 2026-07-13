@@ -1,6 +1,6 @@
 # 開發進度與待辦事項
 
-> Version：V3.1.5
+> Version：V3.2.0
 >
 > 最後更新：2026-07-13
 
@@ -182,9 +182,11 @@ Expense Module
 預計開發：
 
 - [ ] 帳本 UI 改善。
-- [ ] 新增 / 編輯帳目支援記帳日期。
+- [x] 新增 / 編輯帳目支援記帳日期。
 - [ ] 帳本依記帳日期分頁或分組。
-- [ ] 帳目列表改為最新資料優先顯示。
+- [x] 帳目列表改為最新資料優先顯示。
+- [x] Excel 匯出新增記帳日期欄位。
+- [ ] Product Owner 手動執行 `docs/sql/007_expense_date_schema.sql` 與 `docs/sql/008_expense_date_validation.sql`。
 - [ ] 附件管理改善。
 
 近期補強：
@@ -312,12 +314,13 @@ Trip 管理
 
 ---
 
-## 發布前人工收尾（V3.1.5）
+## 發布前人工收尾（V3.2.0）
 
 - [ ] Product Owner 手動將 `develop` 合併到 `main`。
 - [ ] Product Owner 手動執行版本發布 / 部署流程。
-- [ ] 部署後以手機重新安裝 App，確認安裝資訊與 App 內版本皆為 V3.1.5。
-- [ ] 部署後實機回歸 Android PWA 馬上更新 reload fallback 與 iOS Safari 網頁更新提示。
+- [ ] Product Owner 手動執行 `docs/sql/007_expense_date_schema.sql` 與 `docs/sql/008_expense_date_validation.sql`。
+- [ ] 部署後以手機重新安裝 App，確認安裝資訊與 App 內版本皆為 V3.2.0。
+- [ ] 部署後實機回歸記帳日期新增 / 編輯、舊帳目相容日期、最新日期優先排序與 XLSX 匯出日期欄位。
 - [ ] 部署後實機回歸非強制更新提示、馬上更新清暫存、稍後更新再次提醒。
 - [ ] 部署後實機回歸新增 / 編輯旅程 `名稱=Email` 欄位、可編輯者 Email 權限說明與付款人鎖定。
 - [ ] 部署後實機回歸 TWD / JPY / KRW 整數分攤、KRW / EUR 幣別頁籤與帳本匯出。

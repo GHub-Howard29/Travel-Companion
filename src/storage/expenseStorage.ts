@@ -47,6 +47,18 @@ export const readStorageArray = (key: string): unknown[] => {
   }
 };
 
+const toDateOnly = (value: unknown): string | null => {
+  if (typeof value !== 'string' || !value) return null;
+
+  const dateOnlyMatch = /^\d{4}-\d{2}-\d{2}$/.test(value);
+  if (dateOnlyMatch) return value;
+
+  const parsedDate = new Date(value);
+  if (Number.isNaN(parsedDate.getTime())) return null;
+
+  return parsedDate.toISOString().slice(0, 10);
+};
+
 /**
  * 將 LocalStorage 的原始 JSON
  * 轉換成 StoredExpenseItem 型別。
@@ -64,6 +76,11 @@ export const toStoredExpenseItem = (
 
   const tripId = typeof value.trip_id === 'string' ? value.trip_id : fallbackTripId;
   if (!tripId) return null;
+  const createdAt = typeof value.created_at === 'string' ? value.created_at : undefined;
+  const expenseDate =
+    toDateOnly(value.expense_date) ??
+    toDateOnly(createdAt) ??
+    new Date().toISOString().slice(0, 10);
 
   return {
     // Supabase 的 id 為 bigint（number），
@@ -77,6 +94,7 @@ export const toStoredExpenseItem = (
     amount: Number(value.amount) || 0,
     payer: typeof value.payer === 'string' && value.payer ? value.payer : '我',
     currency: typeof value.currency === 'string' ? value.currency : fallbackCurrency,
+    expense_date: expenseDate,
     attachment_bucket: typeof value.attachment_bucket === 'string' ? value.attachment_bucket : ATTACHMENT_BUCKET,
     attachment_path: typeof value.attachment_path === 'string' ? value.attachment_path : null,
     attachment_name: typeof value.attachment_name === 'string' ? value.attachment_name : null,
@@ -92,7 +110,7 @@ export const toStoredExpenseItem = (
     attachment_uploaded_by: typeof value.attachment_uploaded_by === 'string' ? value.attachment_uploaded_by : null,
     attachment_last_error: typeof value.attachment_last_error === 'string' ? value.attachment_last_error : null,
     local_attachment_id: typeof value.local_attachment_id === 'string' ? value.local_attachment_id : null,
-    created_at: typeof value.created_at === 'string' ? value.created_at : undefined,
+    created_at: createdAt,
   };
 };
 

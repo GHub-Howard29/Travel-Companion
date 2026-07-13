@@ -11,6 +11,18 @@ import type {
   EditExpenseDraft,
 } from '../types';
 
+const getTodayDateString = () => {
+  const now = new Date();
+  const localTime = now.getTime() - now.getTimezoneOffset() * 60_000;
+  return new Date(localTime).toISOString().slice(0, 10);
+};
+
+const getExpenseDate = (item: ExpenseItem): string => {
+  if (item.expense_date) return item.expense_date;
+  if (item.created_at) return item.created_at.slice(0, 10);
+  return getTodayDateString();
+};
+
 /**
  * 啟動帳目編輯模式。
  */
@@ -40,6 +52,7 @@ export const startEditExpense = (
     amount: String(item.amount || ''),
     payer: item.payer || expenseMembers[0] || '',
     currency: item.currency || currentCurrencyCode,
+    expenseDate: getExpenseDate(item),
   });
 };
 
@@ -59,6 +72,7 @@ export const cancelEditExpense = (
     amount: '',
     payer: '',
     currency: currentCurrencyCode,
+    expenseDate: getTodayDateString(),
   });
 
   setEditAttachmentFile(null);
