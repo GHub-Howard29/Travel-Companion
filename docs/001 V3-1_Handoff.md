@@ -103,10 +103,11 @@ Trip 管理第一階段已完成，旅程清單切換前會重新同步 Supabase
 - checklistStorage 負責 localStorage 讀寫與執行期資料驗證
 - 進度計算會忽略已不存在的 item id
 
-尚未完成：
+同步策略：
 
-- Checklist Pending Queue / Conflict Resolution 尚未實作
-- Other Info / Reference 已完成最小雲端同步、Supabase schema / RLS 與 validation；尚未完成多人協作衝突處理
+- 共同檢查清單已完成本機 `localStorage` 持久化與 Supabase 最小雲端同步。
+- 共同檢查清單不另做 Pending Queue 或複雜 Conflict Resolution；若多人同時修改同一筆項目，以最後成功上傳到 Supabase 的資料為準。
+- Other Info / Reference 已完成最小雲端同步、Supabase schema / RLS 與 validation；多人協作或衝突處理需有 BUG 回報或待改善功能計畫後再安排。
 
 權限定案：
 
@@ -297,17 +298,19 @@ npm.cmd run build
    - 兩台手機同一帳本新增 / 刪除後即時或 30 秒內更新。
    - `super_admin` / `trip_editor` participantEmailMap 付款人鎖定。
 3. Other Info / Reference 建議範圍：
-   - 實機回歸新增、編輯、刪除是否同步。
+   - 若有 BUG 回報或待改善功能計畫，再針對新增、編輯、刪除同步行為安排修改。
    - 確認領隊導遊聯絡資訊 / 自駕租車資訊與一般「其他資訊」分類互不污染。
-   - 暫時不做完整 Pending Queue / Conflict Resolution。
-4. 暫緩項目：
+4. 取消或暫不規劃項目：
    - Checklist Pending Queue：離線或同步失敗時暫存待上傳操作的佇列。
    - Conflict Resolution：本機與雲端同一筆資料都被修改時的合併或取捨規則。
    - 新 Travel Tool。
-5. 下一輪交付前執行：
+5. 下一輪開發順序：
+   - 先完成 Travel Tool 模組化落地，只整理程式結構，不改變既有 UI 或使用方式。
+   - 再接帳本 UI 改善、記帳日期、日期分頁 / 分組、最新排序與附件管理改善。
+6. 下一輪交付前執行：
    - `npm run lint`
    - `npm run build`
-6. V3.1.4 發布前回歸：
+7. V3.1.4 發布前回歸：
    - 非強制更新提示、馬上更新清暫存、稍後更新再次提醒。
    - 新增 / 編輯旅程 `名稱=Email` 欄位、可編輯者 Email 權限說明與付款人鎖定。
    - TWD / JPY / KRW 整數分攤，KRW / EUR 幣別頁籤與匯出。

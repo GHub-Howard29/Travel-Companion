@@ -189,18 +189,25 @@ V3-1 目前已完成：
 - 實機回歸領隊導遊聯絡資訊 / 自駕租車資訊與一般「其他資訊」分類互不污染。
 - 實機測試 `super_admin` 新增旅程、`trip_editor` 編輯旅程。
 - Guest 瀏覽旅程已於 2026-07-11 本機 App 驗證通過。
-- Other Info / Reference 權限過濾、「管理 / 退出」模式、Supabase schema / RLS 與前端最小雲端同步已完成；下一步是實機回歸。
+- Other Info / Reference 權限過濾、「管理 / 退出」模式、Supabase schema / RLS 與前端最小雲端同步已完成；若有 BUG 回報或 Product Owner 提出待改善功能計畫，再安排修改。
 
 仍待評估：
 
-- 共同檢查清單是否要支援 App 內新增 / 編輯 / 刪除 item。
-- Checklist Pending Queue：離線或同步失敗時暫存待上傳操作的佇列。
-- Checklist Conflict Resolution：本機與雲端同一筆清單資料都被修改時的合併或取捨規則。
 - 是否要將 `admin_users` 中長期補上 `user_id uuid`。
   - 目前程式與 SQL 仍可沿用 `email + role + trip_id`，新增 `trip_editor` 只需維護 Supabase 表格，不需改程式。
   - 若未來 RLS 想更穩，可再補 `user_id`。
-- 其他資訊 / 參考資訊已完成 Supabase schema / RLS 與最小雲端同步；尚未做多人協作衝突處理。
 - Vite chunk size warning 尚未處理。
+
+取消或暫不規劃：
+
+- Checklist Pending Queue：共同清單目前不另做離線待上傳操作佇列。
+- Checklist Conflict Resolution：共同清單目前不做複雜衝突合併，採最後成功上傳的雲端資料為準。
+- 新 Travel Tool：預約紀錄、行李清單、旅行日誌、保險資訊、AI 助手等目前不列入預計開發。
+
+下一步開發順序：
+
+1. 先完成 Travel Tool 模組化落地，只整理程式結構，不改變既有 UI 或使用方式。
+2. 再接帳本 UI 改善、記帳日期、日期分頁 / 分組、最新排序與附件管理改善。
 
 ### 重要檔案
 

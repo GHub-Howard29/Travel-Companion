@@ -323,13 +323,13 @@ Supabase checklists / checklist_items
 - 不同 Trip 各自保留勾選狀態
 - 進度計算忽略已不存在的 checked item id
 
-V3-1 第一階段尚不提供：
+V3-1 目前狀態：
 
-- 共同檢查清單 App 內新增檢查清單項目
-- 共同檢查清單 App 內編輯檢查清單項目
-- 共同檢查清單 App 內刪除檢查清單項目
-- Checklist Pending Queue：離線或同步失敗時暫存待上傳操作的佇列
-- Checklist Conflict Resolution：本機與雲端同一筆清單資料都被修改時的合併或取捨規則
+- 共同檢查清單 App 內新增 / 編輯 / 刪除項目已完成第一版。
+- 共同檢查清單已完成本機 `localStorage` 持久化與 Supabase 最小雲端同步。
+- 暫不規劃 Checklist Pending Queue：離線或同步失敗時暫存待上傳操作的佇列。
+- 暫不規劃 Checklist Conflict Resolution：本機與雲端同一筆清單資料都被修改時的合併或取捨規則。
+- 若多人同時修改同一筆共同清單項目，以最後成功上傳到 Supabase 的資料為準。
 
 ---
 
@@ -368,11 +368,11 @@ trip_id = 目前旅程 id
 
 目前 SQL 已執行至 Supabase，前端已接上私人確認清單最小雲端同步流程。
 
-共同檢查清單尚未同步 Supabase，下一步採最小同步：
+共同檢查清單已同步 Supabase，採最小同步：
 
 - 若雲端沒有 `scope = shared` checklist，使用 Trip JSON `checklistData` 初始化。
 - 共同清單優先讀 Supabase shared checklist。
-- 先只同步勾選狀態，不提供共同項目新增、編輯、刪除。
+- 同步勾選狀態與共同項目管理結果。
 
 ---
 

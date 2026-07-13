@@ -101,13 +101,15 @@ A 行程勾選完成後，B 行程也會顯示相同勾選結果。
 
 Checklist 尚未依旅程建立獨立資料。
 
-預計修正：
+修正方式：
 
-每個 Trip 建立自己的 Checklist 資料。
+- 共同清單勾選進度依 `tripId` 寫入 `localStorage`。
+- 共同清單已接上 Supabase shared checklist 最小雲端同步。
+- `guest` / `user` 查看共同清單時顯示乾淨未勾選版本；`trip_editor` / `super_admin` 可同步勾選狀態。
 
 狀態：
 
-🚧 待修正（V3.4）
+✅ 已修正（V3.0）
 
 ---
 
@@ -121,15 +123,19 @@ Checklist 勾選後，重新整理（F5）會全部消失。
 
 目前僅使用 React State 保存。
 
-尚未建立 IndexedDB 或 localStorage 持久化。
+2026/07/13 補充：
 
-預計修正：
+共同清單目前已使用 `localStorage` 保存進度，並已接上 Supabase 最小雲端同步；重新整理後會保留可同步角色的雲端狀態與本機 fallback。
 
-新增 Checklist Persistence。
+修正方式：
+
+- 建立 `checklistStorage`，以 `travel_companion_checklist_{tripId}` 保存共同清單進度。
+- `checklistService` 統一讀寫本機進度，UI 不直接操作 storage key。
+- `useChecklistState` 讀取 Supabase shared checklist 後，會同步寫回本機進度。
 
 狀態：
 
-🚧 待修正（V3.4）
+✅ 已修正（V3.0）
 
 ---
 
