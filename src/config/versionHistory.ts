@@ -14,6 +14,18 @@ export type VersionHistoryItem = {
 
 export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
+    version: "3.1.2",
+    date: "2026-07-12",
+    forceUpdate: false,
+    notes: [
+      "改善 iOS PWA Google 登入流程，降低安裝版 App 重新驗證失敗的機率",
+      "改善 iOS 照片附件處理與照片連結開啟，支援空 MIME 與 HEIC / HEIF 轉存",
+      "修正 iOS PWA 點選輸入框後畫面自動放大的問題",
+      "領隊導遊聯絡資訊與自駕租車資訊改用獨立資料區，不再混入其他資訊分類",
+      "頁首新增旅程性質標示，可直接看到跟團或自助 / 自駕",
+    ],
+  },
+  {
     version: "3.1.1",
     date: "2026-07-12",
     forceUpdate: false,

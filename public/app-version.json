@@ -1,12 +1,11 @@
 {
-  "version": "3.1.2",
+  "version": "3.1.3",
   "releaseDate": "2026-07-12",
   "releaseNotes": [
-    "改善 iOS PWA Google 登入流程，降低安裝版 App 重新驗證失敗的機率",
-    "改善 iOS 照片附件處理與照片連結開啟，支援空 MIME 與 HEIC / HEIF 轉存",
-    "修正 iOS PWA 點選輸入框後畫面自動放大的問題",
-    "領隊導遊聯絡資訊與自駕租車資訊改用獨立資料區，不再混入其他資訊分類",
-    "頁首新增旅程性質標示，可直接看到跟團或自助 / 自駕"
+    "iOS 安裝版 App 的 Google 登入改用專用開啟流程，降低兩步驗證後無法接回 App 的機率",
+    "登入提示補上 iOS 兩步驗證建議，遇到 YouTube / Google App 確認時可改用其他驗證方式或 Safari 網頁模式",
+    "iOS 照片同步改為重新包裝照片 Blob，並在失敗時改用 ArrayBuffer 重試上傳",
+    "照片同步失敗時會顯示實際錯誤原因，方便判斷是授權、檔案格式或網路問題"
   ],
   "forceUpdate": false
 }

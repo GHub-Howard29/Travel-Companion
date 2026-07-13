@@ -2,12 +2,14 @@ import { LogIn, ShieldCheck, X } from "lucide-react";
 
 interface LoginSafetyModalProps {
   isOpen: boolean;
+  isIosStandalonePwa?: boolean;
   onClose: () => void;
   onConfirm: () => Promise<void>;
 }
 
 export function LoginSafetyModal({
   isOpen,
+  isIosStandalonePwa = false,
   onClose,
   onConfirm,
 }: LoginSafetyModalProps) {
@@ -44,6 +46,11 @@ export function LoginSafetyModal({
           <div className="rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
             不會讀取 Gmail 信件、Google Drive 檔案、通訊錄、相簿或其他 Google 帳號內容。
           </div>
+          {isIosStandalonePwa && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-800">
+              若 Google 要求到 YouTube 或 Google App 確認身分，iOS 安裝版 App 可能無法接回登入流程。請在 Google 驗證頁選擇「其他驗證方式」，改用簡訊、驗證碼或 Authenticator 代碼；若必須用 YouTube / Google App 確認，請改用 Safari 網頁模式登入。
+            </div>
+          )}
         </div>
 
         <div className="grid grid-cols-2 gap-2 border-t border-slate-100 bg-white p-3">
@@ -60,7 +67,7 @@ export function LoginSafetyModal({
             className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-slate-900 px-3 py-2.5 text-sm font-bold text-white hover:bg-slate-800"
           >
             <LogIn size={15} />
-            繼續登入
+            {isIosStandalonePwa ? "開啟 Google 登入" : "繼續登入"}
           </button>
         </div>
       </div>

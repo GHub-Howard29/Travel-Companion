@@ -7,7 +7,7 @@
 ### 目前 Git 狀態
 
 - Branch：`develop`
-- 最新收尾版本：V3.1.2（iOS PWA 與特殊資訊修正）
+- 最新收尾版本：V3.1.3（iOS PWA 登入與照片同步修正）
 - 前一個功能 commit：`1fc8e62 保留未同步其他資訊內容`
 - 目前只允許留下 `.codex-remote-attachments/` 這類對話附件暫存未追蹤；程式與文件修改完成後應直接建立繁體中文 commit。
 - 尚未確認是否已 push 到遠端。
@@ -89,6 +89,12 @@ V3-1 目前已完成：
   - 一般「其他資訊」頁不再使用特殊資訊資料夾作為初始分類，避免分類數量為 0 卻顯示領隊 / 自駕卡片。
   - App 頁首新增旅程性質標籤，顯示「跟團」或「自助 / 自駕」。
   - `src/config/appVersion.ts`、`public/app-version.json`、`src/config/versionHistory.ts`、`package.json`、`package-lock.json` 與文件已同步到 V3.1.2。
+- V3.1.3 已完成：
+  - iOS PWA Google 登入改為專用 OAuth 開啟流程，降低 YouTube / Google App 兩步驗證後無法接回 App 的機率。
+  - 登入提示補上 iOS 兩步驗證操作建議，可改用其他驗證方式或 Safari 網頁模式。
+  - iOS 照片同步上傳改為 Blob 重新包裝，失敗時改用 ArrayBuffer 重試。
+  - 照片同步失敗提示會顯示實際錯誤原因，方便後續實機排查。
+  - `src/config/appVersion.ts`、`public/app-version.json`、`src/config/versionHistory.ts`、`package.json`、`package-lock.json` 與文件已同步到 V3.1.3。
   - 下一步由 Product Owner 手動將 `develop` 合併到 `main`，再執行發布流程。
 
 ### 本輪已完成修改
@@ -165,8 +171,8 @@ V3-1 目前已完成：
 
 最高優先：
 
-- Product Owner 手動合併 `develop` 到 `main` 並發布 V3.1.2。
-- 部署後以手機重新安裝 App，確認安裝資訊與 App 內版本皆為 V3.1.2。
+- Product Owner 手動合併 `develop` 到 `main` 並發布 V3.1.3。
+- 部署後以手機重新安裝 App，確認安裝資訊與 App 內版本皆為 V3.1.3。
 - 實機回歸 iOS PWA Google 登入、照片附件上傳 / 開啟、輸入框縮放。
 - 實機回歸領隊導遊聯絡資訊 / 自駕租車資訊與一般「其他資訊」分類互不污染。
 - 實機測試 `super_admin` 新增旅程、`trip_editor` 編輯旅程。
@@ -237,7 +243,7 @@ Trip Management：
 
 1. 新對話先確認文件是否已同步到共同清單最新狀態。
 2. 建議範圍：
-   - Product Owner 手動合併 `develop` 到 `main` 並發布 V3.1.2。
+   - Product Owner 手動合併 `develop` 到 `main` 並發布 V3.1.3。
    - 使用 `super_admin` / `trip_editor` 帳號完成 Trip Cloud 實機驗證。
    - 使用 `super_admin` / `trip_editor` 帳號完成 Other Info 雲端同步實機回歸。
 3. 每次交付前執行：

@@ -27,7 +27,7 @@ import {
 } from "../utils/attachmentUtils";
 import { cancelEditExpense, startEditExpense } from "../utils/expenseActions";
 import { getExportFileNameXlsx } from "../utils/exportUtils";
-import type { EditExpenseDraft, ExpenseItem } from "../types";
+import type { EditExpenseDraft, ExpenseItem, LocalAttachmentRecord } from "../types";
 
 interface UseExpenseBookOptions {
   supabase: SupabaseClient;
@@ -48,6 +48,32 @@ const shouldRecoverLocalAttachment = (item: ExpenseItem) => {
     item.attachment_status !== "none" &&
     Boolean(item.attachment_name)
   );
+};
+
+const getErrorMessage = (error: unknown) => {
+  if (error instanceof Error) return error.message;
+  if (typeof error === "object" && error !== null) {
+    const details = error as {
+      message?: unknown;
+      error?: unknown;
+      status?: unknown;
+      statusCode?: unknown;
+    };
+    const message =
+      typeof details.message === "string"
+        ? details.message
+        : typeof details.error === "string"
+          ? details.error
+          : "unknown-error";
+    const status =
+      typeof details.status === "number" || typeof details.status === "string"
+        ? details.status
+        : details.statusCode;
+
+    return status ? `${message} (${status})` : message;
+  }
+
+  return String(error || "unknown-error");
 };
 
 export default function useExpenseBook({
@@ -856,6 +882,39 @@ useEffect(() => {
     return data?.signedUrl || "";
   };
 
+  const uploadAttachmentToStorage = async (
+    path: string,
+    attachment: LocalAttachmentRecord,
+  ) => {
+    const contentType = attachment.mimeType || "image/jpeg";
+    const normalizedBlob = new Blob([attachment.blob], { type: contentType });
+    const firstUpload = await supabase.storage
+      .from(ATTACHMENT_BUCKET)
+      .upload(path, normalizedBlob, {
+        contentType,
+        upsert: true,
+      });
+
+    if (!firstUpload.error) return;
+
+    const firstError = firstUpload.error;
+    const arrayBuffer = await normalizedBlob.arrayBuffer();
+    const retryUpload = await supabase.storage
+      .from(ATTACHMENT_BUCKET)
+      .upload(path, arrayBuffer, {
+        contentType,
+        upsert: true,
+      });
+
+    if (retryUpload.error) {
+      throw new Error(
+        `blob:${getErrorMessage(firstError)}; arrayBuffer:${getErrorMessage(
+          retryUpload.error,
+        )}`,
+      );
+    }
+  };
+
   const handleOpenAttachment = async (item: ExpenseItem) => {
     if (
       !(
@@ -1015,13 +1074,7 @@ useEffect(() => {
         const fileName = sanitizeStorageFileName(attachment.fileName);
         const path = `${selectedTripId}/${item.id}/${stamp}-${fileName}`;
 
-        const { error: uploadError } = await supabase.storage
-          .from(ATTACHMENT_BUCKET)
-          .upload(path, attachment.blob, {
-            contentType: attachment.mimeType,
-            upsert: true,
-          });
-        if (uploadError) throw uploadError;
+        await uploadAttachmentToStorage(path, attachment);
 
         const updatePayload = {
           attachment_bucket: ATTACHMENT_BUCKET,
@@ -1048,8 +1101,7 @@ useEffect(() => {
           local_attachment_id: item.local_attachment_id,
         });
       } catch (error) {
-        const errorMessage =
-          error instanceof Error ? error.message : "upload-failed";
+        const errorMessage = getErrorMessage(error);
         const failedExpense: ExpenseItem = {
           ...item,
           attachment_status: "upload_failed",
@@ -1137,10 +1189,13 @@ useEffect(() => {
       (item) => item.attachment_status !== "synced",
     ).length;
     const successCount = savedItems.length - failedCount;
+    const firstFailedError =
+      savedItems.find((item) => item.attachment_status !== "synced")
+        ?.attachment_last_error ?? "";
 
     alert(
       failedCount > 0
-        ? `照片同步完成 ${successCount} 筆，失敗 ${failedCount} 筆。失敗項目會保留本機照片供下次重試；若仍無法開啟，請重新拍照或選擇照片。`
+        ? `照片同步完成 ${successCount} 筆，失敗 ${failedCount} 筆。失敗項目會保留本機照片供下次重試。${firstFailedError ? `\n錯誤原因：${firstFailedError}` : ""}`
         : `照片同步完成，共 ${successCount} 筆。`,
     );
   };

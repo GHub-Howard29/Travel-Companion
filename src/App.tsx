@@ -228,17 +228,48 @@ export default function App() {
   const handleGoogleLogin = async () => {
     setIsLoginSafetyOpen(false);
     const currentRedirectUrl = window.location.origin + getBasePath();
-    const queryParams = isIosStandalonePwa()
+    const shouldUseIosPwaOAuthFallback = isIosStandalonePwa();
+    const queryParams = shouldUseIosPwaOAuthFallback
       ? undefined
       : { prompt: "select_account" };
+    const authPopup = shouldUseIosPwaOAuthFallback
+      ? window.open("about:blank", "_blank")
+      : null;
 
-    await supabase.auth.signInWithOAuth({
+    if (authPopup) {
+      authPopup.opener = null;
+      authPopup.document.title = "Google 登入";
+      authPopup.document.body.innerHTML =
+        '<p style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;padding:24px;line-height:1.6;color:#334155;">正在開啟 Google 登入...</p>';
+    }
+
+    const { data, error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
         redirectTo: currentRedirectUrl,
         queryParams,
+        skipBrowserRedirect: shouldUseIosPwaOAuthFallback,
       },
     });
+
+    if (error) {
+      authPopup?.close();
+      alert("無法開啟 Google 登入，請稍後再試。");
+      return;
+    }
+
+    if (shouldUseIosPwaOAuthFallback) {
+      if (data.url) {
+        if (authPopup) {
+          authPopup.location.href = data.url;
+        } else {
+          window.location.href = data.url;
+        }
+      } else {
+        authPopup?.close();
+        alert("無法取得 Google 登入連結，請稍後再試。");
+      }
+    }
   };
 
   const handleLogout = async () => {
@@ -585,6 +616,7 @@ export default function App() {
     <InstallAppPrompt />
     <LoginSafetyModal
       isOpen={isLoginSafetyOpen}
+      isIosStandalonePwa={isIosStandalonePwa()}
       onClose={() => setIsLoginSafetyOpen(false)}
       onConfirm={handleGoogleLogin}
     />

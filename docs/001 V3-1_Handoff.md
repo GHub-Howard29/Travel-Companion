@@ -23,6 +23,7 @@ Trip 管理第一階段已完成，旅程清單切換前會重新同步 Supabase
 - 角色與權限仍由 `admin_users.email` 判斷，participantEmailMap 僅用於把登入帳號對應到帳本付款人。
 - V3.1.1 已完成 Other Info / Reference 最小雲端同步、Supabase schema / RLS 與 validation。
 - V3.1.2 已完成 iOS PWA Google 登入、照片附件、畫面縮放與特殊資訊資料隔離修正。
+- V3.1.3 已針對 iOS PWA Google 兩步驗證與 iOS 照片同步失敗追加加固：OAuth 改用專用開啟流程，照片上傳改為 Blob 重新包裝與 ArrayBuffer 重試。
 - 領隊導遊聯絡資訊 / 自駕租車資訊已改用 `special-info-guided` / `special-info-self-guided` 專用資料夾，不再混入一般「其他資訊」分類。
 - App 頁首會顯示旅程性質：「跟團」或「自助 / 自駕」。
 
