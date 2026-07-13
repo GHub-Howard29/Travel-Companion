@@ -21,6 +21,7 @@ import { ItineraryPage } from "./components/ItineraryPage";
 import { ChecklistPage } from "./components/ChecklistPage";
 import { PrivateChecklistPage } from "./components/PrivateChecklistPage";
 import { OtherInfoPage } from "./components/OtherInfoPage";
+import { TextInfoPage } from "./components/TextInfoPage";
 import { TripEditorModal } from "./components/TripEditorModal";
 import { UpdatePrompt } from "./components/UpdatePrompt";
 import { VersionInfoModal } from "./components/VersionInfoModal";
@@ -576,18 +577,7 @@ export default function App() {
 
             {/* 3. 純文字/備忘錄模組 */}
             {currentScreenType === "text" && (
-              <div className="space-y-4">
-                <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden p-5">
-                  <h3 className="text-xl font-bold text-slate-800 mb-1">
-                    {currentTrip.content.custom_tab_1?.subtitle || "自訂資訊區"}
-                  </h3>
-                  <div className="w-full h-px bg-slate-100 my-3" />
-                  <p className="text-sm text-slate-600 whitespace-pre-line leading-relaxed bg-slate-50 p-4 rounded-xl border border-slate-100 font-mono">
-                    {currentTrip.content.custom_tab_1?.mainText ||
-                      "目前尚無詳細欄位內容。"}
-                  </p>
-                </div>
-              </div>
+              <TextInfoPage content={currentTrip.content.custom_tab_1} />
             )}
 
             {/* 4. 其他資訊模組 */}
