@@ -6,18 +6,14 @@
  * 必須同步更新 public/app-version.json，
  * PWA 更新提示會使用這些資訊顯示版本內容。
  */
-export const APP_VERSION = "3.1.4";
+export const APP_VERSION = "3.1.5";
 
 export const RELEASE_DATE = "2026-07-13";
 
 export const RELEASE_NOTES = [
-  "非強制更新恢復顯示更新提示，提供馬上更新與稍後更新選項",
-  "選擇馬上更新時會先清除 App 暫存，再重新載入最新版本",
-  "選擇稍後更新不會標記為已讀，重新整理或重新開啟 App 會再次提醒",
-  "新增與編輯旅程時，參與者名稱與登入 Email 合併為名稱=Email 欄位，降低重複輸入",
-  "預設幣別新增並排序為 TWD、JPY、KRW、USD、EUR",
-  "TWD、JPY、KRW 分攤結算改為整數進位規則，零頭盈餘由代墊者承接",
-  "更新提示補上未儲存資料警語，提醒先儲存後再更新",
+  "馬上更新加入重新載入備援，降低 Android PWA 點擊後未自動更新的情況",
+  "iOS Safari 網頁模式也會顯示版本更新提示，方便未安裝 App 時更新",
+  "保留非強制更新的馬上更新與稍後更新流程，稍後更新後重新整理仍會再次提醒",
 ];
 
 export const FORCE_UPDATE = false;

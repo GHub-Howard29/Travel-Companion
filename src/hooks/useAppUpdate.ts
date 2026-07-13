@@ -24,17 +24,24 @@ type AppVersionMetadata = {
 
 const RELEASE_NOTICE_STORAGE_KEY = "travel_companion_seen_app_version";
 
-const isRunningAsInstalledApp = () => {
+const getRuntimeDisplayMode = () => {
   const navigatorWithStandalone = navigator as Navigator & {
     standalone?: boolean;
   };
 
-  return (
+  const isInstalledApp =
     window.matchMedia("(display-mode: standalone)").matches ||
     window.matchMedia("(display-mode: fullscreen)").matches ||
     navigatorWithStandalone.standalone === true ||
-    document.referrer.startsWith("android-app://")
-  );
+    document.referrer.startsWith("android-app://");
+  const isIosDevice =
+    /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+
+  return {
+    isInstalledApp,
+    canShowUpdatePrompt: isInstalledApp || isIosDevice,
+  };
 };
 
 const getStoredAppVersion = () =>
@@ -91,8 +98,12 @@ const clearAppCacheStorage = async () => {
   await Promise.all(cacheNames.map((cacheName) => caches.delete(cacheName)));
 };
 
+const reloadPage = () => {
+  window.location.reload();
+};
+
 export const useAppUpdate = () => {
-  const [isInstalledApp] = useState(isRunningAsInstalledApp);
+  const [{ canShowUpdatePrompt }] = useState(getRuntimeDisplayMode);
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const [latestMetadata, setLatestMetadata] = useState<AppVersionMetadata>({
     version: APP_VERSION,
@@ -105,7 +116,7 @@ export const useAppUpdate = () => {
     return storedVersion ?? APP_VERSION;
   });
   const [releaseNoticeVisible, setReleaseNoticeVisible] = useState(() => {
-    if (!isInstalledApp) {
+    if (!canShowUpdatePrompt) {
       return false;
     }
 
@@ -133,18 +144,16 @@ export const useAppUpdate = () => {
 
         setLatestMetadata(latestVersion);
 
-        if (isInstalledApp && !dismissedRef.current) {
+        if (canShowUpdatePrompt && !dismissedRef.current) {
           setUpdateAvailable(true);
         }
       },
-      onNeedReload() {
-        window.location.reload();
-      },
+      onNeedReload: reloadPage,
       onRegisterError(error: unknown) {
         console.warn("PWA Service Worker registration failed.", error);
       },
     });
-  }, [isInstalledApp]);
+  }, [canShowUpdatePrompt]);
 
   const update = useCallback(async () => {
     setStoredAppVersion(latestMetadata.version);
@@ -159,11 +168,17 @@ export const useAppUpdate = () => {
     }
 
     if (updateAvailable) {
-      await updateServiceWorkerRef.current?.(true);
+      const fallbackReloadTimer = window.setTimeout(reloadPage, 1500);
+      try {
+        await updateServiceWorkerRef.current?.(true);
+      } finally {
+        window.clearTimeout(fallbackReloadTimer);
+      }
+      reloadPage();
       return;
     }
 
-    window.location.reload();
+    reloadPage();
   }, [latestMetadata.version, updateAvailable]);
 
   const dismiss = useCallback(() => {
@@ -173,7 +188,7 @@ export const useAppUpdate = () => {
   }, []);
 
   const isPromptVisible =
-    isInstalledApp && (updateAvailable || releaseNoticeVisible);
+    canShowUpdatePrompt && (updateAvailable || releaseNoticeVisible);
 
   return {
     updateAvailable: isPromptVisible,

@@ -35,6 +35,7 @@ Trip 管理第一階段已完成，旅程清單切換前會重新同步 Supabase
 - 新增旅程會用目前登入 Email 預填參與者與可編輯者 Email；可編輯者 Email 補上會取得旅程資訊與共用帳本編輯權限的說明。
 - 常用幣別調整為 TWD、JPY、KRW、USD、EUR，並同步新增 / 編輯帳目、幣別頁籤與匯出資料。
 - 共同帳本分攤狀態新增每位成員的實際應分攤金額；TWD / JPY / KRW 採整數進位，零頭盈餘由代墊者承接，USD / EUR 維持分為最小單位。
+- V3.1.5 追加補強 Android PWA 馬上更新 reload fallback，並開放 iOS Safari 網頁模式顯示版本更新提示。
 
 目前已完成：
 
@@ -310,3 +311,6 @@ npm.cmd run build
    - 非強制更新提示、馬上更新清暫存、稍後更新再次提醒。
    - 新增 / 編輯旅程 `名稱=Email` 欄位、可編輯者 Email 權限說明與付款人鎖定。
    - TWD / JPY / KRW 整數分攤，KRW / EUR 幣別頁籤與匯出。
+7. V3.1.5 發布前回歸：
+   - Android PWA 點馬上更新後會自動重新載入。
+   - iOS Safari 網頁模式會顯示版本更新提示。
