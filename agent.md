@@ -114,7 +114,8 @@ V3-1 目前已完成：
   - XLSX 匯出新增「記帳日期」欄位。
   - 新增 `docs/sql/007_expense_date_schema.sql` 與 `docs/sql/008_expense_date_validation.sql`。
   - `src/config/appVersion.ts`、`public/app-version.json`、`src/config/versionHistory.ts`、`package.json`、`package-lock.json` 與文件已同步到 V3.2.0。
-  - 發布前 Product Owner 必須先在 Supabase SQL Editor 執行 `007_expense_date_schema.sql`，再執行 `008_expense_date_validation.sql` 確認欄位、index 與資料回填。
+  - 已於 2026/07/13 將 `007_expense_date_schema.sql` 套用至 Supabase `travel-companion-db`，並以 `008_expense_date_validation.sql` 驗證欄位、index 與資料回填皆通過。
+  - Supabase advisors 仍有既有 security / performance warnings，已列入 TODO 待後續獨立評估。
 
 ### 本輪已完成修改
 
@@ -190,7 +191,6 @@ V3-1 目前已完成：
 
 最高優先：
 
-- Product Owner 手動執行 `docs/sql/007_expense_date_schema.sql`，再執行 `docs/sql/008_expense_date_validation.sql`。
 - Product Owner 手動合併 `develop` 到 `main` 並發布 V3.2.0。
 - 部署後以手機重新安裝 App，確認安裝資訊與 App 內版本皆為 V3.2.0。
 - 實機回歸 V3.2.0 記帳日期新增 / 編輯、舊帳目相容日期、最新日期優先排序與 XLSX 匯出日期欄位。
@@ -216,7 +216,7 @@ V3-1 目前已完成：
 
 下一步開發順序：
 
-1. 先完成 V3.2.0 SQL 執行與實機回歸。
+1. 先完成 V3.2.0 實機回歸與發布。
 2. 再接帳本依記帳日期分頁 / 分組。
 3. 後續再做帳本 UI 改善與附件管理改善。
 

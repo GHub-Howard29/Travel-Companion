@@ -186,7 +186,7 @@ Expense Module
 - [ ] 帳本依記帳日期分頁或分組。
 - [x] 帳目列表改為最新資料優先顯示。
 - [x] Excel 匯出新增記帳日期欄位。
-- [ ] Product Owner 手動執行 `docs/sql/007_expense_date_schema.sql` 與 `docs/sql/008_expense_date_validation.sql`。
+- [x] 已執行 `docs/sql/007_expense_date_schema.sql` 與 `docs/sql/008_expense_date_validation.sql`，雲端欄位、index 與回填驗證皆通過。
 - [ ] 附件管理改善。
 
 近期補強：
@@ -318,7 +318,7 @@ Trip 管理
 
 - [ ] Product Owner 手動將 `develop` 合併到 `main`。
 - [ ] Product Owner 手動執行版本發布 / 部署流程。
-- [ ] Product Owner 手動執行 `docs/sql/007_expense_date_schema.sql` 與 `docs/sql/008_expense_date_validation.sql`。
+- [x] 已執行 `docs/sql/007_expense_date_schema.sql` 與 `docs/sql/008_expense_date_validation.sql`。
 - [ ] 部署後以手機重新安裝 App，確認安裝資訊與 App 內版本皆為 V3.2.0。
 - [ ] 部署後實機回歸記帳日期新增 / 編輯、舊帳目相容日期、最新日期優先排序與 XLSX 匯出日期欄位。
 - [ ] 部署後實機回歸非強制更新提示、馬上更新清暫存、稍後更新再次提醒。
@@ -326,6 +326,12 @@ Trip 管理
 - [ ] 部署後實機回歸 TWD / JPY / KRW 整數分攤、KRW / EUR 幣別頁籤與帳本匯出。
 - [ ] 部署後實機回歸 iOS PWA 登入、照片附件、畫面縮放與特殊資訊 / 其他資訊資料隔離。
 - [ ] 若 iOS PWA Google 兩步驗證仍被導到 YouTube / Google App，請改選其他驗證方式或 Safari 網頁模式登入，並回報錯誤畫面。
+
+## Supabase Advisor 待改善
+
+- [ ] 評估既有 `public.tc_*` functions 的 `search_path` / `SECURITY DEFINER` advisors，確認是否需收斂 execute 權限或調整 function 定義。
+- [ ] 評估既有 `expenses` / `checklists` / `checklist_items` RLS initplan performance advisors，確認是否調整為 `(select auth.uid())` 等寫法。
+- [ ] 觀察新建 `expenses_trip_expense_date_idx` 是否於 V3.2.0 發布後被實際查詢使用；剛建立即被列為 unused index 屬正常早期狀態。
 
 ---
 
