@@ -138,7 +138,6 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
         );
         if (tripData) {
           setCurrentTrip(tripData);
-          setActiveDay(1);
 
           if (tripData.sidebarConfig?.length > 0) {
             const validScreenIds = [
@@ -245,6 +244,12 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
 
     void loadTripAndAuthData();
   }, [currentScreen, getBasePath, selectedTripId, selectedTripMeta, supabase, userEmail]);
+
+  useEffect(() => {
+    if (selectedTripId) {
+      setActiveDay(1);
+    }
+  }, [selectedTripId]);
 
   const createTrip = useCallback(
     async (input: TripEditorInput, syncEditors = true) => {

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ExternalLink, MapPin, Settings2, X } from "lucide-react";
 
 import type { ItineraryItem, TripDetail } from "../types";
@@ -41,6 +41,17 @@ export const ItineraryPage = ({
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [draft, setDraft] = useState<ItineraryItem>(createEmptyItineraryDraft);
+  const formRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (editingIndex === null) return;
+
+    const frameId = requestAnimationFrame(() => {
+      formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+
+    return () => cancelAnimationFrame(frameId);
+  }, [editingIndex]);
 
   const currentDayEvents = trip.content.daysData[String(activeDay)] || [];
 
@@ -209,7 +220,7 @@ export const ItineraryPage = ({
           </div>
 
           {isFormOpen && (
-            <div className="mt-3 space-y-2">
+            <div ref={formRef} className="mt-3 space-y-2">
               <div className="grid grid-cols-[92px_1fr] gap-2">
                 <input
                   value={draft.time}
