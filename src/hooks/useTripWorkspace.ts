@@ -245,12 +245,6 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
     void loadTripAndAuthData();
   }, [currentScreen, getBasePath, selectedTripId, selectedTripMeta, supabase, userEmail]);
 
-  useEffect(() => {
-    if (selectedTripId) {
-      setActiveDay(1);
-    }
-  }, [selectedTripId]);
-
   const createTrip = useCallback(
     async (input: TripEditorInput, syncEditors = true) => {
       const record = createTripRecord(input);

@@ -911,7 +911,7 @@ useEffect(() => {
       (item) => String(item.id) !== targetId,
     );
     const deletedDate = getExpenseDate(targetExpense);
-    if (activeExpenseDate === deletedDate) {
+    if (effectiveActiveExpenseDate === deletedDate) {
       const remainingDates = Array.from(
         new Set(
           sortExpensesByLatestDate(nextExpenses)
@@ -1425,19 +1425,14 @@ useEffect(() => {
     new Set(filteredExpenses.map(getExpenseDate)),
   ).sort();
 
-  useEffect(() => {
-    if (availableExpenseDates.length === 0) {
-      if (activeExpenseDate) setActiveExpenseDate("");
-      return;
-    }
+  const effectiveActiveExpenseDate = availableExpenseDates.includes(activeExpenseDate)
+    ? activeExpenseDate
+    : (availableExpenseDates.at(-1) ?? "");
 
-    if (!availableExpenseDates.includes(activeExpenseDate)) {
-      setActiveExpenseDate(availableExpenseDates.at(-1) ?? "");
-    }
-  }, [activeExpenseDate, availableExpenseDates]);
-
-  const dateFilteredExpenses = activeExpenseDate
-    ? filteredExpenses.filter((item) => getExpenseDate(item) === activeExpenseDate)
+  const dateFilteredExpenses = effectiveActiveExpenseDate
+    ? filteredExpenses.filter(
+        (item) => getExpenseDate(item) === effectiveActiveExpenseDate,
+      )
     : [];
 
 // =========================================
@@ -1639,7 +1634,7 @@ const pendingAttachmentCount = isUsingSharedExpenseBook
     availableCurrencies,
     effectiveActiveCurrency,
     filteredExpenses,
-    activeExpenseDate,
+    activeExpenseDate: effectiveActiveExpenseDate,
     setActiveExpenseDate,
     availableExpenseDates,
     dateFilteredExpenses,
