@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import {
+  ExternalLink,
   FileText,
   FolderOpen,
   Pencil,
@@ -19,6 +20,7 @@ import {
   updateOtherInfoItem,
 } from "../services/otherInfoService";
 import {
+  getStandaloneHttpUrl,
   getOtherInfoItemsByFolderId,
   parseOtherInfoContentLinks,
 } from "../utils/otherInfoUtils";
@@ -84,14 +86,16 @@ export const OtherInfoPage = ({
     () =>
       items.filter(
         (item) =>
-          !item.allowedRoles ||
-          item.allowedRoles.length === 0 ||
-          item.allowedRoles.includes(currentRole),
+          !item.isDeleted &&
+          (!item.allowedRoles ||
+            item.allowedRoles.length === 0 ||
+            item.allowedRoles.includes(currentRole)),
       ),
     [currentRole, items],
   );
   const [activeFolderId, setActiveFolderId] = useState(initialFolderId);
   const [isManageMode, setIsManageMode] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const {
     editingItemId,
     form,
@@ -158,6 +162,10 @@ export const OtherInfoPage = ({
   };
 
   const handleSave = async () => {
+    if (isSaving) {
+      return;
+    }
+
     const title = form.title.trim();
     const content = form.content.trim();
 
@@ -188,14 +196,27 @@ export const OtherInfoPage = ({
           })
         : createOtherInfoItem(tripId, targetFolderId, title, content);
 
-    await persistItems(nextItems);
-    setActiveFolderId(targetFolderId);
-    closeForm(targetFolderId);
+    setIsSaving(true);
+    try {
+      await persistItems(nextItems);
+      setActiveFolderId(targetFolderId);
+      closeForm(targetFolderId);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleDelete = async (item: OtherInfoItem) => {
     const nextItems = onSaveItems
-      ? items.filter((currentItem) => currentItem.id !== item.id)
+      ? items.map((currentItem) =>
+          currentItem.id === item.id
+            ? {
+                ...currentItem,
+                isDeleted: true,
+                updatedAt: new Date().toISOString(),
+              }
+            : currentItem,
+        )
       : deleteOtherInfoItem(tripId, item.id);
 
     await persistItems(nextItems);
@@ -275,9 +296,6 @@ export const OtherInfoPage = ({
               <h3 className="text-sm font-bold text-slate-800">
                 {isSpecialInfoPage ? `${pageTitle}管理` : "其他資訊管理"}
               </h3>
-              <p className="mt-0.5 text-xs text-slate-400">
-                進入管理後才可新增、編輯或刪除資訊。
-              </p>
             </div>
             <button
               type="button"
@@ -289,6 +307,7 @@ export const OtherInfoPage = ({
 
                 openCreateForm(activeFolderId);
               }}
+              disabled={isSaving}
               className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-stone-900 px-3 py-2 text-xs font-bold text-white hover:bg-stone-700"
             >
               {isFormOpen ? <X size={14} /> : <Plus size={14} />}
@@ -355,15 +374,19 @@ export const OtherInfoPage = ({
               className="min-h-32 w-full resize-y rounded-lg border border-slate-200 px-3 py-2 text-sm leading-relaxed text-slate-700 outline-none focus:border-stone-500"
               placeholder="內容"
             />
+            <p className="text-xs leading-relaxed text-slate-400">
+              提示：內容只填單一網址時，卡片標題會顯示為可點擊連結（支援
+              https:// 與 https:\\ 格式）。
+            </p>
 
             <button
               type="button"
               onClick={handleSave}
-              disabled={isSaveDisabled}
+              disabled={isSaveDisabled || isSaving}
               className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-stone-900 px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-stone-700 disabled:cursor-not-allowed disabled:bg-slate-300"
             >
               <Save size={16} />
-              儲存
+              {isSaving ? "儲存中..." : "儲存"}
             </button>
           </div>
         </div>
@@ -389,11 +412,27 @@ export const OtherInfoPage = ({
               key={item.id}
               className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm"
             >
+              {(() => {
+                const standaloneUrl = getStandaloneHttpUrl(item.content);
+
+                return <>
               <div className="mb-2 flex items-start justify-between gap-3">
                 <div className="flex items-start gap-2">
                   <FileText className="mt-0.5 text-stone-500" size={18} />
                   <h4 className="text-base font-bold leading-snug text-slate-800">
-                    {item.title}
+                    {standaloneUrl ? (
+                      <a
+                        href={standaloneUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1 text-sky-700 underline decoration-sky-300 underline-offset-2 hover:text-sky-900"
+                      >
+                        {item.title}
+                        <ExternalLink size={14} aria-label="開啟連結" />
+                      </a>
+                    ) : (
+                      item.title
+                    )}
                   </h4>
                 </div>
 
@@ -420,9 +459,13 @@ export const OtherInfoPage = ({
                   </div>
                 )}
               </div>
-              <div className="text-sm leading-relaxed text-slate-600">
-                {renderContentWithLinks(item.content)}
-              </div>
+              {!standaloneUrl && (
+                <div className="text-sm leading-relaxed text-slate-600">
+                  {renderContentWithLinks(item.content)}
+                </div>
+              )}
+                </>;
+              })()}
             </article>
           ))
         )}

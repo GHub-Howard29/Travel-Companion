@@ -88,6 +88,7 @@ export const getCloudOtherInfoItems = async (
       "id, client_item_id, trip_id, folder_id, title, content, allowed_roles, sort_order, created_at, updated_at",
     )
     .eq("trip_id", tripId)
+    .is("deleted_at", null)
     .order("sort_order", { ascending: true })
     .order("created_at", { ascending: true });
 
@@ -150,11 +151,39 @@ export const deleteCloudOtherInfoItems = async (
     return false;
   }
 
-  const { error } = await supabase
-    .from("other_info_items")
-    .update({ deleted_at: new Date().toISOString() })
-    .eq("trip_id", tripId)
-    .in("client_item_id", activeItemIds);
+  // Older rows were created before client_item_id existed.  They are exposed to
+  // the UI as `cloud_<database id>`, so support both identifier formats here.
+  const cloudRowIds = activeItemIds
+    .filter((itemId) => itemId.startsWith("cloud_"))
+    .map((itemId) => itemId.slice("cloud_".length));
+  const clientItemIds = activeItemIds.filter(
+    (itemId) => !itemId.startsWith("cloud_"),
+  );
+  const deletedAt = new Date().toISOString();
+  const requests: Array<PromiseLike<{ error: unknown }>> = [];
+
+  if (clientItemIds.length > 0) {
+    requests.push(
+      supabase
+        .from("other_info_items")
+        .update({ deleted_at: deletedAt })
+        .eq("trip_id", tripId)
+        .in("client_item_id", clientItemIds),
+    );
+  }
+
+  if (cloudRowIds.length > 0) {
+    requests.push(
+      supabase
+        .from("other_info_items")
+        .update({ deleted_at: deletedAt })
+        .eq("trip_id", tripId)
+        .in("id", cloudRowIds),
+    );
+  }
+
+  const results = await Promise.all(requests);
+  const error = results.find((result) => result.error)?.error;
 
   if (error) {
     console.warn("Failed to delete cloud other info", error);

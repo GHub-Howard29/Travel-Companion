@@ -28,8 +28,11 @@ export type OtherInfoContentLine = OtherInfoContentSegment[];
 // Constants
 // ================================
 
-const HTTP_URL_PATTERN = /(https?:\/\/[^\s]+)/g;
-const EXACT_HTTP_URL_PATTERN = /^https?:\/\/[^\s]+$/;
+const HTTP_URL_PATTERN = /(https?:[\\/]+[^\s]+)/gi;
+const EXACT_HTTP_URL_PATTERN = /^https?:[\\/]+[^\s]+$/i;
+
+const normalizeHttpUrl = (value: string): string =>
+  value.replace(/^(https?):[\\/]+/i, "$1://");
 
 // ================================
 // Public Functions
@@ -76,7 +79,16 @@ export const parseOtherInfoContentLinks = (
       .filter((part) => part.length > 0)
       .map((part) => ({
         type: EXACT_HTTP_URL_PATTERN.test(part) ? "link" : "text",
-        text: part,
+        text: EXACT_HTTP_URL_PATTERN.test(part) ? normalizeHttpUrl(part) : part,
       })),
   );
+};
+
+/**
+ * 將單一網址內容轉成可直接使用的超連結網址。
+ */
+export const getStandaloneHttpUrl = (content: string): string | null => {
+  const value = content.trim();
+
+  return EXACT_HTTP_URL_PATTERN.test(value) ? normalizeHttpUrl(value) : null;
 };

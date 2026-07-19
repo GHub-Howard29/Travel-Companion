@@ -14,6 +14,15 @@ export type VersionHistoryItem = {
 
 export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
+    version: "3.2.0",
+    date: "2026-07-13",
+    forceUpdate: false,
+    notes: [
+      "帳本新增記帳日期，支援依日期排序與 Excel 匯出",
+      "行程管理編輯流程與每日行程操作體驗優化",
+    ],
+  },
+  {
     version: "3.1.5",
     date: "2026-07-13",
     forceUpdate: false,

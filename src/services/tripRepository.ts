@@ -163,7 +163,11 @@ const mergeOtherInfoItems = (
   });
 
   cloudItems.forEach((item) => {
-    mergedItemsById.set(item.id, item);
+    // Keep a tombstone saved with the trip record so a legacy cloud row that
+    // cannot be soft-deleted does not reappear after the next refresh.
+    if (!mergedItemsById.get(item.id)?.isDeleted) {
+      mergedItemsById.set(item.id, item);
+    }
   });
 
   return Array.from(mergedItemsById.values());

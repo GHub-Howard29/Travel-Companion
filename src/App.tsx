@@ -356,9 +356,17 @@ export default function App() {
       (currentTrip.content.otherInfoItems ?? []).map((item) => [item.id, item]),
     );
     const nextItemIdSet = new Set(items.map((item) => item.id));
-    const removedItemIds = (currentTrip.content.otherInfoItems ?? [])
+    const removedItemIds = items
+      .filter(
+        (item) =>
+          item.isDeleted && !currentItemsById.get(item.id)?.isDeleted,
+      )
       .map((item) => item.id)
-      .filter((itemId) => !nextItemIdSet.has(itemId));
+      .concat(
+        (currentTrip.content.otherInfoItems ?? [])
+          .map((item) => item.id)
+          .filter((itemId) => !nextItemIdSet.has(itemId)),
+      );
     const changedItems = items.filter((item) => {
       const currentItem = currentItemsById.get(item.id);
 
@@ -368,6 +376,7 @@ export default function App() {
         currentItem.title !== item.title ||
         currentItem.content !== item.content ||
         currentItem.order !== item.order ||
+        currentItem.isDeleted !== item.isDeleted ||
         currentItem.updatedAt !== item.updatedAt ||
         JSON.stringify(currentItem.allowedRoles ?? []) !==
           JSON.stringify(item.allowedRoles ?? [])

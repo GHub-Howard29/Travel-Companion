@@ -3,13 +3,13 @@
  *
  * 發布新版本時，請同步更新 public/app-version.json。
  */
-export const APP_VERSION = "3.2.0";
+export const APP_VERSION = "3.2.1";
 
-export const RELEASE_DATE = "2026-07-13";
+export const RELEASE_DATE = "2026-07-19";
 
 export const RELEASE_NOTES = [
-  "帳本使用方式優化。",
-  "行程管理編輯流程優化。",
+  "其他資訊刪除與同步穩定度提升。",
+  "網址資訊可直接用卡片標題開啟。",
 ];
 
 export const FORCE_UPDATE = false;

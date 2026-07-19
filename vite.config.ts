@@ -2,27 +2,6 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
-import { APP_VERSION } from './src/config/appVersion'
-
-type TravelCompanionManifest = {
-  name: string
-  short_name: string
-  description: string
-  theme_color: string
-  background_color: string
-  display: 'standalone'
-  orientation: 'portrait'
-  id: string
-  start_url: string
-  scope: string
-  version: string
-  version_name: string
-  icons: Array<{
-    src: string
-    sizes: string
-    type: string
-  }>
-}
 
 // https://vitejs.dev/config/
 export default defineConfig({
@@ -51,8 +30,6 @@ export default defineConfig({
         id: '/Travel-Companion/',
         start_url: '/Travel-Companion/',
         scope: '/Travel-Companion/',
-        version: APP_VERSION,
-        version_name: APP_VERSION,
         icons: [
           {
             src: 'pwa-192x192.png',
@@ -65,7 +42,7 @@ export default defineConfig({
             type: 'image/png'
           }
         ]
-      } satisfies TravelCompanionManifest
+      }
     })
   ]
 })
