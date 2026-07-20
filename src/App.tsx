@@ -680,6 +680,7 @@ export default function App() {
                 key={selectedTripId}
                 tripId={selectedTripId}
                 defaultForeignCurrency={currentCurrencyCode}
+                supabase={supabase}
               />
             )}
           </>

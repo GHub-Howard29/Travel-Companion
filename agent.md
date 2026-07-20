@@ -29,7 +29,8 @@ V3.3.0 已完成核心實作：
 - 外幣換算入口會由 `tripRepository` 自動加入所有既有與新建 Trip，位置在「旅費記帳本」之後。
 - `src/components/ExchangeRatePage.tsx` 提供換匯紀錄新增、編輯、刪除、加權平均匯率與外幣轉 TWD 試算。
 - `src/storage/exchangeRateStorage.ts` 以 `travel_companion_exchange_rate_{tripId}` 保存資料，確保不同 Trip 不互相讀寫。
-- 支援 JPY、KRW、USD、EUR；第一版不使用即時匯率 API，也不接 Supabase 雲端同步。
+- 支援 JPY、KRW、USD、EUR；沒有換匯紀錄時，可手動載入臺灣銀行現金賣出參考匯率並離線使用快取。
+- 已部署受登入保護的 Supabase Edge Function `taiwan-bank-exchange-rate`，供前端安全取得臺灣銀行公開牌告並避開跨網域限制；函式不寫入資料庫。
 - 刪除 Trip 時會清除該 Trip 的本機換匯紀錄。
 - `npm run lint`、`npm run build` 已通過；Vite 仍有既有 bundle size warning。
 - 尚待 Product Owner 手動回歸：新增、編輯、刪除、不同 Trip 資料隔離與 F5 後資料保留。

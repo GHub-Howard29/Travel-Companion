@@ -29,6 +29,8 @@
 - [x] 建立依附於 Trip 的外幣換算 Travel Tool。
 - [x] 建立換匯紀錄、加權平均匯率摘要與外幣轉 TWD 換算器。
 - [x] 完成 CRUD、輸入驗證、Trip 資料隔離與本機保存。
+- [x] 完成臺灣銀行現金賣出參考匯率的手動載入、離線快取與來源／匯入時間顯示。
+- [x] 部署受登入保護的 `taiwan-bank-exchange-rate` Supabase Edge Function，避免瀏覽器跨網域讀取失敗。
 - [x] 完成 `npm run lint`、`npm run build`。
 - [ ] Product Owner 手動回歸換匯紀錄的新增、編輯、刪除、不同 Trip 資料隔離與重新整理後資料保留。
 - [ ] Product Owner 確認後提交與發布 V3.3.0。
