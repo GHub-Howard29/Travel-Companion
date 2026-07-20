@@ -58,6 +58,7 @@ export type SidebarItemType =
   | "checklist"
   | "privateChecklist"
   | "expense"
+  | "exchangeRate"
   | "text"
   | "otherInfo";
 

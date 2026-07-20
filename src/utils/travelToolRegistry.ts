@@ -91,6 +91,8 @@ export const getTravelToolHeaderBgClassName = (
       return "bg-rose-700";
     case "expense":
       return "bg-amber-600";
+    case "exchangeRate":
+      return "bg-sky-700";
     case "text":
     case "otherInfo":
       return "bg-stone-700";

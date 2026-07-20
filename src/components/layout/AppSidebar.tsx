@@ -1,5 +1,6 @@
 import {
   Calendar,
+  CircleDollarSign,
   CarFront,
   CheckSquare,
   ClipboardCheck,
@@ -72,6 +73,8 @@ const renderSidebarIcon = (item: SidebarItemConfig, tripMode?: TripMode) => {
       return <FolderOpen size={18} />;
     case "expense":
       return <Wallet size={18} />;
+    case "exchangeRate":
+      return <CircleDollarSign size={18} />;
     default:
       return <Home size={18} />;
   }

@@ -55,6 +55,7 @@ const createSidebarConfig = (mode: TripMode): SidebarItemConfig[] => [
   createSpecialInfoSidebarItem(mode),
   { id: "other_info", title: "其他資訊", type: "otherInfo" },
   { id: "expense", title: "旅費記帳本", type: "expense" },
+  { id: "exchange_rate", title: "外幣換算", type: "exchangeRate" },
 ];
 
 const inferTripMode = (
@@ -100,7 +101,18 @@ const normalizeSidebarConfig = (
     nextItems.splice(checklistIndex >= 0 ? checklistIndex + 1 : 2, 0, specialItem);
   }
 
-  return nextItems.length > 0 ? nextItems : createSidebarConfig(mode);
+  if (nextItems.length === 0) return createSidebarConfig(mode);
+
+  if (!nextItems.some((item) => item.type === "exchangeRate")) {
+    const expenseIndex = nextItems.findIndex((item) => item.type === "expense");
+    nextItems.splice(expenseIndex >= 0 ? expenseIndex + 1 : nextItems.length, 0, {
+      id: "exchange_rate",
+      title: "外幣換算",
+      type: "exchangeRate",
+    });
+  }
+
+  return nextItems;
 };
 
 const createSpecialInfoItem = (

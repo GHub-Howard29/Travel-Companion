@@ -5,3 +5,4 @@ export * from './admin';
 export * from "./checklist";
 export * from "./folder";
 export * from './otherInfo';
+export * from "./exchangeRate";

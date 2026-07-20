@@ -22,6 +22,8 @@ import { ChecklistPage } from "./components/ChecklistPage";
 import { PrivateChecklistPage } from "./components/PrivateChecklistPage";
 import { OtherInfoPage } from "./components/OtherInfoPage";
 import { TextInfoPage } from "./components/TextInfoPage";
+import { ExchangeRatePage } from "./components/ExchangeRatePage";
+import { clearExchangePurchases } from "./storage/exchangeRateStorage";
 import { TripEditorModal } from "./components/TripEditorModal";
 import { UpdatePrompt } from "./components/UpdatePrompt";
 import { VersionInfoModal } from "./components/VersionInfoModal";
@@ -335,6 +337,7 @@ export default function App() {
 
     setIsLoading(true);
     await deleteTrip(selectedTripId);
+    clearExchangePurchases(selectedTripId);
     setIsTripEditorOpen(false);
     setIsMenuOpen(false);
   };
@@ -669,6 +672,14 @@ export default function App() {
                 onCancelPendingDelete={cancelPendingDelete}
                 onRemoveEditAttachment={markEditAttachmentForRemoval}
                 onRestoreEditAttachment={restoreEditAttachment}
+              />
+            )}
+
+            {currentScreenType === "exchangeRate" && selectedTripId && (
+              <ExchangeRatePage
+                key={selectedTripId}
+                tripId={selectedTripId}
+                defaultForeignCurrency={currentCurrencyCode}
               />
             )}
           </>
