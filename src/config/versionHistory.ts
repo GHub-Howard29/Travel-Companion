@@ -14,6 +14,16 @@ export type VersionHistoryItem = {
 
 export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
+    version: "3.3.0",
+    date: "2026-07-20",
+    forceUpdate: false,
+    notes: [
+      "新增外幣換算，支援換匯紀錄、加權平均與臺銀參考匯率雙估算。",
+      "換匯紀錄支援 Trip 雲端同步、跨瀏覽器即時更新與離線參考匯率。",
+      "金額輸入支援千分位，並更新旅行 App 圖示與網頁小圖示。",
+    ],
+  },
+  {
     version: "3.2.0",
     date: "2026-07-13",
     forceUpdate: false,
