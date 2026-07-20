@@ -35,6 +35,8 @@ export interface PermissionContext {
 export interface Permission {
   canUseCloudExpense: boolean;
   canUseLocalExpense: boolean;
+  canViewCloudExchangeHistory: boolean;
+  canSyncCloudExchangeHistory: boolean;
 
   canViewReference: boolean;
   canEditReference: boolean;
@@ -63,6 +65,11 @@ export function createPermission(
     // Expense（記帳）
     canUseCloudExpense: canEditSharedTripData,
     canUseLocalExpense: context.isSignedIn,
+
+    // Exchange purchases: guest/user stay entirely local. Cloud history is
+    // scoped to the selected trip and only available to its editors/admins.
+    canViewCloudExchangeHistory: canEditSharedTripData,
+    canSyncCloudExchangeHistory: canEditSharedTripData,
 
     // Reference（旅行資訊）
     canViewReference: true,

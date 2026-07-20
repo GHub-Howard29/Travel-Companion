@@ -681,6 +681,7 @@ export default function App() {
                 tripId={selectedTripId}
                 defaultForeignCurrency={currentCurrencyCode}
                 supabase={supabase}
+                canSyncCloudHistory={permission.canSyncCloudExchangeHistory}
               />
             )}
           </>
