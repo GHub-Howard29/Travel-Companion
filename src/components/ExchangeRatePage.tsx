@@ -1,5 +1,5 @@
 import { Calculator, Download, Pencil, Save, Trash2, X } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { TripExchangePurchase } from "../types";
@@ -122,6 +122,23 @@ export const ExchangeRatePage = ({
     calculatorValue >= 0;
   const canCalculate = Boolean(summary || referenceRate);
 
+  const refreshCloudPurchases = useCallback(async (): Promise<boolean> => {
+    if (!canSyncCloudHistory) return false;
+
+    setCloudStatus("syncing");
+    const cloudPurchases = await getCloudExchangePurchases(supabase, tripId);
+    if (cloudPurchases === null) {
+      setCloudStatus("error");
+      return false;
+    }
+
+    writeExchangePurchases(tripId, cloudPurchases, storageScope);
+    setPurchases(cloudPurchases);
+    markCloudExchangeHistoryInitialized(tripId);
+    setCloudStatus("synced");
+    return true;
+  }, [canSyncCloudHistory, storageScope, supabase, tripId]);
+
   useEffect(() => {
     if (!canSyncCloudHistory) return;
 
@@ -169,14 +186,45 @@ export const ExchangeRatePage = ({
     };
   }, [canSyncCloudHistory, storageScope, supabase, tripId]);
 
+  useEffect(() => {
+    if (!canSyncCloudHistory) return;
+
+    const refreshOnFocus = () => {
+      void refreshCloudPurchases();
+    };
+    const channel = supabase
+      .channel(`exchange-purchases-${tripId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "exchange_purchases",
+          filter: `trip_id=eq.${tripId}`,
+        },
+        refreshOnFocus,
+      )
+      .subscribe();
+
+    window.addEventListener("focus", refreshOnFocus);
+    return () => {
+      window.removeEventListener("focus", refreshOnFocus);
+      void supabase.removeChannel(channel);
+    };
+  }, [canSyncCloudHistory, refreshCloudPurchases, supabase, tripId]);
+
   const persist = (next: TripExchangePurchase[]) => {
     setPurchases(next);
     writeExchangePurchases(tripId, next, storageScope);
     if (canSyncCloudHistory) {
       setCloudStatus("syncing");
-      void upsertCloudExchangePurchases(supabase, next).then((synced) =>
-        setCloudStatus(synced ? "synced" : "error"),
-      );
+      void upsertCloudExchangePurchases(supabase, next).then((synced) => {
+        if (!synced) {
+          setCloudStatus("error");
+          return;
+        }
+        void refreshCloudPurchases();
+      });
     }
   };
 
@@ -254,12 +302,18 @@ export const ExchangeRatePage = ({
   const handleDelete = (id: string) => {
     if (!window.confirm("確定要刪除這筆換匯紀錄嗎？")) return;
 
-    persist(purchases.filter((item) => item.id !== id));
+    const next = purchases.filter((item) => item.id !== id);
+    setPurchases(next);
+    writeExchangePurchases(tripId, next, storageScope);
     if (canSyncCloudHistory) {
       setCloudStatus("syncing");
-      void deleteCloudExchangePurchase(supabase, tripId, id).then((deleted) =>
-        setCloudStatus(deleted ? "synced" : "error"),
-      );
+      void deleteCloudExchangePurchase(supabase, tripId, id).then((deleted) => {
+        if (!deleted) {
+          setCloudStatus("error");
+          return;
+        }
+        void refreshCloudPurchases();
+      });
     }
     if (editingId === id) resetForm();
   };
@@ -374,6 +428,7 @@ export const ExchangeRatePage = ({
           inputMode="decimal"
           value={formatCalculatorInput(calculatorAmount)}
           onChange={(event) => setCalculatorAmount(normalizeCalculatorInput(event.target.value))}
+          onFocus={() => void refreshCloudPurchases()}
           placeholder={`輸入 ${selectedCurrency} 金額`}
           disabled={!canCalculate}
           className="mt-3 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-slate-700 outline-none focus:border-amber-500 disabled:cursor-not-allowed disabled:bg-slate-100"
@@ -447,11 +502,10 @@ export const ExchangeRatePage = ({
           <label className="text-sm font-semibold text-slate-600">
             支付新臺幣
             <input
-              type="number"
-              min="0"
-              step="1"
-              value={form.twdAmount || ""}
-              onChange={(event) => updateForm("twdAmount", Number(event.target.value))}
+              type="text"
+              inputMode="decimal"
+              value={form.twdAmount ? formatCalculatorInput(String(form.twdAmount)) : ""}
+              onChange={(event) => updateForm("twdAmount", Number(normalizeCalculatorInput(event.target.value)))}
               placeholder="例如 20100"
               className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-700 outline-none focus:border-sky-500"
             />
@@ -459,11 +513,10 @@ export const ExchangeRatePage = ({
           <label className="text-sm font-semibold text-slate-600">
             取得外幣
             <input
-              type="number"
-              min="0"
-              step="0.01"
-              value={form.foreignAmount || ""}
-              onChange={(event) => updateForm("foreignAmount", Number(event.target.value))}
+              type="text"
+              inputMode="decimal"
+              value={form.foreignAmount ? formatCalculatorInput(String(form.foreignAmount)) : ""}
+              onChange={(event) => updateForm("foreignAmount", Number(normalizeCalculatorInput(event.target.value)))}
               placeholder="例如 100000"
               className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-700 outline-none focus:border-sky-500"
             />
