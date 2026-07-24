@@ -77,7 +77,7 @@ export function createPermission(
 
     // Shared Checklist（共用清單）
     canViewSharedChecklist: true,
-    canToggleSharedChecklist: canEditSharedTripData,
+    canToggleSharedChecklist: canEditSharedTripData || context.isSignedIn,
 
     // Private Checklist（私人清單）
     canViewPrivateChecklist: context.isSignedIn,

@@ -52,7 +52,6 @@ const createSpecialInfoSidebarItem = (mode: TripMode): SidebarItemConfig => ({
 const createSidebarConfig = (mode: TripMode): SidebarItemConfig[] => [
   { id: "itinerary", title: "每日詳細行程", type: "itinerary" },
   { id: "checklist", title: "共同檢查清單", type: "checklist" },
-  { id: "privateChecklist", title: "私人確認清單", type: "privateChecklist" },
   createSpecialInfoSidebarItem(mode),
   { id: "other_info", title: "其他資訊", type: "otherInfo" },
   { id: "expense", title: "旅費記帳本", type: "expense" },
@@ -82,35 +81,27 @@ const normalizeSidebarConfig = (
   sidebarConfig: SidebarItemConfig[],
   mode: TripMode,
 ): SidebarItemConfig[] => {
-  if (sidebarConfig.length === 0) return createSidebarConfig(mode);
-
   const specialItem = createSpecialInfoSidebarItem(mode);
-  const hasSpecialItem = sidebarConfig.some(
-    (item) => item.id === SPECIAL_INFO_SCREEN_ID || isLegacySpecialInfoItem(item),
-  );
+  const hasSpecialItem = sidebarConfig.some((item) => item.id === SPECIAL_INFO_SCREEN_ID);
   const normalizedItems = sidebarConfig
+    .filter(
+      (item) =>
+        item.id !== SPECIAL_INFO_SCREEN_ID &&
+        !isLegacySpecialInfoItem(item),
+    )
     .map((item) =>
-      item.id === SPECIAL_INFO_SCREEN_ID || isLegacySpecialInfoItem(item)
-        ? specialItem
-        : item.id === "other_info" && item.type === "otherInfo"
+      item.id === "other_info" && item.type === "otherInfo"
         ? { ...item, title: "其他資訊" }
         : item,
     );
   const checklistIndex = normalizedItems.findIndex((item) => item.type === "checklist");
   const nextItems = [...normalizedItems];
 
-  if (!nextItems.some((item) => item.id === "privateChecklist")) {
-    nextItems.splice(checklistIndex >= 0 ? checklistIndex + 1 : 1, 0, {
-      id: "privateChecklist",
-      title: "私人確認清單",
-      type: "privateChecklist",
-    });
+  if (hasSpecialItem || checklistIndex >= 0) {
+    nextItems.splice(checklistIndex >= 0 ? checklistIndex + 1 : 2, 0, specialItem);
   }
 
-  if (!hasSpecialItem) {
-    const privateChecklistIndex = nextItems.findIndex((item) => item.id === "privateChecklist");
-    nextItems.splice(privateChecklistIndex >= 0 ? privateChecklistIndex + 1 : 2, 0, specialItem);
-  }
+  if (nextItems.length === 0) return createSidebarConfig(mode);
 
   if (!nextItems.some((item) => item.type === "exchangeRate")) {
     const expenseIndex = nextItems.findIndex((item) => item.type === "expense");
@@ -518,7 +509,7 @@ export const updateTripRecord = (
     ...currentRecord.detail,
     title: meta.title,
     departureDate: meta.departureDate,
-    sidebarConfig: normalizeSidebarConfig(input.sidebarConfig ?? currentRecord.detail.sidebarConfig, mode),
+    sidebarConfig: normalizeSidebarConfig(currentRecord.detail.sidebarConfig, mode),
     content: {
       ...currentRecord.detail.content,
       mode,
@@ -577,7 +568,7 @@ export const createTripRecordFromExisting = (
     ...detail,
     title: nextMeta.title,
     departureDate: nextMeta.departureDate,
-    sidebarConfig: normalizeSidebarConfig(input.sidebarConfig ?? detail.sidebarConfig, mode),
+    sidebarConfig: normalizeSidebarConfig(detail.sidebarConfig, mode),
     content: {
       ...detail.content,
       mode,

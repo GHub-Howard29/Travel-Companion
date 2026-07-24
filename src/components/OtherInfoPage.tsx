@@ -1,5 +1,9 @@
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { DndContext, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
+import { arrayMove, SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import {
+  ArrowDown,
+  ArrowUp,
   ExternalLink,
   FileText,
   FolderOpen,
@@ -23,8 +27,10 @@ import {
   getStandaloneHttpUrl,
   getOtherInfoItemsByFolderId,
   parseOtherInfoContentLinks,
+  sortOtherInfoItemsByOrder,
 } from "../utils/otherInfoUtils";
 import { useOtherInfoForm } from "../hooks/useOtherInfoForm";
+import { SortableCard } from "./SortableCard";
 import type { Role } from "../permissions/roles";
 
 interface OtherInfoPageProps {
@@ -81,7 +87,10 @@ export const OtherInfoPage = ({
   const initialFolderId =
     isSpecialInfoPage && specialFolderId ? specialFolderId : folders[0]?.id || "";
   const [localItems, setLocalItems] = useState<OtherInfoItem[]>(() => getItems(tripId));
-  const items = syncedItems ?? localItems;
+  const [optimisticItems, setOptimisticItems] = useState<OtherInfoItem[] | null>(null);
+  const pendingOrderItemsRef = useRef<OtherInfoItem[] | null>(null);
+  const orderTimerRef = useRef<number | null>(null);
+  const items = optimisticItems ?? syncedItems ?? localItems;
   const visibleItems = useMemo(
     () =>
       items.filter(
@@ -96,6 +105,7 @@ export const OtherInfoPage = ({
   const [activeFolderId, setActiveFolderId] = useState(initialFolderId);
   const [isManageMode, setIsManageMode] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
   const {
     editingItemId,
     form,
@@ -109,15 +119,71 @@ export const OtherInfoPage = ({
   } = useOtherInfoForm(initialFolderId);
 
   const activeFolder = folders.find((folder) => folder.id === activeFolderId);
+
+  const flushPendingOrder = useCallback(async () => {
+    if (orderTimerRef.current !== null) {
+      window.clearTimeout(orderTimerRef.current);
+      orderTimerRef.current = null;
+    }
+
+    const pendingItems = pendingOrderItemsRef.current;
+    if (!pendingItems) return;
+
+    try {
+      if (onSaveItems) {
+        await onSaveItems(pendingItems);
+      } else {
+        setLocalItems(pendingItems);
+      }
+      pendingOrderItemsRef.current = null;
+      setOptimisticItems(null);
+    } catch (error) {
+      console.warn(error);
+    }
+  }, [onSaveItems]);
+
+  const deferOrderSync = useCallback((nextItems: OtherInfoItem[]) => {
+    setOptimisticItems(nextItems);
+    pendingOrderItemsRef.current = nextItems;
+
+    if (!onSaveItems) {
+      void flushPendingOrder();
+      return;
+    }
+
+    if (orderTimerRef.current !== null) {
+      window.clearTimeout(orderTimerRef.current);
+    }
+    orderTimerRef.current = window.setTimeout(() => {
+      void flushPendingOrder();
+    }, 800);
+  }, [flushPendingOrder, onSaveItems]);
+
+  useEffect(() => {
+    const flushWhenHidden = () => {
+      if (document.visibilityState === "hidden") {
+        void flushPendingOrder();
+      }
+    };
+
+    document.addEventListener("visibilitychange", flushWhenHidden);
+    return () => {
+      document.removeEventListener("visibilitychange", flushWhenHidden);
+      void flushPendingOrder();
+    };
+  }, [flushPendingOrder]);
   const activeItems = useMemo(
     () =>
-      isSpecialInfoPage
-        ? getOtherInfoItemsByFolderId(visibleItems, initialFolderId)
-        : getOtherInfoItemsByFolderId(visibleItems, activeFolderId),
+      sortOtherInfoItemsByOrder(
+        isSpecialInfoPage
+          ? getOtherInfoItemsByFolderId(visibleItems, initialFolderId)
+          : getOtherInfoItemsByFolderId(visibleItems, activeFolderId),
+      ),
     [activeFolderId, initialFolderId, isSpecialInfoPage, visibleItems],
   );
 
   const closeManageMode = () => {
+    void flushPendingOrder();
     setIsManageMode(false);
     closeForm(activeFolderId);
   };
@@ -224,6 +290,44 @@ export const OtherInfoPage = ({
     if (editingItemId === item.id) {
       closeForm(activeFolderId);
     }
+  };
+
+  const moveActiveItem = (itemId: string, direction: -1 | 1) => {
+    const currentIndex = activeItems.findIndex((item) => item.id === itemId);
+    const targetIndex = currentIndex + direction;
+    if (currentIndex < 0 || targetIndex < 0 || targetIndex >= activeItems.length) {
+      return;
+    }
+
+    const reorderedItems = [...activeItems];
+    [reorderedItems[currentIndex], reorderedItems[targetIndex]] = [
+      reorderedItems[targetIndex],
+      reorderedItems[currentIndex],
+    ];
+    const orderById = new Map(
+      reorderedItems.map((item, index) => [item.id, index + 1]),
+    );
+    deferOrderSync(
+      items.map((item) =>
+        orderById.has(item.id)
+          ? { ...item, order: orderById.get(item.id) ?? item.order, updatedAt: new Date().toISOString() }
+          : item,
+      ),
+    );
+  };
+
+  const handleDragEnd = ({ active, over }: DragEndEvent) => {
+    if (!over || active.id === over.id) return;
+    const oldIndex = activeItems.findIndex((item) => item.id === active.id);
+    const newIndex = activeItems.findIndex((item) => item.id === over.id);
+    if (oldIndex < 0 || newIndex < 0) return;
+    const reorderedItems = arrayMove(activeItems, oldIndex, newIndex);
+    const orderById = new Map(reorderedItems.map((item, index) => [item.id, index + 1]));
+    deferOrderSync(items.map((item) =>
+      orderById.has(item.id)
+        ? { ...item, order: orderById.get(item.id) ?? item.order, updatedAt: new Date().toISOString() }
+        : item,
+    ));
   };
 
   return (
@@ -407,8 +511,11 @@ export const OtherInfoPage = ({
             {isSpecialInfoPage ? "目前尚無資訊" : "這個資料夾目前沒有資訊"}
           </div>
         ) : (
-          activeItems.map((item) => (
-            <article
+          <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
+          <SortableContext items={activeItems.map((item) => item.id)} strategy={verticalListSortingStrategy}>
+          {activeItems.map((item, itemIndex) => (
+            <SortableCard key={item.id} id={item.id} disabled={!canEdit || !isManageMode}>
+            {(dragHandle) => <article
               key={item.id}
               className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm"
             >
@@ -438,6 +545,27 @@ export const OtherInfoPage = ({
 
                 {canEdit && isManageMode && (
                   <div className="flex shrink-0 gap-1">
+                    {dragHandle}
+                    <button
+                      type="button"
+                      disabled={itemIndex === 0}
+                      onClick={() => void moveActiveItem(item.id, -1)}
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-800 disabled:opacity-30"
+                      aria-label="上移卡片"
+                      title="上移"
+                    >
+                      <ArrowUp size={15} />
+                    </button>
+                    <button
+                      type="button"
+                      disabled={itemIndex === activeItems.length - 1}
+                      onClick={() => void moveActiveItem(item.id, 1)}
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-800 disabled:opacity-30"
+                      aria-label="下移卡片"
+                      title="下移"
+                    >
+                      <ArrowDown size={15} />
+                    </button>
                     <button
                       type="button"
                       onClick={() => openEditForm(item)}
@@ -466,8 +594,11 @@ export const OtherInfoPage = ({
               )}
                 </>;
               })()}
-            </article>
-          ))
+            </article>}
+            </SortableCard>
+          ))}
+          </SortableContext>
+          </DndContext>
         )}
       </div>
     </section>

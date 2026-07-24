@@ -26,18 +26,15 @@ export const expandSidebarItemsWithPrivateChecklist = (
 ): SidebarItemConfig[] | undefined => {
   if (!items) return undefined;
 
-  const hasPrivateChecklist = items.some(
-    (item) => item.id === PRIVATE_CHECKLIST_SCREEN_ID,
-  );
-  const visibleItems = userEmail
-    ? items
-    : items.filter((item) => item.id !== PRIVATE_CHECKLIST_SCREEN_ID);
+  return items
+    .filter((item) => item.id !== PRIVATE_CHECKLIST_SCREEN_ID)
+    .flatMap((item) => {
+    if (item.type !== "checklist" || !userEmail) {
+      return [item];
+    }
 
-  if (!userEmail || hasPrivateChecklist) return visibleItems;
-
-  return visibleItems.flatMap((item) =>
-    item.type === "checklist" ? [item, PRIVATE_CHECKLIST_SIDEBAR_ITEM] : [item],
-  );
+    return [item, PRIVATE_CHECKLIST_SIDEBAR_ITEM];
+    });
 };
 
 export const isAuthRequiredTravelTool = (

@@ -14,15 +14,6 @@ export type VersionHistoryItem = {
 
 export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
-    version: "3.3.1",
-    date: "2026-07-22",
-    forceUpdate: false,
-    notes: [
-      "行程首頁會依出發日期自動開啟今天對應的 Day。",
-      "在編輯旅程中可調整共同檢查清單、私人確認清單、領隊／導遊聯絡資訊與其他資訊的顯示順序。",
-    ],
-  },
-  {
     version: "3.3.0",
     date: "2026-07-20",
     forceUpdate: false,

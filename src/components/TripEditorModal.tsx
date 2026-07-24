@@ -1,5 +1,5 @@
 import { FormEvent, useState } from "react";
-import { ArrowDown, ArrowUp, Save, X } from "lucide-react";
+import { Save, X } from "lucide-react";
 import type { TripDetail, TripEditorInput, TripMeta, TripMode } from "../types";
 
 interface TripEditorModalProps {
@@ -139,9 +139,6 @@ export const TripEditorModal = ({
   const [currencySymbol, setCurrencySymbol] = useState(
     trip?.currencyConfig.symbol ?? "NT$",
   );
-  const [sidebarConfig, setSidebarConfig] = useState(
-    tripDetail?.sidebarConfig ?? [],
-  );
   const [formError, setFormError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -152,32 +149,6 @@ export const TripEditorModal = ({
     const selectedCurrency = CURRENCY_OPTIONS.find((item) => item.code === code);
     setCurrencyCode(code);
     setCurrencySymbol(selectedCurrency?.symbol ?? "");
-  };
-
-  const reorderTool = (toolId: string, direction: -1 | 1) => {
-    setSidebarConfig((currentItems) => {
-      const sortableIds = new Set([
-        "checklist",
-        "privateChecklist",
-        "trip_special_info",
-        "other_info",
-      ]);
-      const sortableItems = currentItems.filter((item) => sortableIds.has(item.id));
-      const index = sortableItems.findIndex((item) => item.id === toolId);
-      const targetIndex = index + direction;
-      if (index < 0 || targetIndex < 0 || targetIndex >= sortableItems.length) {
-        return currentItems;
-      }
-
-      [sortableItems[index], sortableItems[targetIndex]] = [
-        sortableItems[targetIndex],
-        sortableItems[index],
-      ];
-      let sortableIndex = 0;
-      return currentItems.map((item) =>
-        sortableIds.has(item.id) ? sortableItems[sortableIndex++] : item,
-      );
-    });
   };
 
   const handleSubmit = async (event: FormEvent) => {
@@ -257,7 +228,6 @@ export const TripEditorModal = ({
       editorEmails: nextEditorEmails,
       currencyCode,
       currencySymbol,
-      sidebarConfig,
     });
     setIsSaving(false);
   };
@@ -410,49 +380,6 @@ export const TripEditorModal = ({
             />
           </label>
         </div>
-
-        {mode === "edit" && (
-          <section className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-            <h3 className="text-sm font-bold text-slate-700">工具順序</h3>
-            <p className="mt-1 text-xs leading-relaxed text-slate-500">
-              可調整共同檢查清單、私人確認清單、領隊／導遊聯絡資訊與其他資訊的顯示順序。
-            </p>
-            <div className="mt-3 space-y-2">
-              {sidebarConfig
-                .filter((item) =>
-                  ["checklist", "privateChecklist", "trip_special_info", "other_info"].includes(item.id),
-                )
-                .map((item, index, items) => (
-                  <div
-                    key={item.id}
-                    className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2"
-                  >
-                    <span className="text-sm font-medium text-slate-700">{item.title}</span>
-                    <span className="flex gap-1">
-                      <button
-                        type="button"
-                        aria-label={`上移 ${item.title}`}
-                        disabled={index === 0}
-                        onClick={() => reorderTool(item.id, -1)}
-                        className="rounded p-1 text-slate-600 hover:bg-slate-100 disabled:opacity-30"
-                      >
-                        <ArrowUp size={16} />
-                      </button>
-                      <button
-                        type="button"
-                        aria-label={`下移 ${item.title}`}
-                        disabled={index === items.length - 1}
-                        onClick={() => reorderTool(item.id, 1)}
-                        className="rounded p-1 text-slate-600 hover:bg-slate-100 disabled:opacity-30"
-                      >
-                        <ArrowDown size={16} />
-                      </button>
-                    </span>
-                  </div>
-                ))}
-            </div>
-          </section>
-        )}
 
         <button
           type="submit"
