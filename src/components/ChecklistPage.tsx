@@ -51,23 +51,15 @@ export const ChecklistPage = ({
   const [cloudChecklistData, setCloudChecklistData] = useState<ChecklistItem[]>(checklistData);
   const pendingCloudOrderRef = useRef<ChecklistItem[] | null>(null);
   const cloudOrderTimerRef = useRef<number | null>(null);
-  const [localChecklistData, setLocalChecklistData] = useState<ChecklistItem[]>(() =>
+  const [, setLocalChecklistRevision] = useState(0);
+  const localChecklistData =
     isLocalUserChecklist && userEmail
       ? readUserSharedChecklist(tripId, userEmail, checklistData)
-      : checklistData,
-  );
+      : checklistData;
   const activeChecklistData = isLocalUserChecklist ? localChecklistData : cloudChecklistData;
   const checklistSeedData = isLocalUserChecklist
     ? activeChecklistData
     : checklistData;
-
-  useEffect(() => {
-    setLocalChecklistData(
-      isLocalUserChecklist && userEmail
-        ? readUserSharedChecklist(tripId, userEmail, checklistData)
-        : checklistData,
-    );
-  }, [checklistData, isLocalUserChecklist, tripId, userEmail]);
 
   useEffect(() => {
     if (!isLocalUserChecklist && !pendingCloudOrderRef.current) {
@@ -78,7 +70,7 @@ export const ChecklistPage = ({
   const saveChecklistData = async (nextItems: ChecklistItem[]) => {
     if (isLocalUserChecklist && userEmail) {
       writeUserSharedChecklist(tripId, userEmail, nextItems);
-      setLocalChecklistData(nextItems);
+      setLocalChecklistRevision((revision) => revision + 1);
       return;
     }
     await onSaveChecklistData(nextItems);
@@ -265,7 +257,6 @@ export const ChecklistPage = ({
     const newIndex = categoryItems.findIndex((item) => item.id === over.id);
     if (oldIndex < 0 || newIndex < 0) return;
     const reorderedCategoryItems = arrayMove(categoryItems, oldIndex, newIndex);
-    const itemById = new Map(reorderedCategoryItems.map((item) => [item.id, item]));
     let categoryIndex = 0;
     const nextItems = activeChecklistData.map((item) =>
       item.category === category ? reorderedCategoryItems[categoryIndex++] : item,
