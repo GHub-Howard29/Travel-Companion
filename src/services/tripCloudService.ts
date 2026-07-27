@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { SidebarItemConfig, TripDetail, TripMeta, TripMode } from "../types";
 import type { StoredTripRecord } from "../storage/tripStorage";
+import { ATTACHMENT_BUCKET } from "../constants/appConstants";
 
 interface CloudTripRow {
   id: string;
@@ -12,6 +13,53 @@ interface CloudTripRow {
   content: unknown;
   updated_at: string;
 }
+
+const STORAGE_REMOVE_BATCH_SIZE = 1_000;
+
+const getCloudAttachmentPaths = async (
+  supabase: SupabaseClient,
+  folderPath: string,
+): Promise<string[]> => {
+  const entries: Array<{ id: string | null; name: string }> = [];
+  let offset = 0;
+
+  while (true) {
+    const { data, error } = await supabase.storage
+      .from(ATTACHMENT_BUCKET)
+      .list(folderPath, { limit: STORAGE_REMOVE_BATCH_SIZE, offset });
+    if (error) throw error;
+
+    const page = data ?? [];
+    entries.push(...page);
+    if (page.length < STORAGE_REMOVE_BATCH_SIZE) break;
+    offset += page.length;
+  }
+
+  const files = entries
+    .filter((entry) => entry.id !== null)
+    .map((entry) => `${folderPath}/${entry.name}`);
+  const nestedPaths = await Promise.all(
+    entries
+      .filter((entry) => entry.id === null)
+      .map((entry) => getCloudAttachmentPaths(supabase, `${folderPath}/${entry.name}`)),
+  );
+
+  return [...files, ...nestedPaths.flat()];
+};
+
+const removeCloudAttachmentsForTrip = async (
+  supabase: SupabaseClient,
+  tripId: string,
+): Promise<void> => {
+  const paths = await getCloudAttachmentPaths(supabase, tripId);
+
+  for (let index = 0; index < paths.length; index += STORAGE_REMOVE_BATCH_SIZE) {
+    const { error } = await supabase.storage
+      .from(ATTACHMENT_BUCKET)
+      .remove(paths.slice(index, index + STORAGE_REMOVE_BATCH_SIZE));
+    if (error) throw error;
+  }
+};
 
 const isCurrencyConfig = (
   value: unknown,
@@ -190,6 +238,15 @@ export const deleteCloudTripRecord = async (
   tripId: string,
 ): Promise<boolean> => {
   if (!navigator.onLine) return false;
+
+  try {
+    // Keep the trip editor permission intact until Storage is cleaned. The
+    // storage delete policy checks the trip id from the attachment path.
+    await removeCloudAttachmentsForTrip(supabase, tripId);
+  } catch (error) {
+    console.warn("Failed to remove trip attachments", error);
+    return false;
+  }
 
   const cleanupRequests = [
     supabase.from("checklists").delete().eq("trip_id", tripId),

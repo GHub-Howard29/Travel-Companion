@@ -337,10 +337,16 @@ export default function App() {
     if (!selectedTripId) return;
 
     setIsLoading(true);
-    await deleteTrip(selectedTripId);
-    clearExchangePurchases(selectedTripId);
-    setIsTripEditorOpen(false);
-    setIsMenuOpen(false);
+    try {
+      await deleteTrip(selectedTripId);
+      clearExchangePurchases(selectedTripId);
+      setIsTripEditorOpen(false);
+      setIsMenuOpen(false);
+    } catch (error) {
+      console.error("Trip deletion failed:", error);
+      alert("無法完成行程刪除，雲端資料未變更。請確認網路後再試一次。");
+      setIsLoading(false);
+    }
   };
   const handleSaveChecklistData = async (items: ChecklistItem[]) => {
     if (!currentTrip) return;
@@ -491,7 +497,7 @@ export default function App() {
     />
     <VersionInfoModal
       isOpen={isVersionInfoOpen}
-      currentVersion={currentVersion}
+      currentVersion={latestVersion}
       releaseDate={releaseDate}
       releaseNotes={releaseNotes}
       forceUpdate={forceUpdate}

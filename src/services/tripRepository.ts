@@ -614,8 +614,12 @@ export const deleteTripRecordWithCloudSync = async (
   supabase: SupabaseClient,
   tripId: string,
 ): Promise<void> => {
+  const didDeleteCloudRecord = await deleteCloudTripRecord(supabase, tripId);
+  if (!didDeleteCloudRecord) {
+    throw new Error("無法完成行程刪除，雲端附件與資料均未變更。");
+  }
+
   deleteStoredTripRecord(tripId);
-  await deleteCloudTripRecord(supabase, tripId);
 };
 
 export const createTripRecordFromDetail = (

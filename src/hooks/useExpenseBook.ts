@@ -681,9 +681,12 @@ useEffect(() => {
         if (error) throw error;
 
         if (removedExpense.attachment_path) {
-          void supabase.storage
+          const { error: attachmentDeleteError } = await supabase.storage
             .from(ATTACHMENT_BUCKET)
             .remove([removedExpense.attachment_path]);
+          if (attachmentDeleteError) {
+            console.warn("Failed to remove expense attachment", attachmentDeleteError);
+          }
         }
       }
 
@@ -843,12 +846,17 @@ useEffect(() => {
         );
         return updated;
       });
-      if (shouldRemoveAttachment) {
+      if (shouldRemoveAttachment || editAttachmentFile) {
         if (targetExpense.attachment_path) {
-          void supabase.storage
+          const { error: attachmentDeleteError } = await supabase.storage
             .from(ATTACHMENT_BUCKET)
             .remove([targetExpense.attachment_path]);
+          if (attachmentDeleteError) {
+            console.warn("Failed to remove replaced expense attachment", attachmentDeleteError);
+          }
         }
+      }
+      if (shouldRemoveAttachment) {
         void deleteLocalAttachment(targetExpense.local_attachment_id);
       }
       setRemovedAttachmentExpenseIds((current) => {
