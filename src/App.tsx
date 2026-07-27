@@ -1,5 +1,5 @@
 // React 核心
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 // Supabase 雲端資料庫
 import { createClient } from "@supabase/supabase-js";
@@ -24,6 +24,7 @@ import { OtherInfoPage } from "./components/OtherInfoPage";
 import { TextInfoPage } from "./components/TextInfoPage";
 import { ExchangeRatePage } from "./components/ExchangeRatePage";
 import { clearExchangePurchases } from "./storage/exchangeRateStorage";
+import { getDefaultHomeScreen, setDefaultHomeScreen } from "./storage/defaultHomeStorage";
 import { TripEditorModal } from "./components/TripEditorModal";
 import { UpdatePrompt } from "./components/UpdatePrompt";
 import { VersionInfoModal } from "./components/VersionInfoModal";
@@ -411,6 +412,27 @@ export default function App() {
     currentTrip?.content.mode,
   );
 
+  const defaultHomeScreen =
+    userEmail && selectedTripId
+      ? getDefaultHomeScreen(selectedTripId, userEmail)
+      : null;
+
+  const appliedDefaultHomeKeyRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!userEmail || !selectedTripId || !currentTrip || !defaultHomeScreen) return;
+    const defaultHomeKey = `${selectedTripId}:${userEmail}:${defaultHomeScreen}`;
+    if (appliedDefaultHomeKeyRef.current === defaultHomeKey) return;
+    const validScreenIds = [
+      ...currentTrip.sidebarConfig.map((item) => item.id),
+      "privateChecklist",
+    ];
+    if (validScreenIds.includes(defaultHomeScreen)) {
+      appliedDefaultHomeKeyRef.current = defaultHomeKey;
+      setCurrentScreen(defaultHomeScreen);
+    }
+  }, [currentTrip, defaultHomeScreen, selectedTripId, setCurrentScreen, userEmail]);
+
   useEffect(() => {
     let isActive = true;
 
@@ -516,6 +538,12 @@ export default function App() {
           return Promise.resolve();
         }}
         onScreenSelect={handleScreenSelect}
+        defaultHomeScreen={defaultHomeScreen}
+        onSetDefaultHome={(screenId) => {
+          if (!userEmail || !selectedTripId) return;
+          setDefaultHomeScreen(selectedTripId, userEmail, screenId);
+          setCurrentScreen(screenId);
+        }}
         appVersion={currentVersion}
         onOpenVersionInfo={() => setIsVersionInfoOpen(true)}
       />
@@ -570,11 +598,13 @@ export default function App() {
             {currentScreenType === "checklist" && (
               <ChecklistPage
                 tripId={selectedTripId}
+                userEmail={userEmail}
                 checklistData={checklistData}
                 supabase={supabase}
                 canViewSharedChecklist={permission.canViewSharedChecklist}
-                canToggleSharedChecklist={permission.canToggleSharedChecklist}
-                canManageSharedChecklist={hasEditPermission}
+                canToggleSharedChecklist={permission.canToggleSharedChecklist || Boolean(userEmail)}
+                canSyncSharedChecklist={hasEditPermission}
+                canManageSharedChecklist={hasEditPermission || Boolean(userEmail)}
                 copySources={checklistCopySources}
                 onSaveChecklistData={handleSaveChecklistData}
               />

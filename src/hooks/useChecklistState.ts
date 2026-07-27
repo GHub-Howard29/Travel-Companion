@@ -59,7 +59,7 @@ export const useChecklistState = (
   );
   const items = useMemo(() => {
     if (!canSyncSharedChecklist) {
-      return mapSeedItemsToSharedItems(tripId, seedItems, []);
+      return mapSeedItemsToSharedItems(tripId, seedItems, checkedItemIds);
     }
 
     return (
@@ -263,11 +263,38 @@ export const useChecklistState = (
     tripId,
   ]);
 
+  const reorderChecklistItems = useCallback((nextSeedItems: ChecklistItem[]) => {
+    setCloudItemsByTripId((currentItemsByTripId) => {
+      const currentItems =
+        currentItemsByTripId[tripId] ??
+        mapSeedItemsToSharedItems(tripId, seedItems, checkedItemIds);
+      const currentItemsById = new Map(currentItems.map((item) => [item.id, item]));
+      const now = new Date().toISOString();
+
+      return {
+        ...currentItemsByTripId,
+        [tripId]: nextSeedItems.map((seedItem, sortOrder) => ({
+          ...(currentItemsById.get(seedItem.id) ?? {
+            id: seedItem.id,
+            tripId,
+            isChecked: checkedItemIds.includes(seedItem.id),
+            createdAt: now,
+            updatedAt: now,
+          }),
+          category: seedItem.category,
+          label: seedItem.label,
+          sortOrder,
+        })),
+      };
+    });
+  }, [checkedItemIds, seedItems, tripId]);
+
   return {
     items,
-    checkedItemIds: canSyncSharedChecklist ? checkedItemIds : [],
+    checkedItemIds,
     syncStatus: canSyncSharedChecklist ? syncStatus : "local",
     syncError: canSyncSharedChecklist ? syncError : null,
     toggleChecklistItem,
+    reorderChecklistItems,
   };
 };

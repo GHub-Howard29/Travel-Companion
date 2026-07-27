@@ -26,13 +26,15 @@ export const expandSidebarItemsWithPrivateChecklist = (
 ): SidebarItemConfig[] | undefined => {
   if (!items) return undefined;
 
-  return items.flatMap((item) => {
+  return items
+    .filter((item) => item.id !== PRIVATE_CHECKLIST_SCREEN_ID)
+    .flatMap((item) => {
     if (item.type !== "checklist" || !userEmail) {
       return [item];
     }
 
     return [item, PRIVATE_CHECKLIST_SIDEBAR_ITEM];
-  });
+    });
 };
 
 export const isAuthRequiredTravelTool = (

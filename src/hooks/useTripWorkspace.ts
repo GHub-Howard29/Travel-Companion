@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { AdminUser, TripDetail, TripEditorInput, TripMeta } from "../types";
-import { findDefaultTrip } from "../utils/tripHelpers";
+import { findDefaultTrip, getDefaultActiveDay } from "../utils/tripHelpers";
 import { toPersonalBookTripId } from "../storage/expenseStorage";
 import { createPermission } from "../permissions/permission";
 import { mapRole } from "../permissions/roleMapper";
@@ -138,6 +138,7 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
         );
         if (tripData) {
           setCurrentTrip(tripData);
+          setActiveDay(getDefaultActiveDay(tripData.departureDate, tripData.content.days));
 
           if (tripData.sidebarConfig?.length > 0) {
             const validScreenIds = [
@@ -258,7 +259,7 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
       setSelectedTripId(record.meta.id);
       setCurrentTrip(record.detail);
       setCurrentScreen("itinerary");
-      setActiveDay(1);
+      setActiveDay(getDefaultActiveDay(record.detail.departureDate, record.detail.content.days));
       setIsLoading(false);
     },
     [getBasePath, supabase],
@@ -281,7 +282,7 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
       setTripOptions(nextTrips);
       setCurrentTrip(record.detail);
       setCurrentScreen("itinerary");
-      setActiveDay(1);
+      setActiveDay(getDefaultActiveDay(record.detail.departureDate, record.detail.content.days));
       setIsLoading(false);
     },
     [currentTrip, getBasePath, selectedTripId, selectedTripMeta, supabase],

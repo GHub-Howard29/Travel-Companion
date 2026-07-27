@@ -23,6 +23,19 @@ const getTripEndTime = (trip: TripMeta): number => {
   return departureTime + (safeDayCount - 1) * 24 * 60 * 60 * 1000;
 };
 
+/** 回傳旅程今天所對應的 Day；不在旅程期間時維持 Day 1。 */
+export const getDefaultActiveDay = (
+  departureDate: string,
+  days: number[],
+  now = new Date(),
+): number => {
+  const departureTime = toDateOnlyTime(departureDate);
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const day = Math.floor((today - departureTime) / (24 * 60 * 60 * 1000)) + 1;
+
+  return days.includes(day) ? day : days[0] ?? 1;
+};
+
 /**
  * 邏輯 2：自動尋找「最新出發」作為首頁預設值
  * 優先尋找今天落在旅程日期區間內的旅程。

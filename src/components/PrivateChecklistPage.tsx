@@ -1,9 +1,12 @@
 import { useEffect, useState, type FormEvent, type KeyboardEvent } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { Check, Copy, Pencil, Plus, Save, Trash2, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Check, Copy, Pencil, Plus, Save, Trash2, X } from "lucide-react";
+import { DndContext, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
+import { arrayMove, SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 
 import { usePrivateChecklistState } from "../hooks/usePrivateChecklistState";
 import { listCloudPrivateChecklistCopies } from "../services/privateChecklistCloudService";
+import { SortableCard } from "./SortableCard";
 import type { PrivateChecklist, TripMeta } from "../types";
 
 interface PrivateChecklistPageProps {
@@ -36,6 +39,8 @@ export const PrivateChecklistPage = ({
     renameItem,
     removeItem,
     replaceItems,
+    reorderItems,
+    flushPendingReorder,
   } = usePrivateChecklistState(
     tripId,
     userEmail,
@@ -50,6 +55,10 @@ export const PrivateChecklistPage = ({
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [editingLabel, setEditingLabel] = useState("");
   const checkedCount = items.filter((item) => item.isChecked).length;
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
+  const displayItems = [...items].sort(
+    (left, right) => Number(left.isChecked) - Number(right.isChecked),
+  );
   const progressPercent =
     items.length > 0 ? (checkedCount / items.length) * 100 : 0;
   const availableCopySources = copySources.filter(
@@ -110,6 +119,7 @@ export const PrivateChecklistPage = ({
   };
 
   const closeManageMode = () => {
+    void flushPendingReorder();
     setIsManageMode(false);
     setIsCopyOpen(false);
     setNewLabel("");
@@ -154,6 +164,30 @@ export const PrivateChecklistPage = ({
       event.preventDefault();
       cancelEdit();
     }
+  };
+
+  const moveItem = (itemId: string, direction: -1 | 1) => {
+    const currentIndex = displayItems.findIndex((item) => item.id === itemId);
+    const currentItem = displayItems[currentIndex];
+    const targetItem = displayItems[currentIndex + direction];
+    if (!currentItem || !targetItem || currentItem.isChecked !== targetItem.isChecked) {
+      return;
+    }
+
+    const nextItems = [...displayItems];
+    [nextItems[currentIndex], nextItems[currentIndex + direction]] = [
+      nextItems[currentIndex + direction],
+      nextItems[currentIndex],
+    ];
+    reorderItems(nextItems);
+  };
+
+  const handleDragEnd = ({ active, over }: DragEndEvent) => {
+    if (!over || active.id === over.id) return;
+    const currentIndex = displayItems.findIndex((item) => item.id === active.id);
+    const targetIndex = displayItems.findIndex((item) => item.id === over.id);
+    if (currentIndex < 0 || targetIndex < 0 || displayItems[currentIndex].isChecked !== displayItems[targetIndex].isChecked) return;
+    reorderItems(arrayMove(displayItems, currentIndex, targetIndex));
   };
 
   return (
@@ -210,10 +244,12 @@ export const PrivateChecklistPage = ({
             </button>
           </div>
           <div className="space-y-3">
-            <p className="rounded-lg border border-amber-300 bg-amber-100 px-3 py-2 text-xs font-bold text-amber-900">
-              如需複製使用舊有清單，請勿提早建立任何清單
-            </p>
-            {availableCopySources.length === 0 && (
+            {canSyncPrivateChecklist && (
+              <p className="rounded-lg border border-amber-300 bg-amber-100 px-3 py-2 text-xs font-bold text-amber-900">
+                如需複製使用舊有清單，請勿提早建立任何清單
+              </p>
+            )}
+            {canSyncPrivateChecklist && availableCopySources.length === 0 && (
               <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-bold text-rose-700">
                 未有私人歷史紀錄，請重新建立
               </p>
@@ -234,7 +270,7 @@ export const PrivateChecklistPage = ({
                 新增項目
               </button>
             </form>
-            <button
+            {canSyncPrivateChecklist && <button
               type="button"
               onClick={() => {
                 setCopySourceTripId(selectedCopySource?.tripId ?? "");
@@ -245,7 +281,7 @@ export const PrivateChecklistPage = ({
             >
               <Copy size={14} />
               複製清單
-            </button>
+            </button>}
           </div>
         </div>
       )}
@@ -301,12 +337,17 @@ export const PrivateChecklistPage = ({
           尚未建立私人確認清單。
         </div>
       ) : (
+        <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
+        <SortableContext items={displayItems.map((item) => item.id)} strategy={verticalListSortingStrategy}>
         <div className="bg-white rounded-xl border border-slate-200/60 shadow-sm overflow-hidden divide-y divide-slate-100">
-          {items.map((item) => {
+          {displayItems.map((item, itemIndex) => {
             const isEditing = editingItemId === item.id;
+            const previousItem = displayItems[itemIndex - 1];
+            const nextItem = displayItems[itemIndex + 1];
 
             return (
-              <div key={item.id} className="flex items-start gap-3 p-4">
+              <SortableCard id={item.id} disabled={!canEditPrivateChecklist || !isManageMode || isEditing}>
+              {(dragHandle) => <div className="flex items-start gap-3 p-4">
                 <button
                   type="button"
                   disabled={!canTogglePrivateChecklist || isEditing}
@@ -347,6 +388,7 @@ export const PrivateChecklistPage = ({
 
                 {canEditPrivateChecklist && isManageMode && (
                   <div className="flex shrink-0 gap-1">
+                    {dragHandle}
                     {isEditing ? (
                       <>
                         <button
@@ -373,6 +415,26 @@ export const PrivateChecklistPage = ({
                       <>
                         <button
                           type="button"
+                          disabled={!previousItem || previousItem.isChecked !== item.isChecked}
+                          onClick={() => moveItem(item.id, -1)}
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-800 disabled:opacity-30"
+                          aria-label="上移項目"
+                          title="上移"
+                        >
+                          <ArrowUp size={15} />
+                        </button>
+                        <button
+                          type="button"
+                          disabled={!nextItem || nextItem.isChecked !== item.isChecked}
+                          onClick={() => moveItem(item.id, 1)}
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-800 disabled:opacity-30"
+                          aria-label="下移項目"
+                          title="下移"
+                        >
+                          <ArrowDown size={15} />
+                        </button>
+                        <button
+                          type="button"
                           onClick={() => startEdit(item.id, item.label)}
                           className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-800"
                           aria-label="編輯"
@@ -393,10 +455,13 @@ export const PrivateChecklistPage = ({
                     )}
                   </div>
                 )}
-              </div>
+              </div>}
+              </SortableCard>
             );
           })}
         </div>
+        </SortableContext>
+        </DndContext>
       )}
     </section>
   );

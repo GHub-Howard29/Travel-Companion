@@ -12,6 +12,7 @@ import {
   LogOut,
   Pencil,
   Plus,
+  Star,
   Wallet,
   X,
 } from "lucide-react";
@@ -47,6 +48,8 @@ interface AppSidebarProps {
   onLogout: () => Promise<void>;
   onGoogleLogin: () => Promise<void>;
   onScreenSelect: (item: SidebarItemConfig) => void;
+  defaultHomeScreen: string | null;
+  onSetDefaultHome: (screenId: string) => void;
   appVersion: string;
   onOpenVersionInfo: () => void;
 }
@@ -98,6 +101,8 @@ export default function AppSidebar({
   onLogout,
   onGoogleLogin,
   onScreenSelect,
+  defaultHomeScreen,
+  onSetDefaultHome,
   appVersion,
   onOpenVersionInfo,
 }: AppSidebarProps) {
@@ -180,24 +185,44 @@ export default function AppSidebar({
         </div>
 
         <nav className="p-3 flex-1 space-y-1 overflow-y-auto">
+          {userEmail && (
+            <p className="px-3 pb-2 text-xs leading-relaxed text-slate-400">
+              選取星號後，可設定成開啟 App 時的預設頁面。
+            </p>
+          )}
           {sidebarItems?.map((item) => {
             const isActive = currentScreen === item.id;
             return (
-              <button
-                key={item.id}
-                onClick={() => onScreenSelect(item)}
-                className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-xl text-left font-medium transition-all ${
+              <div key={item.id} className={`flex w-full items-center rounded-xl transition-all ${
                   isActive
                     ? "bg-slate-900 text-white font-bold shadow-md"
                     : "text-slate-700 hover:bg-slate-50"
-                }`}
+                }`}>
+              <button
+                onClick={() => onScreenSelect(item)}
+                className="flex min-w-0 flex-1 items-center gap-3.5 px-4 py-3 text-left font-medium"
               >
-                <div className={isActive ? "text-white" : "text-slate-400"}>
+                <div className="text-cyan-500">
                   {renderSidebarIcon(item, currentTrip?.content.mode)}
                 </div>
                 <span>{item.title}</span>
               </button>
-            );
+              {userEmail && (
+                <button
+                  type="button"
+                  onClick={() => onSetDefaultHome(item.id)}
+                  className={`mr-2 rounded-lg p-2 ${
+                    defaultHomeScreen === item.id
+                      ? "text-amber-300"
+                      : isActive ? "text-slate-300 hover:text-white" : "text-slate-400 hover:text-amber-600"
+                  }`}
+                  aria-label={`設為預設首頁：${item.title}`}
+                  title="設為預設首頁"
+                >
+                  <Star size={16} fill={defaultHomeScreen === item.id ? "currentColor" : "none"} />
+                </button>
+              )}
+              </div>);
           })}
         </nav>
 

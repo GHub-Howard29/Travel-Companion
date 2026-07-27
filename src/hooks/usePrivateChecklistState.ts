@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { PrivateChecklist, PrivateChecklistItem } from "../types";
@@ -35,6 +35,8 @@ export const usePrivateChecklistState = (
   const canUsePrivateChecklist = Boolean(tripId && ownerEmail);
   const canSyncToCloud = canUsePrivateChecklist && canSyncPrivateChecklist;
   const scopeKey = `${tripId}:${ownerEmail}`;
+  const pendingReorderRef = useRef<PrivateChecklist | null>(null);
+  const reorderTimerRef = useRef<number | null>(null);
   const items = useMemo(
     () =>
       canUsePrivateChecklist
@@ -63,6 +65,45 @@ export const usePrivateChecklistState = (
       setSyncError("雲端同步失敗，資料已保存在本機。");
     }
   }, [canSyncToCloud, supabase]);
+
+  const flushPendingReorder = useCallback(async () => {
+    if (reorderTimerRef.current !== null) {
+      window.clearTimeout(reorderTimerRef.current);
+      reorderTimerRef.current = null;
+    }
+
+    const pendingChecklist = pendingReorderRef.current;
+    if (!pendingChecklist) return;
+
+    pendingReorderRef.current = null;
+    await syncChecklistToCloud(pendingChecklist);
+  }, [syncChecklistToCloud]);
+
+  const deferReorderSync = useCallback((checklist: PrivateChecklist) => {
+    if (!canSyncToCloud) return;
+
+    pendingReorderRef.current = checklist;
+    if (reorderTimerRef.current !== null) {
+      window.clearTimeout(reorderTimerRef.current);
+    }
+    reorderTimerRef.current = window.setTimeout(() => {
+      void flushPendingReorder();
+    }, 800);
+  }, [canSyncToCloud, flushPendingReorder]);
+
+  useEffect(() => {
+    const flushWhenHidden = () => {
+      if (document.visibilityState === "hidden") {
+        void flushPendingReorder();
+      }
+    };
+
+    document.addEventListener("visibilitychange", flushWhenHidden);
+    return () => {
+      document.removeEventListener("visibilitychange", flushWhenHidden);
+      void flushPendingReorder();
+    };
+  }, [flushPendingReorder]);
 
   useEffect(() => {
     if (!canSyncToCloud) {
@@ -291,6 +332,23 @@ export const usePrivateChecklistState = (
     tripId,
   ]);
 
+  const reorderItems = useCallback((nextItems: PrivateChecklistItem[]) => {
+    if (!canUsePrivateChecklist) return;
+
+    const nextChecklist: PrivateChecklist = {
+      tripId,
+      userEmail: ownerEmail,
+      items: nextItems,
+      updatedAt: new Date().toISOString(),
+    };
+    writeStoredPrivateChecklist(nextChecklist);
+    setItemsByScope((currentItemsByScope) => ({
+      ...currentItemsByScope,
+      [scopeKey]: nextItems,
+    }));
+    deferReorderSync(nextChecklist);
+  }, [canUsePrivateChecklist, deferReorderSync, ownerEmail, scopeKey, tripId]);
+
   return {
     items,
     syncStatus: canSyncToCloud ? syncStatus : "local",
@@ -300,5 +358,7 @@ export const usePrivateChecklistState = (
     renameItem,
     removeItem,
     replaceItems,
+    reorderItems,
+    flushPendingReorder,
   };
 };

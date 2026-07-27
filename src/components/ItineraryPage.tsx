@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { ExternalLink, MapPin, Settings2, X } from "lucide-react";
 
 import type { ItineraryItem, TripDetail } from "../types";
@@ -30,6 +30,26 @@ const createEmptyItineraryDraft = (): ItineraryItem => ({
   location: "",
 });
 
+const getItineraryTimeValue = (value: string): number | null => {
+  const match = value.trim().match(/^(\d{1,2}):(\d{2})$/);
+  if (!match) return null;
+
+  const hour = Number(match[1]);
+  const minute = Number(match[2]);
+  return hour < 24 && minute < 60 ? hour * 60 + minute : null;
+};
+
+const sortItineraryItemsByTime = (items: ItineraryItem[]): ItineraryItem[] =>
+  items
+    .map((item, index) => ({ item, index, time: getItineraryTimeValue(item.time) }))
+    .sort((left, right) => {
+      if (left.time === null && right.time === null) return left.index - right.index;
+      if (left.time === null) return 1;
+      if (right.time === null) return -1;
+      return left.time - right.time || left.index - right.index;
+    })
+    .map(({ item }) => item);
+
 export const ItineraryPage = ({
   trip,
   activeDay,
@@ -41,19 +61,28 @@ export const ItineraryPage = ({
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [draft, setDraft] = useState<ItineraryItem>(createEmptyItineraryDraft);
-  const formRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (editingIndex === null) return;
 
     const frameId = requestAnimationFrame(() => {
-      formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      window.scrollTo({ top: 0, behavior: "smooth" });
     });
 
     return () => cancelAnimationFrame(frameId);
   }, [editingIndex]);
 
   const currentDayEvents = trip.content.daysData[String(activeDay)] || [];
+  const sortedDayEvents = currentDayEvents
+    .map((event, originalIndex) => ({ event, originalIndex }))
+    .sort((left, right) => {
+      const leftTime = getItineraryTimeValue(left.event.time);
+      const rightTime = getItineraryTimeValue(right.event.time);
+      if (leftTime === null && rightTime === null) return left.originalIndex - right.originalIndex;
+      if (leftTime === null) return 1;
+      if (rightTime === null) return -1;
+      return leftTime - rightTime || left.originalIndex - right.originalIndex;
+    });
 
   const resetForm = () => {
     setIsFormOpen(false);
@@ -137,7 +166,7 @@ export const ItineraryPage = ({
         ...trip.content,
         daysData: {
           ...trip.content.daysData,
-          [dayKey]: nextEvents,
+          [dayKey]: sortItineraryItemsByTime(nextEvents),
         },
       },
     });
@@ -157,7 +186,9 @@ export const ItineraryPage = ({
         ...trip.content,
         daysData: {
           ...trip.content.daysData,
-          [dayKey]: currentEvents.filter((_, eventIndex) => eventIndex !== index),
+          [dayKey]: sortItineraryItemsByTime(
+            currentEvents.filter((_, eventIndex) => eventIndex !== index),
+          ),
         },
       },
     });
@@ -219,8 +250,12 @@ export const ItineraryPage = ({
             </button>
           </div>
 
+          <p className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-xs leading-relaxed text-slate-500">
+            依照輸入時間做自動排序，無輸入時間的活動會被置放在最下方。
+          </p>
+
           {isFormOpen && (
-            <div ref={formRef} className="mt-3 space-y-2">
+            <div className="mt-3 space-y-2">
               <div className="grid grid-cols-[92px_1fr] gap-2">
                 <input
                   value={draft.time}
@@ -272,11 +307,11 @@ export const ItineraryPage = ({
         </div>
       )}
 
-      {currentDayEvents.length > 0 ? (
+      {sortedDayEvents.length > 0 ? (
         <div className="space-y-4">
-          {currentDayEvents.map((event, idx) => (
+          {sortedDayEvents.map(({ event, originalIndex }) => (
             <div
-              key={idx}
+              key={originalIndex}
               className="bg-white border border-slate-200/60 rounded-xl p-4 shadow-sm"
             >
               <div className="flex justify-between items-center mb-2">
@@ -312,14 +347,14 @@ export const ItineraryPage = ({
                 <div className="mt-3 flex justify-end gap-2 border-t border-slate-100 pt-3">
                   <button
                     type="button"
-                    onClick={() => startEditItem(event, idx)}
+                    onClick={() => startEditItem(event, originalIndex)}
                     className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-200"
                   >
                     編輯
                   </button>
                   <button
                     type="button"
-                    onClick={() => void deleteItem(idx)}
+                    onClick={() => void deleteItem(originalIndex)}
                     className="rounded-lg bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-700 hover:bg-rose-100"
                   >
                     刪除

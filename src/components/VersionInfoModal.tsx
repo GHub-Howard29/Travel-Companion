@@ -27,6 +27,10 @@ export function VersionInfoModal({
 }: VersionInfoModalProps) {
   if (!isOpen) return null;
 
+  const historyItems = VERSION_HISTORY.filter(
+    (item) => item.version !== currentVersion,
+  );
+
   return (
     <div className="fixed inset-0 z-[90] flex items-end justify-center bg-black/40 px-4 sm:items-center">
       <div className="max-h-[86vh] w-full max-w-md overflow-hidden rounded-t-xl border border-slate-200 bg-white shadow-2xl sm:rounded-xl">
@@ -80,7 +84,7 @@ export function VersionInfoModal({
           <section className="mt-5">
             <h3 className="mb-2 text-sm font-bold text-slate-800">版本歷史</h3>
             <div className="space-y-3">
-              {VERSION_HISTORY.map((item) => (
+              {historyItems.map((item) => (
                 <article
                   key={item.version}
                   className="rounded-lg border border-slate-200 bg-white p-3"
