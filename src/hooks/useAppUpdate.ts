@@ -111,10 +111,7 @@ export const useAppUpdate = () => {
     releaseNotes: RELEASE_NOTES,
     forceUpdate: FORCE_UPDATE,
   });
-  const [currentVersion, setCurrentVersion] = useState(() => {
-    const storedVersion = getStoredAppVersion();
-    return storedVersion ?? APP_VERSION;
-  });
+  const [currentVersion, setCurrentVersion] = useState(APP_VERSION);
   const [releaseNoticeVisible, setReleaseNoticeVisible] = useState(() => {
     if (!canShowUpdatePrompt) {
       return false;

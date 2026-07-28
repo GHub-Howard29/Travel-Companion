@@ -1,15 +1,12 @@
 /** App 發布版本設定；須與 public/app-version.json 保持一致。 */
-export const APP_VERSION = "3.3.1";
+export const APP_VERSION = "3.3.2";
 
 export const RELEASE_DATE = "2026-07-27";
 
 export const RELEASE_NOTES = [
-  "行程首頁會依出發日期自動開啟今天對應的 Day。",
-  "行程活動依時間自動排序；未填時間的活動會置底。",
-  "共同清單、私人清單與資訊卡片支援拖拉排序。",
-  "已登入使用者可設定個人預設首頁。",
-  "新增一般登入使用者可以自行創建及使用在本機設備上的共同檢查清單。",
-  "優化版本資訊與側欄操作體驗。",
+  "修正電腦網頁版本資訊會混用舊版本機版本號與新版更新內容的問題。",
+  "帳本總明細看板改為依幣別顯示支出合計，並將 XLSX 匯出移至明細最下方。",
+  "管理者匯出共用帳本時，可直接下載目前旅程全部雲端明細。",
 ];
 
 export const FORCE_UPDATE = false;

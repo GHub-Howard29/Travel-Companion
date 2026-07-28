@@ -14,6 +14,16 @@ export type VersionHistoryItem = {
 
 export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
+    version: "3.3.1",
+    date: "2026-07-27",
+    forceUpdate: false,
+    notes: [
+      "行程首頁依出發日期自動開啟對應 Day，行程活動依時間排序。",
+      "共同清單、私人清單與資訊卡片支援拖拉排序與延後同步。",
+      "已登入使用者可設定個人預設首頁；一般登入使用者可使用本機共同檢查清單。",
+    ],
+  },
+  {
     version: "3.3.0",
     date: "2026-07-20",
     forceUpdate: false,

@@ -35,6 +35,7 @@ interface UseExpenseBookOptions {
   selectedTripId: string;
   expenseBookTripId: string;
   isUsingSharedExpenseBook: boolean;
+  canExportAllSharedExpenses: boolean;
   currentCurrencyCode: string;
   currentCurrencySymbol: string;
   expenseMembers: string[];
@@ -107,6 +108,7 @@ export default function useExpenseBook({
   selectedTripId,
   expenseBookTripId,
   isUsingSharedExpenseBook,
+  canExportAllSharedExpenses,
   currentCurrencyCode,
   currentCurrencySymbol,
   expenseMembers,
@@ -681,9 +683,12 @@ useEffect(() => {
         if (error) throw error;
 
         if (removedExpense.attachment_path) {
-          void supabase.storage
+          const { error: attachmentDeleteError } = await supabase.storage
             .from(ATTACHMENT_BUCKET)
             .remove([removedExpense.attachment_path]);
+          if (attachmentDeleteError) {
+            console.warn("Failed to remove expense attachment", attachmentDeleteError);
+          }
         }
       }
 
@@ -843,12 +848,17 @@ useEffect(() => {
         );
         return updated;
       });
-      if (shouldRemoveAttachment) {
+      if (shouldRemoveAttachment || editAttachmentFile) {
         if (targetExpense.attachment_path) {
-          void supabase.storage
+          const { error: attachmentDeleteError } = await supabase.storage
             .from(ATTACHMENT_BUCKET)
             .remove([targetExpense.attachment_path]);
+          if (attachmentDeleteError) {
+            console.warn("Failed to remove replaced expense attachment", attachmentDeleteError);
+          }
         }
+      }
+      if (shouldRemoveAttachment) {
         void deleteLocalAttachment(targetExpense.local_attachment_id);
       }
       setRemovedAttachmentExpenseIds((current) => {
@@ -1263,18 +1273,56 @@ useEffect(() => {
   };
 
   const buildExpenseXlsx = async () => {
-    const exportItems = isUsingSharedExpenseBook ? filteredExpenses : safeExpenses;
+    const exportItems =
+      isUsingSharedExpenseBook && !canExportAllSharedExpenses
+        ? filteredExpenses
+        : safeExpenses;
+    const payerCurrencyItemCounts = new Map<string, number>();
+
+    exportItems.forEach((item) => {
+      const payer = item.payer || "未知";
+      const currencyCode = item.currency || currentCurrencyCode;
+      const key = `${payer}\u0000${currencyCode}`;
+      payerCurrencyItemCounts.set(key, (payerCurrencyItemCounts.get(key) || 0) + 1);
+    });
+    const sortedExportItems = [...exportItems].sort((left, right) => {
+      const leftPayer = left.payer || "未知";
+      const rightPayer = right.payer || "未知";
+      const payerCompare = leftPayer.localeCompare(rightPayer);
+      if (payerCompare !== 0) return payerCompare;
+
+      const leftCurrencyCode = left.currency || currentCurrencyCode;
+      const rightCurrencyCode = right.currency || currentCurrencyCode;
+      const leftCount =
+        payerCurrencyItemCounts.get(`${leftPayer}\u0000${leftCurrencyCode}`) || 0;
+      const rightCount =
+        payerCurrencyItemCounts.get(`${rightPayer}\u0000${rightCurrencyCode}`) || 0;
+      if (leftCount !== rightCount) return rightCount - leftCount;
+
+      return leftCurrencyCode.localeCompare(rightCurrencyCode);
+    });
 
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet("Expenses");
+    const summaryWorksheet = workbook.addWorksheet("支出人幣別合計");
 
     const rows: Array<(string | number)[]> = [
       ["記帳日期", "消費項目", "支出人", "幣別代碼", "幣別符號", "金額", "附件下載連結"],
     ];
 
     const hyperlinkRows: Array<{ index: number; url: string; text: string }> = [];
+    const payerCurrencyTotals = new Map<
+      string,
+      {
+        payer: string;
+        currencyCode: string;
+        currencySymbol: string;
+        totalAmount: number;
+        itemCount: number;
+      }
+    >();
 
-    for (const item of exportItems) {
+    for (const item of sortedExportItems) {
       const currencyCode = item.currency || currentCurrencyCode;
       const targetConfig = SUPPORTED_CURRENCIES.find(
         (c) => c.code === currencyCode,
@@ -1292,13 +1340,25 @@ useEffect(() => {
         }
       }
       const attachmentName = item.attachment_name || "無附件";
+      const payer = item.payer || "未知";
+      const currencySymbol = targetConfig?.symbol || currentCurrencySymbol;
+      const summaryKey = `${payer}\u0000${currencyCode}`;
+      const existingTotal = payerCurrencyTotals.get(summaryKey);
+
+      payerCurrencyTotals.set(summaryKey, {
+        payer,
+        currencyCode,
+        currencySymbol,
+        totalAmount: (existingTotal?.totalAmount || 0) + (item.amount || 0),
+        itemCount: (existingTotal?.itemCount || 0) + 1,
+      });
 
       rows.push([
-        getExpenseDate(item),
+        getExpenseDate(item).slice(0, 10),
         item.title,
-        item.payer || "未知",
+        payer,
         currencyCode,
-        targetConfig?.symbol || currentCurrencySymbol,
+        currencySymbol,
         item.amount || 0,
         attachmentName,
       ]);
@@ -1313,6 +1373,32 @@ useEffect(() => {
     }
 
     rows.forEach((rowData) => worksheet.addRow(rowData));
+    worksheet.getColumn(1).width = 14;
+    worksheet.getColumn(1).numFmt = "@";
+
+    summaryWorksheet.addRow([
+      "支出人",
+      "幣別代碼",
+      "幣別符號",
+      "支出合計",
+      "明細筆數",
+    ]);
+    Array.from(payerCurrencyTotals.values())
+      .sort(
+        (left, right) =>
+          left.payer.localeCompare(right.payer) ||
+          right.itemCount - left.itemCount ||
+          left.currencyCode.localeCompare(right.currencyCode),
+      )
+      .forEach((total) => {
+        summaryWorksheet.addRow([
+          total.payer,
+          total.currencyCode,
+          total.currencySymbol,
+          total.totalAmount,
+          total.itemCount,
+        ]);
+      });
 
     for (const link of hyperlinkRows) {
       const row = worksheet.getRow(link.index);
@@ -1335,7 +1421,10 @@ useEffect(() => {
       alert("此功能須先登入");
       return;
     }
-    const exportItems = isUsingSharedExpenseBook ? filteredExpenses : safeExpenses;
+    const exportItems =
+      isUsingSharedExpenseBook && !canExportAllSharedExpenses
+        ? filteredExpenses
+        : safeExpenses;
     if (exportItems.length === 0) {
       alert("目前沒有可匯出的帳本資料");
       return;
@@ -1646,6 +1735,7 @@ const pendingAttachmentCount = isUsingSharedExpenseBook
     memberShareAmounts,
     paitAmounts,
     activeCurrencySymbol,
+    exportsAllSharedExpenses: isUsingSharedExpenseBook && canExportAllSharedExpenses,
     handleAttachmentSelection,
     handleAddExpense,
     cancelPendingDelete,

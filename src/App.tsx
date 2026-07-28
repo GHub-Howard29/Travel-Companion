@@ -34,6 +34,7 @@ import useExpenseBook from "./hooks/useExpenseBook";
 import { useAppUpdate } from "./hooks/useAppUpdate";
 import useTripWorkspace from "./hooks/useTripWorkspace";
 import { AppContext } from "./app/context/AppContext";
+import { ROLE } from "./permissions/roles";
 import { getTripDetail } from "./services/tripRepository";
 import { syncCloudOtherInfoItems } from "./services/otherInfoCloudService";
 import {
@@ -157,6 +158,7 @@ export default function App() {
     memberShareAmounts,
     paitAmounts,
     activeCurrencySymbol,
+    exportsAllSharedExpenses,
     handleAttachmentSelection,
     handleAddExpense,
     cancelPendingDelete,
@@ -175,6 +177,7 @@ export default function App() {
     selectedTripId,
     expenseBookTripId,
     isUsingSharedExpenseBook,
+    canExportAllSharedExpenses: role === ROLE.SUPER_ADMIN,
     currentCurrencyCode,
     currentCurrencySymbol,
     expenseMembers,
@@ -337,10 +340,16 @@ export default function App() {
     if (!selectedTripId) return;
 
     setIsLoading(true);
-    await deleteTrip(selectedTripId);
-    clearExchangePurchases(selectedTripId);
-    setIsTripEditorOpen(false);
-    setIsMenuOpen(false);
+    try {
+      await deleteTrip(selectedTripId);
+      clearExchangePurchases(selectedTripId);
+      setIsTripEditorOpen(false);
+      setIsMenuOpen(false);
+    } catch (error) {
+      console.error("Trip deletion failed:", error);
+      alert("無法完成行程刪除，雲端資料未變更。請確認網路後再試一次。");
+      setIsLoading(false);
+    }
   };
   const handleSaveChecklistData = async (items: ChecklistItem[]) => {
     if (!currentTrip) return;
@@ -491,7 +500,7 @@ export default function App() {
     />
     <VersionInfoModal
       isOpen={isVersionInfoOpen}
-      currentVersion={currentVersion}
+      currentVersion={latestVersion}
       releaseDate={releaseDate}
       releaseNotes={releaseNotes}
       forceUpdate={forceUpdate}
@@ -648,6 +657,7 @@ export default function App() {
               <ExpenseScreen
                 canUseExpense={canUseExpense}
                 isUsingSharedExpenseBook={isUsingSharedExpenseBook}
+                exportsAllSharedExpenses={exportsAllSharedExpenses}
                 userEmail={userEmail}
                 safeExpenses={safeExpenses}
                 filteredExpenses={filteredExpenses}
