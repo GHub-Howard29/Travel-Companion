@@ -34,6 +34,7 @@ import useExpenseBook from "./hooks/useExpenseBook";
 import { useAppUpdate } from "./hooks/useAppUpdate";
 import useTripWorkspace from "./hooks/useTripWorkspace";
 import { AppContext } from "./app/context/AppContext";
+import { ROLE } from "./permissions/roles";
 import { getTripDetail } from "./services/tripRepository";
 import { syncCloudOtherInfoItems } from "./services/otherInfoCloudService";
 import {
@@ -157,6 +158,7 @@ export default function App() {
     memberShareAmounts,
     paitAmounts,
     activeCurrencySymbol,
+    exportsAllSharedExpenses,
     handleAttachmentSelection,
     handleAddExpense,
     cancelPendingDelete,
@@ -175,6 +177,7 @@ export default function App() {
     selectedTripId,
     expenseBookTripId,
     isUsingSharedExpenseBook,
+    canExportAllSharedExpenses: role === ROLE.SUPER_ADMIN,
     currentCurrencyCode,
     currentCurrencySymbol,
     expenseMembers,
@@ -654,6 +657,7 @@ export default function App() {
               <ExpenseScreen
                 canUseExpense={canUseExpense}
                 isUsingSharedExpenseBook={isUsingSharedExpenseBook}
+                exportsAllSharedExpenses={exportsAllSharedExpenses}
                 userEmail={userEmail}
                 safeExpenses={safeExpenses}
                 filteredExpenses={filteredExpenses}

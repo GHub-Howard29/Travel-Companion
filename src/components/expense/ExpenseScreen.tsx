@@ -18,6 +18,7 @@ import type { EditExpenseDraft, ExpenseItem } from "../../types";
 interface ExpenseScreenProps {
   canUseExpense: boolean;
   isUsingSharedExpenseBook: boolean;
+  exportsAllSharedExpenses: boolean;
   userEmail: string | null;
   safeExpenses: ExpenseItem[];
   filteredExpenses: ExpenseItem[];
@@ -80,6 +81,7 @@ interface ExpenseScreenProps {
 export default function ExpenseScreen({
   canUseExpense,
   isUsingSharedExpenseBook,
+  exportsAllSharedExpenses,
   userEmail,
   safeExpenses,
   filteredExpenses,
@@ -140,6 +142,17 @@ export default function ExpenseScreen({
     const weekdays = ["日", "一", "二", "三", "四", "五", "六"];
     return `${value.getMonth() + 1}/${value.getDate()}（${weekdays[value.getDay()]}）`;
   };
+  const expenseTotalsByCurrency = safeExpenses.reduce<Record<string, number>>(
+    (totals, item) => {
+      const currencyCode = item.currency || currentCurrencyCode;
+      totals[currencyCode] = (totals[currencyCode] || 0) + (item.amount || 0);
+      return totals;
+    },
+    {},
+  );
+  const currencyTotals = Object.entries(expenseTotalsByCurrency).sort(([left], [right]) =>
+    left.localeCompare(right),
+  );
 
   return (
     <div className="space-y-5">
@@ -174,22 +187,33 @@ export default function ExpenseScreen({
       <div className="bg-gradient-to-br from-amber-500 to-amber-600 p-5 rounded-2xl text-white shadow-md">
         <span className="text-xs text-amber-100 font-bold tracking-wider uppercase">
           {effectiveActiveCurrency === "ALL"
-            ? "總明細預覽看板"
+            ? "總明細看板"
             : `雲端分流統計 (${effectiveActiveCurrency} 頁籤)`}
         </span>
 
         {effectiveActiveCurrency === "ALL" ? (
-          <div>
-            <h2 className="text-2xl font-black mt-1">
-              {safeExpenses.length > 0
-                ? "混合多幣別清單"
-                : "目前尚無記帳資料"}
-            </h2>
-            <p className="text-xs text-amber-100/90 mt-1">
-              {safeExpenses.length > 0
-                ? "目前為混合檢視，下方可查閱各幣別的歷史明細項目。"
-                : "新增第一筆旅費後，這裡會自動顯示可篩選的幣別。"}
-            </p>
+          <div className="mt-3 space-y-2">
+            {currencyTotals.length > 0 ? (
+              currencyTotals.map(([currencyCode, amount]) => {
+                const currency = SUPPORTED_CURRENCIES.find(
+                  (item) => item.code === currencyCode,
+                );
+                const symbol = currency?.symbol || currencyCode;
+
+                return (
+                  <div
+                    key={currencyCode}
+                    className="border-t border-white/20 pt-2 first:border-t-0 first:pt-0"
+                  >
+                    <h2 className="min-w-0 break-words text-2xl font-black leading-tight [overflow-wrap:anywhere]">
+                      {currencyCode} {symbol} {amount.toLocaleString()}
+                    </h2>
+                  </div>
+                );
+              })
+            ) : (
+              <p className="text-sm font-bold text-amber-100">目前尚無記帳資料</p>
+            )}
           </div>
         ) : (
           <>
@@ -216,7 +240,7 @@ export default function ExpenseScreen({
         )}
       </div>
 
-      {effectiveActiveCurrency !== "ALL" ? (
+      {effectiveActiveCurrency !== "ALL" && (
         <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
           <h3 className="text-sm font-bold text-slate-400 mb-3 uppercase tracking-wider">
             {effectiveActiveCurrency} 分攤結算狀態
@@ -265,34 +289,11 @@ export default function ExpenseScreen({
             })}
           </div>
         </div>
-      ) : (
-        <div className="bg-slate-100 border border-slate-200 rounded-xl p-3 text-center text-xs font-medium text-slate-500">
-          💡 切換至單一幣別頁籤（如日圓、新台幣）即可查看該幣別的精確分攤結算。
-        </div>
       )}
 
-      <div className="bg-white rounded-xl border border-slate-200 p-3 shadow-sm">
-        <div className="flex items-center justify-between gap-2">
-          <div>
-            <h3 className="text-sm font-bold text-slate-800">帳本匯出</h3>
-            <p className="text-[11px] text-slate-500 mt-0.5">
-              {isUsingSharedExpenseBook
-                ? "依目前清單與幣別篩選匯出 XLSX，附件欄位會顯示可點擊的下載連結"
-                : "已儲存在此裝置的個人帳本，照片也只保存在本機。Excel 內會標註附件名稱，但不會產生雲端下載網址。"}
-            </p>
-          </div>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={handleExportXlsx}
-              className="inline-flex items-center gap-1 rounded-lg bg-slate-800 px-3 py-2 text-xs font-bold text-white hover:bg-slate-700"
-            >
-              <Download size={14} /> XLSX
-            </button>
-          </div>
-        </div>
-        {canUseExpense && (
-          <div className="mt-3 rounded-lg border border-slate-100 bg-slate-50 p-3">
+      {canUseExpense && (
+        <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+          <div className="rounded-lg border border-slate-100 bg-slate-50 p-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="min-w-0">
                 <p className="text-xs font-bold text-slate-700">照片附件同步</p>
@@ -330,8 +331,8 @@ export default function ExpenseScreen({
               )}
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {canUseExpense ? (
         <form
@@ -443,21 +444,28 @@ export default function ExpenseScreen({
             <span className="text-xs text-slate-500 font-medium">付款人：</span>
             <div className="flex gap-1.5 flex-wrap">
               {expenseMembers.map((m: string) => (
-                <button
-                  key={m}
-                  type="button"
-                  disabled={Boolean(lockedPayerName)}
-                  onClick={() => setNewPayer(m)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all disabled:cursor-not-allowed ${
-                    newPayer === m ||
-                    lockedPayerName === m ||
-                    (!isUsingSharedExpenseBook && m === userEmail)
-                      ? "bg-amber-600 border-amber-600 text-white"
-                      : "bg-white border-slate-200 text-slate-600"
-                  } ${lockedPayerName && lockedPayerName !== m ? "opacity-45" : ""}`}
-                >
-                  {m}
-                </button>
+                (() => {
+                  const isSelectedPayer = lockedPayerName
+                    ? lockedPayerName === m
+                    : newPayer === m ||
+                      (!isUsingSharedExpenseBook && m === userEmail);
+
+                  return (
+                    <button
+                      key={m}
+                      type="button"
+                      disabled={Boolean(lockedPayerName)}
+                      onClick={() => setNewPayer(m)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all disabled:cursor-not-allowed ${
+                        isSelectedPayer
+                          ? "bg-amber-600 border-amber-600 text-white"
+                          : "bg-white border-slate-200 text-slate-600"
+                      } ${lockedPayerName && lockedPayerName !== m ? "opacity-45" : ""}`}
+                    >
+                      {m}
+                    </button>
+                  );
+                })()
               ))}
             </div>
             {lockedPayerName && (
@@ -826,6 +834,26 @@ export default function ExpenseScreen({
                 : "目前尚無此分類下的記帳資料。"}
             </div>
           )}
+        </div>
+
+        <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+          <div className="min-w-0">
+            <h3 className="text-sm font-bold text-slate-800">帳本匯出</h3>
+            <p className="mt-0.5 text-[11px] leading-relaxed text-slate-500">
+              {isUsingSharedExpenseBook
+                ? exportsAllSharedExpenses
+                  ? "管理者會匯出本旅程全部共用帳本明細，包含其他管理者與可編輯者建立的紀錄"
+                  : "依目前清單與幣別篩選匯出 XLSX，附件欄位會顯示可點擊的下載連結"
+                : "已儲存在此裝置的個人帳本，照片也只保存在本機。Excel 內會標註附件名稱，但不會產生雲端下載網址。"}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={handleExportXlsx}
+            className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-slate-800 px-3 py-2 text-xs font-bold text-white hover:bg-slate-700"
+          >
+            <Download size={14} /> XLSX
+          </button>
         </div>
       </div>
     </div>
