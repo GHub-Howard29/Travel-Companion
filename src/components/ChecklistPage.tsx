@@ -133,7 +133,7 @@ export const ChecklistPage = ({
     items.some((item) => item.id === checkedItemId),
   );
   const categories = Array.from(
-    new Set(items.map((item) => item.category)),
+    new Set(activeChecklistData.map((item) => item.category)),
   );
   const progressPercent =
     items.length > 0
@@ -266,6 +266,39 @@ export const ChecklistPage = ({
       return;
     }
     deferCloudOrderSync(nextItems);
+  };
+
+  const saveCategoryOrder = (nextCategories: string[]) => {
+    const nextItems = nextCategories.flatMap((category) =>
+      activeChecklistData.filter((item) => item.category === category),
+    );
+
+    if (isLocalUserChecklist) {
+      void saveChecklistData(nextItems);
+      return;
+    }
+
+    deferCloudOrderSync(nextItems);
+  };
+
+  const moveCategory = (category: string, direction: -1 | 1) => {
+    const currentIndex = categories.indexOf(category);
+    const targetIndex = currentIndex + direction;
+    if (currentIndex < 0 || targetIndex < 0 || targetIndex >= categories.length) {
+      return;
+    }
+
+    saveCategoryOrder(arrayMove(categories, currentIndex, targetIndex));
+  };
+
+  const handleCategoryDragEnd = ({ active, over }: DragEndEvent) => {
+    if (!over || active.id === over.id) return;
+
+    const oldIndex = categories.findIndex((category) => `category_${category}` === active.id);
+    const newIndex = categories.findIndex((category) => `category_${category}` === over.id);
+    if (oldIndex < 0 || newIndex < 0) return;
+
+    saveCategoryOrder(arrayMove(categories, oldIndex, newIndex));
   };
 
   const copyChecklistItems = async () => {
@@ -510,14 +543,52 @@ export const ChecklistPage = ({
         </div>
       )}
 
-      {categories.map((category) => (
-        <div key={category} className="space-y-2">
-          <h3 className="text-sm font-extrabold text-slate-400 uppercase tracking-wider pl-1">
-            {category}
-          </h3>
-          <DndContext sensors={sensors} onDragEnd={(event) => handleChecklistDragEnd(category, event)}>
-          <SortableContext items={items.filter((item) => item.category === category).map((item) => item.id)} strategy={verticalListSortingStrategy}>
-          <div className="bg-white rounded-xl border border-slate-200/60 shadow-sm overflow-hidden divide-y divide-slate-100">
+      <DndContext sensors={sensors} onDragEnd={handleCategoryDragEnd}>
+        <SortableContext
+          items={categories.map((category) => `category_${category}`)}
+          strategy={verticalListSortingStrategy}
+        >
+          {categories.map((category, categoryIndex) => (
+            <SortableCard
+              key={category}
+              id={`category_${category}`}
+              disabled={!canManageSharedChecklist || !isManageMode}
+            >
+              {(categoryDragHandle) => (
+                <div className="space-y-2">
+                  <div className="flex min-h-8 items-center gap-1 pl-1">
+                    <h3 className="mr-auto text-sm font-extrabold uppercase tracking-wider text-slate-400">
+                      {category}
+                    </h3>
+                    {canManageSharedChecklist && isManageMode && (
+                      <div className="flex shrink-0 items-center gap-1">
+                        {categoryDragHandle}
+                        <button
+                          type="button"
+                          disabled={categoryIndex === 0 || isSavingList}
+                          onClick={() => moveCategory(category, -1)}
+                          className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:opacity-30"
+                          aria-label="上移分類"
+                          title="上移分類"
+                        >
+                          <ArrowUp size={14} />
+                        </button>
+                        <button
+                          type="button"
+                          disabled={categoryIndex === categories.length - 1 || isSavingList}
+                          onClick={() => moveCategory(category, 1)}
+                          className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:opacity-30"
+                          aria-label="下移分類"
+                          title="下移分類"
+                        >
+                          <ArrowDown size={14} />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                  <DndContext sensors={sensors} onDragEnd={(event) => handleChecklistDragEnd(category, event)}>
+                    <SortableContext items={items.filter((item) => item.category === category).map((item) => item.id)} strategy={verticalListSortingStrategy}>
+                      <div className="bg-white rounded-xl border border-slate-200/60 shadow-sm overflow-hidden divide-y divide-slate-100">
             {items
               .filter((item) => item.category === category)
               .map((item, itemIndex, categoryItems) => {
@@ -605,11 +676,15 @@ export const ChecklistPage = ({
                   </SortableCard>
                 );
               })}
-          </div>
-          </SortableContext>
-          </DndContext>
-        </div>
-      ))}
+                      </div>
+                    </SortableContext>
+                  </DndContext>
+                </div>
+              )}
+            </SortableCard>
+          ))}
+        </SortableContext>
+      </DndContext>
     </div>
   );
 };
