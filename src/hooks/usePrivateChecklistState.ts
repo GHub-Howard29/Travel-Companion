@@ -66,6 +66,37 @@ export const usePrivateChecklistState = (
     }
   }, [canSyncToCloud, supabase]);
 
+  const applyCloudChecklist = useCallback((checklist: PrivateChecklist) => {
+    writeStoredPrivateChecklist(checklist);
+    setItemsByScope((currentItemsByScope) => ({
+      ...currentItemsByScope,
+      [scopeKey]: checklist.items,
+    }));
+  }, [scopeKey]);
+
+  const syncLatestChecklist = useCallback(async () => {
+    if (!canSyncToCloud) {
+      return;
+    }
+
+    setSyncStatus("syncing");
+    setSyncError(null);
+
+    const localChecklist = getPrivateChecklist(tripId, ownerEmail);
+    const cloudChecklist = await getCloudPrivateChecklist(
+      supabase,
+      tripId,
+      ownerEmail,
+    );
+
+    if (!cloudChecklist || localChecklist.updatedAt > cloudChecklist.updatedAt) {
+      await pushPrivateChecklistToCloud(supabase, localChecklist);
+      return;
+    }
+
+    applyCloudChecklist(cloudChecklist);
+  }, [applyCloudChecklist, canSyncToCloud, ownerEmail, supabase, tripId]);
+
   const flushPendingReorder = useCallback(async () => {
     if (reorderTimerRef.current !== null) {
       window.clearTimeout(reorderTimerRef.current);
@@ -117,42 +148,10 @@ export const usePrivateChecklistState = (
       setSyncError(null);
 
       try {
-        const localChecklist = getPrivateChecklist(tripId, ownerEmail);
-        const cloudChecklist = await getCloudPrivateChecklist(
-          supabase,
-          tripId,
-          ownerEmail,
-        );
+        await syncLatestChecklist();
 
         if (!isActive) {
           return;
-        }
-
-        if (
-          localChecklist.items.length === 0 &&
-          cloudChecklist &&
-          cloudChecklist.items.length > 0
-        ) {
-          writeStoredPrivateChecklist(cloudChecklist);
-          setItemsByScope((currentItemsByScope) => ({
-            ...currentItemsByScope,
-            [scopeKey]: cloudChecklist.items,
-          }));
-        } else if (
-          localChecklist.items.length === 0 &&
-          cloudChecklist &&
-          cloudChecklist.items.length === 0
-        ) {
-          setItemsByScope((currentItemsByScope) => ({
-            ...currentItemsByScope,
-            [scopeKey]: [],
-          }));
-          if (isActive) {
-            setSyncStatus("emptyCloud");
-          }
-          return;
-        } else {
-          await pushPrivateChecklistToCloud(supabase, localChecklist);
         }
 
         if (isActive) {
@@ -172,7 +171,32 @@ export const usePrivateChecklistState = (
     return () => {
       isActive = false;
     };
-  }, [canSyncToCloud, ownerEmail, scopeKey, supabase, tripId]);
+  }, [canSyncToCloud, syncLatestChecklist]);
+
+  useEffect(() => {
+    if (!canSyncToCloud) {
+      return;
+    }
+
+    const syncWhenActive = () => {
+      if (document.visibilityState === "visible") {
+        void syncLatestChecklist()
+          .then(() => setSyncStatus("synced"))
+          .catch((error) => {
+            console.warn(error);
+            setSyncStatus("error");
+            setSyncError("雲端同步失敗，資料已保存在本機。");
+          });
+      }
+    };
+
+    window.addEventListener("focus", syncWhenActive);
+    document.addEventListener("visibilitychange", syncWhenActive);
+    return () => {
+      window.removeEventListener("focus", syncWhenActive);
+      document.removeEventListener("visibilitychange", syncWhenActive);
+    };
+  }, [canSyncToCloud, syncLatestChecklist]);
 
   const addItem = useCallback((label: string) => {
     if (!canUsePrivateChecklist) {

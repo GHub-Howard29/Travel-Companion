@@ -14,6 +14,16 @@ export type VersionHistoryItem = {
 
 export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
+    version: "3.3.2",
+    date: "2026-07-27",
+    forceUpdate: false,
+    notes: [
+      "修正版本資訊顯示與帳本總覽、匯出操作體驗。",
+      "帳本匯出補上支出人幣別合計與完整記帳日期。",
+      "管理者可匯出目前旅程的全部雲端帳本明細。",
+    ],
+  },
+  {
     version: "3.3.1",
     date: "2026-07-27",
     forceUpdate: false,

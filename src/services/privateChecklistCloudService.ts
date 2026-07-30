@@ -15,7 +15,7 @@ interface CloudChecklistItemRow {
   sort_order: number;
   created_at: string;
   updated_at: string;
-  deleted_at?: string | null;
+  deleted_at: string | null;
 }
 
 interface CloudPrivateChecklistCopyRow {
@@ -112,9 +112,8 @@ export const getCloudPrivateChecklist = async (
 
   const { data: rows, error } = await supabase
     .from("checklist_items")
-    .select("id, client_item_id, label, is_checked, sort_order, created_at, updated_at")
+    .select("id, client_item_id, label, is_checked, sort_order, created_at, updated_at, deleted_at")
     .eq("checklist_id", checklist.id)
-    .is("deleted_at", null)
     .order("sort_order", { ascending: true })
     .order("created_at", { ascending: true });
 
@@ -122,8 +121,10 @@ export const getCloudPrivateChecklist = async (
     throw error;
   }
 
-  const items = ((rows ?? []) as CloudChecklistItemRow[]).map(
-    (item): PrivateChecklistItem => ({
+  const cloudItems = (rows ?? []) as CloudChecklistItemRow[];
+  const items = cloudItems
+    .filter((item) => !item.deleted_at)
+    .map((item): PrivateChecklistItem => ({
       id: item.client_item_id ?? `cloud_${item.id}`,
       tripId,
       userEmail,
@@ -131,11 +132,15 @@ export const getCloudPrivateChecklist = async (
       isChecked: item.is_checked,
       createdAt: item.created_at,
       updatedAt: item.updated_at,
-    }),
-  );
+    }));
 
-  const latestItemUpdatedAt = items.reduce(
-    (latest, item) => (item.updatedAt > latest ? item.updatedAt : latest),
+  const latestCloudUpdatedAt = cloudItems.reduce(
+    (latest, item) => {
+      const itemLatestAt = item.deleted_at && item.deleted_at > item.updated_at
+        ? item.deleted_at
+        : item.updated_at;
+      return itemLatestAt > latest ? itemLatestAt : latest;
+    },
     checklist.updated_at,
   );
 
@@ -143,7 +148,7 @@ export const getCloudPrivateChecklist = async (
     tripId,
     userEmail,
     items,
-    updatedAt: latestItemUpdatedAt,
+    updatedAt: latestCloudUpdatedAt,
   };
 };
 
@@ -221,17 +226,24 @@ export const pushPrivateChecklistToCloud = async (
     .filter((row) => row.client_item_id && !localItemIds.has(row.client_item_id))
     .map((row) => row.id);
 
-  if (deletedCloudItemIds.length === 0) {
-    return;
+  if (deletedCloudItemIds.length > 0) {
+    const { error: deleteError } = await supabase
+      .from("checklist_items")
+      .update({ deleted_at: new Date().toISOString() })
+      .in("id", deletedCloudItemIds);
+
+    if (deleteError) {
+      throw deleteError;
+    }
   }
 
-  const { error: deleteError } = await supabase
-    .from("checklist_items")
-    .update({ deleted_at: new Date().toISOString() })
-    .in("id", deletedCloudItemIds);
+  const { error: touchError } = await supabase
+    .from("checklists")
+    .update({ title: PRIVATE_CHECKLIST_TITLE })
+    .eq("id", cloudChecklist.id);
 
-  if (deleteError) {
-    throw deleteError;
+  if (touchError) {
+    throw touchError;
   }
 };
 
