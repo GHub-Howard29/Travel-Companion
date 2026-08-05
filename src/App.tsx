@@ -1,5 +1,5 @@
 // React 核心
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 // Supabase 雲端資料庫
 import { createClient } from "@supabase/supabase-js";
@@ -16,16 +16,9 @@ import type {
 // 抽出的畫面元件
 import AppSidebar from "./components/layout/AppSidebar";
 import AppHeader from "./components/layout/AppHeader";
-import ExpenseScreen from "./components/expense/ExpenseScreen";
-import { ItineraryPage } from "./components/ItineraryPage";
-import { ChecklistPage } from "./components/ChecklistPage";
-import { PrivateChecklistPage } from "./components/PrivateChecklistPage";
-import { OtherInfoPage } from "./components/OtherInfoPage";
 import { TextInfoPage } from "./components/TextInfoPage";
-import { ExchangeRatePage } from "./components/ExchangeRatePage";
 import { clearExchangePurchases } from "./storage/exchangeRateStorage";
 import { getDefaultHomeScreen, setDefaultHomeScreen } from "./storage/defaultHomeStorage";
-import { TripEditorModal } from "./components/TripEditorModal";
 import { UpdatePrompt } from "./components/UpdatePrompt";
 import { VersionInfoModal } from "./components/VersionInfoModal";
 import { InstallAppPrompt } from "./components/InstallAppPrompt";
@@ -44,6 +37,33 @@ import {
   isSpecialInfoSidebarItem,
   resolveTravelToolType,
 } from "./utils/travelToolRegistry";
+
+const ExpenseScreen = lazy(() => import("./components/expense/ExpenseScreen"));
+const ItineraryPage = lazy(() =>
+  import("./components/ItineraryPage").then((module) => ({ default: module.ItineraryPage })),
+);
+const ChecklistPage = lazy(() =>
+  import("./components/ChecklistPage").then((module) => ({ default: module.ChecklistPage })),
+);
+const PrivateChecklistPage = lazy(() =>
+  import("./components/PrivateChecklistPage").then((module) => ({ default: module.PrivateChecklistPage })),
+);
+const OtherInfoPage = lazy(() =>
+  import("./components/OtherInfoPage").then((module) => ({ default: module.OtherInfoPage })),
+);
+const ExchangeRatePage = lazy(() =>
+  import("./components/ExchangeRatePage").then((module) => ({ default: module.ExchangeRatePage })),
+);
+const TripEditorModal = lazy(() =>
+  import("./components/TripEditorModal").then((module) => ({ default: module.TripEditorModal })),
+);
+
+const screenLoadingFallback = (
+  <div className="py-24 text-center text-slate-400" role="status">
+    <div className="mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-b-2 border-slate-600" />
+    載入功能中...
+  </div>
+);
 
 // --- 初始化 Supabase 雲端客戶端 ---
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
@@ -558,6 +578,7 @@ export default function App() {
       />
 
       {isTripEditorOpen && (
+        <Suspense fallback={null}>
         <TripEditorModal
           key={`${tripEditorMode}-${selectedTripId || "new"}`}
           mode={tripEditorMode}
@@ -572,6 +593,7 @@ export default function App() {
           onSubmit={handleTripEditorSubmit}
           onDelete={tripEditorMode === "edit" ? handleTripDelete : undefined}
         />
+        </Suspense>
       )}
 
       <AppHeader
@@ -590,6 +612,7 @@ export default function App() {
             正在建立雲端 safe 連線...
           </div>
         ) : (
+          <Suspense fallback={screenLoadingFallback}>
           <>
             {/* 1. 行程規劃模組 */}
             {currentScreenType === "itinerary" && currentTrip && (
@@ -725,6 +748,7 @@ export default function App() {
               />
             )}
           </>
+          </Suspense>
         )}
       </main>
     </div>

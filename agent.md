@@ -7,7 +7,7 @@
 - 權限白話規則：未登入／已登入 Gmail 者，換匯資料僅保留在本機；管理員／已登記完成的旅程成員，可同步所屬旅程的雲端換匯歷史紀錄。
 - 雲端同步採取：頁面開啟時讀取、Supabase Realtime 推播、視窗重新聚焦與計算機欄位聚焦時補抓、寫入後以雲端結果回寫。雲端歷史初始化後以雲端為準，防止舊快取復活已刪除紀錄。
 - Supabase 正式專案 `travel-companion-db` 已部署 `taiwan-bank-exchange-rate` Edge Function，並將 `exchange_purchases` 加入 `supabase_realtime` publication。
-- V3.4.0 前端載入效能優化維持待辦；僅在 Product Owner 完成 V3.3.0 手動發布後才能開始。
+- V3.3.3 已由 Product Owner 完成發布與部署；V3.4.0 前端載入效能優化已啟動。
 
 ## 目前 V3.3.0 開發紀錄（待 Product Owner 手動回歸與發布）
 

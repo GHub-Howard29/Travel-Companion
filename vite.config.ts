@@ -49,5 +49,10 @@ export default defineConfig({
         ]
       }
     })
-  ]
+  ],
+  build: {
+    // Excel 匯出模組約 930 kB，但已改為使用者匯出時才下載。
+    // 以 1 MB 為非首屏 chunk 警告門檻，初始 bundle 仍應維持在 500 kB 以下。
+    chunkSizeWarningLimit: 1000,
+  },
 })
