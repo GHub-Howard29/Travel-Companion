@@ -7,7 +7,8 @@
 - production PWA 已確認 precache 包含動態 chunk，切斷網路後可從本機資料重載；旅行工具切換正常。
 - `npm run lint` 與 `npm run build` 通過，App 版本已更新為 3.4.0。
 - V3.5.0 規格已完成，待 V3.4.1 修正結案後啟動；開始前先讀 `docs/15_V3.5.0_地點間預估移動資訊規格.md`。
-- V3.4.1 已列入下一個修正版本：側欄需改用實際 online／offline 狀態，避免把未取得 Supabase session 誤顯示為離線；V3.5.0 延後至此修正完成後開始。
+- V3.4.1 已完成規格：除修正 online／offline 與 Supabase session 誤判外，Other Info 共用元件改採本機先存、立即更新畫面、每 Trip 單一最新快照背景同步；不建立逐筆 Queue。
+- V3.4.1 開發前必讀 `docs/16_V3.4.1_離線狀態與OtherInfo本機優先同步規格.md`；必須防止新增重複、刪除復活、快速操作回退及舊雲端覆蓋 pending 本機資料。V3.5.0 延後至此修正完成後開始。
 
 ## V3.3.0 發布交接（2026-07-20）
 
