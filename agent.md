@@ -1,5 +1,13 @@
 ﻿# Travel Companion Agent Guide
 
+## V3.4.0 前端載入效能交接（2026-08-05）
+
+- V3.4.0 程式、版本與文件已完成，待 Product Owner 發布／部署。
+- 初始 JavaScript bundle 由 1,571.41 kB 降至 489.90 kB；旅行工具與 Excel 匯出改為按需載入。
+- production PWA 已確認 precache 包含動態 chunk，切斷網路後可從本機資料重載；旅行工具切換正常。
+- `npm run lint` 與 `npm run build` 通過，App 版本已更新為 3.4.0。
+- 下一版本 V3.5.0 已具備啟動條件，開始前先讀 `docs/15_V3.5.0_地點間預估移動資訊規格.md`。
+
 ## V3.3.0 發布交接（2026-07-20）
 
 - V3.3.0 外幣換算已完成 Product Owner 全數回歸驗證與程式提交；發布由 Product Owner 手動執行。

@@ -14,6 +14,15 @@ export type VersionHistoryItem = {
 
 export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
+    version: "3.3.3",
+    date: "2026-07-30",
+    forceUpdate: false,
+    notes: [
+      "修正私人確認清單跨裝置同步邏輯。",
+      "共同確認清單分類（根目錄）新增排序功能。",
+    ],
+  },
+  {
     version: "3.3.2",
     date: "2026-07-27",
     forceUpdate: false,
