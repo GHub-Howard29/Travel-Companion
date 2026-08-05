@@ -95,6 +95,7 @@
 - [x] 盤點超過 500 kB 的初始 JavaScript bundle（基準為 1,571.41 kB）。
 - [x] 將非首屏 Travel Tool 與 Excel 匯出改為動態載入；初始 bundle 降至 489.70 kB。
 - [x] 驗證 production PWA 離線快取、首次開啟與工具切換維持正常。
+- [x] Product Owner 本機驗證 Service Worker、PWA precache、工具動態載入與切換、Excel 匯出及更新提示。
 
 ---
 
