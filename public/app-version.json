@@ -1,9 +1,8 @@
 {
-  "version": "3.3.3",
-  "releaseDate": "2026-07-30",
+  "version": "3.4.0",
+  "releaseDate": "2026-08-05",
   "releaseNotes": [
-    "修正私人確認清單跨裝置同步邏輯。",
-    "共同確認清單分類（根目錄）新增排序功能。"
+    "APP效能優化"
   ],
   "forceUpdate": false
 }

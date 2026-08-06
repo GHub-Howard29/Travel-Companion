@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import ExcelJS from "exceljs";
 import {
   ATTACHMENT_BUCKET,
   SUPPORTED_CURRENCIES,
@@ -1273,6 +1272,7 @@ useEffect(() => {
   };
 
   const buildExpenseXlsx = async () => {
+    const { default: ExcelJS } = await import("exceljs");
     const exportItems =
       isUsingSharedExpenseBook && !canExportAllSharedExpenses
         ? filteredExpenses

@@ -1,5 +1,17 @@
 ﻿# Travel Companion Agent Guide
 
+## V3.4.0 前端載入效能交接（2026-08-05）
+
+- V3.4.0 程式、版本與文件已完成，待 Product Owner 發布／部署。
+- 初始 JavaScript bundle 由 1,571.41 kB 降至 489.70 kB；旅行工具與 Excel 匯出改為按需載入。
+- production PWA 已確認 precache 包含動態 chunk，切斷網路後可從本機資料重載；旅行工具切換正常。
+- `npm run lint` 與 `npm run build` 通過，App 版本已更新為 3.4.0。
+- V3.5.0 規格已完成，待 V3.4.1 修正結案後啟動；開始前先讀 `docs/15_V3.5.0_地點間預估移動資訊規格.md`。
+- V3.4.1 已完成規格：除修正 online／offline 與 Supabase session 誤判外，Other Info 共用元件改採本機先存、立即更新畫面、每 Trip 單一最新快照背景同步；不建立逐筆 Queue。
+- V3.4.1 開發前必讀 `docs/16_V3.4.1_離線狀態與OtherInfo本機優先同步規格.md`；必須防止新增重複、刪除復活、快速操作回退及舊雲端覆蓋 pending 本機資料。V3.5.0 延後至此修正完成後開始。
+- V3.4.1 尚有未定案 UX：本機快取先顯示、雲端稍後更新可能造成卡片數量跳變；短等待、更新提示與操作中延後套用等候選方案見規格第十三節，不得直接實作成定案。
+- Product Owner 說「待討論事項」時，立即讀取所有未定案項目，逐項提出背景、選項、風險、建議與待決問題，再進行討論。
+
 ## V3.3.0 發布交接（2026-07-20）
 
 - V3.3.0 外幣換算已完成 Product Owner 全數回歸驗證與程式提交；發布由 Product Owner 手動執行。
@@ -7,7 +19,7 @@
 - 權限白話規則：未登入／已登入 Gmail 者，換匯資料僅保留在本機；管理員／已登記完成的旅程成員，可同步所屬旅程的雲端換匯歷史紀錄。
 - 雲端同步採取：頁面開啟時讀取、Supabase Realtime 推播、視窗重新聚焦與計算機欄位聚焦時補抓、寫入後以雲端結果回寫。雲端歷史初始化後以雲端為準，防止舊快取復活已刪除紀錄。
 - Supabase 正式專案 `travel-companion-db` 已部署 `taiwan-bank-exchange-rate` Edge Function，並將 `exchange_purchases` 加入 `supabase_realtime` publication。
-- V3.4.0 前端載入效能優化維持待辦；僅在 Product Owner 完成 V3.3.0 手動發布後才能開始。
+- V3.3.3 已由 Product Owner 完成發布與部署；V3.4.0 前端載入效能優化已啟動。
 
 ## 目前 V3.3.0 開發紀錄（待 Product Owner 手動回歸與發布）
 
