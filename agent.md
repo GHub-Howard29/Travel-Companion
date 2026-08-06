@@ -2,7 +2,7 @@
 
 ## V3.4.0 前端載入效能交接（2026-08-05）
 
-- V3.4.0 程式、版本與文件已完成，待 Product Owner 發布／部署。
+- V3.4.0 已完成發布、合併及部署，尚待部署後實機驗證。
 - 初始 JavaScript bundle 由 1,571.41 kB 降至 489.70 kB；旅行工具與 Excel 匯出改為按需載入。
 - production PWA 已確認 precache 包含動態 chunk，切斷網路後可從本機資料重載；旅行工具切換正常。
 - `npm run lint` 與 `npm run build` 通過，App 版本已更新為 3.4.0。
@@ -19,7 +19,7 @@
 - 權限白話規則：未登入／已登入 Gmail 者，換匯資料僅保留在本機；管理員／已登記完成的旅程成員，可同步所屬旅程的雲端換匯歷史紀錄。
 - 雲端同步採取：頁面開啟時讀取、Supabase Realtime 推播、視窗重新聚焦與計算機欄位聚焦時補抓、寫入後以雲端結果回寫。雲端歷史初始化後以雲端為準，防止舊快取復活已刪除紀錄。
 - Supabase 正式專案 `travel-companion-db` 已部署 `taiwan-bank-exchange-rate` Edge Function，並將 `exchange_purchases` 加入 `supabase_realtime` publication。
-- V3.3.3 已由 Product Owner 完成發布與部署；V3.4.0 前端載入效能優化已啟動。
+- V3.4.0 已由 Product Owner 完成發布、合併及部署；部署後實機驗證尚未完成。
 
 ## 目前 V3.3.0 開發紀錄（待 Product Owner 手動回歸與發布）
 
