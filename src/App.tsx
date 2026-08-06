@@ -84,6 +84,7 @@ const isIosStandalonePwa = () => {
 export default function App() {
   const {
     updateAvailable,
+    promptMode,
     currentVersion,
     latestVersion,
     releaseDate,
@@ -503,6 +504,7 @@ export default function App() {
     <AppContext.Provider value={appContextValue}>
     <UpdatePrompt
       isOpen={updateAvailable}
+      mode={promptMode}
       currentVersion={currentVersion}
       latestVersion={latestVersion}
       releaseDate={releaseDate}

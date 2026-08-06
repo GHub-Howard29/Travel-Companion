@@ -15,6 +15,7 @@ import {
 } from "../config/appVersion";
 
 type UpdateServiceWorker = (reloadPage?: boolean) => Promise<void>;
+export type AppUpdatePromptMode = "update" | "releaseNotice";
 type AppVersionMetadata = {
   version: string;
   releaseDate: string;
@@ -181,14 +182,21 @@ export const useAppUpdate = () => {
   const dismiss = useCallback(() => {
     dismissedRef.current = true;
     setUpdateAvailable(false);
+    if (releaseNoticeVisible) {
+      setStoredAppVersion(APP_VERSION);
+    }
     setReleaseNoticeVisible(false);
-  }, []);
+  }, [releaseNoticeVisible]);
 
   const isPromptVisible =
     canShowUpdatePrompt && (updateAvailable || releaseNoticeVisible);
+  const promptMode: AppUpdatePromptMode = updateAvailable
+    ? "update"
+    : "releaseNotice";
 
   return {
     updateAvailable: isPromptVisible,
+    promptMode,
     currentVersion,
     latestVersion: latestMetadata.version,
     releaseDate: latestMetadata.releaseDate,
