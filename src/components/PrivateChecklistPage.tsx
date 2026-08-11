@@ -252,7 +252,12 @@ export const PrivateChecklistPage = ({
                 如需複製使用舊有清單，請勿提早建立任何清單
               </p>
             )}
-            {canSyncPrivateChecklist && availableCopySources.length === 0 && (
+            {canSyncPrivateChecklist && !isOnline && availableCopySources.length === 0 && (
+              <p className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs font-bold text-sky-700">
+                目前為離線狀態，無法載入私人歷史清單；請恢復連線後再使用複製清單。
+              </p>
+            )}
+            {canSyncPrivateChecklist && isOnline && availableCopySources.length === 0 && (
               <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-bold text-rose-700">
                 未有私人歷史紀錄，請重新建立
               </p>
