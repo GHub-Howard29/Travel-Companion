@@ -769,7 +769,7 @@ export default function ExpenseScreen({
                         </span>
                         {isUsingSharedExpenseBook && item.recorded_by_email && (
                           <span className="max-w-full break-words rounded bg-slate-50 px-2 py-1 text-[11px] font-semibold leading-snug text-slate-500 [overflow-wrap:anywhere]">
-                            記錄者：
+                            紀錄者：
                             {getParticipantAliasByEmail(
                               item.recorded_by_email,
                               participantEmailMap,

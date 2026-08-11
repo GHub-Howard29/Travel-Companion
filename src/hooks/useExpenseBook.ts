@@ -762,7 +762,7 @@ useEffect(() => {
     if (
       !canManageExpenseItem(targetExpense)
     ) {
-      alert("這筆帳目由其他記錄者建立，目前只能檢視。請由原記錄者或管理員修改。");
+      alert("這筆帳目由其他紀錄者建立，目前只能檢視。請由原紀錄者或管理員修改。");
       return;
     }
     const shouldRemoveAttachment =
@@ -939,7 +939,7 @@ useEffect(() => {
     if (
       !canManageExpenseItem(targetExpense)
     ) {
-      alert("這筆帳目由其他記錄者建立，目前只能檢視。請由原記錄者或管理員刪除。");
+      alert("這筆帳目由其他紀錄者建立，目前只能檢視。請由原紀錄者或管理員刪除。");
       return;
     }
 
@@ -1352,7 +1352,7 @@ useEffect(() => {
     const summaryWorksheet = workbook.addWorksheet("支出人幣別合計");
 
     const rows: Array<(string | number)[]> = [
-      ["記帳日期", "消費項目", "支出人", "記帳者代號", "幣別代碼", "幣別符號", "金額", "附件下載連結"],
+      ["記帳日期", "消費項目", "支出人", "紀錄者", "幣別代碼", "幣別符號", "金額", "附件下載連結"],
     ];
 
     const hyperlinkRows: Array<{ index: number; url: string; text: string }> = [];
