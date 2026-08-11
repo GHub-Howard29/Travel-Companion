@@ -30,6 +30,7 @@ interface CloudPrivateChecklistCopyRow {
 }
 
 const PRIVATE_CHECKLIST_TITLE = "私人確認清單";
+const privateChecklistPushQueues = new Map<string, Promise<void>>();
 
 const getCurrentUserId = async (
   supabase: SupabaseClient,
@@ -158,7 +159,7 @@ export const getCloudPrivateChecklist = async (
   };
 };
 
-export const pushPrivateChecklistToCloud = async (
+const pushPrivateChecklistSnapshotToCloud = async (
   supabase: SupabaseClient,
   checklist: PrivateChecklist,
 ): Promise<void> => {
@@ -253,21 +254,42 @@ export const pushPrivateChecklistToCloud = async (
   }
 };
 
+export const pushPrivateChecklistToCloud = async (
+  supabase: SupabaseClient,
+  checklist: PrivateChecklist,
+): Promise<void> => {
+  const scopeKey = `${checklist.tripId}:${checklist.userEmail}`;
+  const previousPush = privateChecklistPushQueues.get(scopeKey) ??
+    Promise.resolve();
+  const currentPush = previousPush
+    .catch(() => undefined)
+    .then(() => pushPrivateChecklistSnapshotToCloud(supabase, checklist));
+
+  privateChecklistPushQueues.set(scopeKey, currentPush);
+  try {
+    await currentPush;
+  } finally {
+    if (privateChecklistPushQueues.get(scopeKey) === currentPush) {
+      privateChecklistPushQueues.delete(scopeKey);
+    }
+  }
+};
+
 export const syncPrivateChecklistWithCloud = async (
   supabase: SupabaseClient,
   tripId: string,
   userEmail: string,
 ): Promise<PrivateChecklist> => {
-  const localChecklist = readStoredPrivateChecklist(tripId, userEmail);
-  const pendingRevision = readPrivateChecklistPendingRevision(
+  const initialLocalChecklist = readStoredPrivateChecklist(tripId, userEmail);
+  const initialPendingRevision = readPrivateChecklistPendingRevision(
     tripId,
     userEmail,
   );
 
-  if (pendingRevision) {
-    await pushPrivateChecklistToCloud(supabase, localChecklist);
-    clearPrivateChecklistPending(tripId, userEmail, pendingRevision);
-    return localChecklist;
+  if (initialPendingRevision) {
+    await pushPrivateChecklistToCloud(supabase, initialLocalChecklist);
+    clearPrivateChecklistPending(tripId, userEmail, initialPendingRevision);
+    return readStoredPrivateChecklist(tripId, userEmail);
   }
 
   const cloudChecklist = await getCloudPrivateChecklist(
@@ -277,20 +299,48 @@ export const syncPrivateChecklistWithCloud = async (
   );
 
   if (!cloudChecklist) {
-    if (localChecklist.updatedAt) {
-      await pushPrivateChecklistToCloud(supabase, localChecklist);
+    const latestLocalChecklist = readStoredPrivateChecklist(tripId, userEmail);
+    if (latestLocalChecklist.updatedAt) {
+      await pushPrivateChecklistToCloud(supabase, latestLocalChecklist);
     }
-    return localChecklist;
+    return readStoredPrivateChecklist(tripId, userEmail);
+  }
+
+  const latestLocalChecklist = readStoredPrivateChecklist(tripId, userEmail);
+  const latestPendingRevision = readPrivateChecklistPendingRevision(
+    tripId,
+    userEmail,
+  );
+
+  if (
+    latestPendingRevision ||
+    latestLocalChecklist.updatedAt !== initialLocalChecklist.updatedAt
+  ) {
+    await pushPrivateChecklistToCloud(supabase, latestLocalChecklist);
+    if (latestPendingRevision) {
+      clearPrivateChecklistPending(tripId, userEmail, latestPendingRevision);
+    }
+    return readStoredPrivateChecklist(tripId, userEmail);
   }
 
   if (
-    localChecklist.updatedAt &&
-    localChecklist.updatedAt > cloudChecklist.updatedAt
+    latestLocalChecklist.updatedAt &&
+    latestLocalChecklist.updatedAt > cloudChecklist.updatedAt
   ) {
-    await pushPrivateChecklistToCloud(supabase, localChecklist);
-    return localChecklist;
+    await pushPrivateChecklistToCloud(supabase, latestLocalChecklist);
+    return readStoredPrivateChecklist(tripId, userEmail);
   }
 
+  const finalPendingRevision = readPrivateChecklistPendingRevision(
+    tripId,
+    userEmail,
+  );
+  if (finalPendingRevision) {
+    const newestLocalChecklist = readStoredPrivateChecklist(tripId, userEmail);
+    await pushPrivateChecklistToCloud(supabase, newestLocalChecklist);
+    clearPrivateChecklistPending(tripId, userEmail, finalPendingRevision);
+    return readStoredPrivateChecklist(tripId, userEmail);
+  }
   writeStoredPrivateChecklist(cloudChecklist);
   return cloudChecklist;
 };
