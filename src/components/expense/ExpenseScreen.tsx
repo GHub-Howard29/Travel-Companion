@@ -13,6 +13,7 @@ import {
 import { type Dispatch, type FormEvent, type SetStateAction } from "react";
 import { SUPPORTED_CURRENCIES } from "../../constants/appConstants";
 import { formatFileSize } from "../../utils/attachmentUtils";
+import { getParticipantAliasByEmail } from "../../utils/participantUtils";
 import type { EditExpenseDraft, ExpenseItem } from "../../types";
 
 interface ExpenseScreenProps {
@@ -33,6 +34,7 @@ interface ExpenseScreenProps {
   currentCurrencyCode: string;
   currentCurrencySymbol: string;
   expenseMembers: string[];
+  participantEmailMap: Record<string, string>;
   defaultPayerName: string | null;
   totalExpense: number;
   averageExpense: number;
@@ -97,6 +99,7 @@ export default function ExpenseScreen({
   currentCurrencyCode,
   currentCurrencySymbol,
   expenseMembers,
+  participantEmailMap,
   defaultPayerName,
   totalExpense,
   averageExpense,
@@ -766,7 +769,11 @@ export default function ExpenseScreen({
                         </span>
                         {isUsingSharedExpenseBook && item.recorded_by_email && (
                           <span className="max-w-full break-words rounded bg-slate-50 px-2 py-1 text-[11px] font-semibold leading-snug text-slate-500 [overflow-wrap:anywhere]">
-                            記錄者：{item.recorded_by_email}
+                            記錄者：
+                            {getParticipantAliasByEmail(
+                              item.recorded_by_email,
+                              participantEmailMap,
+                            ) || "未設定代號"}
                           </span>
                         )}
                       </div>

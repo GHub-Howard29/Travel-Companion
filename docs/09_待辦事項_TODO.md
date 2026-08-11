@@ -127,6 +127,7 @@
 - [x] 加入 online、App 聚焦與進入頁面時的自動重試，以及待同步／同步失敗提示。
 - [x] 共用帳本採 A+B 聯集、穩定 ID 去重，離線待同步資料依登入者隔離。
 - [x] 解除付款人名稱鎖定，保留 Email 對照為預設付款人；畫面區分付款人與記錄者。
+- [x] 帳目卡片以旅程成員代號顯示記錄者，不直接顯示 Email；Excel 明細於支出人右側新增記帳者代號。
 - [x] 建立帳本 ownership／RLS schema 與驗證 SQL。
 - [x] 在 Supabase 套用 `011_expense_ownership_and_merge_schema.sql` 並執行 `012_expense_ownership_and_merge_validation.sql`；欄位、4 個索引、4 項 RLS policy、2 個 trigger、grants 與資料回填皆驗證通過。
 - [x] `npm run lint` 與 `npm run build` 通過。

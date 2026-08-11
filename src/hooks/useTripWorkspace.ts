@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { AdminUser, TripDetail, TripEditorInput, TripMeta } from "../types";
 import { findDefaultTrip, getDefaultActiveDay } from "../utils/tripHelpers";
+import { getParticipantAliasByEmail } from "../utils/participantUtils";
 import { toPersonalBookTripId } from "../storage/expenseStorage";
 import { createPermission } from "../permissions/permission";
 import { mapRole } from "../permissions/roleMapper";
@@ -53,22 +54,19 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
   const isUsingSharedExpenseBook = canUseExpense && hasEditPermission;
   const expenseMembers =
     isUsingSharedExpenseBook || !userEmail ? currentMembers : [userEmail];
+  const participantEmailMap =
+    selectedTripMeta?.participantEmailMap ??
+    currentTrip?.content.participantEmailMap ??
+    {};
   const currentUserParticipantName = (() => {
-    if (!userEmail) return null;
-
-    const email = userEmail.trim().toLowerCase();
-    const participantEmailMap =
-      selectedTripMeta?.participantEmailMap ??
-      currentTrip?.content.participantEmailMap ??
-      {};
-    const currentMemberSet = new Set(currentMembers);
-    const matchedEntry = Object.entries(participantEmailMap).find(
-      ([participant, participantEmail]) =>
-        currentMemberSet.has(participant) &&
-        participantEmail.trim().toLowerCase() === email,
+    const participantName = getParticipantAliasByEmail(
+      userEmail,
+      participantEmailMap,
     );
 
-    return matchedEntry?.[0] ?? null;
+    return participantName && currentMembers.includes(participantName)
+      ? participantName
+      : null;
   })();
   const isSignedIn = Boolean(userEmail);
   const isAssignedTrip =
@@ -434,6 +432,7 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
     canUseExpense,
     isUsingSharedExpenseBook,
     expenseMembers,
+    participantEmailMap,
     currentUserParticipantName,
     isSignedIn,
     isAssignedTrip,

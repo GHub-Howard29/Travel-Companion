@@ -26,6 +26,7 @@ import {
 } from "../utils/attachmentUtils";
 import { cancelEditExpense, startEditExpense } from "../utils/expenseActions";
 import { getExportFileNameXlsx } from "../utils/exportUtils";
+import { getParticipantAliasByEmail } from "../utils/participantUtils";
 import type { EditExpenseDraft, ExpenseItem, LocalAttachmentRecord } from "../types";
 
 interface UseExpenseBookOptions {
@@ -39,6 +40,7 @@ interface UseExpenseBookOptions {
   currentCurrencyCode: string;
   currentCurrencySymbol: string;
   expenseMembers: string[];
+  participantEmailMap: Record<string, string>;
   defaultPayerName: string | null;
   tripTitle: string;
 }
@@ -113,6 +115,7 @@ export default function useExpenseBook({
   currentCurrencyCode,
   currentCurrencySymbol,
   expenseMembers,
+  participantEmailMap,
   defaultPayerName,
   tripTitle,
 }: UseExpenseBookOptions) {
@@ -1349,7 +1352,7 @@ useEffect(() => {
     const summaryWorksheet = workbook.addWorksheet("支出人幣別合計");
 
     const rows: Array<(string | number)[]> = [
-      ["記帳日期", "消費項目", "支出人", "幣別代碼", "幣別符號", "金額", "附件下載連結"],
+      ["記帳日期", "消費項目", "支出人", "記帳者代號", "幣別代碼", "幣別符號", "金額", "附件下載連結"],
     ];
 
     const hyperlinkRows: Array<{ index: number; url: string; text: string }> = [];
@@ -1383,6 +1386,9 @@ useEffect(() => {
       }
       const attachmentName = item.attachment_name || "無附件";
       const payer = item.payer || "未知";
+      const recorderAlias =
+        getParticipantAliasByEmail(item.recorded_by_email, participantEmailMap) ||
+        "未設定代號";
       const currencySymbol = targetConfig?.symbol || currentCurrencySymbol;
       const summaryKey = `${payer}\u0000${currencyCode}`;
       const existingTotal = payerCurrencyTotals.get(summaryKey);
@@ -1399,6 +1405,7 @@ useEffect(() => {
         getExpenseDate(item).slice(0, 10),
         item.title,
         payer,
+        recorderAlias,
         currencyCode,
         currencySymbol,
         item.amount || 0,
@@ -1444,7 +1451,7 @@ useEffect(() => {
 
     for (const link of hyperlinkRows) {
       const row = worksheet.getRow(link.index);
-      const hyperlinkCell = row.getCell(7);
+      const hyperlinkCell = row.getCell(8);
       hyperlinkCell.value = {
         text: link.text,
         hyperlink: link.url,

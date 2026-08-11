@@ -132,6 +132,7 @@ export default function App() {
     canUseExpense,
     isUsingSharedExpenseBook,
     expenseMembers,
+    participantEmailMap,
     currentUserParticipantName,
     isSignedIn,
     isAssignedTrip,
@@ -221,6 +222,7 @@ export default function App() {
     currentCurrencyCode,
     currentCurrencySymbol,
     expenseMembers,
+    participantEmailMap,
     defaultPayerName: currentUserParticipantName,
     tripTitle: currentTrip?.title || selectedTripMeta?.title || selectedTripId || "travel",
   });
@@ -793,6 +795,7 @@ export default function App() {
                 currentCurrencyCode={currentCurrencyCode}
                 currentCurrencySymbol={currentCurrencySymbol}
                 expenseMembers={expenseMembers}
+                participantEmailMap={participantEmailMap}
                 defaultPayerName={currentUserParticipantName}
                 totalExpense={totalExpense}
                 averageExpense={averageExpense}
