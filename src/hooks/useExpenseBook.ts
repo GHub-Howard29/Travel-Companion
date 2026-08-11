@@ -1509,16 +1509,15 @@ useEffect(() => {
       const totalRow = summaryWorksheet.addRow([
         total.payer,
         total.currencyCode,
-        "",
         "合計:",
         {
           formula: `SUMIFS($D$2:$D$${payerSummaryLastRow},$A$2:$A$${payerSummaryLastRow},A${totalRowNumber},$B$2:$B$${payerSummaryLastRow},B${totalRowNumber})`,
           result: total.totalAmount,
         },
       ]);
+      totalRow.getCell(3).font = { bold: true };
       totalRow.getCell(4).font = { bold: true };
-      totalRow.getCell(5).font = { bold: true };
-      totalRow.getCell(5).numFmt = "#,##0.########";
+      totalRow.getCell(4).numFmt = "#,##0.########";
     });
 
     return workbook;
