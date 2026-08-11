@@ -56,6 +56,7 @@ export const PrivateChecklistPage = ({
   const [copySourceLoadStatus, setCopySourceLoadStatus] = useState<
     "idle" | "loaded" | "error"
   >("idle");
+  const [copySourceRetryKey, setCopySourceRetryKey] = useState(0);
   const [isCopyOpen, setIsCopyOpen] = useState(false);
   const [copySourceTripId, setCopySourceTripId] = useState("");
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
@@ -79,7 +80,7 @@ export const PrivateChecklistPage = ({
   };
 
   useEffect(() => {
-    if (!userEmail || !canSyncPrivateChecklist || !isOnline) {
+    if (!userEmail || !canSyncPrivateChecklist) {
       return;
     }
 
@@ -106,7 +107,36 @@ export const PrivateChecklistPage = ({
     return () => {
       isActive = false;
     };
-  }, [canSyncPrivateChecklist, isOnline, supabase, userEmail]);
+  }, [canSyncPrivateChecklist, copySourceRetryKey, supabase, userEmail]);
+
+  useEffect(() => {
+    if (copySourceLoadStatus !== "error") return;
+
+    const retryWhenAvailable = () => {
+      if (!navigator.onLine) return;
+      setCopySourceLoadStatus("idle");
+      setCopySourceRetryKey((retryKey) => retryKey + 1);
+    };
+    const retryWhenVisible = () => {
+      if (document.visibilityState === "visible") {
+        retryWhenAvailable();
+      }
+    };
+
+    window.addEventListener("online", retryWhenAvailable);
+    window.addEventListener("focus", retryWhenAvailable);
+    document.addEventListener("visibilitychange", retryWhenVisible);
+    return () => {
+      window.removeEventListener("online", retryWhenAvailable);
+      window.removeEventListener("focus", retryWhenAvailable);
+      document.removeEventListener("visibilitychange", retryWhenVisible);
+    };
+  }, [copySourceLoadStatus]);
+
+  const retryCopySourceLoad = () => {
+    setCopySourceLoadStatus("idle");
+    setCopySourceRetryKey((retryKey) => retryKey + 1);
+  };
 
   if (!canViewPrivateChecklist || !userEmail) {
     return (
@@ -259,22 +289,29 @@ export const PrivateChecklistPage = ({
                 如需複製使用舊有清單，請勿提早建立任何清單
               </p>
             )}
-            {canSyncPrivateChecklist && !isOnline && availableCopySources.length === 0 && (
+            {canSyncPrivateChecklist && copySourceLoadStatus === "idle" && !isOnline && availableCopySources.length === 0 && (
               <p className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs font-bold text-sky-700">
                 目前為離線狀態，無法載入私人歷史清單；請恢復連線後再使用複製清單。
               </p>
             )}
-            {canSyncPrivateChecklist && isOnline && copySourceLoadStatus === "idle" && availableCopySources.length === 0 && (
+            {canSyncPrivateChecklist && copySourceLoadStatus === "idle" && isOnline && availableCopySources.length === 0 && (
               <p className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs font-bold text-sky-700">
                 正在載入私人歷史清單...
               </p>
             )}
-            {canSyncPrivateChecklist && isOnline && copySourceLoadStatus === "error" && availableCopySources.length === 0 && (
-              <p className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800">
-                無法載入私人歷史清單，請確認網路連線後再試一次。
-              </p>
+            {canSyncPrivateChecklist && copySourceLoadStatus === "error" && availableCopySources.length === 0 && (
+              <div className="flex items-center justify-between gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800">
+                <span>無法載入私人歷史清單，請確認網路連線後再試一次。</span>
+                <button
+                  type="button"
+                  onClick={retryCopySourceLoad}
+                  className="shrink-0 rounded-md border border-amber-400 bg-white px-2 py-1 text-amber-800 hover:bg-amber-100"
+                >
+                  重新載入
+                </button>
+              </div>
             )}
-            {canSyncPrivateChecklist && isOnline && copySourceLoadStatus === "loaded" && availableCopySources.length === 0 && (
+            {canSyncPrivateChecklist && copySourceLoadStatus === "loaded" && availableCopySources.length === 0 && (
               <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-bold text-rose-700">
                 未有私人歷史紀錄，請重新建立
               </p>
