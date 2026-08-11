@@ -8,6 +8,7 @@ export const RELEASE_NOTES = [
   "其他資訊改為本機先存並於背景同步",
   "共用帳本支援代其他成員記帳與多人資料疊加",
   "帳本畫面與 Excel 匯出以旅程代號顯示紀錄者",
+  "Excel 明細與支出人幣別頁面新增分類合計",
 ];
 
 export const FORCE_UPDATE = false;

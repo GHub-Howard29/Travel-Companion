@@ -1356,6 +1356,7 @@ useEffect(() => {
     ];
 
     const hyperlinkRows: Array<{ index: number; url: string; text: string }> = [];
+    const currencyTotals = new Map<string, number>();
     const payerCurrencyTotals = new Map<
       string,
       {
@@ -1394,6 +1395,11 @@ useEffect(() => {
       const currencySymbol = targetConfig?.symbol || currentCurrencySymbol;
       const summaryKey = `${payer}\u0000${currencyCode}`;
       const existingTotal = payerCurrencyTotals.get(summaryKey);
+
+      currencyTotals.set(
+        currencyCode,
+        (currencyTotals.get(currencyCode) || 0) + (item.amount || 0),
+      );
 
       payerCurrencyTotals.set(summaryKey, {
         payer,
@@ -1434,22 +1440,31 @@ useEffect(() => {
       "支出合計",
       "明細筆數",
     ]);
-    Array.from(payerCurrencyTotals.values())
-      .sort(
-        (left, right) =>
-          left.payer.localeCompare(right.payer) ||
-          right.itemCount - left.itemCount ||
-          left.currencyCode.localeCompare(right.currencyCode),
-      )
-      .forEach((total) => {
-        summaryWorksheet.addRow([
-          total.payer,
-          total.currencyCode,
-          total.currencySymbol,
-          total.totalAmount,
-          total.itemCount,
-        ]);
-      });
+    const sortedPayerCurrencyTotals = Array.from(
+      payerCurrencyTotals.values(),
+    ).sort(
+      (left, right) =>
+        left.payer.localeCompare(right.payer) ||
+        right.itemCount - left.itemCount ||
+        left.currencyCode.localeCompare(right.currencyCode),
+    );
+    const expenseDetailLastRow = rows.length;
+    sortedPayerCurrencyTotals.forEach((total, index) => {
+      const summaryRowNumber = index + 2;
+      summaryWorksheet.addRow([
+        total.payer,
+        total.currencyCode,
+        total.currencySymbol,
+        {
+          formula: `SUMIFS('Expenses'!$G$2:$G$${expenseDetailLastRow},'Expenses'!$C$2:$C$${expenseDetailLastRow},A${summaryRowNumber},'Expenses'!$E$2:$E$${expenseDetailLastRow},B${summaryRowNumber})`,
+          result: total.totalAmount,
+        },
+        {
+          formula: `COUNTIFS('Expenses'!$C$2:$C$${expenseDetailLastRow},A${summaryRowNumber},'Expenses'!$E$2:$E$${expenseDetailLastRow},B${summaryRowNumber})`,
+          result: total.itemCount,
+        },
+      ]);
+    });
 
     for (const link of hyperlinkRows) {
       const row = worksheet.getRow(link.index);
@@ -1463,6 +1478,48 @@ useEffect(() => {
         underline: true,
       };
     }
+
+    worksheet.addRow([]);
+    Array.from(currencyTotals.entries())
+      .sort(([leftCode], [rightCode]) => leftCode.localeCompare(rightCode))
+      .forEach(([currencyCode, totalAmount]) => {
+        const totalRowNumber = worksheet.rowCount + 1;
+        const totalRow = worksheet.addRow([
+          "",
+          "",
+          "",
+          "",
+          currencyCode,
+          "合計:",
+          {
+            formula: `SUMIF($E$2:$E$${expenseDetailLastRow},E${totalRowNumber},$G$2:$G$${expenseDetailLastRow})`,
+            result: totalAmount,
+          },
+          "",
+        ]);
+        totalRow.getCell(6).font = { bold: true };
+        totalRow.getCell(7).font = { bold: true };
+        totalRow.getCell(7).numFmt = "#,##0.########";
+      });
+
+    const payerSummaryLastRow = sortedPayerCurrencyTotals.length + 1;
+    summaryWorksheet.addRow([]);
+    sortedPayerCurrencyTotals.forEach((total) => {
+      const totalRowNumber = summaryWorksheet.rowCount + 1;
+      const totalRow = summaryWorksheet.addRow([
+        total.payer,
+        total.currencyCode,
+        "",
+        "合計:",
+        {
+          formula: `SUMIFS($D$2:$D$${payerSummaryLastRow},$A$2:$A$${payerSummaryLastRow},A${totalRowNumber},$B$2:$B$${payerSummaryLastRow},B${totalRowNumber})`,
+          result: total.totalAmount,
+        },
+      ]);
+      totalRow.getCell(4).font = { bold: true };
+      totalRow.getCell(5).font = { bold: true };
+      totalRow.getCell(5).numFmt = "#,##0.########";
+    });
 
     return workbook;
   };
