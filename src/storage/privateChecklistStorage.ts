@@ -1,6 +1,8 @@
 import type { PrivateChecklist, PrivateChecklistItem } from "../types";
 
 const PRIVATE_CHECKLIST_STORAGE_PREFIX = "travel_companion_private_checklist";
+const PRIVATE_CHECKLIST_PENDING_PREFIX =
+  "travel_companion_pending_private_checklist";
 
 const getPrivateChecklistStorageKey = (
   tripId: string,
@@ -90,4 +92,37 @@ export const writeStoredPrivateChecklist = (
     getPrivateChecklistStorageKey(checklist.tripId, checklist.userEmail),
     JSON.stringify(checklist),
   );
+};
+
+const getPrivateChecklistPendingKey = (
+  tripId: string,
+  userEmail: string,
+): string => `${PRIVATE_CHECKLIST_PENDING_PREFIX}_${tripId}_${userEmail}`;
+
+export const markPrivateChecklistPending = (
+  checklist: PrivateChecklist,
+): string => {
+  const revision = crypto.randomUUID();
+  localStorage.setItem(
+    getPrivateChecklistPendingKey(checklist.tripId, checklist.userEmail),
+    revision,
+  );
+  return revision;
+};
+
+export const readPrivateChecklistPendingRevision = (
+  tripId: string,
+  userEmail: string,
+): string | null =>
+  localStorage.getItem(getPrivateChecklistPendingKey(tripId, userEmail));
+
+export const clearPrivateChecklistPending = (
+  tripId: string,
+  userEmail: string,
+  revision: string,
+): boolean => {
+  const key = getPrivateChecklistPendingKey(tripId, userEmail);
+  if (localStorage.getItem(key) !== revision) return false;
+  localStorage.removeItem(key);
+  return true;
 };

@@ -2,6 +2,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { PrivateChecklist, PrivateChecklistItem } from "../types";
 import {
+  clearPrivateChecklistPending,
+  readPrivateChecklistPendingRevision,
   readStoredPrivateChecklist,
   writeStoredPrivateChecklist,
 } from "../storage/privateChecklistStorage";
@@ -257,6 +259,17 @@ export const syncPrivateChecklistWithCloud = async (
   userEmail: string,
 ): Promise<PrivateChecklist> => {
   const localChecklist = readStoredPrivateChecklist(tripId, userEmail);
+  const pendingRevision = readPrivateChecklistPendingRevision(
+    tripId,
+    userEmail,
+  );
+
+  if (pendingRevision) {
+    await pushPrivateChecklistToCloud(supabase, localChecklist);
+    clearPrivateChecklistPending(tripId, userEmail, pendingRevision);
+    return localChecklist;
+  }
+
   const cloudChecklist = await getCloudPrivateChecklist(
     supabase,
     tripId,

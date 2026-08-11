@@ -12,7 +12,11 @@ import {
   pushPrivateChecklistToCloud,
   syncPrivateChecklistWithCloud,
 } from "../services/privateChecklistCloudService";
-import { writeStoredPrivateChecklist } from "../storage/privateChecklistStorage";
+import {
+  clearPrivateChecklistPending,
+  markPrivateChecklistPending,
+  writeStoredPrivateChecklist,
+} from "../storage/privateChecklistStorage";
 
 const normalizeUserEmail = (userEmail: string | null): string => {
   return userEmail?.trim().toLowerCase() ?? "";
@@ -51,6 +55,7 @@ export const usePrivateChecklistState = (
   const syncChecklistToCloud = useCallback(async (
     checklist: PrivateChecklist,
   ) => {
+    const pendingRevision = markPrivateChecklistPending(checklist);
     if (!canSyncToCloud) {
       return;
     }
@@ -60,6 +65,11 @@ export const usePrivateChecklistState = (
 
     try {
       await pushPrivateChecklistToCloud(supabase, checklist);
+      clearPrivateChecklistPending(
+        checklist.tripId,
+        checklist.userEmail,
+        pendingRevision,
+      );
       setSyncStatus("synced");
     } catch (error) {
       console.warn(error);
@@ -106,6 +116,7 @@ export const usePrivateChecklistState = (
   }, [syncChecklistToCloud]);
 
   const deferReorderSync = useCallback((checklist: PrivateChecklist) => {
+    markPrivateChecklistPending(checklist);
     if (!canSyncToCloud) return;
 
     pendingReorderRef.current = checklist;

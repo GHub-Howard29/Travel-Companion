@@ -12,6 +12,11 @@ import {
   updateCloudSharedChecklistItemChecked,
 } from "../services/sharedChecklistCloudService";
 import { writeStoredChecklistProgress } from "../storage/checklistStorage";
+import {
+  clearPendingSharedChecklistProgress,
+  readPendingSharedChecklistProgress,
+  writePendingSharedChecklistProgress,
+} from "../storage/sharedChecklistSyncStorage";
 import type { ChecklistItem, SharedChecklistItem } from "../types";
 
 const mapSeedItemsToSharedItems = (
@@ -40,6 +45,7 @@ export const useChecklistState = (
   supabase: SupabaseClient,
   canSyncSharedChecklist: boolean,
   isOnline: boolean,
+  userEmail: string | null,
 ) => {
   const [checkedItemIdsByTripId, setCheckedItemIdsByTripId] = useState<
     Record<string, string[]>
@@ -89,6 +95,9 @@ export const useChecklistState = (
 
       try {
         const localProgress = getChecklistProgress(tripId);
+        const pendingProgress = userEmail
+          ? readPendingSharedChecklistProgress(tripId, userEmail)
+          : null;
         const cloudChecklist = await getCloudSharedChecklist(
           supabase,
           tripId,
@@ -104,7 +113,8 @@ export const useChecklistState = (
             supabase,
             tripId,
             seedItems,
-            localProgress.checkedItemIds,
+            pendingProgress?.checkedItemIds ?? localProgress.checkedItemIds,
+            Boolean(pendingProgress),
           );
 
           if (!isActive) {
@@ -115,6 +125,14 @@ export const useChecklistState = (
           const nextCheckedItemIds = nextCloudChecklist.items
             .filter((item) => item.isChecked)
             .map((item) => item.id);
+
+          if (pendingProgress && userEmail) {
+            clearPendingSharedChecklistProgress(
+              tripId,
+              userEmail,
+              pendingProgress.revision,
+            );
+          }
 
           setCheckedItemIdsByTripId((currentIdsByTripId) => {
             if (currentIdsByTripId[tripId]) {
@@ -173,7 +191,7 @@ export const useChecklistState = (
     return () => {
       isActive = false;
     };
-  }, [canSyncToCloud, seedItems, supabase, tripId]);
+  }, [canSyncToCloud, seedItems, supabase, tripId, userEmail]);
 
   const toggleChecklistItem = useCallback((itemId: string) => {
     setCheckedItemIdsByTripId((currentIdsByTripId) => {
@@ -215,6 +233,13 @@ export const useChecklistState = (
       const nextCheckedItemIds = nextItems
         .filter((item) => item.isChecked)
         .map((item) => item.id);
+      const pendingProgress = userEmail
+        ? writePendingSharedChecklistProgress(
+            tripId,
+            userEmail,
+            nextCheckedItemIds,
+          )
+        : null;
 
       if (canSyncToCloud) {
         setSyncStatus("syncing");
@@ -243,6 +268,13 @@ export const useChecklistState = (
           }
         })()
           .then(() => {
+            if (pendingProgress && userEmail) {
+              clearPendingSharedChecklistProgress(
+                tripId,
+                userEmail,
+                pendingProgress.revision,
+              );
+            }
             setSyncStatus("synced");
           })
           .catch((error) => {
@@ -263,6 +295,7 @@ export const useChecklistState = (
     seedItems,
     supabase,
     tripId,
+    userEmail,
   ]);
 
   const reorderChecklistItems = useCallback((nextSeedItems: ChecklistItem[]) => {

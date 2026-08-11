@@ -175,6 +175,7 @@ export const syncCloudSharedChecklistSeedItems = async (
   tripId: string,
   seedItems: ChecklistItem[],
   checkedItemIds: string[],
+  shouldSyncCheckedState = false,
 ): Promise<SharedChecklist | null> => {
   const userId = await getCurrentUserId(supabase);
 
@@ -264,13 +265,22 @@ export const syncCloudSharedChecklistSeedItems = async (
   }
 
   for (const { item, row } of existingSeedRows) {
+    const nextValues: {
+      label: string;
+      sort_order: number;
+      deleted_at: null;
+      is_checked?: boolean;
+    } = {
+      label: item.label,
+      sort_order: seedItems.findIndex((seedItem) => seedItem.id === item.id),
+      deleted_at: null,
+    };
+    if (shouldSyncCheckedState) {
+      nextValues.is_checked = checkedItemIdSet.has(item.id);
+    }
     const { error: updateError } = await supabase
       .from("checklist_items")
-      .update({
-        label: item.label,
-        sort_order: seedItems.findIndex((seedItem) => seedItem.id === item.id),
-        deleted_at: null,
-      })
+      .update(nextValues)
       .eq("id", row.id);
 
     if (updateError) {

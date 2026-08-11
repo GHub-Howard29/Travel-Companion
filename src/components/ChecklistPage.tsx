@@ -7,6 +7,12 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ChecklistItem } from "../types";
 import { useChecklistState } from "../hooks/useChecklistState";
 import { readUserSharedChecklist, writeUserSharedChecklist } from "../storage/userSharedChecklistStorage";
+import {
+  clearPendingSharedChecklistOrder,
+  readPendingSharedChecklistOrder,
+  writePendingSharedChecklistOrder,
+  type PendingSharedChecklistOrder,
+} from "../storage/sharedChecklistSyncStorage";
 import { SortableCard } from "./SortableCard";
 
 interface ChecklistPageProps {
@@ -50,8 +56,16 @@ export const ChecklistPage = ({
   const [isSavingList, setIsSavingList] = useState(false);
   const isLocalUserChecklist = Boolean(userEmail && !canSyncSharedChecklist);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
-  const [cloudChecklistData, setCloudChecklistData] = useState<ChecklistItem[]>(checklistData);
-  const pendingCloudOrderRef = useRef<ChecklistItem[] | null>(null);
+  const initialPendingCloudOrder =
+    canSyncSharedChecklist && userEmail
+      ? readPendingSharedChecklistOrder(tripId, userEmail)
+      : null;
+  const [cloudChecklistData, setCloudChecklistData] = useState<ChecklistItem[]>(
+    initialPendingCloudOrder?.items ?? checklistData,
+  );
+  const pendingCloudOrderRef = useRef<PendingSharedChecklistOrder | null>(
+    initialPendingCloudOrder,
+  );
   const cloudOrderTimerRef = useRef<number | null>(null);
   const [, setLocalChecklistRevision] = useState(0);
   const localChecklistData =
@@ -61,7 +75,7 @@ export const ChecklistPage = ({
   const activeChecklistData = isLocalUserChecklist ? localChecklistData : cloudChecklistData;
   const checklistSeedData = isLocalUserChecklist
     ? activeChecklistData
-    : checklistData;
+    : initialPendingCloudOrder?.items ?? checklistData;
 
   useEffect(() => {
     if (!isLocalUserChecklist && !pendingCloudOrderRef.current) {
@@ -84,6 +98,7 @@ export const ChecklistPage = ({
       supabase,
       canSyncSharedChecklist,
       isOnline,
+      userEmail,
     );
 
   const flushPendingCloudOrder = useCallback(async () => {
@@ -94,16 +109,27 @@ export const ChecklistPage = ({
       cloudOrderTimerRef.current = null;
     }
 
-    const pendingItems = pendingCloudOrderRef.current;
-    if (!pendingItems) return;
+    const pending = userEmail
+      ? readPendingSharedChecklistOrder(tripId, userEmail)
+      : pendingCloudOrderRef.current;
+    if (!pending) return;
 
     try {
-      await onSaveChecklistData(pendingItems);
-      pendingCloudOrderRef.current = null;
+      await onSaveChecklistData(pending.items);
+      if (
+        userEmail &&
+        clearPendingSharedChecklistOrder(
+          tripId,
+          userEmail,
+          pending.revision,
+        )
+      ) {
+        pendingCloudOrderRef.current = null;
+      }
     } catch (error) {
       console.warn(error);
     }
-  }, [isOnline, onSaveChecklistData]);
+  }, [isOnline, onSaveChecklistData, tripId, userEmail]);
 
   useEffect(() => {
     if (isOnline) {
@@ -114,7 +140,9 @@ export const ChecklistPage = ({
   const deferCloudOrderSync = useCallback((nextItems: ChecklistItem[]) => {
     setCloudChecklistData(nextItems);
     reorderChecklistItems(nextItems);
-    pendingCloudOrderRef.current = nextItems;
+    pendingCloudOrderRef.current = userEmail
+      ? writePendingSharedChecklistOrder(tripId, userEmail, nextItems)
+      : null;
 
     if (cloudOrderTimerRef.current !== null) {
       window.clearTimeout(cloudOrderTimerRef.current);
@@ -122,7 +150,7 @@ export const ChecklistPage = ({
     cloudOrderTimerRef.current = window.setTimeout(() => {
       void flushPendingCloudOrder();
     }, 800);
-  }, [flushPendingCloudOrder, reorderChecklistItems]);
+  }, [flushPendingCloudOrder, reorderChecklistItems, tripId, userEmail]);
 
   useEffect(() => {
     const flushWhenHidden = () => {

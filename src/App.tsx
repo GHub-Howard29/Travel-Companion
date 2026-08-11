@@ -755,6 +755,7 @@ export default function App() {
             {/* 2. 行李清單檢查模組 */}
             {currentScreenType === "checklist" && (
               <ChecklistPage
+                key={`${selectedTripId}:${userEmail ?? "guest"}`}
                 tripId={selectedTripId}
                 userEmail={userEmail}
                 checklistData={checklistData}
