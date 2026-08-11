@@ -1,6 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { PrivateChecklist, PrivateChecklistItem } from "../types";
+import {
+  readStoredPrivateChecklist,
+  writeStoredPrivateChecklist,
+} from "../storage/privateChecklistStorage";
 
 interface CloudChecklistRow {
   id: string;
@@ -245,6 +249,37 @@ export const pushPrivateChecklistToCloud = async (
   if (touchError) {
     throw touchError;
   }
+};
+
+export const syncPrivateChecklistWithCloud = async (
+  supabase: SupabaseClient,
+  tripId: string,
+  userEmail: string,
+): Promise<PrivateChecklist> => {
+  const localChecklist = readStoredPrivateChecklist(tripId, userEmail);
+  const cloudChecklist = await getCloudPrivateChecklist(
+    supabase,
+    tripId,
+    userEmail,
+  );
+
+  if (!cloudChecklist) {
+    if (localChecklist.updatedAt) {
+      await pushPrivateChecklistToCloud(supabase, localChecklist);
+    }
+    return localChecklist;
+  }
+
+  if (
+    localChecklist.updatedAt &&
+    localChecklist.updatedAt > cloudChecklist.updatedAt
+  ) {
+    await pushPrivateChecklistToCloud(supabase, localChecklist);
+    return localChecklist;
+  }
+
+  writeStoredPrivateChecklist(cloudChecklist);
+  return cloudChecklist;
 };
 
 export const listCloudPrivateChecklistCopies = async (

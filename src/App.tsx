@@ -30,6 +30,7 @@ import { AppContext } from "./app/context/AppContext";
 import { ROLE } from "./permissions/roles";
 import { getTripDetail } from "./services/tripRepository";
 import { syncCloudOtherInfoItems } from "./services/otherInfoCloudService";
+import { syncPrivateChecklistWithCloud } from "./services/privateChecklistCloudService";
 import { upsertCloudTripRecord } from "./services/tripCloudService";
 import { readStoredTripRecords } from "./storage/tripStorage";
 import { writeStoredOtherInfoItems } from "./storage/otherInfoStorage";
@@ -527,6 +528,25 @@ export default function App() {
     const timer = window.setTimeout(preload, 1500);
     return () => window.clearTimeout(timer);
   }, []);
+
+  useEffect(() => {
+    if (
+      !isOnline ||
+      !selectedTripId ||
+      !userEmail ||
+      !permission.canSyncPrivateChecklist
+    ) {
+      return;
+    }
+
+    void syncPrivateChecklistWithCloud(
+      supabase,
+      selectedTripId,
+      userEmail.trim().toLowerCase(),
+    ).catch((error) => {
+      console.warn("Private checklist preload failed", error);
+    });
+  }, [isOnline, permission.canSyncPrivateChecklist, selectedTripId, userEmail]);
   const currentScreenType = getCurrentScreenType();
   const currentSidebarItem = currentTrip?.sidebarConfig.find(
     (item) => item.id === currentScreen,
@@ -563,9 +583,15 @@ export default function App() {
 
     const loadChecklistCopySources = async () => {
       const basePath = getBasePath();
+      const storedTripsById = new Map(
+        readStoredTripRecords().map((record) => [record.meta.id, record.detail]),
+      );
       const sources = await Promise.all(
         tripOptions.map(async (trip) => {
-          const detail = await getTripDetail(supabase, basePath, trip.id, trip);
+          const detail = isOnline
+            ? await getTripDetail(supabase, basePath, trip.id, trip)
+            : storedTripsById.get(trip.id) ??
+              (trip.id === selectedTripId ? currentTrip : null);
 
           return {
             tripId: trip.id,
@@ -585,7 +611,7 @@ export default function App() {
     return () => {
       isActive = false;
     };
-  }, [tripOptions]);
+  }, [currentTrip, isOnline, selectedTripId, tripOptions]);
 
   useEffect(() => {
     if (userEmail || !isAuthRequiredTravelTool(currentScreenType)) {
@@ -736,6 +762,7 @@ export default function App() {
                 canViewSharedChecklist={permission.canViewSharedChecklist}
                 canToggleSharedChecklist={permission.canToggleSharedChecklist || Boolean(userEmail)}
                 canSyncSharedChecklist={hasEditPermission}
+                isOnline={isOnline}
                 canManageSharedChecklist={hasEditPermission || Boolean(userEmail)}
                 copySources={checklistCopySources}
                 onSaveChecklistData={handleSaveChecklistData}
@@ -751,6 +778,7 @@ export default function App() {
                 canEditPrivateChecklist={permission.canEditPrivateChecklist}
                 canTogglePrivateChecklist={permission.canTogglePrivateChecklist}
                 canSyncPrivateChecklist={permission.canSyncPrivateChecklist}
+                isOnline={isOnline}
                 tripOptions={tripOptions}
               />
             )}

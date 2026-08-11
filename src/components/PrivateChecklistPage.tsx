@@ -17,6 +17,7 @@ interface PrivateChecklistPageProps {
   canEditPrivateChecklist: boolean;
   canTogglePrivateChecklist: boolean;
   canSyncPrivateChecklist: boolean;
+  isOnline: boolean;
   tripOptions: TripMeta[];
 }
 
@@ -28,6 +29,7 @@ export const PrivateChecklistPage = ({
   canEditPrivateChecklist,
   canTogglePrivateChecklist,
   canSyncPrivateChecklist,
+  isOnline,
   tripOptions,
 }: PrivateChecklistPageProps) => {
   const {
@@ -46,6 +48,7 @@ export const PrivateChecklistPage = ({
     userEmail,
     supabase,
     canSyncPrivateChecklist,
+    isOnline,
   );
   const [isManageMode, setIsManageMode] = useState(false);
   const [newLabel, setNewLabel] = useState("");
@@ -73,7 +76,7 @@ export const PrivateChecklistPage = ({
   };
 
   useEffect(() => {
-    if (!userEmail || !canSyncPrivateChecklist) {
+    if (!userEmail || !canSyncPrivateChecklist || !isOnline) {
       return;
     }
 
@@ -96,7 +99,7 @@ export const PrivateChecklistPage = ({
     return () => {
       isActive = false;
     };
-  }, [canSyncPrivateChecklist, supabase, userEmail]);
+  }, [canSyncPrivateChecklist, isOnline, supabase, userEmail]);
 
   if (!canViewPrivateChecklist || !userEmail) {
     return (

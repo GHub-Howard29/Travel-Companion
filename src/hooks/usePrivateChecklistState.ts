@@ -9,8 +9,8 @@ import {
   updatePrivateChecklistItem,
 } from "../services/privateChecklistService";
 import {
-  getCloudPrivateChecklist,
   pushPrivateChecklistToCloud,
+  syncPrivateChecklistWithCloud,
 } from "../services/privateChecklistCloudService";
 import { writeStoredPrivateChecklist } from "../storage/privateChecklistStorage";
 
@@ -23,6 +23,7 @@ export const usePrivateChecklistState = (
   userEmail: string | null,
   supabase: SupabaseClient,
   canSyncPrivateChecklist: boolean,
+  isOnline: boolean,
 ) => {
   const [itemsByScope, setItemsByScope] = useState<
     Record<string, PrivateChecklistItem[]>
@@ -33,7 +34,8 @@ export const usePrivateChecklistState = (
   const [syncError, setSyncError] = useState<string | null>(null);
   const ownerEmail = normalizeUserEmail(userEmail);
   const canUsePrivateChecklist = Boolean(tripId && ownerEmail);
-  const canSyncToCloud = canUsePrivateChecklist && canSyncPrivateChecklist;
+  const canSyncToCloud =
+    canUsePrivateChecklist && canSyncPrivateChecklist && isOnline;
   const scopeKey = `${tripId}:${ownerEmail}`;
   const pendingReorderRef = useRef<PrivateChecklist | null>(null);
   const reorderTimerRef = useRef<number | null>(null);
@@ -82,19 +84,12 @@ export const usePrivateChecklistState = (
     setSyncStatus("syncing");
     setSyncError(null);
 
-    const localChecklist = getPrivateChecklist(tripId, ownerEmail);
-    const cloudChecklist = await getCloudPrivateChecklist(
+    const latestChecklist = await syncPrivateChecklistWithCloud(
       supabase,
       tripId,
       ownerEmail,
     );
-
-    if (!cloudChecklist || localChecklist.updatedAt > cloudChecklist.updatedAt) {
-      await pushPrivateChecklistToCloud(supabase, localChecklist);
-      return;
-    }
-
-    applyCloudChecklist(cloudChecklist);
+    applyCloudChecklist(latestChecklist);
   }, [applyCloudChecklist, canSyncToCloud, ownerEmail, supabase, tripId]);
 
   const flushPendingReorder = useCallback(async () => {

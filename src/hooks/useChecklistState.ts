@@ -39,6 +39,7 @@ export const useChecklistState = (
   seedItems: ChecklistItem[],
   supabase: SupabaseClient,
   canSyncSharedChecklist: boolean,
+  isOnline: boolean,
 ) => {
   const [checkedItemIdsByTripId, setCheckedItemIdsByTripId] = useState<
     Record<string, string[]>
@@ -50,6 +51,7 @@ export const useChecklistState = (
     "local" | "syncing" | "synced" | "error"
   >("local");
   const [syncError, setSyncError] = useState<string | null>(null);
+  const canSyncToCloud = canSyncSharedChecklist && isOnline;
 
   const checkedItemIds = useMemo(
     () =>
@@ -75,7 +77,7 @@ export const useChecklistState = (
   ]);
 
   useEffect(() => {
-    if (!canSyncSharedChecklist) {
+    if (!canSyncToCloud) {
       return;
     }
 
@@ -134,7 +136,7 @@ export const useChecklistState = (
             ...currentItemsByTripId,
             [tripId]: nextCloudChecklist.items,
           }));
-        } else if (canSyncSharedChecklist) {
+        } else if (canSyncToCloud) {
           const initializedChecklist = await initializeCloudSharedChecklist(
             supabase,
             tripId,
@@ -171,7 +173,7 @@ export const useChecklistState = (
     return () => {
       isActive = false;
     };
-  }, [canSyncSharedChecklist, seedItems, supabase, tripId]);
+  }, [canSyncToCloud, seedItems, supabase, tripId]);
 
   const toggleChecklistItem = useCallback((itemId: string) => {
     setCheckedItemIdsByTripId((currentIdsByTripId) => {
@@ -214,7 +216,7 @@ export const useChecklistState = (
         .filter((item) => item.isChecked)
         .map((item) => item.id);
 
-      if (canSyncSharedChecklist) {
+      if (canSyncToCloud) {
         setSyncStatus("syncing");
         setSyncError(null);
         void (async () => {
@@ -256,7 +258,7 @@ export const useChecklistState = (
       };
     });
   }, [
-    canSyncSharedChecklist,
+    canSyncToCloud,
     checkedItemIds,
     seedItems,
     supabase,
@@ -292,8 +294,8 @@ export const useChecklistState = (
   return {
     items,
     checkedItemIds,
-    syncStatus: canSyncSharedChecklist ? syncStatus : "local",
-    syncError: canSyncSharedChecklist ? syncError : null,
+    syncStatus: canSyncToCloud ? syncStatus : "local",
+    syncError: canSyncToCloud ? syncError : null,
     toggleChecklistItem,
     reorderChecklistItems,
   };

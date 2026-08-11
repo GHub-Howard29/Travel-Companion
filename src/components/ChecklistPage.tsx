@@ -17,6 +17,7 @@ interface ChecklistPageProps {
   canViewSharedChecklist: boolean;
   canToggleSharedChecklist: boolean;
   canSyncSharedChecklist: boolean;
+  isOnline: boolean;
   canManageSharedChecklist: boolean;
   copySources: Array<{
     tripId: string;
@@ -34,6 +35,7 @@ export const ChecklistPage = ({
   canViewSharedChecklist,
   canToggleSharedChecklist,
   canSyncSharedChecklist,
+  isOnline,
   canManageSharedChecklist,
   copySources,
   onSaveChecklistData,
@@ -81,9 +83,12 @@ export const ChecklistPage = ({
       checklistSeedData,
       supabase,
       canSyncSharedChecklist,
+      isOnline,
     );
 
   const flushPendingCloudOrder = useCallback(async () => {
+    if (!isOnline) return;
+
     if (cloudOrderTimerRef.current !== null) {
       window.clearTimeout(cloudOrderTimerRef.current);
       cloudOrderTimerRef.current = null;
@@ -98,7 +103,13 @@ export const ChecklistPage = ({
     } catch (error) {
       console.warn(error);
     }
-  }, [onSaveChecklistData]);
+  }, [isOnline, onSaveChecklistData]);
+
+  useEffect(() => {
+    if (isOnline) {
+      void flushPendingCloudOrder();
+    }
+  }, [flushPendingCloudOrder, isOnline]);
 
   const deferCloudOrderSync = useCallback((nextItems: ChecklistItem[]) => {
     setCloudChecklistData(nextItems);
