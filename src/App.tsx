@@ -772,6 +772,7 @@ export default function App() {
 
             {currentScreenType === "privateChecklist" && (
               <PrivateChecklistPage
+                key={`${selectedTripId}:${userEmail ?? "guest"}`}
                 tripId={selectedTripId}
                 userEmail={userEmail}
                 supabase={supabase}

@@ -53,6 +53,9 @@ export const PrivateChecklistPage = ({
   const [isManageMode, setIsManageMode] = useState(false);
   const [newLabel, setNewLabel] = useState("");
   const [copySources, setCopySources] = useState<PrivateChecklist[]>([]);
+  const [copySourceLoadStatus, setCopySourceLoadStatus] = useState<
+    "idle" | "loaded" | "error"
+  >("idle");
   const [isCopyOpen, setIsCopyOpen] = useState(false);
   const [copySourceTripId, setCopySourceTripId] = useState("");
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
@@ -88,9 +91,13 @@ export const PrivateChecklistPage = ({
 
         if (isActive) {
           setCopySources(sources);
+          setCopySourceLoadStatus("loaded");
         }
       } catch (error) {
         console.warn(error);
+        if (isActive) {
+          setCopySourceLoadStatus("error");
+        }
       }
     };
 
@@ -257,7 +264,17 @@ export const PrivateChecklistPage = ({
                 目前為離線狀態，無法載入私人歷史清單；請恢復連線後再使用複製清單。
               </p>
             )}
-            {canSyncPrivateChecklist && isOnline && availableCopySources.length === 0 && (
+            {canSyncPrivateChecklist && isOnline && copySourceLoadStatus === "idle" && availableCopySources.length === 0 && (
+              <p className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs font-bold text-sky-700">
+                正在載入私人歷史清單...
+              </p>
+            )}
+            {canSyncPrivateChecklist && isOnline && copySourceLoadStatus === "error" && availableCopySources.length === 0 && (
+              <p className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800">
+                無法載入私人歷史清單，請確認網路連線後再試一次。
+              </p>
+            )}
+            {canSyncPrivateChecklist && isOnline && copySourceLoadStatus === "loaded" && availableCopySources.length === 0 && (
               <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-bold text-rose-700">
                 未有私人歷史紀錄，請重新建立
               </p>
