@@ -631,6 +631,7 @@ export default function App() {
         tripOptions={tripOptions}
         currentTrip={currentTrip}
         userEmail={userEmail}
+        userParticipantName={currentUserParticipantName}
         isOnline={isOnline}
         isSessionReady={isSessionReady}
         hasEditPermission={hasEditPermission}

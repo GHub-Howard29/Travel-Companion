@@ -37,6 +37,7 @@ interface AppSidebarProps {
   tripOptions: TripMeta[];
   currentTrip: TripDetail | null;
   userEmail: string | null;
+  userParticipantName: string | null;
   isOnline: boolean;
   isSessionReady: boolean;
   hasEditPermission: boolean;
@@ -92,6 +93,7 @@ export default function AppSidebar({
   tripOptions,
   currentTrip,
   userEmail,
+  userParticipantName,
   isOnline,
   isSessionReady,
   hasEditPermission,
@@ -234,6 +236,16 @@ export default function AppSidebar({
           {!isOnline ? (
             <div className="space-y-2 rounded-lg bg-amber-50 p-2 text-left">
               <p className="font-medium text-amber-800">📡 目前沒有網路連線</p>
+              {userEmail && (
+                <div className="rounded-md bg-white/70 px-2 py-1.5">
+                  <p className="font-semibold text-slate-700">
+                    離線使用者：{userParticipantName || "未設定代號"}
+                  </p>
+                  <p className="truncate text-[10px] text-slate-500">
+                    {userEmail}
+                  </p>
+                </div>
+              )}
               <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800">
                 已載入資料仍可離線使用
               </span>

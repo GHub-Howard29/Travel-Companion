@@ -129,13 +129,19 @@
 - [x] 解除付款人名稱鎖定，保留 Email 對照為預設付款人；畫面區分付款人與記錄者。
 - [x] 帳目卡片以旅程成員代號顯示紀錄者，不直接顯示 Email；Excel 明細於支出人右側新增紀錄者。
 - [x] Excel 明細依支出幣別顯示合計，支出人幣別頁面依支出人與幣別分組顯示合計。
+- [x] PR 前 Excel 匯出、共用帳本與權限、Other Info 與連線狀態驗證通過。
+- [x] 驗證離線新增帳目於同步前刪除，恢復連線後不會上傳。
+- [x] 驗證在線刪除既有雲端帳目，重新登入及跨裝置後不會復活。
+- [x] 定案既有雲端帳目離線時不提供修改／刪除；須恢復連線後操作，避免在沒有可靠身分與刪除佇列時誤刪。
+- [x] 離線側欄在現有 session 可確認身分時顯示使用者代號與 Email，不另外猜測過期帳號。
 - [x] 建立帳本 ownership／RLS schema 與驗證 SQL。
 - [x] 在 Supabase 套用 `011_expense_ownership_and_merge_schema.sql` 並執行 `012_expense_ownership_and_merge_validation.sql`；欄位、4 個索引、4 項 RLS policy、2 個 trigger、grants 與資料回填皆驗證通過。
 - [x] `npm run lint` 與 `npm run build` 通過。
 - [x] 本機 production preview 驗證 V3.4.1、旅程載入與旅行工具切換，瀏覽器無 warning／error。
-- [ ] 驗證離線重新載入、本機旅程資料回退及恢復連線後的 session／權限狀態。
-- [ ] 驗證 Online／Offline／弱網路 CRUD 立即反映、新增不重複、刪除不復活、快速操作不回退。
-- [ ] 實機驗證 A+B 疊加、A 代 B 記帳、一般記錄者 ownership、super_admin 管理全部及跨帳號離線佇列隔離。
+- [x] 驗證離線重新載入、本機旅程資料回退及恢復連線後的 session／權限狀態。
+- [x] 驗證 Online／Offline／弱網路 CRUD 立即反映、新增不重複、刪除不復活、快速操作不回退。
+- [x] 驗證 A+B 疊加、A 代 B 記帳、一般紀錄者 ownership、super_admin 管理全部及跨帳號離線佇列隔離。
+- [ ] 實機驗證離線側欄顯示目前使用者代號與 Email；無可確認 session 時不得顯示猜測帳號。
 
 完整規格：
 
