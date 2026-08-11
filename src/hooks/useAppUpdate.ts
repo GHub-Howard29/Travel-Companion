@@ -92,13 +92,6 @@ const fetchLatestVersionMetadata = async (): Promise<AppVersionMetadata | null> 
   }
 };
 
-const clearAppCacheStorage = async () => {
-  if (!("caches" in window)) return;
-
-  const cacheNames = await caches.keys();
-  await Promise.all(cacheNames.map((cacheName) => caches.delete(cacheName)));
-};
-
 const reloadPage = () => {
   window.location.reload();
 };
@@ -158,12 +151,6 @@ export const useAppUpdate = () => {
     setCurrentVersion(latestMetadata.version);
     setReleaseNoticeVisible(false);
     setUpdateAvailable(false);
-
-    try {
-      await clearAppCacheStorage();
-    } catch (error) {
-      console.warn("Failed to clear app cache storage before update.", error);
-    }
 
     if (updateAvailable) {
       const fallbackReloadTimer = window.setTimeout(reloadPage, 1500);

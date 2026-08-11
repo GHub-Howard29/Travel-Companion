@@ -21,6 +21,7 @@ import {
 } from "./tripCloudService";
 import { getCloudOtherInfoItems } from "./otherInfoCloudService";
 import { sortTripsByDateDesc } from "../utils/tripHelpers";
+import { readOtherInfoSyncState } from "../storage/otherInfoSyncStorage";
 
 const SPECIAL_INFO_SCREEN_ID = "trip_special_info";
 const LEGACY_SPECIAL_INFO_SCREEN_IDS = new Set([
@@ -175,9 +176,12 @@ const mergeOtherInfoItems = (
   });
 
   cloudItems.forEach((item) => {
-    // Keep a tombstone saved with the trip record so a legacy cloud row that
-    // cannot be soft-deleted does not reappear after the next refresh.
-    if (!mergedItemsById.get(item.id)?.isDeleted) {
+    const localItem = mergedItemsById.get(item.id);
+    if (
+      !localItem ||
+      (!localItem.isDeleted &&
+        new Date(item.updatedAt).getTime() > new Date(localItem.updatedAt).getTime())
+    ) {
       mergedItemsById.set(item.id, item);
     }
   });
@@ -270,10 +274,14 @@ const normalizeParticipantEmailMap = (
 };
 
 const fetchJson = async <T>(url: string): Promise<T | null> => {
-  const response = await fetch(url);
-  if (!response.ok) return null;
+  try {
+    const response = await fetch(url);
+    if (!response.ok) return null;
 
-  return (await response.json()) as T;
+    return (await response.json()) as T;
+  } catch {
+    return null;
+  }
 };
 
 const withDayCount = (trip: TripMeta, detail: TripDetail | null): TripMeta => {
@@ -363,10 +371,26 @@ export const getTripMetas = async (
     (await fetchJson<TripMeta[]>(seedUrl)) ?? [],
   );
   const cloudRecords = await getCloudTripRecords(supabase);
-  const storedRecords =
-    cloudRecords.length > 0
-      ? replaceStoredTripRecords(cloudRecords)
-      : readStoredTripRecords();
+  const currentStoredRecords = readStoredTripRecords();
+  const storedRecords = (() => {
+    if (cloudRecords.length === 0) return currentStoredRecords;
+
+    const recordsById = new Map(
+      cloudRecords.map((record) => [record.meta.id, record]),
+    );
+    currentStoredRecords.forEach((record) => {
+      const cloudRecord = recordsById.get(record.meta.id);
+      if (
+        readOtherInfoSyncState(record.meta.id) ||
+        !cloudRecord ||
+        isNewerRecord(record, cloudRecord)
+      ) {
+        recordsById.set(record.meta.id, record);
+      }
+    });
+
+    return replaceStoredTripRecords(Array.from(recordsById.values()));
+  })();
 
   return mergeTripRecords(seedTrips, cloudRecords, storedRecords);
 };
@@ -385,6 +409,10 @@ export const getTripDetail = async (
   );
   const latestRecord = chooseLatestRecord([cloudTrip, storedTrip]);
   if (latestRecord) {
+    if (readOtherInfoSyncState(tripId) && storedTrip) {
+      return normalizeTripDetail(storedTrip.detail, storedTrip.meta);
+    }
+
     const cloudOtherInfoItems = await getCloudOtherInfoItems(supabase, tripId);
 
     if (cloudOtherInfoItems && cloudOtherInfoItems.length > 0) {

@@ -109,9 +109,11 @@ export const upsertCloudOtherInfoItems = async (
     .filter((item) => item.tripId === tripId && !item.isDeleted)
     .map((item) => toCloudRow(tripId, item));
 
-  if (!navigator.onLine || activeRows.length === 0) {
+  if (!navigator.onLine) {
     return false;
   }
+
+  if (activeRows.length === 0) return true;
 
   for (const row of activeRows) {
     const { data: existingRow, error: selectError } = await supabase
@@ -147,9 +149,11 @@ export const deleteCloudOtherInfoItems = async (
 ): Promise<boolean> => {
   const activeItemIds = itemIds.filter(Boolean);
 
-  if (!navigator.onLine || activeItemIds.length === 0) {
+  if (!navigator.onLine) {
     return false;
   }
+
+  if (activeItemIds.length === 0) return true;
 
   // Older rows were created before client_item_id existed.  They are exposed to
   // the UI as `cloud_<database id>`, so support both identifier formats here.
@@ -198,7 +202,9 @@ export const syncCloudOtherInfoItems = async (
   tripId: string,
   items: OtherInfoItem[],
   removedItemIds: string[],
-): Promise<void> => {
-  await upsertCloudOtherInfoItems(supabase, tripId, items);
-  await deleteCloudOtherInfoItems(supabase, tripId, removedItemIds);
+): Promise<boolean> => {
+  const didUpsert = await upsertCloudOtherInfoItems(supabase, tripId, items);
+  if (!didUpsert) return false;
+
+  return deleteCloudOtherInfoItems(supabase, tripId, removedItemIds);
 };

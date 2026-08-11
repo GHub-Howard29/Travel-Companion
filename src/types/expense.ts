@@ -1,5 +1,6 @@
 export interface ExpenseItem { 
   id: string; 
+  client_item_id?: string;
   trip_id: string; 
   title: string; 
   amount: number; 
@@ -7,6 +8,10 @@ export interface ExpenseItem {
   currency?: string;
   expense_date?: string;
   created_at?: string;
+  updated_at?: string;
+  deleted_at?: string | null;
+  owner_user_id?: string | null;
+  recorded_by_email?: string | null;
   attachment_bucket?: string | null;
   attachment_path?: string | null;
   attachment_name?: string | null;

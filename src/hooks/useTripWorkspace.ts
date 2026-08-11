@@ -15,6 +15,7 @@ import {
   getTripMetas,
   getSuperAdminEmails,
   saveTripRecordWithCloudSync,
+  saveTripRecord,
   syncTripEditorEmails,
   updateTripRecord,
 } from "../services/tripRepository";
@@ -26,6 +27,8 @@ interface UseTripWorkspaceOptions {
 export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) {
   const [userId, setUserId] = useState<string | null>(null);
   const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [isSessionReady, setIsSessionReady] = useState(false);
+  const [isOnline, setIsOnline] = useState(() => navigator.onLine);
   const [tripOptions, setTripOptions] = useState<TripMeta[]>([]);
   const [selectedTripId, setSelectedTripId] = useState<string>("");
   const [currentTrip, setCurrentTrip] = useState<TripDetail | null>(null);
@@ -96,9 +99,13 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
   }, []);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    void supabase.auth.getSession().then(({ data: { session } }) => {
       setUserId(session?.user?.id || null);
       setUserEmail(session?.user?.email || null);
+      setIsSessionReady(true);
+    }).catch((error) => {
+      console.warn("Failed to restore Supabase session", error);
+      setIsSessionReady(true);
     });
 
     const {
@@ -106,10 +113,22 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
     } = supabase.auth.onAuthStateChange((_event, session) => {
       setUserId(session?.user?.id || null);
       setUserEmail(session?.user?.email || null);
+      setIsSessionReady(true);
     });
 
     return () => subscription.unsubscribe();
   }, [supabase]);
+
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, []);
 
   useEffect(() => {
     getTripMetas(supabase, getBasePath())
@@ -122,7 +141,10 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
           setSelectedTripId(initialTrip.id);
         }
       })
-      .catch((error) => console.error(error));
+      .catch((error) => {
+        console.error(error);
+        setIsLoading(false);
+      });
   }, [getBasePath, supabase]);
 
   useEffect(() => {
@@ -145,9 +167,11 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
               ...tripData.sidebarConfig.map((screen) => screen.id),
               "privateChecklist",
             ];
-            if (!validScreenIds.includes(currentScreen)) {
-              setCurrentScreen(tripData.sidebarConfig[0].id);
-            }
+            setCurrentScreen((screen) =>
+              validScreenIds.includes(screen)
+                ? screen
+                : tripData.sidebarConfig[0].id,
+            );
           }
         }
       } catch (error) {
@@ -244,7 +268,7 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
     };
 
     void loadTripAndAuthData();
-  }, [currentScreen, getBasePath, selectedTripId, selectedTripMeta, supabase, userEmail]);
+  }, [getBasePath, selectedTripId, selectedTripMeta, supabase, userEmail]);
 
   const createTrip = useCallback(
     async (input: TripEditorInput, syncEditors = true) => {
@@ -361,9 +385,28 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
     ],
   );
 
+  const saveCurrentTripDetailLocally = useCallback(
+    (nextTrip: TripDetail) => {
+      if (!selectedTripMeta) return null;
+
+      const record = createTripRecordFromDetail(
+        selectedTripMeta,
+        nextTrip,
+        currentTripEditorEmails,
+      );
+      saveTripRecord(record);
+      setCurrentTrip(record.detail);
+      setIsLoading(false);
+      return record;
+    },
+    [currentTripEditorEmails, selectedTripMeta],
+  );
+
   return {
     userEmail,
     userId,
+    isSessionReady,
+    isOnline,
     setUserId,
     setUserEmail,
     tripOptions,
@@ -401,6 +444,7 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
     deleteTrip,
     refreshTripOptionsAndSelect,
     saveCurrentTripDetail,
+    saveCurrentTripDetailLocally,
     currentTripEditorEmails,
     superAdminEmails,
   };

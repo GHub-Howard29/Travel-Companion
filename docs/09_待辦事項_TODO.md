@@ -1,10 +1,10 @@
 ﻿# 開發進度與待辦事項
 
-> 目前版本：V3.4.0（已發布、合併及部署，待部署後實機驗證）；下一個修正版本：V3.4.1。
+> 目前開發版本：V3.4.1（程式完成，待資料庫套用與實機驗證）；已發布版本：V3.4.0。
 >
 > 已發布版本：V3.4.0。
 >
-> 最後更新：2026-08-06
+> 最後更新：2026-08-11
 
 ---
 
@@ -114,20 +114,26 @@
 - [x] 修正目前版本與可更新版本的顯示語意，已讀版本不再冒充目前執行版本。
 - [x] 修正 Android／iOS 手機對話框高度、捲動與底部安全區。
 - [ ] 實機驗證「馬上更新」、「稍後更新」、「我知道了」及手機按鈕位置。
-- [ ] 修正 PWA 斷網重開可用、但離線刷新會顯示「無法顯示頁面」的導覽 fallback／快取時序問題。
+- [x] 修正 PWA 斷網重開可用、但離線刷新會顯示「無法顯示頁面」的導覽 fallback／快取時序問題。
 - [ ] 實機驗證離線重開、離線刷新及刷新後旅行工具切換均正常。
-- [ ] 新增明確的瀏覽器連線狀態，監聽 `online`／`offline` 事件。
-- [ ] 側欄不再以 `!userEmail && hasEditPermission` 直接判斷為離線。
-- [ ] 分開呈現線上未登入、線上已登入、離線無權限、離線有快取權限。
-- [ ] 網路恢復後重新確認 Supabase session 與目前旅程權限。
-- [ ] Other Info 新增、修改、刪除改為立即更新畫面並先保存本機。
-- [ ] 每個 Trip 保存單一最新待同步快照與 revision，不建立逐筆 Queue。
-- [ ] 同一 Trip 背景同步序列化，兩個雲端資料來源都成功且 revision 未改變後才清除 pending。
-- [ ] 刪除保留 tombstone，pending 完成前防止較舊雲端資料覆蓋本機 Other Info。
-- [ ] 加入 online、App 聚焦與進入頁面時的自動重試，以及待同步／同步失敗提示。
+- [x] 新增明確的瀏覽器連線狀態，監聽 `online`／`offline` 事件。
+- [x] 側欄不再以 `!userEmail && hasEditPermission` 直接判斷為離線。
+- [x] 分開呈現線上 session 恢復中、線上未登入、線上已登入與真正離線。
+- [x] 網路恢復後由 Auth listener、旅程權限載入與 pending 重試重新確認狀態。
+- [x] Other Info 新增、修改、刪除改為立即更新畫面並先保存本機。
+- [x] 每個 Trip 保存單一最新待同步快照與 revision，不建立逐筆 Queue。
+- [x] 同一 Trip 背景同步序列化，兩個雲端資料來源都成功且 revision 未改變後才清除 pending。
+- [x] 刪除保留 tombstone，pending 完成前防止較舊雲端資料覆蓋本機 Other Info。
+- [x] 加入 online、App 聚焦與進入頁面時的自動重試，以及待同步／同步失敗提示。
+- [x] 共用帳本採 A+B 聯集、穩定 ID 去重，離線待同步資料依登入者隔離。
+- [x] 解除付款人名稱鎖定，保留 Email 對照為預設付款人；畫面區分付款人與記錄者。
+- [x] 建立帳本 ownership／RLS schema 與驗證 SQL。
+- [ ] 在 Supabase 套用 `011_expense_ownership_and_merge_schema.sql` 並執行 `012_expense_ownership_and_merge_validation.sql`。
+- [x] `npm run lint` 與 `npm run build` 通過。
+- [x] 本機 production preview 驗證 V3.4.1、旅程載入與旅行工具切換，瀏覽器無 warning／error。
 - [ ] 驗證離線重新載入、本機旅程資料回退及恢復連線後的 session／權限狀態。
 - [ ] 驗證 Online／Offline／弱網路 CRUD 立即反映、新增不重複、刪除不復活、快速操作不回退。
-- [ ] 討論並確認在線時本機快取與雲端資料的首次顯示、短等待、更新提示及操作中延後套用規則。
+- [ ] 實機驗證 A+B 疊加、A 代 B 記帳、一般記錄者 ownership、super_admin 管理全部及跨帳號離線佇列隔離。
 
 完整規格：
 

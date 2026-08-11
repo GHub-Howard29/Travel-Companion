@@ -30,6 +30,16 @@ import { AppContext } from "./app/context/AppContext";
 import { ROLE } from "./permissions/roles";
 import { getTripDetail } from "./services/tripRepository";
 import { syncCloudOtherInfoItems } from "./services/otherInfoCloudService";
+import { upsertCloudTripRecord } from "./services/tripCloudService";
+import { readStoredTripRecords } from "./storage/tripStorage";
+import { writeStoredOtherInfoItems } from "./storage/otherInfoStorage";
+import {
+  clearOtherInfoSyncState,
+  markOtherInfoSyncFailed,
+  markOtherInfoSyncPending,
+  readOtherInfoSyncState,
+  type OtherInfoSyncStatus,
+} from "./storage/otherInfoSyncStorage";
 import {
   getSpecialInfoFolderId,
   getTravelToolHeaderBgClassName,
@@ -96,6 +106,8 @@ export default function App() {
   const {
     userEmail,
     userId,
+    isSessionReady,
+    isOnline,
     setUserId,
     setUserEmail,
     tripOptions,
@@ -130,6 +142,7 @@ export default function App() {
     deleteTrip,
     refreshTripOptionsAndSelect,
     saveCurrentTripDetail,
+    saveCurrentTripDetailLocally,
     currentTripEditorEmails,
     superAdminEmails,
   } = useTripWorkspace({ supabase });
@@ -137,6 +150,10 @@ export default function App() {
   const [isTripEditorOpen, setIsTripEditorOpen] = useState(false);
   const [isVersionInfoOpen, setIsVersionInfoOpen] = useState(false);
   const [isLoginSafetyOpen, setIsLoginSafetyOpen] = useState(false);
+  const [otherInfoSyncStatus, setOtherInfoSyncStatus] = useState<
+    OtherInfoSyncStatus | "syncing" | null
+  >(null);
+  const otherInfoSyncingTripsRef = useRef(new Set<string>());
   const [checklistCopySources, setChecklistCopySources] = useState<
     Array<{ tripId: string; title: string; items: ChecklistItem[] }>
   >([]);
@@ -180,6 +197,7 @@ export default function App() {
     paitAmounts,
     activeCurrencySymbol,
     exportsAllSharedExpenses,
+    canManageExpense,
     handleAttachmentSelection,
     handleAddExpense,
     cancelPendingDelete,
@@ -195,6 +213,7 @@ export default function App() {
   } = useExpenseBook({
     supabase,
     userEmail,
+    userId,
     selectedTripId,
     expenseBookTripId,
     isUsingSharedExpenseBook,
@@ -202,7 +221,7 @@ export default function App() {
     currentCurrencyCode,
     currentCurrencySymbol,
     expenseMembers,
-    lockedPayerName: currentUserParticipantName,
+    defaultPayerName: currentUserParticipantName,
     tripTitle: currentTrip?.title || selectedTripMeta?.title || selectedTripId || "travel",
   });
 
@@ -383,55 +402,129 @@ export default function App() {
       },
     });
   };
+  const syncPendingOtherInfo = useCallback(async () => {
+    const tripId = selectedTripId;
+    if (
+      !tripId ||
+      !navigator.onLine ||
+      !userId ||
+      !permission.canEditReference ||
+      otherInfoSyncingTripsRef.current.has(tripId)
+    ) {
+      return;
+    }
+
+    otherInfoSyncingTripsRef.current.add(tripId);
+    try {
+      while (navigator.onLine) {
+        const pending = readOtherInfoSyncState(tripId);
+        if (!pending) {
+          setOtherInfoSyncStatus(null);
+          break;
+        }
+
+        const record = readStoredTripRecords().find(
+          (item) => item.meta.id === tripId,
+        );
+        if (!record) break;
+
+        setOtherInfoSyncStatus("syncing");
+        const items = record.detail.content.otherInfoItems ?? [];
+        const didSyncItems = await syncCloudOtherInfoItems(
+          supabase,
+          tripId,
+          items.filter((item) => !item.isDeleted),
+          items.filter((item) => item.isDeleted).map((item) => item.id),
+        );
+        const syncedTrip = didSyncItems
+          ? await upsertCloudTripRecord(supabase, record)
+          : null;
+
+        if (!didSyncItems || !syncedTrip) {
+          markOtherInfoSyncFailed(
+            tripId,
+            pending.revision,
+            "Other Info 雲端同步未完成",
+          );
+          setOtherInfoSyncStatus("failed");
+          break;
+        }
+
+        if (clearOtherInfoSyncState(tripId, pending.revision)) {
+          setOtherInfoSyncStatus(null);
+          break;
+        }
+      }
+    } catch (error) {
+      const pending = readOtherInfoSyncState(tripId);
+      if (pending) {
+        markOtherInfoSyncFailed(tripId, pending.revision, error);
+        setOtherInfoSyncStatus("failed");
+      }
+    } finally {
+      otherInfoSyncingTripsRef.current.delete(tripId);
+    }
+  }, [permission.canEditReference, selectedTripId, userId]);
+
   const handleSaveOtherInfoItems = async (items: OtherInfoItem[]) => {
     if (!currentTrip) return;
 
-    const currentItemsById = new Map(
-      (currentTrip.content.otherInfoItems ?? []).map((item) => [item.id, item]),
-    );
-    const nextItemIdSet = new Set(items.map((item) => item.id));
-    const removedItemIds = items
-      .filter(
-        (item) =>
-          item.isDeleted && !currentItemsById.get(item.id)?.isDeleted,
-      )
-      .map((item) => item.id)
-      .concat(
-        (currentTrip.content.otherInfoItems ?? [])
-          .map((item) => item.id)
-          .filter((itemId) => !nextItemIdSet.has(itemId)),
-      );
-    const changedItems = items.filter((item) => {
-      const currentItem = currentItemsById.get(item.id);
-
-      return (
-        !currentItem ||
-        currentItem.folderId !== item.folderId ||
-        currentItem.title !== item.title ||
-        currentItem.content !== item.content ||
-        currentItem.order !== item.order ||
-        currentItem.isDeleted !== item.isDeleted ||
-        currentItem.updatedAt !== item.updatedAt ||
-        JSON.stringify(currentItem.allowedRoles ?? []) !==
-          JSON.stringify(item.allowedRoles ?? [])
-      );
-    });
-
-    await syncCloudOtherInfoItems(
-      supabase,
-      selectedTripId,
-      changedItems,
-      removedItemIds,
-    );
-
-    await saveCurrentTripDetail({
+    const nextTrip = {
       ...currentTrip,
       content: {
         ...currentTrip.content,
         otherInfoItems: items,
       },
-    });
+    };
+    writeStoredOtherInfoItems(selectedTripId, items);
+    saveCurrentTripDetailLocally(nextTrip);
+    markOtherInfoSyncPending(selectedTripId);
+    setOtherInfoSyncStatus("pending");
+    void syncPendingOtherInfo();
   };
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setOtherInfoSyncStatus(
+        selectedTripId
+          ? readOtherInfoSyncState(selectedTripId)?.status ?? null
+          : null,
+      );
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [selectedTripId]);
+
+  useEffect(() => {
+    const retry = () => void syncPendingOtherInfo();
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") retry();
+    };
+    window.addEventListener("online", retry);
+    window.addEventListener("focus", retry);
+    document.addEventListener("visibilitychange", handleVisibility);
+    retry();
+    return () => {
+      window.removeEventListener("online", retry);
+      window.removeEventListener("focus", retry);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, [syncPendingOtherInfo]);
+
+  useEffect(() => {
+    if (!navigator.onLine) return;
+    const preload = () => {
+      void Promise.allSettled([
+        import("./components/expense/ExpenseScreen"),
+        import("./components/ItineraryPage"),
+        import("./components/ChecklistPage"),
+        import("./components/PrivateChecklistPage"),
+        import("./components/OtherInfoPage"),
+        import("./components/ExchangeRatePage"),
+      ]);
+    };
+    const timer = window.setTimeout(preload, 1500);
+    return () => window.clearTimeout(timer);
+  }, []);
   const currentScreenType = getCurrentScreenType();
   const currentSidebarItem = currentTrip?.sidebarConfig.find(
     (item) => item.id === currentScreen,
@@ -536,6 +629,8 @@ export default function App() {
         tripOptions={tripOptions}
         currentTrip={currentTrip}
         userEmail={userEmail}
+        isOnline={isOnline}
+        isSessionReady={isSessionReady}
         hasEditPermission={hasEditPermission}
         adminProfile={adminProfile}
         currentScreen={currentScreen}
@@ -674,6 +769,7 @@ export default function App() {
                 pageTitle={currentSidebarItem?.title}
                 isSpecialInfoPage={isSpecialInfoPage}
                 specialFolderId={specialInfoFolderId}
+                syncStatus={otherInfoSyncStatus}
               />
             )}
 
@@ -684,6 +780,7 @@ export default function App() {
                 isUsingSharedExpenseBook={isUsingSharedExpenseBook}
                 exportsAllSharedExpenses={exportsAllSharedExpenses}
                 userEmail={userEmail}
+                canManageExpense={canManageExpense}
                 safeExpenses={safeExpenses}
                 filteredExpenses={filteredExpenses}
                 activeExpenseDate={activeExpenseDate}
@@ -696,7 +793,7 @@ export default function App() {
                 currentCurrencyCode={currentCurrencyCode}
                 currentCurrencySymbol={currentCurrencySymbol}
                 expenseMembers={expenseMembers}
-                lockedPayerName={currentUserParticipantName}
+                defaultPayerName={currentUserParticipantName}
                 totalExpense={totalExpense}
                 averageExpense={averageExpense}
                 memberShareAmounts={memberShareAmounts}

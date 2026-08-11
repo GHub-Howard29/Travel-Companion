@@ -1,5 +1,16 @@
 ﻿# Travel Companion Agent Guide
 
+## V3.4.1 程式實作交接（2026-08-11）
+
+- 目前 branch：`develop`；程式版本已升為 V3.4.1，尚未發布。
+- 已修正 PWA 離線刷新 App Shell、更新前清空快取空窗、工具切換重跑雲端載入、連線／session 誤判。
+- Other Info 已完成本機先存、每 Trip 單一 revision、序列化背景同步、tombstone、pending 覆蓋保護及重試提示。
+- 帳本已完成 A+B 聯集與代記帳：付款人可選，`owner_user_id` 固定登入者，離線 queue 依 owner 隔離，`client_item_id` 去重。
+- 部署前必須套用 `docs/sql/011_expense_ownership_and_merge_schema.sql`，再執行 `012_expense_ownership_and_merge_validation.sql`；目前尚未套用遠端資料庫。
+- `npm run lint` 與 `npm run build` 已通過；build 初始 JS 495.63 kB（gzip 143.68 kB），PWA precache 33 筆。
+- 尚待實機驗證，未通過前不得把 V3.4.1 標記為完成或已發布。
+- commit message 必須使用繁體中文。
+
 ## V3.4.0 前端載入效能交接（2026-08-05）
 
 - V3.4.0 已完成發布、合併及部署，尚待部署後實機驗證。

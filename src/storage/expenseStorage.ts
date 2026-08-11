@@ -89,6 +89,12 @@ export const toStoredExpenseItem = (
     value.id !== undefined && value.id !== null
     ? String(value.id)
     : `cached_${Math.random()}`,
+    client_item_id:
+      typeof value.client_item_id === 'string'
+        ? value.client_item_id
+        : typeof value.id === 'string' && value.id.startsWith('local_')
+          ? value.id
+          : undefined,
     trip_id: tripId,
     title: typeof value.title === 'string' && value.title ? value.title : '未命名消費',
     amount: Number(value.amount) || 0,
@@ -111,7 +117,41 @@ export const toStoredExpenseItem = (
     attachment_last_error: typeof value.attachment_last_error === 'string' ? value.attachment_last_error : null,
     local_attachment_id: typeof value.local_attachment_id === 'string' ? value.local_attachment_id : null,
     created_at: createdAt,
+    updated_at: typeof value.updated_at === 'string' ? value.updated_at : createdAt,
+    deleted_at: typeof value.deleted_at === 'string' ? value.deleted_at : null,
+    owner_user_id: typeof value.owner_user_id === 'string' ? value.owner_user_id : null,
+    recorded_by_email:
+      typeof value.recorded_by_email === 'string' ? value.recorded_by_email : null,
   };
+};
+
+const getExpenseMergeKey = (item: StoredExpenseItem): string =>
+  item.client_item_id || String(item.id);
+
+const getExpenseUpdatedAt = (item: StoredExpenseItem): number => {
+  const value = item.updated_at || item.created_at;
+  const timestamp = value ? new Date(value).getTime() : 0;
+  return Number.isFinite(timestamp) ? timestamp : 0;
+};
+
+/**
+ * 依穩定 client_item_id 疊加雲端快取與登入者自己的離線資料。
+ * payer 只是分帳欄位，不參與資料 ownership 或去重。
+ */
+export const mergeStoredExpenses = (
+  ...groups: StoredExpenseItem[][]
+): StoredExpenseItem[] => {
+  const merged = new Map<string, StoredExpenseItem>();
+
+  groups.flat().forEach((item) => {
+    const key = getExpenseMergeKey(item);
+    const current = merged.get(key);
+    if (!current || getExpenseUpdatedAt(item) >= getExpenseUpdatedAt(current)) {
+      merged.set(key, item);
+    }
+  });
+
+  return Array.from(merged.values()).filter((item) => !item.deleted_at);
 };
 
 /**
@@ -142,12 +182,20 @@ export const readStoredExpenses = (
  *
  * 回傳完整帳目清單。
  */
-export const getStoredExpensesForTrip = (tripId: string, fallbackCurrency: string): StoredExpenseItem[] => {
+export const getStoredExpensesForTrip = (
+  tripId: string,
+  fallbackCurrency: string,
+  ownerUserId?: string | null,
+): StoredExpenseItem[] => {
   const cachedExpenses = readStoredExpenses(`cached_expenses_${tripId}`, tripId, fallbackCurrency);
   const offlineExpenses = readStoredExpenses('offline_expenses', '', fallbackCurrency)
-    .filter((item) => item.trip_id === tripId);
+    .filter(
+      (item) =>
+        item.trip_id === tripId &&
+        (!ownerUserId || item.owner_user_id === ownerUserId),
+    );
 
-  return [...cachedExpenses, ...offlineExpenses];
+  return mergeStoredExpenses(cachedExpenses, offlineExpenses);
 };
 
 /**

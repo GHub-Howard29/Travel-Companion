@@ -328,7 +328,7 @@ export const TripEditorModal = ({
           </span>
           <p className="mt-1 text-xs leading-relaxed text-slate-400">
             每行填寫「名稱=Email」。左邊名稱會顯示在記帳本付款人，右邊 Email
-            用於鎖定登入者可使用的付款人；新增旅程時會先帶入目前登入 Email。
+            用於預設登入者的付款人名稱；記帳時仍可改選其他參與者代為記帳。新增旅程時會先帶入目前登入 Email。
           </p>
           <textarea
             value={participantAssignments}
