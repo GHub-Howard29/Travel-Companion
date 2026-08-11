@@ -1,6 +1,6 @@
 ﻿# 開發進度與待辦事項
 
-> 目前開發版本：V3.4.1（程式完成，待資料庫套用與實機驗證）；已發布版本：V3.4.0。
+> 目前開發版本：V3.4.1（程式與資料庫完成，待實機驗證）；已發布版本：V3.4.0。
 >
 > 已發布版本：V3.4.0。
 >
@@ -128,7 +128,7 @@
 - [x] 共用帳本採 A+B 聯集、穩定 ID 去重，離線待同步資料依登入者隔離。
 - [x] 解除付款人名稱鎖定，保留 Email 對照為預設付款人；畫面區分付款人與記錄者。
 - [x] 建立帳本 ownership／RLS schema 與驗證 SQL。
-- [ ] 在 Supabase 套用 `011_expense_ownership_and_merge_schema.sql` 並執行 `012_expense_ownership_and_merge_validation.sql`。
+- [x] 在 Supabase 套用 `011_expense_ownership_and_merge_schema.sql` 並執行 `012_expense_ownership_and_merge_validation.sql`；欄位、4 個索引、4 項 RLS policy、2 個 trigger、grants 與資料回填皆驗證通過。
 - [x] `npm run lint` 與 `npm run build` 通過。
 - [x] 本機 production preview 驗證 V3.4.1、旅程載入與旅行工具切換，瀏覽器無 warning／error。
 - [ ] 驗證離線重新載入、本機旅程資料回退及恢復連線後的 session／權限狀態。
@@ -485,6 +485,7 @@ Trip 管理
 - [ ] 評估既有 `public.tc_*` functions 的 `search_path` / `SECURITY DEFINER` advisors，確認是否需收斂 execute 權限或調整 function 定義。
 - [ ] 評估既有 `expenses` / `checklists` / `checklist_items` RLS initplan performance advisors，確認是否調整為 `(select auth.uid())` 等寫法。
 - [ ] 觀察新建 `expenses_trip_expense_date_idx` 是否於 V3.2.0 發布後被實際查詢使用；剛建立即被列為 unused index 屬正常早期狀態。
+- [x] V3.4.1 新增的 `expenses.owner_user_id` 外鍵已補 `expenses_owner_user_idx`，不再出現未建立索引的 advisor finding。
 
 ---
 

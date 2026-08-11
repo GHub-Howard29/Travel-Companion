@@ -25,6 +25,9 @@ on public.expenses (trip_id, client_item_id);
 create index if not exists expenses_trip_owner_idx
 on public.expenses (trip_id, owner_user_id);
 
+create index if not exists expenses_owner_user_idx
+on public.expenses (owner_user_id);
+
 create index if not exists expenses_trip_active_created_idx
 on public.expenses (trip_id, created_at)
 where deleted_at is null;
@@ -122,4 +125,3 @@ using (
 revoke all on public.expenses from anon;
 revoke all on public.expenses from authenticated;
 grant select, insert, update, delete on public.expenses to authenticated;
-

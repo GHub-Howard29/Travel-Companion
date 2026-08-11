@@ -19,6 +19,7 @@ where schemaname = 'public'
   and tablename = 'expenses'
   and indexname in (
     'expenses_one_client_item_per_trip',
+    'expenses_owner_user_idx',
     'expenses_trip_owner_idx',
     'expenses_trip_active_created_idx'
   )
