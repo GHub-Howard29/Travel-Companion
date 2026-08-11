@@ -26,7 +26,7 @@ import {
 } from "../utils/attachmentUtils";
 import { cancelEditExpense, startEditExpense } from "../utils/expenseActions";
 import { getExportFileNameXlsx } from "../utils/exportUtils";
-import { getParticipantAliasByEmail } from "../utils/participantUtils";
+import { getExpenseRecorderAlias } from "../utils/participantUtils";
 import type { EditExpenseDraft, ExpenseItem, LocalAttachmentRecord } from "../types";
 
 interface UseExpenseBookOptions {
@@ -1386,9 +1386,11 @@ useEffect(() => {
       }
       const attachmentName = item.attachment_name || "無附件";
       const payer = item.payer || "未知";
-      const recorderAlias =
-        getParticipantAliasByEmail(item.recorded_by_email, participantEmailMap) ||
-        "未設定代號";
+      const recorderAlias = getExpenseRecorderAlias(
+        item.recorded_by_email,
+        payer,
+        participantEmailMap,
+      );
       const currencySymbol = targetConfig?.symbol || currentCurrencySymbol;
       const summaryKey = `${payer}\u0000${currencyCode}`;
       const existingTotal = payerCurrencyTotals.get(summaryKey);

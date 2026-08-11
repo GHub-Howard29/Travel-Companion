@@ -13,7 +13,7 @@ import {
 import { type Dispatch, type FormEvent, type SetStateAction } from "react";
 import { SUPPORTED_CURRENCIES } from "../../constants/appConstants";
 import { formatFileSize } from "../../utils/attachmentUtils";
-import { getParticipantAliasByEmail } from "../../utils/participantUtils";
+import { getExpenseRecorderAlias } from "../../utils/participantUtils";
 import type { EditExpenseDraft, ExpenseItem } from "../../types";
 
 interface ExpenseScreenProps {
@@ -767,13 +767,14 @@ export default function ExpenseScreen({
                         <span className="max-w-full break-words rounded bg-sky-50 px-2 py-1 text-[11px] font-semibold leading-snug text-sky-800 [overflow-wrap:anywhere]">
                           付款人：{item.payer || "未知"}
                         </span>
-                        {isUsingSharedExpenseBook && item.recorded_by_email && (
+                        {isUsingSharedExpenseBook && (
                           <span className="max-w-full break-words rounded bg-slate-50 px-2 py-1 text-[11px] font-semibold leading-snug text-slate-500 [overflow-wrap:anywhere]">
                             紀錄者：
-                            {getParticipantAliasByEmail(
+                            {getExpenseRecorderAlias(
                               item.recorded_by_email,
+                              item.payer,
                               participantEmailMap,
-                            ) || "未設定代號"}
+                            )}
                           </span>
                         )}
                       </div>
