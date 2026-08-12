@@ -1,7 +1,7 @@
 /** App 發布版本設定；須與 public/app-version.json 保持一致。 */
 export const APP_VERSION = "3.4.1";
 
-export const RELEASE_DATE = "2026-08-11";
+export const RELEASE_DATE = "2026-08-12";
 
 export const RELEASE_NOTES = [
   "改善離線刷新與旅行工具載入穩定性",

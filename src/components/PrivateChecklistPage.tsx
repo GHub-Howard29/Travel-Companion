@@ -80,7 +80,7 @@ export const PrivateChecklistPage = ({
   };
 
   useEffect(() => {
-    if (!userEmail || !canSyncPrivateChecklist) {
+    if (!userEmail || !canSyncPrivateChecklist || !isOnline) {
       return;
     }
 
@@ -107,7 +107,7 @@ export const PrivateChecklistPage = ({
     return () => {
       isActive = false;
     };
-  }, [canSyncPrivateChecklist, copySourceRetryKey, supabase, userEmail]);
+  }, [canSyncPrivateChecklist, copySourceRetryKey, isOnline, supabase, userEmail]);
 
   useEffect(() => {
     if (copySourceLoadStatus !== "error") return;
@@ -289,9 +289,11 @@ export const PrivateChecklistPage = ({
                 如需複製使用舊有清單，請勿提早建立任何清單
               </p>
             )}
-            {canSyncPrivateChecklist && copySourceLoadStatus === "idle" && !isOnline && availableCopySources.length === 0 && (
+            {canSyncPrivateChecklist && !isOnline && (
               <p className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs font-bold text-sky-700">
-                目前為離線狀態，無法載入私人歷史清單；請恢復連線後再使用複製清單。
+                {availableCopySources.length > 0
+                  ? "目前為離線狀態，僅能使用已載入的私人歷史清單。"
+                  : "目前為離線狀態，無法載入私人歷史清單；請恢復連線後再使用複製清單。"}
               </p>
             )}
             {canSyncPrivateChecklist && copySourceLoadStatus === "idle" && isOnline && availableCopySources.length === 0 && (
@@ -299,7 +301,7 @@ export const PrivateChecklistPage = ({
                 正在載入私人歷史清單...
               </p>
             )}
-            {canSyncPrivateChecklist && copySourceLoadStatus === "error" && availableCopySources.length === 0 && (
+            {canSyncPrivateChecklist && isOnline && copySourceLoadStatus === "error" && availableCopySources.length === 0 && (
               <div className="flex flex-col gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800 sm:flex-row sm:items-center sm:justify-between">
                 <span>私人歷史清單載入失敗</span>
                 <button
