@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { PrivateChecklist, PrivateChecklistItem } from "../types";
 import {
   clearPrivateChecklistPending,
+  readPrivateChecklistPending,
   readPrivateChecklistPendingRevision,
   readStoredPrivateChecklist,
   writeStoredPrivateChecklist,
@@ -31,6 +32,28 @@ interface CloudPrivateChecklistCopyRow {
 
 const PRIVATE_CHECKLIST_TITLE = "私人確認清單";
 const privateChecklistPushQueues = new Map<string, Promise<void>>();
+
+const mergePendingPrivateChecklist = (
+  localChecklist: PrivateChecklist,
+  cloudChecklist: PrivateChecklist | null,
+  baseItemIds: string[] | null,
+): PrivateChecklist => {
+  if (!cloudChecklist) return localChecklist;
+
+  const localItemIds = new Set(localChecklist.items.map((item) => item.id));
+  const baseItemIdSet = new Set(baseItemIds ?? []);
+  const remoteOnlyItems = cloudChecklist.items.filter(
+    (item) => !localItemIds.has(item.id) && !baseItemIdSet.has(item.id),
+  );
+
+  if (remoteOnlyItems.length === 0) return localChecklist;
+
+  return {
+    ...localChecklist,
+    items: [...localChecklist.items, ...remoteOnlyItems],
+    updatedAt: new Date().toISOString(),
+  };
+};
 
 const getCurrentUserId = async (
   supabase: SupabaseClient,
@@ -281,14 +304,28 @@ export const syncPrivateChecklistWithCloud = async (
   userEmail: string,
 ): Promise<PrivateChecklist> => {
   const initialLocalChecklist = readStoredPrivateChecklist(tripId, userEmail);
-  const initialPendingRevision = readPrivateChecklistPendingRevision(
+  const initialPending = readPrivateChecklistPending(
     tripId,
     userEmail,
   );
 
-  if (initialPendingRevision) {
-    await pushPrivateChecklistToCloud(supabase, initialLocalChecklist);
-    clearPrivateChecklistPending(tripId, userEmail, initialPendingRevision);
+  if (initialPending) {
+    const cloudChecklist = await getCloudPrivateChecklist(
+      supabase,
+      tripId,
+      userEmail,
+    );
+    const latestLocalChecklist = readStoredPrivateChecklist(tripId, userEmail);
+    const latestPending = readPrivateChecklistPending(tripId, userEmail) ??
+      initialPending;
+    const mergedChecklist = mergePendingPrivateChecklist(
+      latestLocalChecklist,
+      cloudChecklist,
+      latestPending.baseItemIds,
+    );
+    writeStoredPrivateChecklist(mergedChecklist);
+    await pushPrivateChecklistToCloud(supabase, mergedChecklist);
+    clearPrivateChecklistPending(tripId, userEmail, latestPending.revision);
     return readStoredPrivateChecklist(tripId, userEmail);
   }
 

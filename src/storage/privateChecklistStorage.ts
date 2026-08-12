@@ -4,6 +4,11 @@ const PRIVATE_CHECKLIST_STORAGE_PREFIX = "travel_companion_private_checklist";
 const PRIVATE_CHECKLIST_PENDING_PREFIX =
   "travel_companion_pending_private_checklist";
 
+export interface PrivateChecklistPendingState {
+  revision: string;
+  baseItemIds: string[] | null;
+}
+
 const getPrivateChecklistStorageKey = (
   tripId: string,
   userEmail: string,
@@ -101,20 +106,60 @@ const getPrivateChecklistPendingKey = (
 
 export const markPrivateChecklistPending = (
   checklist: PrivateChecklist,
+  baseItemIds: string[],
 ): string => {
   const revision = crypto.randomUUID();
+  const currentPending = readPrivateChecklistPending(
+    checklist.tripId,
+    checklist.userEmail,
+  );
   localStorage.setItem(
     getPrivateChecklistPendingKey(checklist.tripId, checklist.userEmail),
-    revision,
+    JSON.stringify({
+      revision,
+      baseItemIds: currentPending?.baseItemIds ?? baseItemIds,
+    } satisfies PrivateChecklistPendingState),
   );
   return revision;
+};
+
+export const readPrivateChecklistPending = (
+  tripId: string,
+  userEmail: string,
+): PrivateChecklistPendingState | null => {
+  const rawData = localStorage.getItem(
+    getPrivateChecklistPendingKey(tripId, userEmail),
+  );
+  if (!rawData) return null;
+
+  try {
+    const parsedData = JSON.parse(rawData) as Partial<PrivateChecklistPendingState>;
+    if (
+      typeof parsedData.revision === "string" &&
+      (parsedData.baseItemIds === null ||
+        (Array.isArray(parsedData.baseItemIds) &&
+          parsedData.baseItemIds.every((itemId) => typeof itemId === "string")))
+    ) {
+      return {
+        revision: parsedData.revision,
+        baseItemIds: parsedData.baseItemIds,
+      };
+    }
+  } catch {
+    // 舊版 pending 只保存 revision 字串；保留相容但不推測其合併基準。
+  }
+
+  return {
+    revision: rawData,
+    baseItemIds: null,
+  };
 };
 
 export const readPrivateChecklistPendingRevision = (
   tripId: string,
   userEmail: string,
 ): string | null =>
-  localStorage.getItem(getPrivateChecklistPendingKey(tripId, userEmail));
+  readPrivateChecklistPending(tripId, userEmail)?.revision ?? null;
 
 export const clearPrivateChecklistPending = (
   tripId: string,

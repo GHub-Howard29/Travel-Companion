@@ -190,7 +190,7 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
       let profile: AdminUser | null = null;
       const cachedProfile = localStorage.getItem(`admin_profile_${selectedTripId}`);
 
-      if (userEmail && navigator.onLine) {
+      if (userEmail && isOnline) {
         try {
           const { data, error } = await supabase
             .from("admin_users")
@@ -266,7 +266,7 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
     };
 
     void loadTripAndAuthData();
-  }, [getBasePath, selectedTripId, selectedTripMeta, supabase, userEmail]);
+  }, [getBasePath, isOnline, selectedTripId, selectedTripMeta, supabase, userEmail]);
 
   const createTrip = useCallback(
     async (input: TripEditorInput, syncEditors = true) => {
