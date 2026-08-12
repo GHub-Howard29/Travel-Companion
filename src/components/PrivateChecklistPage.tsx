@@ -300,12 +300,12 @@ export const PrivateChecklistPage = ({
               </p>
             )}
             {canSyncPrivateChecklist && copySourceLoadStatus === "error" && availableCopySources.length === 0 && (
-              <div className="flex items-center justify-between gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800">
-                <span>無法載入私人歷史清單，請確認網路連線後再試一次。</span>
+              <div className="flex flex-col gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800 sm:flex-row sm:items-center sm:justify-between">
+                <span>私人歷史清單載入失敗</span>
                 <button
                   type="button"
                   onClick={retryCopySourceLoad}
-                  className="shrink-0 rounded-md border border-amber-400 bg-white px-2 py-1 text-amber-800 hover:bg-amber-100"
+                  className="w-full shrink-0 rounded-md border border-amber-400 bg-white px-2 py-1 text-amber-800 hover:bg-amber-100 sm:w-auto"
                 >
                   重新載入
                 </button>
