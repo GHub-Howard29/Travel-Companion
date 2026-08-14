@@ -634,7 +634,10 @@ export default function App() {
       onUpdate={update}
       onDismiss={dismiss}
     />
-    <InstallAppPrompt />
+    <InstallAppPrompt
+      isAuthenticated={Boolean(userEmail)}
+      isAppReady={isSessionReady && !isLoading}
+    />
     <LoginSafetyModal
       isOpen={isLoginSafetyOpen}
       isIosStandalonePwa={isIosStandalonePwa()}
