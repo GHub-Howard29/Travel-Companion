@@ -79,7 +79,10 @@ const screenLoadingFallback = (
 // --- 初始化 Supabase 雲端客戶端 ---
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
+const supabase =
+  supabaseUrl?.trim() && supabaseAnonKey?.trim()
+    ? createClient(supabaseUrl, supabaseAnonKey)
+    : null;
 
 const isIosStandalonePwa = () => {
   const navigatorWithStandalone = navigator as Navigator & {
@@ -93,6 +96,33 @@ const isIosStandalonePwa = () => {
 };
 
 export default function App() {
+  if (!supabase) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-slate-50 px-6 text-slate-800">
+        <section className="w-full max-w-lg rounded-2xl border border-amber-200 bg-white p-6 shadow-sm">
+          <h1 className="text-xl font-semibold">APP 設定尚未完成</h1>
+          <p className="mt-3 leading-7 text-slate-600">
+            目前缺少 Supabase 連線設定，請確認建置環境已設定
+            <code className="mx-1 rounded bg-slate-100 px-1.5 py-0.5 text-sm">VITE_SUPABASE_URL</code>
+            與
+            <code className="mx-1 rounded bg-slate-100 px-1.5 py-0.5 text-sm">
+              VITE_SUPABASE_ANON_KEY
+            </code>
+            後重新建置。
+          </p>
+        </section>
+      </main>
+    );
+  }
+
+  return <ConfiguredApp supabaseClient={supabase} />;
+}
+
+function ConfiguredApp({
+  supabaseClient: supabase,
+}: {
+  supabaseClient: NonNullable<typeof supabase>;
+}) {
   const {
     updateAvailable,
     promptMode,
@@ -467,7 +497,7 @@ export default function App() {
     } finally {
       otherInfoSyncingTripsRef.current.delete(tripId);
     }
-  }, [permission.canEditReference, selectedTripId, userId]);
+  }, [permission.canEditReference, selectedTripId, supabase, userId]);
 
   const handleSaveOtherInfoItems = async (items: OtherInfoItem[]) => {
     if (!currentTrip) return;
@@ -546,7 +576,7 @@ export default function App() {
     ).catch((error) => {
       console.warn("Private checklist preload failed", error);
     });
-  }, [isOnline, permission.canSyncPrivateChecklist, selectedTripId, userEmail]);
+  }, [isOnline, permission.canSyncPrivateChecklist, selectedTripId, supabase, userEmail]);
   const currentScreenType = getCurrentScreenType();
   const currentSidebarItem = currentTrip?.sidebarConfig.find(
     (item) => item.id === currentScreen,
@@ -611,7 +641,7 @@ export default function App() {
     return () => {
       isActive = false;
     };
-  }, [currentTrip, isOnline, selectedTripId, tripOptions]);
+  }, [currentTrip, isOnline, selectedTripId, supabase, tripOptions]);
 
   useEffect(() => {
     if (userEmail || !isAuthRequiredTravelTool(currentScreenType)) {
