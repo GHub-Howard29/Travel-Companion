@@ -378,10 +378,12 @@ export const ChecklistPage = ({
         )}
         {canSyncSharedChecklist && (
           <p className="mt-3 text-xs font-medium text-slate-500">
-            {syncStatus === "syncing" && "正在同步共同檢查清單..."}
-            {syncStatus === "synced" && "共同檢查清單已同步到雲端。"}
-            {syncStatus === "error" && syncError}
-            {syncStatus === "local" && "目前資料先保存於本機。"}
+            {!isOnline &&
+              "目前為離線狀態，資料先保存於本機；恢復連線後才會完整同步更新。"}
+            {isOnline && syncStatus === "syncing" && "正在同步共同檢查清單..."}
+            {isOnline && syncStatus === "synced" && "共同檢查清單已同步到雲端。"}
+            {isOnline && syncStatus === "error" && syncError}
+            {isOnline && syncStatus === "local" && "目前資料先保存於本機。"}
           </p>
         )}
         {!canSyncSharedChecklist && userEmail && (

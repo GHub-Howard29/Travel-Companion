@@ -6,6 +6,7 @@ import { arrayMove, SortableContext, verticalListSortingStrategy } from "@dnd-ki
 
 import { usePrivateChecklistState } from "../hooks/usePrivateChecklistState";
 import { listCloudPrivateChecklistCopies } from "../services/privateChecklistCloudService";
+import { readStoredPrivateChecklist } from "../storage/privateChecklistStorage";
 import { SortableCard } from "./SortableCard";
 import type { PrivateChecklist, TripMeta } from "../types";
 
@@ -68,7 +69,14 @@ export const PrivateChecklistPage = ({
   );
   const progressPercent =
     items.length > 0 ? (checkedCount / items.length) * 100 : 0;
-  const availableCopySources = copySources.filter(
+  const normalizedUserEmail = userEmail?.trim().toLowerCase() ?? "";
+  const storedCopySources = normalizedUserEmail
+    ? tripOptions
+        .map((trip) => readStoredPrivateChecklist(trip.id, normalizedUserEmail))
+        .filter((checklist) => checklist.items.length > 0)
+    : [];
+  const effectiveCopySources = isOnline ? copySources : storedCopySources;
+  const availableCopySources = effectiveCopySources.filter(
     (source) => source.tripId !== tripId && source.items.length > 0,
   );
   const selectedCopySource =
@@ -247,14 +255,24 @@ export const PrivateChecklistPage = ({
         </div>
         <p className="mt-3 text-xs font-medium text-slate-500">
           {!canSyncPrivateChecklist && "目前資料僅保存於此裝置。"}
-          {canSyncPrivateChecklist && syncStatus === "syncing" && "正在同步雲端..."}
-          {canSyncPrivateChecklist && syncStatus === "synced" && "已同步到雲端。"}
+          {canSyncPrivateChecklist && !isOnline &&
+            "目前為離線狀態，資料先保存於本機；恢復連線後才會完整同步更新。"}
+          {canSyncPrivateChecklist && isOnline && syncStatus === "syncing" && "正在同步雲端..."}
+          {canSyncPrivateChecklist && isOnline && syncStatus === "synced" && "已同步到雲端。"}
           {canSyncPrivateChecklist &&
+            isOnline &&
             syncStatus === "emptyCloud" &&
             "雲端私人清單已準備好，新增項目後會同步。"}
-          {canSyncPrivateChecklist && syncStatus === "error" && syncError}
-          {canSyncPrivateChecklist && syncStatus === "local" && "目前資料先保存於本機。"}
+          {canSyncPrivateChecklist && isOnline && syncStatus === "error" && syncError}
+          {canSyncPrivateChecklist && isOnline && syncStatus === "local" && "目前資料先保存於本機。"}
         </p>
+        {canSyncPrivateChecklist && !isOnline && (
+          <p className="mt-2 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs font-bold text-sky-700">
+            {availableCopySources.length > 0
+              ? "私人歷史清單：目前僅能使用已載入的本機資料。"
+              : "私人歷史清單：目前沒有已載入的來源，請恢復連線後再使用複製清單。"}
+          </p>
+        )}
         {canEditPrivateChecklist && (
           <div className="mt-3 flex justify-end">
             <button
@@ -287,13 +305,6 @@ export const PrivateChecklistPage = ({
             {canSyncPrivateChecklist && (
               <p className="rounded-lg border border-amber-300 bg-amber-100 px-3 py-2 text-xs font-bold text-amber-900">
                 如需複製使用舊有清單，請勿提早建立任何清單
-              </p>
-            )}
-            {canSyncPrivateChecklist && !isOnline && (
-              <p className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs font-bold text-sky-700">
-                {availableCopySources.length > 0
-                  ? "目前為離線狀態，僅能使用已載入的私人歷史清單。"
-                  : "目前為離線狀態，無法載入私人歷史清單；請恢復連線後再使用複製清單。"}
               </p>
             )}
             {canSyncPrivateChecklist && copySourceLoadStatus === "idle" && isOnline && availableCopySources.length === 0 && (

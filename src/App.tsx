@@ -729,6 +729,7 @@ export default function App() {
         currentTrip={currentTrip}
         isUsingSharedExpenseBook={isUsingSharedExpenseBook}
         userEmail={userEmail}
+        isOnline={isOnline}
         onOpenMenu={() => setIsMenuOpen(true)}
         headerBgClassName={getTravelToolHeaderBgClassName(currentScreenType)}
       />

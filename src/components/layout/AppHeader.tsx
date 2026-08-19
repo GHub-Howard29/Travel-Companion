@@ -5,6 +5,7 @@ interface AppHeaderProps {
   currentTrip: TripDetail | null;
   isUsingSharedExpenseBook: boolean;
   userEmail: string | null;
+  isOnline: boolean;
   onOpenMenu: () => void;
   headerBgClassName: string;
 }
@@ -13,6 +14,7 @@ export default function AppHeader({
   currentTrip,
   isUsingSharedExpenseBook,
   userEmail,
+  isOnline,
   onOpenMenu,
   headerBgClassName,
 }: AppHeaderProps) {
@@ -45,7 +47,9 @@ export default function AppHeader({
                 </>
               )}
               <span>
-                {isUsingSharedExpenseBook
+                {!isOnline
+                  ? "📴 離線使用中"
+                  : isUsingSharedExpenseBook
                   ? "🌍 共用帳本同步中"
                   : userEmail
                     ? "個人帳本模式"
