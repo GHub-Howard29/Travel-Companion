@@ -560,23 +560,43 @@ function ConfiguredApp({
   }, []);
 
   useEffect(() => {
-    if (
-      !isOnline ||
-      !selectedTripId ||
-      !userEmail ||
-      !permission.canSyncPrivateChecklist
-    ) {
+    if (!isOnline || !userEmail) {
       return;
     }
 
-    void syncPrivateChecklistWithCloud(
-      supabase,
-      selectedTripId,
-      userEmail.trim().toLowerCase(),
-    ).catch((error) => {
-      console.warn("Private checklist preload failed", error);
+    const now = new Date();
+    const today = [
+      now.getFullYear(),
+      String(now.getMonth() + 1).padStart(2, "0"),
+      String(now.getDate()).padStart(2, "0"),
+    ].join("-");
+    const preloadTripIds = tripOptions
+      .filter((trip) => trip.departureDate >= today)
+      .filter(
+        (trip) =>
+          role === ROLE.SUPER_ADMIN ||
+          (role === ROLE.TRIP_EDITOR && trip.id === adminProfile?.trip_id),
+      )
+      .map((trip) => trip.id);
+
+    if (preloadTripIds.length === 0) return;
+
+    const normalizedEmail = userEmail.trim().toLowerCase();
+    void Promise.allSettled(
+      preloadTripIds.map((tripId) =>
+        syncPrivateChecklistWithCloud(supabase, tripId, normalizedEmail),
+      ),
+    ).then((results) => {
+      results.forEach((result, index) => {
+        if (result.status === "rejected") {
+          console.warn(
+            `Private checklist preload failed: ${preloadTripIds[index]}`,
+            result.reason,
+          );
+        }
+      });
     });
-  }, [isOnline, permission.canSyncPrivateChecklist, selectedTripId, supabase, userEmail]);
+  }, [adminProfile?.trip_id, isOnline, role, supabase, tripOptions, userEmail]);
   const currentScreenType = getCurrentScreenType();
   const currentSidebarItem = currentTrip?.sidebarConfig.find(
     (item) => item.id === currentScreen,

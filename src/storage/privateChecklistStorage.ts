@@ -113,11 +113,14 @@ export const markPrivateChecklistPending = (
     checklist.tripId,
     checklist.userEmail,
   );
+  const mergedBaseItemIds = Array.from(
+    new Set([...(currentPending?.baseItemIds ?? []), ...baseItemIds]),
+  );
   localStorage.setItem(
     getPrivateChecklistPendingKey(checklist.tripId, checklist.userEmail),
     JSON.stringify({
       revision,
-      baseItemIds: currentPending?.baseItemIds ?? baseItemIds,
+      baseItemIds: mergedBaseItemIds,
     } satisfies PrivateChecklistPendingState),
   );
   return revision;
@@ -167,7 +170,9 @@ export const clearPrivateChecklistPending = (
   revision: string,
 ): boolean => {
   const key = getPrivateChecklistPendingKey(tripId, userEmail);
-  if (localStorage.getItem(key) !== revision) return false;
+  if (readPrivateChecklistPendingRevision(tripId, userEmail) !== revision) {
+    return false;
+  }
   localStorage.removeItem(key);
   return true;
 };

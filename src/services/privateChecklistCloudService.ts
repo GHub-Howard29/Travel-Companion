@@ -32,6 +32,10 @@ interface CloudPrivateChecklistCopyRow {
 
 const PRIVATE_CHECKLIST_TITLE = "私人確認清單";
 const privateChecklistPushQueues = new Map<string, Promise<void>>();
+const privateChecklistSyncQueues = new Map<
+  string,
+  Promise<PrivateChecklist>
+>();
 
 const mergePendingPrivateChecklist = (
   localChecklist: PrivateChecklist,
@@ -298,7 +302,7 @@ export const pushPrivateChecklistToCloud = async (
   }
 };
 
-export const syncPrivateChecklistWithCloud = async (
+const runPrivateChecklistSync = async (
   supabase: SupabaseClient,
   tripId: string,
   userEmail: string,
@@ -380,6 +384,29 @@ export const syncPrivateChecklistWithCloud = async (
   }
   writeStoredPrivateChecklist(cloudChecklist);
   return cloudChecklist;
+};
+
+export const syncPrivateChecklistWithCloud = (
+  supabase: SupabaseClient,
+  tripId: string,
+  userEmail: string,
+): Promise<PrivateChecklist> => {
+  const scopeKey = `${tripId}:${userEmail}`;
+  const previousSync = privateChecklistSyncQueues.get(scopeKey) ??
+    Promise.resolve(readStoredPrivateChecklist(tripId, userEmail));
+  const currentSync = previousSync
+    .catch(() => readStoredPrivateChecklist(tripId, userEmail))
+    .then(() => runPrivateChecklistSync(supabase, tripId, userEmail));
+
+  privateChecklistSyncQueues.set(scopeKey, currentSync);
+  const clearQueue = () => {
+    if (privateChecklistSyncQueues.get(scopeKey) === currentSync) {
+      privateChecklistSyncQueues.delete(scopeKey);
+    }
+  };
+  void currentSync.then(clearQueue, clearQueue);
+
+  return currentSync;
 };
 
 export const listCloudPrivateChecklistCopies = async (

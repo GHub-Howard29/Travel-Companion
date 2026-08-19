@@ -1,4 +1,4 @@
-import { Menu } from "lucide-react";
+import { Menu, WifiOff } from "lucide-react";
 import type { TripDetail } from "../../types";
 
 interface AppHeaderProps {
@@ -46,10 +46,19 @@ export default function AppHeader({
                   <span className="opacity-60">•</span>
                 </>
               )}
-              <span>
-                {!isOnline
-                  ? "📴 離線使用中"
-                  : isUsingSharedExpenseBook
+              <span
+                className={
+                  !isOnline
+                    ? "inline-flex items-center gap-1 rounded-full bg-amber-300 px-2 py-0.5 font-bold text-slate-900 shadow-sm"
+                    : undefined
+                }
+              >
+                {!isOnline ? (
+                  <>
+                    <WifiOff size={14} strokeWidth={3} aria-hidden="true" />
+                    離線使用中
+                  </>
+                ) : isUsingSharedExpenseBook
                   ? "🌍 共用帳本同步中"
                   : userEmail
                     ? "個人帳本模式"

@@ -54,6 +54,8 @@ export const ChecklistPage = ({
   const [draftCategory, setDraftCategory] = useState("其他");
   const [draftLabel, setDraftLabel] = useState("");
   const [isSavingList, setIsSavingList] = useState(false);
+  const [isDeleteLocked, setIsDeleteLocked] = useState(false);
+  const deleteUnlockTimerRef = useRef<number | null>(null);
   const isLocalUserChecklist = Boolean(userEmail && !canSyncSharedChecklist);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
   const initialPendingCloudOrder =
@@ -76,6 +78,12 @@ export const ChecklistPage = ({
   const checklistSeedData = isLocalUserChecklist
     ? activeChecklistData
     : initialPendingCloudOrder?.items ?? checklistData;
+
+  useEffect(() => () => {
+    if (deleteUnlockTimerRef.current !== null) {
+      window.clearTimeout(deleteUnlockTimerRef.current);
+    }
+  }, []);
 
   useEffect(() => {
     if (!isLocalUserChecklist && !pendingCloudOrderRef.current) {
@@ -255,14 +263,25 @@ export const ChecklistPage = ({
   };
 
   const deleteChecklistItem = async (itemId: string) => {
-    const targetItem = activeChecklistData.find((item) => item.id === itemId);
-    if (!targetItem) return;
-    if (!confirm(`確定刪除「${targetItem.label}」？`)) return;
+    if (isDeleteLocked) return;
+    const hasTargetItem = activeChecklistData.some((item) => item.id === itemId);
+    if (!hasTargetItem) return;
 
+    setIsDeleteLocked(true);
     setIsSavingList(true);
-    await saveChecklistData(activeChecklistData.filter((item) => item.id !== itemId));
-    setIsSavingList(false);
-    resetForm();
+    try {
+      await saveChecklistData(activeChecklistData.filter((item) => item.id !== itemId));
+      resetForm();
+    } finally {
+      setIsSavingList(false);
+      if (deleteUnlockTimerRef.current !== null) {
+        window.clearTimeout(deleteUnlockTimerRef.current);
+      }
+      deleteUnlockTimerRef.current = window.setTimeout(() => {
+        setIsDeleteLocked(false);
+        deleteUnlockTimerRef.current = null;
+      }, 1000);
+    }
   };
 
   const moveChecklistItem = async (itemId: string, direction: -1 | 1) => {
@@ -423,6 +442,11 @@ export const ChecklistPage = ({
             {canSyncSharedChecklist && <p className="rounded-lg border border-amber-300 bg-amber-100 px-3 py-2 text-xs font-bold text-amber-900">
               如需複製使用舊有清單，請勿提早建立任何清單
             </p>}
+            {canSyncSharedChecklist && !isOnline && (
+              <p className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs font-bold text-sky-700">
+                目前為離線狀態，共同歷史清單須連線後才能複製；請恢復連線後再使用複製清單。
+              </p>
+            )}
             <div className={`grid gap-2 ${canSyncSharedChecklist ? "grid-cols-2" : "grid-cols-1"}`}>
               <button
                 type="button"
@@ -439,7 +463,7 @@ export const ChecklistPage = ({
                   setIsFormOpen(false);
                   setIsCopyOpen(true);
                 }}
-                disabled={availableCopySources.length === 0}
+                disabled={!isOnline || availableCopySources.length === 0}
                 className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Copy size={14} />
@@ -450,7 +474,7 @@ export const ChecklistPage = ({
         </div>
       )}
 
-      {canManageSharedChecklist && isManageMode && isCopyOpen && (
+      {canManageSharedChecklist && isManageMode && isCopyOpen && isOnline && (
         <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="mb-3 flex items-center justify-between">
             <h3 className="text-sm font-bold text-slate-800">複製共同清單</h3>
@@ -488,7 +512,7 @@ export const ChecklistPage = ({
             <button
               type="button"
               onClick={() => void copyChecklistItems()}
-              disabled={!selectedCopySource || isSavingList}
+              disabled={!isOnline || !selectedCopySource || isSavingList}
               className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-rose-700 px-4 py-2.5 text-sm font-bold text-white hover:bg-rose-800 disabled:cursor-not-allowed disabled:opacity-60"
             >
               <Copy size={16} />
@@ -704,8 +728,9 @@ export const ChecklistPage = ({
                         </button>
                         <button
                           type="button"
+                          disabled={isSavingList || isDeleteLocked}
                           onClick={() => void deleteChecklistItem(item.id)}
-                          className="rounded-lg p-2 text-slate-400 hover:bg-rose-50 hover:text-rose-700"
+                          className="rounded-lg p-2 text-slate-400 hover:bg-rose-50 hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-30"
                           aria-label="刪除共同清單項目"
                           title="刪除共同清單項目"
                         >
