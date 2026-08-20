@@ -17,6 +17,10 @@ export default defineConfig({
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,json}'],
         globIgnores: ['**/app-version.json'],
+        cleanupOutdatedCaches: true,
+        clientsClaim: true,
+        navigateFallback: '/Travel-Companion/index.html',
+        navigateFallbackAllowlist: [/^\/Travel-Companion\/(?:.*)?$/],
         // 這會強制打包公用資料夾與編譯後的所有靜態與資料檔案
       },
       manifest: {

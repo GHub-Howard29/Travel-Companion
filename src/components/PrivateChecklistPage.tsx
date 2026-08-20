@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent, type KeyboardEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { ArrowDown, ArrowUp, Check, Copy, Pencil, Plus, Save, Trash2, X } from "lucide-react";
 import { DndContext, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
@@ -6,6 +6,7 @@ import { arrayMove, SortableContext, verticalListSortingStrategy } from "@dnd-ki
 
 import { usePrivateChecklistState } from "../hooks/usePrivateChecklistState";
 import { listCloudPrivateChecklistCopies } from "../services/privateChecklistCloudService";
+import { readStoredPrivateChecklist } from "../storage/privateChecklistStorage";
 import { SortableCard } from "./SortableCard";
 import type { PrivateChecklist, TripMeta } from "../types";
 
@@ -17,6 +18,7 @@ interface PrivateChecklistPageProps {
   canEditPrivateChecklist: boolean;
   canTogglePrivateChecklist: boolean;
   canSyncPrivateChecklist: boolean;
+  isOnline: boolean;
   tripOptions: TripMeta[];
 }
 
@@ -28,6 +30,7 @@ export const PrivateChecklistPage = ({
   canEditPrivateChecklist,
   canTogglePrivateChecklist,
   canSyncPrivateChecklist,
+  isOnline,
   tripOptions,
 }: PrivateChecklistPageProps) => {
   const {
@@ -46,14 +49,22 @@ export const PrivateChecklistPage = ({
     userEmail,
     supabase,
     canSyncPrivateChecklist,
+    isOnline,
   );
   const [isManageMode, setIsManageMode] = useState(false);
+  const [isFormOpen, setIsFormOpen] = useState(false);
   const [newLabel, setNewLabel] = useState("");
   const [copySources, setCopySources] = useState<PrivateChecklist[]>([]);
+  const [copySourceLoadStatus, setCopySourceLoadStatus] = useState<
+    "idle" | "loaded" | "error"
+  >("idle");
+  const [copySourceRetryKey, setCopySourceRetryKey] = useState(0);
   const [isCopyOpen, setIsCopyOpen] = useState(false);
   const [copySourceTripId, setCopySourceTripId] = useState("");
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [editingLabel, setEditingLabel] = useState("");
+  const [isDeleteLocked, setIsDeleteLocked] = useState(false);
+  const deleteUnlockTimerRef = useRef<number | null>(null);
   const checkedCount = items.filter((item) => item.isChecked).length;
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
   const displayItems = [...items].sort(
@@ -61,7 +72,14 @@ export const PrivateChecklistPage = ({
   );
   const progressPercent =
     items.length > 0 ? (checkedCount / items.length) * 100 : 0;
-  const availableCopySources = copySources.filter(
+  const normalizedUserEmail = userEmail?.trim().toLowerCase() ?? "";
+  const storedCopySources = normalizedUserEmail
+    ? tripOptions
+        .map((trip) => readStoredPrivateChecklist(trip.id, normalizedUserEmail))
+        .filter((checklist) => checklist.items.length > 0)
+    : [];
+  const effectiveCopySources = isOnline ? copySources : storedCopySources;
+  const availableCopySources = effectiveCopySources.filter(
     (source) => source.tripId !== tripId && source.items.length > 0,
   );
   const selectedCopySource =
@@ -73,7 +91,7 @@ export const PrivateChecklistPage = ({
   };
 
   useEffect(() => {
-    if (!userEmail || !canSyncPrivateChecklist) {
+    if (!userEmail || !canSyncPrivateChecklist || !isOnline) {
       return;
     }
 
@@ -85,9 +103,13 @@ export const PrivateChecklistPage = ({
 
         if (isActive) {
           setCopySources(sources);
+          setCopySourceLoadStatus("loaded");
         }
       } catch (error) {
         console.warn(error);
+        if (isActive) {
+          setCopySourceLoadStatus("error");
+        }
       }
     };
 
@@ -96,7 +118,42 @@ export const PrivateChecklistPage = ({
     return () => {
       isActive = false;
     };
-  }, [canSyncPrivateChecklist, supabase, userEmail]);
+  }, [canSyncPrivateChecklist, copySourceRetryKey, isOnline, supabase, userEmail]);
+
+  useEffect(() => {
+    if (copySourceLoadStatus !== "error") return;
+
+    const retryWhenAvailable = () => {
+      if (!navigator.onLine) return;
+      setCopySourceLoadStatus("idle");
+      setCopySourceRetryKey((retryKey) => retryKey + 1);
+    };
+    const retryWhenVisible = () => {
+      if (document.visibilityState === "visible") {
+        retryWhenAvailable();
+      }
+    };
+
+    window.addEventListener("online", retryWhenAvailable);
+    window.addEventListener("focus", retryWhenAvailable);
+    document.addEventListener("visibilitychange", retryWhenVisible);
+    return () => {
+      window.removeEventListener("online", retryWhenAvailable);
+      window.removeEventListener("focus", retryWhenAvailable);
+      document.removeEventListener("visibilitychange", retryWhenVisible);
+    };
+  }, [copySourceLoadStatus]);
+
+  useEffect(() => () => {
+    if (deleteUnlockTimerRef.current !== null) {
+      window.clearTimeout(deleteUnlockTimerRef.current);
+    }
+  }, []);
+
+  const retryCopySourceLoad = () => {
+    setCopySourceLoadStatus("idle");
+    setCopySourceRetryKey((retryKey) => retryKey + 1);
+  };
 
   if (!canViewPrivateChecklist || !userEmail) {
     return (
@@ -116,11 +173,13 @@ export const PrivateChecklistPage = ({
 
     addItem(label);
     setNewLabel("");
+    setIsFormOpen(false);
   };
 
   const closeManageMode = () => {
     void flushPendingReorder();
     setIsManageMode(false);
+    setIsFormOpen(false);
     setIsCopyOpen(false);
     setNewLabel("");
     cancelEdit();
@@ -129,6 +188,12 @@ export const PrivateChecklistPage = ({
   const startEdit = (itemId: string, label: string) => {
     setEditingItemId(itemId);
     setEditingLabel(label);
+  };
+
+  const startCreateItem = () => {
+    setNewLabel("");
+    setIsCopyOpen(false);
+    setIsFormOpen(true);
   };
 
   const cancelEdit = () => {
@@ -145,6 +210,20 @@ export const PrivateChecklistPage = ({
 
     renameItem(editingItemId, label);
     cancelEdit();
+  };
+
+  const deleteItem = (itemId: string) => {
+    if (isDeleteLocked) return;
+
+    setIsDeleteLocked(true);
+    removeItem(itemId);
+    if (deleteUnlockTimerRef.current !== null) {
+      window.clearTimeout(deleteUnlockTimerRef.current);
+    }
+    deleteUnlockTimerRef.current = window.setTimeout(() => {
+      setIsDeleteLocked(false);
+      deleteUnlockTimerRef.current = null;
+    }, 1000);
   };
 
   const copyPrivateChecklist = () => {
@@ -207,13 +286,16 @@ export const PrivateChecklistPage = ({
         </div>
         <p className="mt-3 text-xs font-medium text-slate-500">
           {!canSyncPrivateChecklist && "目前資料僅保存於此裝置。"}
-          {canSyncPrivateChecklist && syncStatus === "syncing" && "正在同步雲端..."}
-          {canSyncPrivateChecklist && syncStatus === "synced" && "已同步到雲端。"}
+          {canSyncPrivateChecklist && !isOnline &&
+            "目前為離線狀態，資料先保存於本機；恢復連線後才會完整同步更新。"}
+          {canSyncPrivateChecklist && isOnline && syncStatus === "syncing" && "正在同步雲端..."}
+          {canSyncPrivateChecklist && isOnline && syncStatus === "synced" && "已同步到雲端。"}
           {canSyncPrivateChecklist &&
+            isOnline &&
             syncStatus === "emptyCloud" &&
             "雲端私人清單已準備好，新增項目後會同步。"}
-          {canSyncPrivateChecklist && syncStatus === "error" && syncError}
-          {canSyncPrivateChecklist && syncStatus === "local" && "目前資料先保存於本機。"}
+          {canSyncPrivateChecklist && isOnline && syncStatus === "error" && syncError}
+          {canSyncPrivateChecklist && isOnline && syncStatus === "local" && "目前資料先保存於本機。"}
         </p>
         {canEditPrivateChecklist && (
           <div className="mt-3 flex justify-end">
@@ -249,44 +331,98 @@ export const PrivateChecklistPage = ({
                 如需複製使用舊有清單，請勿提早建立任何清單
               </p>
             )}
-            {canSyncPrivateChecklist && availableCopySources.length === 0 && (
+            {canSyncPrivateChecklist && !isOnline && (
+              <p className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs font-bold text-sky-700">
+                目前為離線狀態，私人歷史清單須連線後才能複製；請恢復連線後再使用複製清單。
+              </p>
+            )}
+            {canSyncPrivateChecklist && copySourceLoadStatus === "idle" && isOnline && availableCopySources.length === 0 && (
+              <p className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs font-bold text-sky-700">
+                正在載入私人歷史清單...
+              </p>
+            )}
+            {canSyncPrivateChecklist && isOnline && copySourceLoadStatus === "error" && availableCopySources.length === 0 && (
+              <div className="flex flex-col gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800 sm:flex-row sm:items-center sm:justify-between">
+                <span>私人歷史清單載入失敗</span>
+                <button
+                  type="button"
+                  onClick={retryCopySourceLoad}
+                  className="w-full shrink-0 rounded-md border border-amber-400 bg-white px-2 py-1 text-amber-800 hover:bg-amber-100 sm:w-auto"
+                >
+                  重新載入
+                </button>
+              </div>
+            )}
+            {canSyncPrivateChecklist && isOnline && copySourceLoadStatus === "loaded" && availableCopySources.length === 0 && (
               <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-bold text-rose-700">
                 未有私人歷史紀錄，請重新建立
               </p>
             )}
-            <form onSubmit={handleCreate} className="space-y-2">
-              <input
-                value={newLabel}
-                onChange={(event) => setNewLabel(event.target.value)}
-                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 outline-none focus:border-rose-500"
-                placeholder="新增私人準備事項"
-              />
+            <div className={`grid gap-2 ${canSyncPrivateChecklist ? "grid-cols-2" : "grid-cols-1"}`}>
               <button
-                type="submit"
-                disabled={!newLabel.trim()}
-                className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-slate-900 px-3 py-2 text-sm font-bold text-white transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+                type="button"
+                onClick={startCreateItem}
+                className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white hover:bg-slate-800"
               >
-                <Plus size={16} />
+                <Plus size={14} />
                 新增項目
               </button>
-            </form>
-            {canSyncPrivateChecklist && <button
-              type="button"
-              onClick={() => {
-                setCopySourceTripId(selectedCopySource?.tripId ?? "");
-                setIsCopyOpen(true);
-              }}
-              disabled={availableCopySources.length === 0}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <Copy size={14} />
-              複製清單
-            </button>}
+              {canSyncPrivateChecklist && <button
+                type="button"
+                onClick={() => {
+                  setCopySourceTripId(selectedCopySource?.tripId ?? "");
+                  setIsFormOpen(false);
+                  setIsCopyOpen(true);
+                }}
+                disabled={!isOnline || availableCopySources.length === 0}
+                className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Copy size={14} />
+                複製清單
+              </button>}
+            </div>
           </div>
         </div>
       )}
 
-      {canEditPrivateChecklist && isManageMode && isCopyOpen && (
+      {canEditPrivateChecklist && isManageMode && isFormOpen && (
+        <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-bold text-slate-800">新增私人清單項目</h3>
+            <button
+              type="button"
+              onClick={() => {
+                setIsFormOpen(false);
+                setNewLabel("");
+              }}
+              className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100"
+              aria-label="取消"
+              title="取消"
+            >
+              <X size={15} />
+            </button>
+          </div>
+          <form onSubmit={handleCreate} className="space-y-2">
+            <input
+              value={newLabel}
+              onChange={(event) => setNewLabel(event.target.value)}
+              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 outline-none focus:border-rose-500"
+              placeholder="新增私人準備事項"
+              autoFocus
+            />
+            <button
+              type="submit"
+              disabled={!newLabel.trim()}
+              className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-slate-900 px-3 py-2 text-sm font-bold text-white transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+            >
+              <Plus size={16} />
+              新增項目
+            </button>
+          </form>
+        </div>
+      )}
+
+      {canEditPrivateChecklist && isManageMode && isCopyOpen && isOnline && (
         <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="mb-3 flex items-center justify-between">
             <h3 className="text-sm font-bold text-slate-800">複製私人清單</h3>
@@ -322,7 +458,7 @@ export const PrivateChecklistPage = ({
             <button
               type="button"
               onClick={copyPrivateChecklist}
-              disabled={!selectedCopySource}
+              disabled={!isOnline || !selectedCopySource}
               className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-rose-700 px-4 py-2.5 text-sm font-bold text-white hover:bg-rose-800 disabled:cursor-not-allowed disabled:opacity-60"
             >
               <Copy size={16} />
@@ -444,8 +580,9 @@ export const PrivateChecklistPage = ({
                         </button>
                         <button
                           type="button"
-                          onClick={() => removeItem(item.id)}
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-rose-50 hover:text-rose-700"
+                          disabled={isDeleteLocked}
+                          onClick={() => deleteItem(item.id)}
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-rose-50 hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-30"
                           aria-label="刪除"
                           title="刪除"
                         >

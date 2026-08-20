@@ -14,6 +14,15 @@ export type VersionHistoryItem = {
 
 export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
+    version: "3.4.0",
+    date: "2026-08-05",
+    forceUpdate: false,
+    notes: [
+      "非首屏旅行工具與 Excel 匯出改為按需載入。",
+      "降低 App 首次開啟的 JavaScript 下載量。",
+    ],
+  },
+  {
     version: "3.3.3",
     date: "2026-07-30",
     forceUpdate: false,

@@ -15,6 +15,7 @@ import {
 } from "../config/appVersion";
 
 type UpdateServiceWorker = (reloadPage?: boolean) => Promise<void>;
+export type AppUpdatePromptMode = "update" | "releaseNotice";
 type AppVersionMetadata = {
   version: string;
   releaseDate: string;
@@ -91,13 +92,6 @@ const fetchLatestVersionMetadata = async (): Promise<AppVersionMetadata | null> 
   }
 };
 
-const clearAppCacheStorage = async () => {
-  if (!("caches" in window)) return;
-
-  const cacheNames = await caches.keys();
-  await Promise.all(cacheNames.map((cacheName) => caches.delete(cacheName)));
-};
-
 const reloadPage = () => {
   window.location.reload();
 };
@@ -158,12 +152,6 @@ export const useAppUpdate = () => {
     setReleaseNoticeVisible(false);
     setUpdateAvailable(false);
 
-    try {
-      await clearAppCacheStorage();
-    } catch (error) {
-      console.warn("Failed to clear app cache storage before update.", error);
-    }
-
     if (updateAvailable) {
       const fallbackReloadTimer = window.setTimeout(reloadPage, 1500);
       try {
@@ -181,14 +169,21 @@ export const useAppUpdate = () => {
   const dismiss = useCallback(() => {
     dismissedRef.current = true;
     setUpdateAvailable(false);
+    if (releaseNoticeVisible) {
+      setStoredAppVersion(APP_VERSION);
+    }
     setReleaseNoticeVisible(false);
-  }, []);
+  }, [releaseNoticeVisible]);
 
   const isPromptVisible =
     canShowUpdatePrompt && (updateAvailable || releaseNoticeVisible);
+  const promptMode: AppUpdatePromptMode = updateAvailable
+    ? "update"
+    : "releaseNotice";
 
   return {
     updateAvailable: isPromptVisible,
+    promptMode,
     currentVersion,
     latestVersion: latestMetadata.version,
     releaseDate: latestMetadata.releaseDate,

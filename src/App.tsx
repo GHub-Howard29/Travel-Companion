@@ -22,14 +22,28 @@ import { getDefaultHomeScreen, setDefaultHomeScreen } from "./storage/defaultHom
 import { UpdatePrompt } from "./components/UpdatePrompt";
 import { VersionInfoModal } from "./components/VersionInfoModal";
 import { InstallAppPrompt } from "./components/InstallAppPrompt";
+import { ReconnectPrompt } from "./components/ReconnectPrompt";
 import { LoginSafetyModal } from "./components/LoginSafetyModal";
 import useExpenseBook from "./hooks/useExpenseBook";
 import { useAppUpdate } from "./hooks/useAppUpdate";
 import useTripWorkspace from "./hooks/useTripWorkspace";
 import { AppContext } from "./app/context/AppContext";
 import { ROLE } from "./permissions/roles";
+import { getCloudTripRecords } from "./services/tripCloudService";
 import { getTripDetail } from "./services/tripRepository";
 import { syncCloudOtherInfoItems } from "./services/otherInfoCloudService";
+import { syncPrivateChecklistWithCloud } from "./services/privateChecklistCloudService";
+import { syncCloudSharedChecklistSeedItems } from "./services/sharedChecklistCloudService";
+import { upsertCloudTripRecord } from "./services/tripCloudService";
+import { readStoredTripRecords } from "./storage/tripStorage";
+import { writeStoredOtherInfoItems } from "./storage/otherInfoStorage";
+import {
+  clearOtherInfoSyncState,
+  markOtherInfoSyncFailed,
+  markOtherInfoSyncPending,
+  readOtherInfoSyncState,
+  type OtherInfoSyncStatus,
+} from "./storage/otherInfoSyncStorage";
 import {
   getSpecialInfoFolderId,
   getTravelToolHeaderBgClassName,
@@ -37,6 +51,7 @@ import {
   isSpecialInfoSidebarItem,
   resolveTravelToolType,
 } from "./utils/travelToolRegistry";
+import { mergeSharedChecklistItems } from "./utils/checklistMerge";
 
 const ExpenseScreen = lazy(() => import("./components/expense/ExpenseScreen"));
 const ItineraryPage = lazy(() =>
@@ -68,7 +83,10 @@ const screenLoadingFallback = (
 // --- 初始化 Supabase 雲端客戶端 ---
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
+const supabase =
+  supabaseUrl?.trim() && supabaseAnonKey?.trim()
+    ? createClient(supabaseUrl, supabaseAnonKey)
+    : null;
 
 const isIosStandalonePwa = () => {
   const navigatorWithStandalone = navigator as Navigator & {
@@ -82,8 +100,36 @@ const isIosStandalonePwa = () => {
 };
 
 export default function App() {
+  if (!supabase) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-slate-50 px-6 text-slate-800">
+        <section className="w-full max-w-lg rounded-2xl border border-amber-200 bg-white p-6 shadow-sm">
+          <h1 className="text-xl font-semibold">APP 設定尚未完成</h1>
+          <p className="mt-3 leading-7 text-slate-600">
+            目前缺少 Supabase 連線設定，請確認建置環境已設定
+            <code className="mx-1 rounded bg-slate-100 px-1.5 py-0.5 text-sm">VITE_SUPABASE_URL</code>
+            與
+            <code className="mx-1 rounded bg-slate-100 px-1.5 py-0.5 text-sm">
+              VITE_SUPABASE_ANON_KEY
+            </code>
+            後重新建置。
+          </p>
+        </section>
+      </main>
+    );
+  }
+
+  return <ConfiguredApp supabaseClient={supabase} />;
+}
+
+function ConfiguredApp({
+  supabaseClient: supabase,
+}: {
+  supabaseClient: NonNullable<typeof supabase>;
+}) {
   const {
     updateAvailable,
+    promptMode,
     currentVersion,
     latestVersion,
     releaseDate,
@@ -95,6 +141,8 @@ export default function App() {
   const {
     userEmail,
     userId,
+    isSessionReady,
+    isOnline,
     setUserId,
     setUserEmail,
     tripOptions,
@@ -119,6 +167,7 @@ export default function App() {
     canUseExpense,
     isUsingSharedExpenseBook,
     expenseMembers,
+    participantEmailMap,
     currentUserParticipantName,
     isSignedIn,
     isAssignedTrip,
@@ -129,6 +178,8 @@ export default function App() {
     deleteTrip,
     refreshTripOptionsAndSelect,
     saveCurrentTripDetail,
+    saveCurrentTripDetailLocally,
+    reloadCurrentTrip,
     currentTripEditorEmails,
     superAdminEmails,
   } = useTripWorkspace({ supabase });
@@ -136,6 +187,16 @@ export default function App() {
   const [isTripEditorOpen, setIsTripEditorOpen] = useState(false);
   const [isVersionInfoOpen, setIsVersionInfoOpen] = useState(false);
   const [isLoginSafetyOpen, setIsLoginSafetyOpen] = useState(false);
+  const [otherInfoSyncStatus, setOtherInfoSyncStatus] = useState<
+    OtherInfoSyncStatus | "syncing" | null
+  >(null);
+  const [reconnectPromptMode, setReconnectPromptMode] = useState<
+    "syncing" | "ready" | "reminder" | null
+  >(null);
+  const experiencedOfflineRef = useRef(!navigator.onLine);
+  const reconnectReadyTimerRef = useRef<number | null>(null);
+  const reconnectReminderTimerRef = useRef<number | null>(null);
+  const otherInfoSyncingTripsRef = useRef(new Set<string>());
   const [checklistCopySources, setChecklistCopySources] = useState<
     Array<{ tripId: string; title: string; items: ChecklistItem[] }>
   >([]);
@@ -179,6 +240,7 @@ export default function App() {
     paitAmounts,
     activeCurrencySymbol,
     exportsAllSharedExpenses,
+    canManageExpense,
     handleAttachmentSelection,
     handleAddExpense,
     cancelPendingDelete,
@@ -194,6 +256,7 @@ export default function App() {
   } = useExpenseBook({
     supabase,
     userEmail,
+    userId,
     selectedTripId,
     expenseBookTripId,
     isUsingSharedExpenseBook,
@@ -201,7 +264,8 @@ export default function App() {
     currentCurrencyCode,
     currentCurrencySymbol,
     expenseMembers,
-    lockedPayerName: currentUserParticipantName,
+    participantEmailMap,
+    defaultPayerName: currentUserParticipantName,
     tripTitle: currentTrip?.title || selectedTripMeta?.title || selectedTripId || "travel",
   });
 
@@ -371,66 +435,251 @@ export default function App() {
       setIsLoading(false);
     }
   };
-  const handleSaveChecklistData = async (items: ChecklistItem[]) => {
+  const handleSaveChecklistData = async (
+    items: ChecklistItem[],
+    baseItems: ChecklistItem[] = checklistData,
+  ) => {
     if (!currentTrip) return;
+
+    const cloudTrip = navigator.onLine
+      ? (await getCloudTripRecords(supabase)).find(
+          (record) => record.meta.id === selectedTripId,
+        )
+      : null;
+    const mergedItems = cloudTrip
+      ? mergeSharedChecklistItems(
+          items,
+          cloudTrip.detail.content.checklistData ?? [],
+          baseItems,
+        )
+      : items;
 
     await saveCurrentTripDetail({
       ...currentTrip,
       content: {
         ...currentTrip.content,
-        checklistData: items,
+        checklistData: mergedItems,
       },
     });
+    await syncCloudSharedChecklistSeedItems(
+      supabase,
+      selectedTripId,
+      mergedItems,
+      [],
+      false,
+    );
   };
+  const syncPendingOtherInfo = useCallback(async () => {
+    const tripId = selectedTripId;
+    if (
+      !tripId ||
+      !navigator.onLine ||
+      !userId ||
+      !permission.canEditReference ||
+      otherInfoSyncingTripsRef.current.has(tripId)
+    ) {
+      return;
+    }
+
+    otherInfoSyncingTripsRef.current.add(tripId);
+    try {
+      while (navigator.onLine) {
+        const pending = readOtherInfoSyncState(tripId);
+        if (!pending) {
+          setOtherInfoSyncStatus(null);
+          break;
+        }
+
+        const record = readStoredTripRecords().find(
+          (item) => item.meta.id === tripId,
+        );
+        if (!record) break;
+
+        setOtherInfoSyncStatus("syncing");
+        const items = record.detail.content.otherInfoItems ?? [];
+        const didSyncItems = await syncCloudOtherInfoItems(
+          supabase,
+          tripId,
+          items.filter((item) => !item.isDeleted),
+          items.filter((item) => item.isDeleted).map((item) => item.id),
+        );
+        const syncedTrip = didSyncItems
+          ? await upsertCloudTripRecord(supabase, record)
+          : null;
+
+        if (!didSyncItems || !syncedTrip) {
+          markOtherInfoSyncFailed(
+            tripId,
+            pending.revision,
+            "Other Info 雲端同步未完成",
+          );
+          setOtherInfoSyncStatus("failed");
+          break;
+        }
+
+        if (clearOtherInfoSyncState(tripId, pending.revision)) {
+          setOtherInfoSyncStatus(null);
+          break;
+        }
+      }
+    } catch (error) {
+      const pending = readOtherInfoSyncState(tripId);
+      if (pending) {
+        markOtherInfoSyncFailed(tripId, pending.revision, error);
+        setOtherInfoSyncStatus("failed");
+      }
+    } finally {
+      otherInfoSyncingTripsRef.current.delete(tripId);
+    }
+  }, [permission.canEditReference, selectedTripId, supabase, userId]);
+
   const handleSaveOtherInfoItems = async (items: OtherInfoItem[]) => {
     if (!currentTrip) return;
 
-    const currentItemsById = new Map(
-      (currentTrip.content.otherInfoItems ?? []).map((item) => [item.id, item]),
-    );
-    const nextItemIdSet = new Set(items.map((item) => item.id));
-    const removedItemIds = items
-      .filter(
-        (item) =>
-          item.isDeleted && !currentItemsById.get(item.id)?.isDeleted,
-      )
-      .map((item) => item.id)
-      .concat(
-        (currentTrip.content.otherInfoItems ?? [])
-          .map((item) => item.id)
-          .filter((itemId) => !nextItemIdSet.has(itemId)),
-      );
-    const changedItems = items.filter((item) => {
-      const currentItem = currentItemsById.get(item.id);
-
-      return (
-        !currentItem ||
-        currentItem.folderId !== item.folderId ||
-        currentItem.title !== item.title ||
-        currentItem.content !== item.content ||
-        currentItem.order !== item.order ||
-        currentItem.isDeleted !== item.isDeleted ||
-        currentItem.updatedAt !== item.updatedAt ||
-        JSON.stringify(currentItem.allowedRoles ?? []) !==
-          JSON.stringify(item.allowedRoles ?? [])
-      );
-    });
-
-    await syncCloudOtherInfoItems(
-      supabase,
-      selectedTripId,
-      changedItems,
-      removedItemIds,
-    );
-
-    await saveCurrentTripDetail({
+    const nextTrip = {
       ...currentTrip,
       content: {
         ...currentTrip.content,
         otherInfoItems: items,
       },
-    });
+    };
+    writeStoredOtherInfoItems(selectedTripId, items);
+    saveCurrentTripDetailLocally(nextTrip);
+    markOtherInfoSyncPending(selectedTripId);
+    setOtherInfoSyncStatus("pending");
+    void syncPendingOtherInfo();
   };
+
+  useEffect(() => {
+    if (!isOnline) {
+      experiencedOfflineRef.current = true;
+      return;
+    }
+
+    if (!experiencedOfflineRef.current) return;
+    experiencedOfflineRef.current = false;
+    const openTimer = window.setTimeout(() => {
+      setReconnectPromptMode("syncing");
+      reconnectReadyTimerRef.current = window.setTimeout(() => {
+        setReconnectPromptMode("ready");
+      }, 3000);
+    }, 0);
+
+    return () => {
+      window.clearTimeout(openTimer);
+      if (reconnectReadyTimerRef.current !== null) {
+        window.clearTimeout(reconnectReadyTimerRef.current);
+        reconnectReadyTimerRef.current = null;
+      }
+    };
+  }, [isOnline]);
+
+  useEffect(() => () => {
+    if (reconnectReminderTimerRef.current !== null) {
+      window.clearTimeout(reconnectReminderTimerRef.current);
+    }
+  }, []);
+
+  const handleReconnectLater = () => {
+    setReconnectPromptMode("reminder");
+    if (reconnectReminderTimerRef.current !== null) {
+      window.clearTimeout(reconnectReminderTimerRef.current);
+    }
+    reconnectReminderTimerRef.current = window.setTimeout(() => {
+      setReconnectPromptMode(null);
+      reconnectReminderTimerRef.current = null;
+    }, 6000);
+  };
+
+  const dismissReconnectReminder = () => {
+    if (reconnectReminderTimerRef.current !== null) {
+      window.clearTimeout(reconnectReminderTimerRef.current);
+      reconnectReminderTimerRef.current = null;
+    }
+    setReconnectPromptMode(null);
+  };
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setOtherInfoSyncStatus(
+        selectedTripId
+          ? readOtherInfoSyncState(selectedTripId)?.status ?? null
+          : null,
+      );
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [selectedTripId]);
+
+  useEffect(() => {
+    const retry = () => void syncPendingOtherInfo();
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") retry();
+    };
+    window.addEventListener("online", retry);
+    window.addEventListener("focus", retry);
+    document.addEventListener("visibilitychange", handleVisibility);
+    retry();
+    return () => {
+      window.removeEventListener("online", retry);
+      window.removeEventListener("focus", retry);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, [syncPendingOtherInfo]);
+
+  useEffect(() => {
+    if (!navigator.onLine) return;
+    const preload = () => {
+      void Promise.allSettled([
+        import("./components/expense/ExpenseScreen"),
+        import("./components/ItineraryPage"),
+        import("./components/ChecklistPage"),
+        import("./components/PrivateChecklistPage"),
+        import("./components/OtherInfoPage"),
+        import("./components/ExchangeRatePage"),
+      ]);
+    };
+    const timer = window.setTimeout(preload, 1500);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    if (!isOnline || !userEmail) {
+      return;
+    }
+
+    const now = new Date();
+    const today = [
+      now.getFullYear(),
+      String(now.getMonth() + 1).padStart(2, "0"),
+      String(now.getDate()).padStart(2, "0"),
+    ].join("-");
+    const preloadTripIds = tripOptions
+      .filter((trip) => trip.departureDate >= today)
+      .filter(
+        (trip) =>
+          role === ROLE.SUPER_ADMIN ||
+          (role === ROLE.TRIP_EDITOR && trip.id === adminProfile?.trip_id),
+      )
+      .map((trip) => trip.id);
+
+    if (preloadTripIds.length === 0) return;
+
+    const normalizedEmail = userEmail.trim().toLowerCase();
+    void Promise.allSettled(
+      preloadTripIds.map((tripId) =>
+        syncPrivateChecklistWithCloud(supabase, tripId, normalizedEmail),
+      ),
+    ).then((results) => {
+      results.forEach((result, index) => {
+        if (result.status === "rejected") {
+          console.warn(
+            `Private checklist preload failed: ${preloadTripIds[index]}`,
+            result.reason,
+          );
+        }
+      });
+    });
+  }, [adminProfile?.trip_id, isOnline, role, supabase, tripOptions, userEmail]);
   const currentScreenType = getCurrentScreenType();
   const currentSidebarItem = currentTrip?.sidebarConfig.find(
     (item) => item.id === currentScreen,
@@ -467,9 +716,15 @@ export default function App() {
 
     const loadChecklistCopySources = async () => {
       const basePath = getBasePath();
+      const storedTripsById = new Map(
+        readStoredTripRecords().map((record) => [record.meta.id, record.detail]),
+      );
       const sources = await Promise.all(
         tripOptions.map(async (trip) => {
-          const detail = await getTripDetail(supabase, basePath, trip.id, trip);
+          const detail = isOnline
+            ? await getTripDetail(supabase, basePath, trip.id, trip)
+            : storedTripsById.get(trip.id) ??
+              (trip.id === selectedTripId ? currentTrip : null);
 
           return {
             tripId: trip.id,
@@ -489,7 +744,7 @@ export default function App() {
     return () => {
       isActive = false;
     };
-  }, [tripOptions]);
+  }, [currentTrip, isOnline, selectedTripId, supabase, tripOptions]);
 
   useEffect(() => {
     if (userEmail || !isAuthRequiredTravelTool(currentScreenType)) {
@@ -503,6 +758,7 @@ export default function App() {
     <AppContext.Provider value={appContextValue}>
     <UpdatePrompt
       isOpen={updateAvailable}
+      mode={promptMode}
       currentVersion={currentVersion}
       latestVersion={latestVersion}
       releaseDate={releaseDate}
@@ -511,7 +767,16 @@ export default function App() {
       onUpdate={update}
       onDismiss={dismiss}
     />
-    <InstallAppPrompt />
+    <InstallAppPrompt
+      isAuthenticated={Boolean(userEmail)}
+      isAppReady={isSessionReady && !isLoading}
+    />
+    <ReconnectPrompt
+      mode={isOnline ? reconnectPromptMode : null}
+      onLater={handleReconnectLater}
+      onDismissReminder={dismissReconnectReminder}
+      onReload={() => window.location.reload()}
+    />
     <LoginSafetyModal
       isOpen={isLoginSafetyOpen}
       isIosStandalonePwa={isIosStandalonePwa()}
@@ -534,6 +799,9 @@ export default function App() {
         tripOptions={tripOptions}
         currentTrip={currentTrip}
         userEmail={userEmail}
+        userParticipantName={currentUserParticipantName}
+        isOnline={isOnline}
+        isSessionReady={isSessionReady}
         hasEditPermission={hasEditPermission}
         adminProfile={adminProfile}
         currentScreen={currentScreen}
@@ -600,6 +868,7 @@ export default function App() {
         currentTrip={currentTrip}
         isUsingSharedExpenseBook={isUsingSharedExpenseBook}
         userEmail={userEmail}
+        isOnline={isOnline}
         onOpenMenu={() => setIsMenuOpen(true)}
         headerBgClassName={getTravelToolHeaderBgClassName(currentScreenType)}
       />
@@ -629,6 +898,7 @@ export default function App() {
             {/* 2. 行李清單檢查模組 */}
             {currentScreenType === "checklist" && (
               <ChecklistPage
+                key={`${selectedTripId}:${userEmail ?? "guest"}`}
                 tripId={selectedTripId}
                 userEmail={userEmail}
                 checklistData={checklistData}
@@ -636,14 +906,17 @@ export default function App() {
                 canViewSharedChecklist={permission.canViewSharedChecklist}
                 canToggleSharedChecklist={permission.canToggleSharedChecklist || Boolean(userEmail)}
                 canSyncSharedChecklist={hasEditPermission}
+                isOnline={isOnline}
                 canManageSharedChecklist={hasEditPermission || Boolean(userEmail)}
                 copySources={checklistCopySources}
                 onSaveChecklistData={handleSaveChecklistData}
+                onReloadChecklistData={reloadCurrentTrip}
               />
             )}
 
             {currentScreenType === "privateChecklist" && (
               <PrivateChecklistPage
+                key={`${selectedTripId}:${userEmail ?? "guest"}`}
                 tripId={selectedTripId}
                 userEmail={userEmail}
                 supabase={supabase}
@@ -651,6 +924,7 @@ export default function App() {
                 canEditPrivateChecklist={permission.canEditPrivateChecklist}
                 canTogglePrivateChecklist={permission.canTogglePrivateChecklist}
                 canSyncPrivateChecklist={permission.canSyncPrivateChecklist}
+                isOnline={isOnline}
                 tripOptions={tripOptions}
               />
             )}
@@ -672,6 +946,7 @@ export default function App() {
                 pageTitle={currentSidebarItem?.title}
                 isSpecialInfoPage={isSpecialInfoPage}
                 specialFolderId={specialInfoFolderId}
+                syncStatus={otherInfoSyncStatus}
               />
             )}
 
@@ -682,6 +957,7 @@ export default function App() {
                 isUsingSharedExpenseBook={isUsingSharedExpenseBook}
                 exportsAllSharedExpenses={exportsAllSharedExpenses}
                 userEmail={userEmail}
+                canManageExpense={canManageExpense}
                 safeExpenses={safeExpenses}
                 filteredExpenses={filteredExpenses}
                 activeExpenseDate={activeExpenseDate}
@@ -694,7 +970,8 @@ export default function App() {
                 currentCurrencyCode={currentCurrencyCode}
                 currentCurrencySymbol={currentCurrencySymbol}
                 expenseMembers={expenseMembers}
-                lockedPayerName={currentUserParticipantName}
+                participantEmailMap={participantEmailMap}
+                defaultPayerName={currentUserParticipantName}
                 totalExpense={totalExpense}
                 averageExpense={averageExpense}
                 memberShareAmounts={memberShareAmounts}

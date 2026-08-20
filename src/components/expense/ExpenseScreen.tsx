@@ -13,6 +13,7 @@ import {
 import { type Dispatch, type FormEvent, type SetStateAction } from "react";
 import { SUPPORTED_CURRENCIES } from "../../constants/appConstants";
 import { formatFileSize } from "../../utils/attachmentUtils";
+import { getExpenseRecorderAlias } from "../../utils/participantUtils";
 import type { EditExpenseDraft, ExpenseItem } from "../../types";
 
 interface ExpenseScreenProps {
@@ -20,6 +21,7 @@ interface ExpenseScreenProps {
   isUsingSharedExpenseBook: boolean;
   exportsAllSharedExpenses: boolean;
   userEmail: string | null;
+  canManageExpense: (item: ExpenseItem) => boolean;
   safeExpenses: ExpenseItem[];
   filteredExpenses: ExpenseItem[];
   activeExpenseDate: string;
@@ -32,7 +34,8 @@ interface ExpenseScreenProps {
   currentCurrencyCode: string;
   currentCurrencySymbol: string;
   expenseMembers: string[];
-  lockedPayerName: string | null;
+  participantEmailMap: Record<string, string>;
+  defaultPayerName: string | null;
   totalExpense: number;
   averageExpense: number;
   memberShareAmounts: Record<string, number>;
@@ -83,6 +86,7 @@ export default function ExpenseScreen({
   isUsingSharedExpenseBook,
   exportsAllSharedExpenses,
   userEmail,
+  canManageExpense,
   safeExpenses,
   filteredExpenses,
   activeExpenseDate,
@@ -95,7 +99,8 @@ export default function ExpenseScreen({
   currentCurrencyCode,
   currentCurrencySymbol,
   expenseMembers,
-  lockedPayerName,
+  participantEmailMap,
+  defaultPayerName,
   totalExpense,
   averageExpense,
   memberShareAmounts,
@@ -445,22 +450,21 @@ export default function ExpenseScreen({
             <div className="flex gap-1.5 flex-wrap">
               {expenseMembers.map((m: string) => (
                 (() => {
-                  const isSelectedPayer = lockedPayerName
-                    ? lockedPayerName === m
-                    : newPayer === m ||
-                      (!isUsingSharedExpenseBook && m === userEmail);
+                  const isSelectedPayer =
+                    newPayer === m ||
+                    (!newPayer && defaultPayerName === m) ||
+                    (!isUsingSharedExpenseBook && m === userEmail);
 
                   return (
                     <button
                       key={m}
                       type="button"
-                      disabled={Boolean(lockedPayerName)}
                       onClick={() => setNewPayer(m)}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all disabled:cursor-not-allowed ${
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${
                         isSelectedPayer
                           ? "bg-amber-600 border-amber-600 text-white"
                           : "bg-white border-slate-200 text-slate-600"
-                      } ${lockedPayerName && lockedPayerName !== m ? "opacity-45" : ""}`}
+                      }`}
                     >
                       {m}
                     </button>
@@ -468,9 +472,9 @@ export default function ExpenseScreen({
                 })()
               ))}
             </div>
-            {lockedPayerName && (
+            {defaultPayerName && (
               <span className="text-[11px] font-semibold text-amber-700">
-                已依登入 Email 鎖定
+                已依登入 Email 預設，可代其他成員記帳
               </span>
             )}
             <button
@@ -761,8 +765,18 @@ export default function ExpenseScreen({
                       )}
                       <div className="flex min-w-0">
                         <span className="max-w-full break-words rounded bg-sky-50 px-2 py-1 text-[11px] font-semibold leading-snug text-sky-800 [overflow-wrap:anywhere]">
-                          支出人：{item.payer || "未知"}
+                          付款人：{item.payer || "未知"}
                         </span>
+                        {isUsingSharedExpenseBook && (
+                          <span className="max-w-full break-words rounded bg-slate-50 px-2 py-1 text-[11px] font-semibold leading-snug text-slate-500 [overflow-wrap:anywhere]">
+                            紀錄者：
+                            {getExpenseRecorderAlias(
+                              item.recorded_by_email,
+                              item.payer,
+                              participantEmailMap,
+                            )}
+                          </span>
+                        )}
                       </div>
                       <div className="flex min-w-0 flex-wrap items-center gap-2">
                         <span className="rounded bg-slate-100 px-2 py-1 font-mono text-[10px] font-bold text-slate-500">
@@ -775,7 +789,7 @@ export default function ExpenseScreen({
                           {(item.amount || 0).toLocaleString()}
                         </span>
                       </div>
-                      {canUseExpense && (
+                      {canUseExpense && canManageExpense(item) && (
                         <div className="flex flex-wrap items-center gap-2">
                           <button
                             type="button"

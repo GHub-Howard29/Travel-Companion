@@ -26,11 +26,13 @@ import {
 } from "../utils/attachmentUtils";
 import { cancelEditExpense, startEditExpense } from "../utils/expenseActions";
 import { getExportFileNameXlsx } from "../utils/exportUtils";
+import { getExpenseRecorderAlias } from "../utils/participantUtils";
 import type { EditExpenseDraft, ExpenseItem, LocalAttachmentRecord } from "../types";
 
 interface UseExpenseBookOptions {
   supabase: SupabaseClient;
   userEmail: string | null;
+  userId: string | null;
   selectedTripId: string;
   expenseBookTripId: string;
   isUsingSharedExpenseBook: boolean;
@@ -38,7 +40,8 @@ interface UseExpenseBookOptions {
   currentCurrencyCode: string;
   currentCurrencySymbol: string;
   expenseMembers: string[];
-  lockedPayerName: string | null;
+  participantEmailMap: Record<string, string>;
+  defaultPayerName: string | null;
   tripTitle: string;
 }
 
@@ -104,6 +107,7 @@ const sortExpensesByLatestDate = (items: ExpenseItem[]): ExpenseItem[] => {
 export default function useExpenseBook({
   supabase,
   userEmail,
+  userId,
   selectedTripId,
   expenseBookTripId,
   isUsingSharedExpenseBook,
@@ -111,7 +115,8 @@ export default function useExpenseBook({
   currentCurrencyCode,
   currentCurrencySymbol,
   expenseMembers,
-  lockedPayerName,
+  participantEmailMap,
+  defaultPayerName,
   tripTitle,
 }: UseExpenseBookOptions) {
   const [expenses, setExpenses] = useState<ExpenseItem[]>([]);
@@ -127,6 +132,7 @@ const reloadExpenses = useCallback(async (bookId = expenseBookTripId) => {
   const local = getStoredExpensesForTrip(
     bookId,
     currentCurrencyCode,
+    isUsingSharedExpenseBook ? userId : null,
   );
 
   // 重新查詢每筆帳目的本機附件，
@@ -153,7 +159,7 @@ const reloadExpenses = useCallback(async (bookId = expenseBookTripId) => {
   );
 
   setExpenses(hydrated);
-}, [currentCurrencyCode, expenseBookTripId]);
+}, [currentCurrencyCode, expenseBookTripId, isUsingSharedExpenseBook, userId]);
 
   const [newTitle, setNewTitle] = useState("");
   const [newAmount, setNewAmount] = useState("");
@@ -182,6 +188,14 @@ const reloadExpenses = useCallback(async (bookId = expenseBookTripId) => {
   const [formCurrency, setFormCurrency] = useState("JPY");
   const deleteConfirmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const expenseRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const canManageExpenseItem = useCallback(
+    (item: ExpenseItem) =>
+      !isUsingSharedExpenseBook ||
+      canExportAllSharedExpenses ||
+      !item.owner_user_id ||
+      item.owner_user_id === userId,
+    [canExportAllSharedExpenses, isUsingSharedExpenseBook, userId],
+  );
 
   /* ================================
    📦 帳本統一載入核心（新增）
@@ -208,6 +222,7 @@ const loadExpenseBook = useCallback(async (bookId: string) => {
         .from("expenses")
         .select("*")
         .eq("trip_id", bookId)
+        .is("deleted_at", null)
         .order("created_at", { ascending: true });
 
       if (data) {
@@ -244,7 +259,8 @@ const loadExpenseBook = useCallback(async (bookId: string) => {
     // =========================
     const local = getStoredExpensesForTrip(
       bookId,
-      currentCurrencyCode
+      currentCurrencyCode,
+      isUsingSharedExpenseBook ? userId : null,
     );
 
     setExpenses(local);
@@ -257,6 +273,7 @@ const loadExpenseBook = useCallback(async (bookId: string) => {
   isUsingSharedExpenseBook,
   reloadExpenses,
   supabase,
+  userId,
 ]);
 
 /* =========================================
@@ -372,6 +389,7 @@ useEffect(() => {
       if (
         !navigator.onLine ||
         !userEmail ||
+        !userId ||
         !expenseBookTripId ||
         !isUsingSharedExpenseBook
       )
@@ -381,6 +399,7 @@ useEffect(() => {
       const sharedQueue = localQueue.filter((item) => {
         return (
           item.trip_id === expenseBookTripId &&
+          item.owner_user_id === userId &&
           !isPersonalBookTripId(item.trip_id)
         );
       });
@@ -393,9 +412,12 @@ useEffect(() => {
         for (const item of sharedQueue) {
           const { data, error } = await supabase
             .from("expenses")
-            .insert([
+            .upsert([
               {
                 trip_id: item.trip_id,
+                client_item_id: item.client_item_id || String(item.id),
+                owner_user_id: userId,
+                recorded_by_email: item.recorded_by_email || userEmail,
                 title: item.title,
                 amount: item.amount,
                 payer: item.payer,
@@ -413,7 +435,7 @@ useEffect(() => {
                 attachment_uploaded_by: null,
                 attachment_last_error: null,
               },
-            ])
+            ], { onConflict: "trip_id,client_item_id" })
             .select()
             .single();
 
@@ -449,6 +471,7 @@ useEffect(() => {
               .from("expenses")
               .select("*")
               .eq("trip_id", expenseBookTripId)
+              .is("deleted_at", null)
               .order("created_at", { ascending: true });
             if (data) {
               const hydratedData = (data as ExpenseItem[]).map((item) => ({
@@ -486,6 +509,7 @@ useEffect(() => {
     selectedTripId,
     supabase,
     userEmail,
+    userId,
   ]);
 
   const handleAddExpense = async (e: FormEvent) => {
@@ -497,6 +521,7 @@ useEffect(() => {
     if (!newTitle || !newAmount || isNaN(Number(newAmount))) return;
 
     const amountNum = Math.abs(Math.floor(Number(newAmount)));
+    const clientItemId = crypto.randomUUID();
     const selectedFile = newAttachmentFile;
     const attachmentFields = selectedFile
       ? {
@@ -527,8 +552,11 @@ useEffect(() => {
       title: newTitle,
       amount: amountNum,
       payer: isUsingSharedExpenseBook
-        ? lockedPayerName || newPayer || expenseMembers[0]
+        ? newPayer || defaultPayerName || expenseMembers[0]
         : userEmail,
+      client_item_id: clientItemId,
+      owner_user_id: userId,
+      recorded_by_email: userEmail,
       currency: formCurrency,
       expense_date: newExpenseDate || getTodayDateString(),
       ...attachmentFields,
@@ -544,10 +572,11 @@ useEffect(() => {
     const createLocalExpenseItem = async (): Promise<
       ExpenseItem & { created_at: string }
     > => {
-      const localId = `local_${Date.now()}_${Math.random()}`;
+      const localId = `local_${clientItemId}`;
       const localItem: ExpenseItem & { created_at: string } = {
         id: localId,
         created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
         ...newExpenseData,
         local_attachment_id: null,
       };
@@ -730,6 +759,12 @@ useEffect(() => {
       (item) => String(item.id) === String(id),
     );
     if (!targetExpense) return;
+    if (
+      !canManageExpenseItem(targetExpense)
+    ) {
+      alert("這筆帳目由其他紀錄者建立，目前只能檢視。請由原紀錄者或管理員修改。");
+      return;
+    }
     const shouldRemoveAttachment =
       removedAttachmentExpenseIds.has(String(id)) && !editAttachmentFile;
 
@@ -740,6 +775,7 @@ useEffect(() => {
       payer: isUsingSharedExpenseBook ? editDraft.payer : userEmail,
       currency: editDraft.currency,
       expense_date: editDraft.expenseDate || getExpenseDate(targetExpense),
+      updated_at: new Date().toISOString(),
     };
 
     if (editAttachmentFile) {
@@ -900,6 +936,12 @@ useEffect(() => {
     );
     const targetExpense = currentExpenses[targetIndex];
     if (!targetExpense) return;
+    if (
+      !canManageExpenseItem(targetExpense)
+    ) {
+      alert("這筆帳目由其他紀錄者建立，目前只能檢視。請由原紀錄者或管理員刪除。");
+      return;
+    }
 
     if (
       !String(targetExpense.id).startsWith("local_") &&
@@ -1071,6 +1113,7 @@ useEffect(() => {
 
     const pendingItems = await Promise.all(
       expenses.map(async (item) => {
+        if (!canManageExpenseItem(item)) return null;
         if (
           item.attachment_status === "synced" ||
           String(item.id).startsWith("local_")
@@ -1101,6 +1144,7 @@ useEffect(() => {
     if (filteredPendingItems.length === 0) {
       const failedItemsWithoutLocalPhoto = expenses.some(
         (item) =>
+          canManageExpenseItem(item) &&
           item.attachment_status === "upload_failed" &&
           Boolean(item.attachment_name) &&
           !item.local_attachment_id,
@@ -1211,6 +1255,7 @@ useEffect(() => {
         .from("expenses")
         .select("*")
         .eq("trip_id", expenseBookTripId)
+        .is("deleted_at", null)
         .order("created_at", { ascending: true });
       if (refreshedData) {
         const cachedItems = readStoredExpenses(
@@ -1307,10 +1352,11 @@ useEffect(() => {
     const summaryWorksheet = workbook.addWorksheet("支出人幣別合計");
 
     const rows: Array<(string | number)[]> = [
-      ["記帳日期", "消費項目", "支出人", "幣別代碼", "幣別符號", "金額", "附件下載連結"],
+      ["記帳日期", "消費項目", "支出人", "紀錄者", "幣別代碼", "幣別符號", "金額", "附件下載連結"],
     ];
 
     const hyperlinkRows: Array<{ index: number; url: string; text: string }> = [];
+    const currencyTotals = new Map<string, number>();
     const payerCurrencyTotals = new Map<
       string,
       {
@@ -1341,9 +1387,19 @@ useEffect(() => {
       }
       const attachmentName = item.attachment_name || "無附件";
       const payer = item.payer || "未知";
+      const recorderAlias = getExpenseRecorderAlias(
+        item.recorded_by_email,
+        payer,
+        participantEmailMap,
+      );
       const currencySymbol = targetConfig?.symbol || currentCurrencySymbol;
       const summaryKey = `${payer}\u0000${currencyCode}`;
       const existingTotal = payerCurrencyTotals.get(summaryKey);
+
+      currencyTotals.set(
+        currencyCode,
+        (currencyTotals.get(currencyCode) || 0) + (item.amount || 0),
+      );
 
       payerCurrencyTotals.set(summaryKey, {
         payer,
@@ -1357,6 +1413,7 @@ useEffect(() => {
         getExpenseDate(item).slice(0, 10),
         item.title,
         payer,
+        recorderAlias,
         currencyCode,
         currencySymbol,
         item.amount || 0,
@@ -1383,26 +1440,35 @@ useEffect(() => {
       "支出合計",
       "明細筆數",
     ]);
-    Array.from(payerCurrencyTotals.values())
-      .sort(
-        (left, right) =>
-          left.payer.localeCompare(right.payer) ||
-          right.itemCount - left.itemCount ||
-          left.currencyCode.localeCompare(right.currencyCode),
-      )
-      .forEach((total) => {
-        summaryWorksheet.addRow([
-          total.payer,
-          total.currencyCode,
-          total.currencySymbol,
-          total.totalAmount,
-          total.itemCount,
-        ]);
-      });
+    const sortedPayerCurrencyTotals = Array.from(
+      payerCurrencyTotals.values(),
+    ).sort(
+      (left, right) =>
+        left.payer.localeCompare(right.payer) ||
+        right.itemCount - left.itemCount ||
+        left.currencyCode.localeCompare(right.currencyCode),
+    );
+    const expenseDetailLastRow = rows.length;
+    sortedPayerCurrencyTotals.forEach((total, index) => {
+      const summaryRowNumber = index + 2;
+      summaryWorksheet.addRow([
+        total.payer,
+        total.currencyCode,
+        total.currencySymbol,
+        {
+          formula: `SUMIFS('Expenses'!$G$2:$G$${expenseDetailLastRow},'Expenses'!$C$2:$C$${expenseDetailLastRow},A${summaryRowNumber},'Expenses'!$E$2:$E$${expenseDetailLastRow},B${summaryRowNumber})`,
+          result: total.totalAmount,
+        },
+        {
+          formula: `COUNTIFS('Expenses'!$C$2:$C$${expenseDetailLastRow},A${summaryRowNumber},'Expenses'!$E$2:$E$${expenseDetailLastRow},B${summaryRowNumber})`,
+          result: total.itemCount,
+        },
+      ]);
+    });
 
     for (const link of hyperlinkRows) {
       const row = worksheet.getRow(link.index);
-      const hyperlinkCell = row.getCell(7);
+      const hyperlinkCell = row.getCell(8);
       hyperlinkCell.value = {
         text: link.text,
         hyperlink: link.url,
@@ -1412,6 +1478,47 @@ useEffect(() => {
         underline: true,
       };
     }
+
+    worksheet.addRow([]);
+    Array.from(currencyTotals.entries())
+      .sort(([leftCode], [rightCode]) => leftCode.localeCompare(rightCode))
+      .forEach(([currencyCode, totalAmount]) => {
+        const totalRowNumber = worksheet.rowCount + 1;
+        const totalRow = worksheet.addRow([
+          "",
+          "",
+          "",
+          "",
+          currencyCode,
+          "合計:",
+          {
+            formula: `SUMIF($E$2:$E$${expenseDetailLastRow},E${totalRowNumber},$G$2:$G$${expenseDetailLastRow})`,
+            result: totalAmount,
+          },
+          "",
+        ]);
+        totalRow.getCell(6).font = { bold: true };
+        totalRow.getCell(7).font = { bold: true };
+        totalRow.getCell(7).numFmt = "#,##0.########";
+      });
+
+    const payerSummaryLastRow = sortedPayerCurrencyTotals.length + 1;
+    summaryWorksheet.addRow([]);
+    sortedPayerCurrencyTotals.forEach((total) => {
+      const totalRowNumber = summaryWorksheet.rowCount + 1;
+      const totalRow = summaryWorksheet.addRow([
+        total.payer,
+        total.currencyCode,
+        "合計:",
+        {
+          formula: `SUMIFS($D$2:$D$${payerSummaryLastRow},$A$2:$A$${payerSummaryLastRow},A${totalRowNumber},$B$2:$B$${payerSummaryLastRow},B${totalRowNumber})`,
+          result: total.totalAmount,
+        },
+      ]);
+      totalRow.getCell(3).font = { bold: true };
+      totalRow.getCell(4).font = { bold: true };
+      totalRow.getCell(4).numFmt = "#,##0.########";
+    });
 
     return workbook;
   };
@@ -1533,6 +1640,7 @@ useEffect(() => {
 const pendingAttachmentCount = isUsingSharedExpenseBook
   ? safeExpenses.filter(
       (item) =>
+        canManageExpenseItem(item) &&
         item.local_attachment_id &&
         item.attachment_status !== "synced" &&
         item.attachment_status !== "none",
@@ -1541,6 +1649,7 @@ const pendingAttachmentCount = isUsingSharedExpenseBook
 
   const hasUnsyncedLocalExpenseAttachments = safeExpenses.some(
     (item) =>
+      canManageExpenseItem(item) &&
       item.local_attachment_id &&
       item.attachment_status !== "synced" &&
       String(item.id).startsWith("local_") &&
@@ -1736,6 +1845,7 @@ const pendingAttachmentCount = isUsingSharedExpenseBook
     paitAmounts,
     activeCurrencySymbol,
     exportsAllSharedExpenses: isUsingSharedExpenseBook && canExportAllSharedExpenses,
+    canManageExpense: canManageExpenseItem,
     handleAttachmentSelection,
     handleAddExpense,
     cancelPendingDelete,

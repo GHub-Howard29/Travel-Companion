@@ -9,10 +9,12 @@ import {
   updatePrivateChecklistItem,
 } from "../services/privateChecklistService";
 import {
-  getCloudPrivateChecklist,
-  pushPrivateChecklistToCloud,
+  syncPrivateChecklistWithCloud,
 } from "../services/privateChecklistCloudService";
-import { writeStoredPrivateChecklist } from "../storage/privateChecklistStorage";
+import {
+  markPrivateChecklistPending,
+  writeStoredPrivateChecklist,
+} from "../storage/privateChecklistStorage";
 
 const normalizeUserEmail = (userEmail: string | null): string => {
   return userEmail?.trim().toLowerCase() ?? "";
@@ -23,6 +25,7 @@ export const usePrivateChecklistState = (
   userEmail: string | null,
   supabase: SupabaseClient,
   canSyncPrivateChecklist: boolean,
+  isOnline: boolean,
 ) => {
   const [itemsByScope, setItemsByScope] = useState<
     Record<string, PrivateChecklistItem[]>
@@ -33,7 +36,8 @@ export const usePrivateChecklistState = (
   const [syncError, setSyncError] = useState<string | null>(null);
   const ownerEmail = normalizeUserEmail(userEmail);
   const canUsePrivateChecklist = Boolean(tripId && ownerEmail);
-  const canSyncToCloud = canUsePrivateChecklist && canSyncPrivateChecklist;
+  const canSyncToCloud =
+    canUsePrivateChecklist && canSyncPrivateChecklist && isOnline;
   const scopeKey = `${tripId}:${ownerEmail}`;
   const pendingReorderRef = useRef<PrivateChecklist | null>(null);
   const reorderTimerRef = useRef<number | null>(null);
@@ -48,7 +52,9 @@ export const usePrivateChecklistState = (
 
   const syncChecklistToCloud = useCallback(async (
     checklist: PrivateChecklist,
+    baseItems: PrivateChecklistItem[],
   ) => {
+    markPrivateChecklistPending(checklist, baseItems);
     if (!canSyncToCloud) {
       return;
     }
@@ -57,7 +63,16 @@ export const usePrivateChecklistState = (
     setSyncError(null);
 
     try {
-      await pushPrivateChecklistToCloud(supabase, checklist);
+      const syncedChecklist = await syncPrivateChecklistWithCloud(
+        supabase,
+        checklist.tripId,
+        checklist.userEmail,
+      );
+      const syncedScopeKey = `${checklist.tripId}:${checklist.userEmail}`;
+      setItemsByScope((currentItemsByScope) => ({
+        ...currentItemsByScope,
+        [syncedScopeKey]: syncedChecklist.items,
+      }));
       setSyncStatus("synced");
     } catch (error) {
       console.warn(error);
@@ -82,19 +97,12 @@ export const usePrivateChecklistState = (
     setSyncStatus("syncing");
     setSyncError(null);
 
-    const localChecklist = getPrivateChecklist(tripId, ownerEmail);
-    const cloudChecklist = await getCloudPrivateChecklist(
+    const latestChecklist = await syncPrivateChecklistWithCloud(
       supabase,
       tripId,
       ownerEmail,
     );
-
-    if (!cloudChecklist || localChecklist.updatedAt > cloudChecklist.updatedAt) {
-      await pushPrivateChecklistToCloud(supabase, localChecklist);
-      return;
-    }
-
-    applyCloudChecklist(cloudChecklist);
+    applyCloudChecklist(latestChecklist);
   }, [applyCloudChecklist, canSyncToCloud, ownerEmail, supabase, tripId]);
 
   const flushPendingReorder = useCallback(async () => {
@@ -107,10 +115,14 @@ export const usePrivateChecklistState = (
     if (!pendingChecklist) return;
 
     pendingReorderRef.current = null;
-    await syncChecklistToCloud(pendingChecklist);
+    await syncChecklistToCloud(pendingChecklist, []);
   }, [syncChecklistToCloud]);
 
-  const deferReorderSync = useCallback((checklist: PrivateChecklist) => {
+  const deferReorderSync = useCallback((
+    checklist: PrivateChecklist,
+    baseItems: PrivateChecklistItem[],
+  ) => {
+    markPrivateChecklistPending(checklist, baseItems);
     if (!canSyncToCloud) return;
 
     pendingReorderRef.current = checklist;
@@ -216,7 +228,7 @@ export const usePrivateChecklistState = (
         [scopeKey]: nextChecklist.items,
       };
     });
-    void syncChecklistToCloud(nextChecklist);
+    void syncChecklistToCloud(nextChecklist, items);
   }, [
     canUsePrivateChecklist,
     items,
@@ -251,7 +263,7 @@ export const usePrivateChecklistState = (
         [scopeKey]: nextChecklist.items,
       };
     });
-    void syncChecklistToCloud(nextChecklist);
+    void syncChecklistToCloud(nextChecklist, items);
   }, [
     canUsePrivateChecklist,
     items,
@@ -280,7 +292,7 @@ export const usePrivateChecklistState = (
         [scopeKey]: nextChecklist.items,
       };
     });
-    void syncChecklistToCloud(nextChecklist);
+    void syncChecklistToCloud(nextChecklist, items);
   }, [
     canUsePrivateChecklist,
     items,
@@ -308,7 +320,7 @@ export const usePrivateChecklistState = (
         [scopeKey]: nextChecklist.items,
       };
     });
-    void syncChecklistToCloud(nextChecklist);
+    void syncChecklistToCloud(nextChecklist, items);
   }, [
     canUsePrivateChecklist,
     items,
@@ -347,9 +359,10 @@ export const usePrivateChecklistState = (
       ...currentItemsByScope,
       [scopeKey]: nextChecklist.items,
     }));
-    void syncChecklistToCloud(nextChecklist);
+    void syncChecklistToCloud(nextChecklist, items);
   }, [
     canUsePrivateChecklist,
+    items,
     ownerEmail,
     scopeKey,
     syncChecklistToCloud,
@@ -370,8 +383,8 @@ export const usePrivateChecklistState = (
       ...currentItemsByScope,
       [scopeKey]: nextItems,
     }));
-    deferReorderSync(nextChecklist);
-  }, [canUsePrivateChecklist, deferReorderSync, ownerEmail, scopeKey, tripId]);
+    deferReorderSync(nextChecklist, items);
+  }, [canUsePrivateChecklist, deferReorderSync, items, ownerEmail, scopeKey, tripId]);
 
   return {
     items,

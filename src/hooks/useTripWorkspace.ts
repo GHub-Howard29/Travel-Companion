@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { AdminUser, TripDetail, TripEditorInput, TripMeta } from "../types";
 import { findDefaultTrip, getDefaultActiveDay } from "../utils/tripHelpers";
+import { getParticipantAliasByEmail } from "../utils/participantUtils";
 import { toPersonalBookTripId } from "../storage/expenseStorage";
 import { createPermission } from "../permissions/permission";
 import { mapRole } from "../permissions/roleMapper";
@@ -15,6 +16,7 @@ import {
   getTripMetas,
   getSuperAdminEmails,
   saveTripRecordWithCloudSync,
+  saveTripRecord,
   syncTripEditorEmails,
   updateTripRecord,
 } from "../services/tripRepository";
@@ -26,6 +28,8 @@ interface UseTripWorkspaceOptions {
 export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) {
   const [userId, setUserId] = useState<string | null>(null);
   const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [isSessionReady, setIsSessionReady] = useState(false);
+  const [isOnline, setIsOnline] = useState(() => navigator.onLine);
   const [tripOptions, setTripOptions] = useState<TripMeta[]>([]);
   const [selectedTripId, setSelectedTripId] = useState<string>("");
   const [currentTrip, setCurrentTrip] = useState<TripDetail | null>(null);
@@ -50,22 +54,19 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
   const isUsingSharedExpenseBook = canUseExpense && hasEditPermission;
   const expenseMembers =
     isUsingSharedExpenseBook || !userEmail ? currentMembers : [userEmail];
+  const participantEmailMap =
+    selectedTripMeta?.participantEmailMap ??
+    currentTrip?.content.participantEmailMap ??
+    {};
   const currentUserParticipantName = (() => {
-    if (!userEmail) return null;
-
-    const email = userEmail.trim().toLowerCase();
-    const participantEmailMap =
-      selectedTripMeta?.participantEmailMap ??
-      currentTrip?.content.participantEmailMap ??
-      {};
-    const currentMemberSet = new Set(currentMembers);
-    const matchedEntry = Object.entries(participantEmailMap).find(
-      ([participant, participantEmail]) =>
-        currentMemberSet.has(participant) &&
-        participantEmail.trim().toLowerCase() === email,
+    const participantName = getParticipantAliasByEmail(
+      userEmail,
+      participantEmailMap,
     );
 
-    return matchedEntry?.[0] ?? null;
+    return participantName && currentMembers.includes(participantName)
+      ? participantName
+      : null;
   })();
   const isSignedIn = Boolean(userEmail);
   const isAssignedTrip =
@@ -96,9 +97,13 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
   }, []);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    void supabase.auth.getSession().then(({ data: { session } }) => {
       setUserId(session?.user?.id || null);
       setUserEmail(session?.user?.email || null);
+      setIsSessionReady(true);
+    }).catch((error) => {
+      console.warn("Failed to restore Supabase session", error);
+      setIsSessionReady(true);
     });
 
     const {
@@ -106,10 +111,22 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
     } = supabase.auth.onAuthStateChange((_event, session) => {
       setUserId(session?.user?.id || null);
       setUserEmail(session?.user?.email || null);
+      setIsSessionReady(true);
     });
 
     return () => subscription.unsubscribe();
   }, [supabase]);
+
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, []);
 
   useEffect(() => {
     getTripMetas(supabase, getBasePath())
@@ -122,7 +139,10 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
           setSelectedTripId(initialTrip.id);
         }
       })
-      .catch((error) => console.error(error));
+      .catch((error) => {
+        console.error(error);
+        setIsLoading(false);
+      });
   }, [getBasePath, supabase]);
 
   useEffect(() => {
@@ -145,9 +165,11 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
               ...tripData.sidebarConfig.map((screen) => screen.id),
               "privateChecklist",
             ];
-            if (!validScreenIds.includes(currentScreen)) {
-              setCurrentScreen(tripData.sidebarConfig[0].id);
-            }
+            setCurrentScreen((screen) =>
+              validScreenIds.includes(screen)
+                ? screen
+                : tripData.sidebarConfig[0].id,
+            );
           }
         }
       } catch (error) {
@@ -168,7 +190,7 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
       let profile: AdminUser | null = null;
       const cachedProfile = localStorage.getItem(`admin_profile_${selectedTripId}`);
 
-      if (userEmail && navigator.onLine) {
+      if (userEmail && isOnline) {
         try {
           const { data, error } = await supabase
             .from("admin_users")
@@ -244,7 +266,7 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
     };
 
     void loadTripAndAuthData();
-  }, [currentScreen, getBasePath, selectedTripId, selectedTripMeta, supabase, userEmail]);
+  }, [getBasePath, isOnline, selectedTripId, selectedTripMeta, supabase, userEmail]);
 
   const createTrip = useCallback(
     async (input: TripEditorInput, syncEditors = true) => {
@@ -361,9 +383,42 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
     ],
   );
 
+  const saveCurrentTripDetailLocally = useCallback(
+    (nextTrip: TripDetail) => {
+      if (!selectedTripMeta) return null;
+
+      const record = createTripRecordFromDetail(
+        selectedTripMeta,
+        nextTrip,
+        currentTripEditorEmails,
+      );
+      saveTripRecord(record);
+      setCurrentTrip(record.detail);
+      setIsLoading(false);
+      return record;
+    },
+    [currentTripEditorEmails, selectedTripMeta],
+  );
+
+  const reloadCurrentTrip = useCallback(async () => {
+    if (!selectedTripId || !navigator.onLine) return;
+
+    const nextTrip = await getTripDetail(
+      supabase,
+      getBasePath(),
+      selectedTripId,
+      selectedTripMeta ?? undefined,
+    );
+    if (nextTrip) {
+      setCurrentTrip(nextTrip);
+    }
+  }, [getBasePath, selectedTripId, selectedTripMeta, supabase]);
+
   return {
     userEmail,
     userId,
+    isSessionReady,
+    isOnline,
     setUserId,
     setUserEmail,
     tripOptions,
@@ -391,6 +446,7 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
     canUseExpense,
     isUsingSharedExpenseBook,
     expenseMembers,
+    participantEmailMap,
     currentUserParticipantName,
     isSignedIn,
     isAssignedTrip,
@@ -401,6 +457,8 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
     deleteTrip,
     refreshTripOptionsAndSelect,
     saveCurrentTripDetail,
+    saveCurrentTripDetailLocally,
+    reloadCurrentTrip,
     currentTripEditorEmails,
     superAdminEmails,
   };

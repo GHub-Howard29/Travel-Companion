@@ -32,6 +32,7 @@ import {
 import { useOtherInfoForm } from "../hooks/useOtherInfoForm";
 import { SortableCard } from "./SortableCard";
 import type { Role } from "../permissions/roles";
+import type { OtherInfoSyncStatus } from "../storage/otherInfoSyncStorage";
 
 interface OtherInfoPageProps {
   tripId: string;
@@ -42,6 +43,7 @@ interface OtherInfoPageProps {
   pageTitle?: string;
   isSpecialInfoPage?: boolean;
   specialFolderId?: string;
+  syncStatus?: OtherInfoSyncStatus | "syncing" | null;
 }
 
 const renderContentWithLinks = (content: string) => {
@@ -82,6 +84,7 @@ export const OtherInfoPage = ({
   pageTitle = "旅行資訊",
   isSpecialInfoPage = false,
   specialFolderId,
+  syncStatus,
 }: OtherInfoPageProps) => {
   const folders = useMemo<Folder[]>(() => getFolders(tripId), [tripId]);
   const initialFolderId =
@@ -198,12 +201,15 @@ export const OtherInfoPage = ({
   };
 
   const persistItems = async (nextItems: OtherInfoItem[]) => {
+    setOptimisticItems(nextItems);
     if (onSaveItems) {
       await onSaveItems(nextItems);
+      setOptimisticItems(null);
       return;
     }
 
     setLocalItems(nextItems);
+    setOptimisticItems(null);
   };
 
   const createSyncedOtherInfoItem = (
@@ -357,6 +363,22 @@ export const OtherInfoPage = ({
           </button>
         )}
       </div>
+
+      {syncStatus && (
+        <div
+          className={`rounded-lg border px-3 py-2 text-xs font-semibold ${
+            syncStatus === "failed"
+              ? "border-rose-200 bg-rose-50 text-rose-700"
+              : "border-amber-200 bg-amber-50 text-amber-800"
+          }`}
+        >
+          {syncStatus === "syncing"
+            ? "同步中…"
+            : syncStatus === "failed"
+              ? "同步失敗，資料已保存在本機，連線恢復後會自動重試。"
+              : "已儲存於本機，待連線同步。"}
+        </div>
+      )}
 
       {!isSpecialInfoPage && (
       <div className="flex flex-wrap gap-2">

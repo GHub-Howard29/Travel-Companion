@@ -7,6 +7,12 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ChecklistItem } from "../types";
 import { useChecklistState } from "../hooks/useChecklistState";
 import { readUserSharedChecklist, writeUserSharedChecklist } from "../storage/userSharedChecklistStorage";
+import {
+  clearPendingSharedChecklistOrder,
+  readPendingSharedChecklistOrder,
+  writePendingSharedChecklistOrder,
+  type PendingSharedChecklistOrder,
+} from "../storage/sharedChecklistSyncStorage";
 import { SortableCard } from "./SortableCard";
 
 interface ChecklistPageProps {
@@ -17,13 +23,18 @@ interface ChecklistPageProps {
   canViewSharedChecklist: boolean;
   canToggleSharedChecklist: boolean;
   canSyncSharedChecklist: boolean;
+  isOnline: boolean;
   canManageSharedChecklist: boolean;
   copySources: Array<{
     tripId: string;
     title: string;
     items: ChecklistItem[];
   }>;
-  onSaveChecklistData: (items: ChecklistItem[]) => Promise<void>;
+  onSaveChecklistData: (
+    items: ChecklistItem[],
+    baseItems?: ChecklistItem[],
+  ) => Promise<void>;
+  onReloadChecklistData: () => Promise<void>;
 }
 
 export const ChecklistPage = ({
@@ -34,9 +45,11 @@ export const ChecklistPage = ({
   canViewSharedChecklist,
   canToggleSharedChecklist,
   canSyncSharedChecklist,
+  isOnline,
   canManageSharedChecklist,
   copySources,
   onSaveChecklistData,
+  onReloadChecklistData,
 }: ChecklistPageProps) => {
   const [isManageMode, setIsManageMode] = useState(false);
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -46,10 +59,21 @@ export const ChecklistPage = ({
   const [draftCategory, setDraftCategory] = useState("其他");
   const [draftLabel, setDraftLabel] = useState("");
   const [isSavingList, setIsSavingList] = useState(false);
+  const [isDeleteLocked, setIsDeleteLocked] = useState(false);
+  const deleteUnlockTimerRef = useRef<number | null>(null);
   const isLocalUserChecklist = Boolean(userEmail && !canSyncSharedChecklist);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
-  const [cloudChecklistData, setCloudChecklistData] = useState<ChecklistItem[]>(checklistData);
-  const pendingCloudOrderRef = useRef<ChecklistItem[] | null>(null);
+  const initialPendingCloudOrder =
+    canSyncSharedChecklist && userEmail
+      ? readPendingSharedChecklistOrder(tripId, userEmail)
+      : null;
+  const [cloudChecklistData, setCloudChecklistData] = useState<ChecklistItem[]>(
+    initialPendingCloudOrder?.items ?? checklistData,
+  );
+  const pendingCloudOrderRef = useRef<PendingSharedChecklistOrder | null>(
+    initialPendingCloudOrder,
+  );
+  const isCloudOrderSyncingRef = useRef(false);
   const cloudOrderTimerRef = useRef<number | null>(null);
   const [, setLocalChecklistRevision] = useState(0);
   const localChecklistData =
@@ -59,7 +83,13 @@ export const ChecklistPage = ({
   const activeChecklistData = isLocalUserChecklist ? localChecklistData : cloudChecklistData;
   const checklistSeedData = isLocalUserChecklist
     ? activeChecklistData
-    : checklistData;
+    : initialPendingCloudOrder?.items ?? checklistData;
+
+  useEffect(() => () => {
+    if (deleteUnlockTimerRef.current !== null) {
+      window.clearTimeout(deleteUnlockTimerRef.current);
+    }
+  }, []);
 
   useEffect(() => {
     if (!isLocalUserChecklist && !pendingCloudOrderRef.current) {
@@ -67,43 +97,108 @@ export const ChecklistPage = ({
     }
   }, [checklistData, isLocalUserChecklist]);
 
-  const saveChecklistData = async (nextItems: ChecklistItem[]) => {
-    if (isLocalUserChecklist && userEmail) {
-      writeUserSharedChecklist(tripId, userEmail, nextItems);
-      setLocalChecklistRevision((revision) => revision + 1);
-      return;
-    }
-    await onSaveChecklistData(nextItems);
-  };
   const { items, syncStatus, syncError, toggleChecklistItem, reorderChecklistItems } =
     useChecklistState(
       tripId,
       checklistSeedData,
       supabase,
       canSyncSharedChecklist,
+      isOnline,
+      userEmail,
     );
 
   const flushPendingCloudOrder = useCallback(async () => {
+    if (!isOnline || isCloudOrderSyncingRef.current) return;
+
     if (cloudOrderTimerRef.current !== null) {
       window.clearTimeout(cloudOrderTimerRef.current);
       cloudOrderTimerRef.current = null;
     }
 
-    const pendingItems = pendingCloudOrderRef.current;
-    if (!pendingItems) return;
+    isCloudOrderSyncingRef.current = true;
+    try {
+      while (navigator.onLine) {
+        const pending = userEmail
+          ? readPendingSharedChecklistOrder(tripId, userEmail)
+          : pendingCloudOrderRef.current;
+        if (!pending) break;
+
+        await onSaveChecklistData(pending.items, pending.baseItems);
+        if (!userEmail) {
+          pendingCloudOrderRef.current = null;
+          break;
+        }
+        if (
+          clearPendingSharedChecklistOrder(
+            tripId,
+            userEmail,
+            pending.revision,
+          )
+        ) {
+          pendingCloudOrderRef.current = null;
+          break;
+        }
+      }
+    } catch (error) {
+      console.warn(error);
+    } finally {
+      isCloudOrderSyncingRef.current = false;
+    }
+  }, [isOnline, onSaveChecklistData, tripId, userEmail]);
+
+  useEffect(() => {
+    if (isOnline) {
+      void flushPendingCloudOrder();
+    }
+  }, [flushPendingCloudOrder, isOnline]);
+
+  const reloadCloudChecklist = useCallback(async () => {
+    if (
+      !isOnline ||
+      !canSyncSharedChecklist ||
+      pendingCloudOrderRef.current ||
+      isCloudOrderSyncingRef.current
+    ) {
+      return;
+    }
 
     try {
-      await onSaveChecklistData(pendingItems);
-      pendingCloudOrderRef.current = null;
+      await onReloadChecklistData();
     } catch (error) {
       console.warn(error);
     }
-  }, [onSaveChecklistData]);
+  }, [canSyncSharedChecklist, isOnline, onReloadChecklistData]);
+
+  useEffect(() => {
+    const reloadWhenVisible = () => {
+      if (document.visibilityState === "visible") {
+        void reloadCloudChecklist();
+      }
+    };
+
+    window.addEventListener("focus", reloadCloudChecklist);
+    window.addEventListener("online", reloadCloudChecklist);
+    document.addEventListener("visibilitychange", reloadWhenVisible);
+    void reloadCloudChecklist();
+
+    return () => {
+      window.removeEventListener("focus", reloadCloudChecklist);
+      window.removeEventListener("online", reloadCloudChecklist);
+      document.removeEventListener("visibilitychange", reloadWhenVisible);
+    };
+  }, [reloadCloudChecklist]);
 
   const deferCloudOrderSync = useCallback((nextItems: ChecklistItem[]) => {
     setCloudChecklistData(nextItems);
     reorderChecklistItems(nextItems);
-    pendingCloudOrderRef.current = nextItems;
+    pendingCloudOrderRef.current = userEmail
+      ? writePendingSharedChecklistOrder(
+          tripId,
+          userEmail,
+          nextItems,
+          activeChecklistData,
+        )
+      : null;
 
     if (cloudOrderTimerRef.current !== null) {
       window.clearTimeout(cloudOrderTimerRef.current);
@@ -111,7 +206,19 @@ export const ChecklistPage = ({
     cloudOrderTimerRef.current = window.setTimeout(() => {
       void flushPendingCloudOrder();
     }, 800);
-  }, [flushPendingCloudOrder, reorderChecklistItems]);
+  }, [activeChecklistData, flushPendingCloudOrder, reorderChecklistItems, tripId, userEmail]);
+
+  const saveChecklistData = async (nextItems: ChecklistItem[]) => {
+    if (isLocalUserChecklist && userEmail) {
+      writeUserSharedChecklist(tripId, userEmail, nextItems);
+      setLocalChecklistRevision((revision) => revision + 1);
+      return;
+    }
+    deferCloudOrderSync(nextItems);
+    if (isOnline) {
+      await flushPendingCloudOrder();
+    }
+  };
 
   useEffect(() => {
     const flushWhenHidden = () => {
@@ -191,6 +298,7 @@ export const ChecklistPage = ({
     if (!label) return;
 
     setIsSavingList(true);
+    const now = new Date().toISOString();
     const nextItems = editingItemId
       ? activeChecklistData.map((item) =>
           item.id === editingItemId
@@ -198,6 +306,7 @@ export const ChecklistPage = ({
                 ...item,
                 category,
                 label,
+                updatedAt: now,
               }
             : item,
         )
@@ -207,6 +316,7 @@ export const ChecklistPage = ({
             id: `shared_${Date.now().toString(36)}`,
             category,
             label,
+            updatedAt: now,
           },
         ];
 
@@ -216,14 +326,25 @@ export const ChecklistPage = ({
   };
 
   const deleteChecklistItem = async (itemId: string) => {
-    const targetItem = activeChecklistData.find((item) => item.id === itemId);
-    if (!targetItem) return;
-    if (!confirm(`確定刪除「${targetItem.label}」？`)) return;
+    if (isDeleteLocked) return;
+    const hasTargetItem = activeChecklistData.some((item) => item.id === itemId);
+    if (!hasTargetItem) return;
 
+    setIsDeleteLocked(true);
     setIsSavingList(true);
-    await saveChecklistData(activeChecklistData.filter((item) => item.id !== itemId));
-    setIsSavingList(false);
-    resetForm();
+    try {
+      await saveChecklistData(activeChecklistData.filter((item) => item.id !== itemId));
+      resetForm();
+    } finally {
+      setIsSavingList(false);
+      if (deleteUnlockTimerRef.current !== null) {
+        window.clearTimeout(deleteUnlockTimerRef.current);
+      }
+      deleteUnlockTimerRef.current = window.setTimeout(() => {
+        setIsDeleteLocked(false);
+        deleteUnlockTimerRef.current = null;
+      }, 1000);
+    }
   };
 
   const moveChecklistItem = async (itemId: string, direction: -1 | 1) => {
@@ -310,6 +431,7 @@ export const ChecklistPage = ({
         id: `shared_copy_${Date.now().toString(36)}_${index}`,
         category: item.category,
         label: item.label,
+        updatedAt: new Date().toISOString(),
       })),
     );
     setIsSavingList(false);
@@ -339,10 +461,12 @@ export const ChecklistPage = ({
         )}
         {canSyncSharedChecklist && (
           <p className="mt-3 text-xs font-medium text-slate-500">
-            {syncStatus === "syncing" && "正在同步共同檢查清單..."}
-            {syncStatus === "synced" && "共同檢查清單已同步到雲端。"}
-            {syncStatus === "error" && syncError}
-            {syncStatus === "local" && "目前資料先保存於本機。"}
+            {!isOnline &&
+              "目前為離線狀態，資料先保存於本機；恢復連線後才會完整同步更新。"}
+            {isOnline && syncStatus === "syncing" && "正在同步共同檢查清單..."}
+            {isOnline && syncStatus === "synced" && "共同檢查清單已同步到雲端。"}
+            {isOnline && syncStatus === "error" && syncError}
+            {isOnline && syncStatus === "local" && "目前資料先保存於本機。"}
           </p>
         )}
         {!canSyncSharedChecklist && userEmail && (
@@ -382,6 +506,11 @@ export const ChecklistPage = ({
             {canSyncSharedChecklist && <p className="rounded-lg border border-amber-300 bg-amber-100 px-3 py-2 text-xs font-bold text-amber-900">
               如需複製使用舊有清單，請勿提早建立任何清單
             </p>}
+            {canSyncSharedChecklist && !isOnline && (
+              <p className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs font-bold text-sky-700">
+                目前為離線狀態，共同歷史清單須連線後才能複製；請恢復連線後再使用複製清單。
+              </p>
+            )}
             <div className={`grid gap-2 ${canSyncSharedChecklist ? "grid-cols-2" : "grid-cols-1"}`}>
               <button
                 type="button"
@@ -398,7 +527,7 @@ export const ChecklistPage = ({
                   setIsFormOpen(false);
                   setIsCopyOpen(true);
                 }}
-                disabled={availableCopySources.length === 0}
+                disabled={!isOnline || availableCopySources.length === 0}
                 className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Copy size={14} />
@@ -409,7 +538,7 @@ export const ChecklistPage = ({
         </div>
       )}
 
-      {canManageSharedChecklist && isManageMode && isCopyOpen && (
+      {canManageSharedChecklist && isManageMode && isCopyOpen && isOnline && (
         <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="mb-3 flex items-center justify-between">
             <h3 className="text-sm font-bold text-slate-800">複製共同清單</h3>
@@ -447,7 +576,7 @@ export const ChecklistPage = ({
             <button
               type="button"
               onClick={() => void copyChecklistItems()}
-              disabled={!selectedCopySource || isSavingList}
+              disabled={!isOnline || !selectedCopySource || isSavingList}
               className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-rose-700 px-4 py-2.5 text-sm font-bold text-white hover:bg-rose-800 disabled:cursor-not-allowed disabled:opacity-60"
             >
               <Copy size={16} />
@@ -663,8 +792,9 @@ export const ChecklistPage = ({
                         </button>
                         <button
                           type="button"
+                          disabled={isSavingList || isDeleteLocked}
                           onClick={() => void deleteChecklistItem(item.id)}
-                          className="rounded-lg p-2 text-slate-400 hover:bg-rose-50 hover:text-rose-700"
+                          className="rounded-lg p-2 text-slate-400 hover:bg-rose-50 hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-30"
                           aria-label="刪除共同清單項目"
                           title="刪除共同清單項目"
                         >

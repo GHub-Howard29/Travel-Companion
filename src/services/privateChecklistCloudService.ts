@@ -1,6 +1,13 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { PrivateChecklist, PrivateChecklistItem } from "../types";
+import {
+  clearPrivateChecklistPending,
+  readPrivateChecklistPending,
+  readPrivateChecklistPendingRevision,
+  readStoredPrivateChecklist,
+  writeStoredPrivateChecklist,
+} from "../storage/privateChecklistStorage";
 
 interface CloudChecklistRow {
   id: string;
@@ -24,6 +31,82 @@ interface CloudPrivateChecklistCopyRow {
 }
 
 const PRIVATE_CHECKLIST_TITLE = "私人確認清單";
+const privateChecklistPushQueues = new Map<string, Promise<void>>();
+const privateChecklistSyncQueues = new Map<
+  string,
+  Promise<PrivateChecklist>
+>();
+
+const mergePendingPrivateChecklist = (
+  localChecklist: PrivateChecklist,
+  cloudChecklist: PrivateChecklist | null,
+  baseItems: PrivateChecklistItem[] | null,
+): PrivateChecklist => {
+  if (!cloudChecklist) return localChecklist;
+
+  const localItemsById = new Map(localChecklist.items.map((item) => [item.id, item]));
+  const cloudItemsById = new Map(cloudChecklist.items.map((item) => [item.id, item]));
+  const baseItemsById = new Map((baseItems ?? []).map((item) => [item.id, item]));
+  const hasChanged = (
+    item: PrivateChecklistItem,
+    baseItem: PrivateChecklistItem,
+  ) => item.label !== baseItem.label || item.isChecked !== baseItem.isChecked;
+  const mergedItems: PrivateChecklistItem[] = [];
+
+  for (const localItem of localChecklist.items) {
+    const cloudItem = cloudItemsById.get(localItem.id);
+    const baseItem = baseItemsById.get(localItem.id);
+
+    if (cloudItem) {
+      if (!baseItem) {
+        mergedItems.push(
+          cloudItem.updatedAt > localItem.updatedAt ? cloudItem : localItem,
+        );
+        continue;
+      }
+
+      const localChanged = hasChanged(localItem, baseItem);
+      const cloudChanged = hasChanged(cloudItem, baseItem);
+      if (localChanged && !cloudChanged) {
+        mergedItems.push(localItem);
+      } else if (cloudChanged && !localChanged) {
+        mergedItems.push(cloudItem);
+      } else if (localChanged && cloudChanged) {
+        // 跨裝置時鐘不可可靠比較；雙方皆修改時以已同步雲端版本為準。
+        mergedItems.push(cloudItem);
+      } else {
+        mergedItems.push(
+          cloudItem.updatedAt > localItem.updatedAt ? cloudItem : localItem,
+        );
+      }
+      continue;
+    }
+
+    // 雲端刪除、本機仍存在：本機有修改時保留；雙方無法判定時採資料保留。
+    if (!baseItem || hasChanged(localItem, baseItem)) {
+      mergedItems.push(localItem);
+    }
+  }
+
+  for (const cloudItem of cloudChecklist.items) {
+    if (localItemsById.has(cloudItem.id)) continue;
+    const baseItem = baseItemsById.get(cloudItem.id);
+
+    // 本機刪除、雲端仍存在：雲端有修改時保留；真正未修改才接受刪除。
+    if (!baseItem || hasChanged(cloudItem, baseItem)) {
+      mergedItems.push(cloudItem);
+    }
+  }
+
+  return {
+    ...localChecklist,
+    items: mergedItems,
+    updatedAt:
+      localChecklist.updatedAt > cloudChecklist.updatedAt
+        ? localChecklist.updatedAt
+        : cloudChecklist.updatedAt,
+  };
+};
 
 const getCurrentUserId = async (
   supabase: SupabaseClient,
@@ -152,7 +235,7 @@ export const getCloudPrivateChecklist = async (
   };
 };
 
-export const pushPrivateChecklistToCloud = async (
+const pushPrivateChecklistSnapshotToCloud = async (
   supabase: SupabaseClient,
   checklist: PrivateChecklist,
 ): Promise<void> => {
@@ -245,6 +328,134 @@ export const pushPrivateChecklistToCloud = async (
   if (touchError) {
     throw touchError;
   }
+};
+
+export const pushPrivateChecklistToCloud = async (
+  supabase: SupabaseClient,
+  checklist: PrivateChecklist,
+): Promise<void> => {
+  const scopeKey = `${checklist.tripId}:${checklist.userEmail}`;
+  const previousPush = privateChecklistPushQueues.get(scopeKey) ??
+    Promise.resolve();
+  const currentPush = previousPush
+    .catch(() => undefined)
+    .then(() => pushPrivateChecklistSnapshotToCloud(supabase, checklist));
+
+  privateChecklistPushQueues.set(scopeKey, currentPush);
+  try {
+    await currentPush;
+  } finally {
+    if (privateChecklistPushQueues.get(scopeKey) === currentPush) {
+      privateChecklistPushQueues.delete(scopeKey);
+    }
+  }
+};
+
+const runPrivateChecklistSync = async (
+  supabase: SupabaseClient,
+  tripId: string,
+  userEmail: string,
+): Promise<PrivateChecklist> => {
+  const initialLocalChecklist = readStoredPrivateChecklist(tripId, userEmail);
+  const initialPending = readPrivateChecklistPending(
+    tripId,
+    userEmail,
+  );
+
+  if (initialPending) {
+    const cloudChecklist = await getCloudPrivateChecklist(
+      supabase,
+      tripId,
+      userEmail,
+    );
+    const latestLocalChecklist = readStoredPrivateChecklist(tripId, userEmail);
+    const latestPending = readPrivateChecklistPending(tripId, userEmail) ??
+      initialPending;
+    const mergedChecklist = mergePendingPrivateChecklist(
+      latestLocalChecklist,
+      cloudChecklist,
+      latestPending.baseItems,
+    );
+    writeStoredPrivateChecklist(mergedChecklist);
+    await pushPrivateChecklistToCloud(supabase, mergedChecklist);
+    clearPrivateChecklistPending(tripId, userEmail, latestPending.revision);
+    return readStoredPrivateChecklist(tripId, userEmail);
+  }
+
+  const cloudChecklist = await getCloudPrivateChecklist(
+    supabase,
+    tripId,
+    userEmail,
+  );
+
+  if (!cloudChecklist) {
+    const latestLocalChecklist = readStoredPrivateChecklist(tripId, userEmail);
+    if (latestLocalChecklist.updatedAt) {
+      await pushPrivateChecklistToCloud(supabase, latestLocalChecklist);
+    }
+    return readStoredPrivateChecklist(tripId, userEmail);
+  }
+
+  const latestLocalChecklist = readStoredPrivateChecklist(tripId, userEmail);
+  const latestPendingRevision = readPrivateChecklistPendingRevision(
+    tripId,
+    userEmail,
+  );
+
+  if (
+    latestPendingRevision ||
+    latestLocalChecklist.updatedAt !== initialLocalChecklist.updatedAt
+  ) {
+    await pushPrivateChecklistToCloud(supabase, latestLocalChecklist);
+    if (latestPendingRevision) {
+      clearPrivateChecklistPending(tripId, userEmail, latestPendingRevision);
+    }
+    return readStoredPrivateChecklist(tripId, userEmail);
+  }
+
+  if (
+    latestLocalChecklist.updatedAt &&
+    latestLocalChecklist.updatedAt > cloudChecklist.updatedAt
+  ) {
+    await pushPrivateChecklistToCloud(supabase, latestLocalChecklist);
+    return readStoredPrivateChecklist(tripId, userEmail);
+  }
+
+  const finalPendingRevision = readPrivateChecklistPendingRevision(
+    tripId,
+    userEmail,
+  );
+  if (finalPendingRevision) {
+    const newestLocalChecklist = readStoredPrivateChecklist(tripId, userEmail);
+    await pushPrivateChecklistToCloud(supabase, newestLocalChecklist);
+    clearPrivateChecklistPending(tripId, userEmail, finalPendingRevision);
+    return readStoredPrivateChecklist(tripId, userEmail);
+  }
+  writeStoredPrivateChecklist(cloudChecklist);
+  return cloudChecklist;
+};
+
+export const syncPrivateChecklistWithCloud = (
+  supabase: SupabaseClient,
+  tripId: string,
+  userEmail: string,
+): Promise<PrivateChecklist> => {
+  const scopeKey = `${tripId}:${userEmail}`;
+  const previousSync = privateChecklistSyncQueues.get(scopeKey) ??
+    Promise.resolve(readStoredPrivateChecklist(tripId, userEmail));
+  const currentSync = previousSync
+    .catch(() => readStoredPrivateChecklist(tripId, userEmail))
+    .then(() => runPrivateChecklistSync(supabase, tripId, userEmail));
+
+  privateChecklistSyncQueues.set(scopeKey, currentSync);
+  const clearQueue = () => {
+    if (privateChecklistSyncQueues.get(scopeKey) === currentSync) {
+      privateChecklistSyncQueues.delete(scopeKey);
+    }
+  };
+  void currentSync.then(clearQueue, clearQueue);
+
+  return currentSync;
 };
 
 export const listCloudPrivateChecklistCopies = async (
