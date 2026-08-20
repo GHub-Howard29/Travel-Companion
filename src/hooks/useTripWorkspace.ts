@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { AdminUser, TripDetail, TripEditorInput, TripMeta } from "../types";
 import { findDefaultTrip, getDefaultActiveDay } from "../utils/tripHelpers";
@@ -42,6 +42,8 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
   const [expenseBookTripId, setExpenseBookTripId] = useState<string>("");
   const [currentTripEditorEmails, setCurrentTripEditorEmails] = useState<string[]>([]);
   const [superAdminEmails, setSuperAdminEmails] = useState<string[]>([]);
+  // 防止重連時較早開始的讀取，在較新的儲存後才回寫舊快照。
+  const tripLoadRevisionRef = useRef(0);
 
   const selectedTripMeta = tripOptions.find((trip) => trip.id === selectedTripId);
   const currentMembers = useMemo(
@@ -149,6 +151,7 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
     if (!selectedTripId) return;
 
     const loadTripAndAuthData = async () => {
+      const loadRevision = ++tripLoadRevisionRef.current;
       try {
         const tripData = await getTripDetail(
           supabase,
@@ -156,7 +159,7 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
           selectedTripId,
           selectedTripMeta,
         );
-        if (tripData) {
+        if (tripData && tripLoadRevisionRef.current === loadRevision) {
           setCurrentTrip(tripData);
           setActiveDay(getDefaultActiveDay(tripData.departureDate, tripData.content.days));
 
@@ -360,8 +363,10 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
   }, [getBasePath, supabase]);
 
   const saveCurrentTripDetail = useCallback(
-    async (nextTrip: TripDetail) => {
-      if (!selectedTripMeta) return;
+    async (nextTrip: TripDetail): Promise<boolean> => {
+      if (!selectedTripMeta) return false;
+
+      tripLoadRevisionRef.current += 1;
 
       const record = createTripRecordFromDetail(
         selectedTripMeta,
@@ -369,9 +374,10 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
         currentTripEditorEmails,
       );
 
-      await saveTripRecordWithCloudSync(supabase, record);
+      const didSync = await saveTripRecordWithCloudSync(supabase, record);
       setCurrentTrip(record.detail);
       setIsLoading(false);
+      return didSync;
     },
     [
       currentTripEditorEmails,
@@ -383,6 +389,8 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
   const saveCurrentTripDetailLocally = useCallback(
     (nextTrip: TripDetail) => {
       if (!selectedTripMeta) return null;
+
+      tripLoadRevisionRef.current += 1;
 
       const record = createTripRecordFromDetail(
         selectedTripMeta,
@@ -400,13 +408,15 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
   const reloadCurrentTrip = useCallback(async () => {
     if (!selectedTripId || !navigator.onLine) return;
 
+    const loadRevision = ++tripLoadRevisionRef.current;
+
     const nextTrip = await getTripDetail(
       supabase,
       getBasePath(),
       selectedTripId,
       selectedTripMeta ?? undefined,
     );
-    if (nextTrip) {
+    if (nextTrip && tripLoadRevisionRef.current === loadRevision) {
       setCurrentTrip(nextTrip);
     }
   }, [getBasePath, selectedTripId, selectedTripMeta, supabase]);

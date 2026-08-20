@@ -1,15 +1,13 @@
 /** App 發布版本設定；須與 public/app-version.json 保持一致。 */
-export const APP_VERSION = "3.4.1";
+export const APP_VERSION = "3.4.2";
 
 export const RELEASE_DATE = "2026-08-20";
 
 export const RELEASE_NOTES = [
-  "改善離線刷新、旅行工具載入與恢復連線提示",
-  "共同與私人清單加強離線同步及多人修改合併",
-  "修正清單刪除、排序與跨裝置更新穩定性",
-  "其他資訊改為本機先存並於背景同步",
-  "共用帳本支援代其他成員記帳與多人資料疊加",
-  "Excel 匯出新增紀錄者與幣別分類合計",
+  "改善離線後恢復連線時的共同清單同步穩定性",
+  "歷史行程在離線狀態下改為完整唯讀，避免誤操作",
+  "調整歷史行程記帳本的離線提示文案",
+  "新增可離線使用的 PWA 啟動動畫，載入完成後自動進入 App",
 ];
 
 export const FORCE_UPDATE = false;

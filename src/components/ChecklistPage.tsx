@@ -33,7 +33,7 @@ interface ChecklistPageProps {
   onSaveChecklistData: (
     items: ChecklistItem[],
     baseItems?: ChecklistItem[],
-  ) => Promise<void>;
+  ) => Promise<ChecklistItem[]>;
   onReloadChecklistData: () => Promise<void>;
 }
 
@@ -77,6 +77,8 @@ export const ChecklistPage = ({
   );
   const isCloudOrderSyncingRef = useRef(false);
   const cloudOrderTimerRef = useRef<number | null>(null);
+  const cloudOrderRetryTimerRef = useRef<number | null>(null);
+  const [pendingSyncRetry, setPendingSyncRetry] = useState(0);
   const [, setLocalChecklistRevision] = useState(0);
   const localChecklistData =
     isLocalUserChecklist && userEmail
@@ -116,6 +118,10 @@ export const ChecklistPage = ({
       window.clearTimeout(cloudOrderTimerRef.current);
       cloudOrderTimerRef.current = null;
     }
+    if (cloudOrderRetryTimerRef.current !== null) {
+      window.clearTimeout(cloudOrderRetryTimerRef.current);
+      cloudOrderRetryTimerRef.current = null;
+    }
 
     isCloudOrderSyncingRef.current = true;
     try {
@@ -125,7 +131,17 @@ export const ChecklistPage = ({
           : pendingCloudOrderRef.current;
         if (!pending) break;
 
-        await onSaveChecklistData(pending.items, pending.baseItems);
+        const mergedItems = await onSaveChecklistData(
+          pending.items,
+          pending.baseItems,
+        );
+        // 重連時可能仍有舊的雲端快照在元件記憶體中；先以已完成三方
+        // 合併的結果更新畫面，避免短暫回退到離線前資料而必須手動刷新。
+        setCloudChecklistData(mergedItems);
+        reorderChecklistItems(mergedItems);
+        // 同步已完成後才讀回旅程快照，讓 App 的全域旅程資料也與共同清單
+        // 一致；不依賴恢復連線提示框的手動整頁重新載入。
+        await onReloadChecklistData();
         if (!userEmail) {
           pendingCloudOrderRef.current = null;
           break;
@@ -145,14 +161,30 @@ export const ChecklistPage = ({
       console.warn(error);
     } finally {
       isCloudOrderSyncingRef.current = false;
+      const hasPending = userEmail
+        ? Boolean(readPendingSharedChecklistOrder(tripId, userEmail))
+        : Boolean(pendingCloudOrderRef.current);
+      if (navigator.onLine && hasPending) {
+        cloudOrderRetryTimerRef.current = window.setTimeout(() => {
+          cloudOrderRetryTimerRef.current = null;
+          setPendingSyncRetry((revision) => revision + 1);
+        }, 1500);
+      }
     }
-  }, [isOnline, onSaveChecklistData, tripId, userEmail]);
+  }, [
+    isOnline,
+    onReloadChecklistData,
+    onSaveChecklistData,
+    reorderChecklistItems,
+    tripId,
+    userEmail,
+  ]);
 
   useEffect(() => {
     if (isOnline) {
       void flushPendingCloudOrder();
     }
-  }, [flushPendingCloudOrder, isOnline]);
+  }, [flushPendingCloudOrder, isOnline, pendingSyncRetry]);
 
   const reloadCloudChecklist = useCallback(async () => {
     if (
@@ -235,6 +267,12 @@ export const ChecklistPage = ({
       void flushPendingCloudOrder();
     };
   }, [flushPendingCloudOrder]);
+
+  useEffect(() => () => {
+    if (cloudOrderRetryTimerRef.current !== null) {
+      window.clearTimeout(cloudOrderRetryTimerRef.current);
+    }
+  }, []);
   const checkedItemIds = items
     .filter((item) => item.isChecked)
     .map((item) => item.id);

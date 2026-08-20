@@ -23,6 +23,12 @@ const getTripEndTime = (trip: TripMeta): number => {
   return departureTime + (safeDayCount - 1) * 24 * 60 * 60 * 1000;
 };
 
+/** 行程最後一天早於今天時，視為歷史行程。 */
+export const isHistoricalTrip = (trip: TripMeta, now = new Date()): boolean => {
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  return getTripEndTime(trip) < today;
+};
+
 /** 回傳旅程今天所對應的 Day；不在旅程期間時維持 Day 1。 */
 export const getDefaultActiveDay = (
   departureDate: string,

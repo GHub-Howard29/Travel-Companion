@@ -22,8 +22,8 @@ import { getDefaultHomeScreen, setDefaultHomeScreen } from "./storage/defaultHom
 import { UpdatePrompt } from "./components/UpdatePrompt";
 import { VersionInfoModal } from "./components/VersionInfoModal";
 import { InstallAppPrompt } from "./components/InstallAppPrompt";
-import { ReconnectPrompt } from "./components/ReconnectPrompt";
 import { LoginSafetyModal } from "./components/LoginSafetyModal";
+import { AppSplash } from "./components/AppSplash";
 import useExpenseBook from "./hooks/useExpenseBook";
 import { useAppUpdate } from "./hooks/useAppUpdate";
 import useTripWorkspace from "./hooks/useTripWorkspace";
@@ -52,6 +52,7 @@ import {
   resolveTravelToolType,
 } from "./utils/travelToolRegistry";
 import { mergeSharedChecklistItems } from "./utils/checklistMerge";
+import { isHistoricalTrip } from "./utils/tripHelpers";
 
 const ExpenseScreen = lazy(() => import("./components/expense/ExpenseScreen"));
 const ItineraryPage = lazy(() =>
@@ -183,6 +184,7 @@ function ConfiguredApp({
     currentTripEditorEmails,
     superAdminEmails,
   } = useTripWorkspace({ supabase });
+  const [isSplashVisible, setIsSplashVisible] = useState(true);
   const [tripEditorMode, setTripEditorMode] = useState<"create" | "edit">("create");
   const [isTripEditorOpen, setIsTripEditorOpen] = useState(false);
   const [isVersionInfoOpen, setIsVersionInfoOpen] = useState(false);
@@ -190,12 +192,6 @@ function ConfiguredApp({
   const [otherInfoSyncStatus, setOtherInfoSyncStatus] = useState<
     OtherInfoSyncStatus | "syncing" | null
   >(null);
-  const [reconnectPromptMode, setReconnectPromptMode] = useState<
-    "syncing" | "ready" | "reminder" | null
-  >(null);
-  const experiencedOfflineRef = useRef(!navigator.onLine);
-  const reconnectReadyTimerRef = useRef<number | null>(null);
-  const reconnectReminderTimerRef = useRef<number | null>(null);
   const otherInfoSyncingTripsRef = useRef(new Set<string>());
   const [checklistCopySources, setChecklistCopySources] = useState<
     Array<{ tripId: string; title: string; items: ChecklistItem[] }>
@@ -397,15 +393,21 @@ function ConfiguredApp({
       currentScreen,
       currentTrip?.sidebarConfig.find((s) => s.id === currentScreen),
     );
+  const isHistoricalOfflineReadOnly = Boolean(
+    selectedTripMeta && !isOnline && isHistoricalTrip(selectedTripMeta),
+  );
   const openCreateTrip = () => {
+    if (isHistoricalOfflineReadOnly) return;
     setTripEditorMode("create");
     setIsTripEditorOpen(true);
   };
   const openEditTrip = () => {
+    if (isHistoricalOfflineReadOnly) return;
     setTripEditorMode("edit");
     setIsTripEditorOpen(true);
   };
   const handleTripEditorSubmit = async (input: TripEditorInput) => {
+    if (isHistoricalOfflineReadOnly) return;
     setIsLoading(true);
     const canManageEditors = adminProfile?.role === "super_admin";
     const nextInput = canManageEditors
@@ -421,7 +423,7 @@ function ConfiguredApp({
     setIsMenuOpen(false);
   };
   const handleTripDelete = async () => {
-    if (!selectedTripId) return;
+    if (!selectedTripId || isHistoricalOfflineReadOnly) return;
 
     setIsLoading(true);
     try {
@@ -438,8 +440,8 @@ function ConfiguredApp({
   const handleSaveChecklistData = async (
     items: ChecklistItem[],
     baseItems: ChecklistItem[] = checklistData,
-  ) => {
-    if (!currentTrip) return;
+  ): Promise<ChecklistItem[]> => {
+    if (!currentTrip || isHistoricalOfflineReadOnly) return items;
 
     const cloudTrip = navigator.onLine
       ? (await getCloudTripRecords(supabase)).find(
@@ -454,20 +456,28 @@ function ConfiguredApp({
         )
       : items;
 
-    await saveCurrentTripDetail({
+    const didSaveTrip = await saveCurrentTripDetail({
       ...currentTrip,
       content: {
         ...currentTrip.content,
         checklistData: mergedItems,
       },
     });
-    await syncCloudSharedChecklistSeedItems(
+    if (!didSaveTrip) {
+      throw new Error("共同清單旅程資料尚未成功寫入雲端");
+    }
+
+    const syncedChecklist = await syncCloudSharedChecklistSeedItems(
       supabase,
       selectedTripId,
       mergedItems,
       [],
       false,
     );
+    if (!syncedChecklist) {
+      throw new Error("共同清單項目尚未成功寫入雲端");
+    }
+    return mergedItems;
   };
   const syncPendingOtherInfo = useCallback(async () => {
     const tripId = selectedTripId;
@@ -534,7 +544,7 @@ function ConfiguredApp({
   }, [permission.canEditReference, selectedTripId, supabase, userId]);
 
   const handleSaveOtherInfoItems = async (items: OtherInfoItem[]) => {
-    if (!currentTrip) return;
+    if (!currentTrip || isHistoricalOfflineReadOnly) return;
 
     const nextTrip = {
       ...currentTrip,
@@ -548,55 +558,6 @@ function ConfiguredApp({
     markOtherInfoSyncPending(selectedTripId);
     setOtherInfoSyncStatus("pending");
     void syncPendingOtherInfo();
-  };
-
-  useEffect(() => {
-    if (!isOnline) {
-      experiencedOfflineRef.current = true;
-      return;
-    }
-
-    if (!experiencedOfflineRef.current) return;
-    experiencedOfflineRef.current = false;
-    const openTimer = window.setTimeout(() => {
-      setReconnectPromptMode("syncing");
-      reconnectReadyTimerRef.current = window.setTimeout(() => {
-        setReconnectPromptMode("ready");
-      }, 3000);
-    }, 0);
-
-    return () => {
-      window.clearTimeout(openTimer);
-      if (reconnectReadyTimerRef.current !== null) {
-        window.clearTimeout(reconnectReadyTimerRef.current);
-        reconnectReadyTimerRef.current = null;
-      }
-    };
-  }, [isOnline]);
-
-  useEffect(() => () => {
-    if (reconnectReminderTimerRef.current !== null) {
-      window.clearTimeout(reconnectReminderTimerRef.current);
-    }
-  }, []);
-
-  const handleReconnectLater = () => {
-    setReconnectPromptMode("reminder");
-    if (reconnectReminderTimerRef.current !== null) {
-      window.clearTimeout(reconnectReminderTimerRef.current);
-    }
-    reconnectReminderTimerRef.current = window.setTimeout(() => {
-      setReconnectPromptMode(null);
-      reconnectReminderTimerRef.current = null;
-    }, 6000);
-  };
-
-  const dismissReconnectReminder = () => {
-    if (reconnectReminderTimerRef.current !== null) {
-      window.clearTimeout(reconnectReminderTimerRef.current);
-      reconnectReminderTimerRef.current = null;
-    }
-    setReconnectPromptMode(null);
   };
 
   useEffect(() => {
@@ -756,6 +717,12 @@ function ConfiguredApp({
 
   return (
     <AppContext.Provider value={appContextValue}>
+    {isSplashVisible && (
+      <AppSplash
+        isReady={isSessionReady && !isLoading}
+        onComplete={() => setIsSplashVisible(false)}
+      />
+    )}
     <UpdatePrompt
       isOpen={updateAvailable}
       mode={promptMode}
@@ -770,12 +737,6 @@ function ConfiguredApp({
     <InstallAppPrompt
       isAuthenticated={Boolean(userEmail)}
       isAppReady={isSessionReady && !isLoading}
-    />
-    <ReconnectPrompt
-      mode={isOnline ? reconnectPromptMode : null}
-      onLater={handleReconnectLater}
-      onDismissReminder={dismissReconnectReminder}
-      onReload={() => window.location.reload()}
     />
     <LoginSafetyModal
       isOpen={isLoginSafetyOpen}
@@ -805,8 +766,8 @@ function ConfiguredApp({
         hasEditPermission={hasEditPermission}
         adminProfile={adminProfile}
         currentScreen={currentScreen}
-        canCreateTrip={adminProfile?.role === "super_admin"}
-        canEditCurrentTrip={hasEditPermission}
+        canCreateTrip={adminProfile?.role === "super_admin" && !isHistoricalOfflineReadOnly}
+        canEditCurrentTrip={hasEditPermission && !isHistoricalOfflineReadOnly}
         onCreateTrip={openCreateTrip}
         onEditTrip={openEditTrip}
         onTripSelect={(tripId) => {
@@ -845,7 +806,7 @@ function ConfiguredApp({
         onOpenVersionInfo={() => setIsVersionInfoOpen(true)}
       />
 
-      {isTripEditorOpen && (
+      {isTripEditorOpen && !isHistoricalOfflineReadOnly && (
         <Suspense fallback={null}>
         <TripEditorModal
           key={`${tripEditorMode}-${selectedTripId || "new"}`}
@@ -892,7 +853,9 @@ function ConfiguredApp({
                 hasEditPermission={hasEditPermission}
                 isOnline={isOnline}
                 onActiveDayChange={setActiveDay}
-                onSaveTripDetail={saveCurrentTripDetail}
+                onSaveTripDetail={async (trip) => {
+                  await saveCurrentTripDetail(trip);
+                }}
               />
             )}
 
@@ -905,10 +868,15 @@ function ConfiguredApp({
                 checklistData={checklistData}
                 supabase={supabase}
                 canViewSharedChecklist={permission.canViewSharedChecklist}
-                canToggleSharedChecklist={permission.canToggleSharedChecklist || Boolean(userEmail)}
+                canToggleSharedChecklist={
+                  (permission.canToggleSharedChecklist || Boolean(userEmail)) &&
+                  !isHistoricalOfflineReadOnly
+                }
                 canSyncSharedChecklist={hasEditPermission}
                 isOnline={isOnline}
-                canManageSharedChecklist={hasEditPermission || Boolean(userEmail)}
+                canManageSharedChecklist={
+                  (hasEditPermission || Boolean(userEmail)) && !isHistoricalOfflineReadOnly
+                }
                 copySources={checklistCopySources}
                 onSaveChecklistData={handleSaveChecklistData}
                 onReloadChecklistData={reloadCurrentTrip}
@@ -922,8 +890,12 @@ function ConfiguredApp({
                 userEmail={userEmail}
                 supabase={supabase}
                 canViewPrivateChecklist={permission.canViewPrivateChecklist}
-                canEditPrivateChecklist={permission.canEditPrivateChecklist}
-                canTogglePrivateChecklist={permission.canTogglePrivateChecklist}
+                canEditPrivateChecklist={
+                  permission.canEditPrivateChecklist && !isHistoricalOfflineReadOnly
+                }
+                canTogglePrivateChecklist={
+                  permission.canTogglePrivateChecklist && !isHistoricalOfflineReadOnly
+                }
                 canSyncPrivateChecklist={permission.canSyncPrivateChecklist}
                 isOnline={isOnline}
                 tripOptions={tripOptions}
@@ -940,7 +912,7 @@ function ConfiguredApp({
               <OtherInfoPage
                 key={`${selectedTripId}-${currentScreen}`}
                 tripId={selectedTripId}
-                canEdit={permission.canEditReference}
+                canEdit={permission.canEditReference && !isHistoricalOfflineReadOnly}
                 currentRole={role}
                 items={currentTrip.content.otherInfoItems}
                 onSaveItems={handleSaveOtherInfoItems}
@@ -954,11 +926,14 @@ function ConfiguredApp({
             {/* 5. 智慧多幣別記帳模組 */}
             {currentScreenType === "expense" && (
               <ExpenseScreen
-                canUseExpense={canUseExpense}
+                canUseExpense={canUseExpense && !isHistoricalOfflineReadOnly}
+                isHistoricalOfflineReadOnly={isHistoricalOfflineReadOnly}
                 isUsingSharedExpenseBook={isUsingSharedExpenseBook}
                 exportsAllSharedExpenses={exportsAllSharedExpenses}
                 userEmail={userEmail}
-                canManageExpense={canManageExpense}
+                canManageExpense={(item) =>
+                  !isHistoricalOfflineReadOnly && canManageExpense(item)
+                }
                 safeExpenses={safeExpenses}
                 filteredExpenses={filteredExpenses}
                 activeExpenseDate={activeExpenseDate}
@@ -1001,14 +976,24 @@ function ConfiguredApp({
                 editDraft={editDraft}
                 setEditDraft={setEditDraft}
                 pendingDeleteId={pendingDeleteId}
-                handleAddExpense={handleAddExpense}
-                handleSaveEditExpense={handleSaveEditExpense}
-                handleDeleteExpense={handleDeleteExpense}
+                handleAddExpense={(event) =>
+                  isHistoricalOfflineReadOnly ? Promise.resolve() : handleAddExpense(event)
+                }
+                handleSaveEditExpense={(id) =>
+                  isHistoricalOfflineReadOnly
+                    ? Promise.resolve()
+                    : handleSaveEditExpense(id)
+                }
+                handleDeleteExpense={(id) => {
+                  if (!isHistoricalOfflineReadOnly) handleDeleteExpense(id);
+                }}
                 handleOpenAttachment={handleOpenAttachment}
                 handleSyncAttachments={handleSyncAttachments}
                 handleExportXlsx={handleExportXlsx}
                 handleAttachmentSelection={handleAttachmentSelection}
-                onStartEditExpense={startEditExpenseHandler}
+                onStartEditExpense={(item) => {
+                  if (!isHistoricalOfflineReadOnly) startEditExpenseHandler(item);
+                }}
                 onCancelEditExpense={cancelEditExpenseHandler}
                 onCancelPendingDelete={cancelPendingDelete}
                 onRemoveEditAttachment={markEditAttachmentForRemoval}
@@ -1023,6 +1008,7 @@ function ConfiguredApp({
                 defaultForeignCurrency={currentCurrencyCode}
                 supabase={supabase}
                 canSyncCloudHistory={permission.canSyncCloudExchangeHistory}
+                isReadOnly={isHistoricalOfflineReadOnly}
               />
             )}
           </>
