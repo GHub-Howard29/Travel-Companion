@@ -30,7 +30,11 @@ interface ChecklistPageProps {
     title: string;
     items: ChecklistItem[];
   }>;
-  onSaveChecklistData: (items: ChecklistItem[]) => Promise<void>;
+  onSaveChecklistData: (
+    items: ChecklistItem[],
+    baseItems?: ChecklistItem[],
+  ) => Promise<void>;
+  onReloadChecklistData: () => Promise<void>;
 }
 
 export const ChecklistPage = ({
@@ -45,6 +49,7 @@ export const ChecklistPage = ({
   canManageSharedChecklist,
   copySources,
   onSaveChecklistData,
+  onReloadChecklistData,
 }: ChecklistPageProps) => {
   const [isManageMode, setIsManageMode] = useState(false);
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -68,6 +73,7 @@ export const ChecklistPage = ({
   const pendingCloudOrderRef = useRef<PendingSharedChecklistOrder | null>(
     initialPendingCloudOrder,
   );
+  const isCloudOrderSyncingRef = useRef(false);
   const cloudOrderTimerRef = useRef<number | null>(null);
   const [, setLocalChecklistRevision] = useState(0);
   const localChecklistData =
@@ -91,14 +97,6 @@ export const ChecklistPage = ({
     }
   }, [checklistData, isLocalUserChecklist]);
 
-  const saveChecklistData = async (nextItems: ChecklistItem[]) => {
-    if (isLocalUserChecklist && userEmail) {
-      writeUserSharedChecklist(tripId, userEmail, nextItems);
-      setLocalChecklistRevision((revision) => revision + 1);
-      return;
-    }
-    await onSaveChecklistData(nextItems);
-  };
   const { items, syncStatus, syncError, toggleChecklistItem, reorderChecklistItems } =
     useChecklistState(
       tripId,
@@ -110,32 +108,41 @@ export const ChecklistPage = ({
     );
 
   const flushPendingCloudOrder = useCallback(async () => {
-    if (!isOnline) return;
+    if (!isOnline || isCloudOrderSyncingRef.current) return;
 
     if (cloudOrderTimerRef.current !== null) {
       window.clearTimeout(cloudOrderTimerRef.current);
       cloudOrderTimerRef.current = null;
     }
 
-    const pending = userEmail
-      ? readPendingSharedChecklistOrder(tripId, userEmail)
-      : pendingCloudOrderRef.current;
-    if (!pending) return;
-
+    isCloudOrderSyncingRef.current = true;
     try {
-      await onSaveChecklistData(pending.items);
-      if (
-        userEmail &&
-        clearPendingSharedChecklistOrder(
-          tripId,
-          userEmail,
-          pending.revision,
-        )
-      ) {
-        pendingCloudOrderRef.current = null;
+      while (navigator.onLine) {
+        const pending = userEmail
+          ? readPendingSharedChecklistOrder(tripId, userEmail)
+          : pendingCloudOrderRef.current;
+        if (!pending) break;
+
+        await onSaveChecklistData(pending.items, pending.baseItems);
+        if (!userEmail) {
+          pendingCloudOrderRef.current = null;
+          break;
+        }
+        if (
+          clearPendingSharedChecklistOrder(
+            tripId,
+            userEmail,
+            pending.revision,
+          )
+        ) {
+          pendingCloudOrderRef.current = null;
+          break;
+        }
       }
     } catch (error) {
       console.warn(error);
+    } finally {
+      isCloudOrderSyncingRef.current = false;
     }
   }, [isOnline, onSaveChecklistData, tripId, userEmail]);
 
@@ -145,11 +152,52 @@ export const ChecklistPage = ({
     }
   }, [flushPendingCloudOrder, isOnline]);
 
+  const reloadCloudChecklist = useCallback(async () => {
+    if (
+      !isOnline ||
+      !canSyncSharedChecklist ||
+      pendingCloudOrderRef.current ||
+      isCloudOrderSyncingRef.current
+    ) {
+      return;
+    }
+
+    try {
+      await onReloadChecklistData();
+    } catch (error) {
+      console.warn(error);
+    }
+  }, [canSyncSharedChecklist, isOnline, onReloadChecklistData]);
+
+  useEffect(() => {
+    const reloadWhenVisible = () => {
+      if (document.visibilityState === "visible") {
+        void reloadCloudChecklist();
+      }
+    };
+
+    window.addEventListener("focus", reloadCloudChecklist);
+    window.addEventListener("online", reloadCloudChecklist);
+    document.addEventListener("visibilitychange", reloadWhenVisible);
+    void reloadCloudChecklist();
+
+    return () => {
+      window.removeEventListener("focus", reloadCloudChecklist);
+      window.removeEventListener("online", reloadCloudChecklist);
+      document.removeEventListener("visibilitychange", reloadWhenVisible);
+    };
+  }, [reloadCloudChecklist]);
+
   const deferCloudOrderSync = useCallback((nextItems: ChecklistItem[]) => {
     setCloudChecklistData(nextItems);
     reorderChecklistItems(nextItems);
     pendingCloudOrderRef.current = userEmail
-      ? writePendingSharedChecklistOrder(tripId, userEmail, nextItems)
+      ? writePendingSharedChecklistOrder(
+          tripId,
+          userEmail,
+          nextItems,
+          activeChecklistData,
+        )
       : null;
 
     if (cloudOrderTimerRef.current !== null) {
@@ -158,7 +206,19 @@ export const ChecklistPage = ({
     cloudOrderTimerRef.current = window.setTimeout(() => {
       void flushPendingCloudOrder();
     }, 800);
-  }, [flushPendingCloudOrder, reorderChecklistItems, tripId, userEmail]);
+  }, [activeChecklistData, flushPendingCloudOrder, reorderChecklistItems, tripId, userEmail]);
+
+  const saveChecklistData = async (nextItems: ChecklistItem[]) => {
+    if (isLocalUserChecklist && userEmail) {
+      writeUserSharedChecklist(tripId, userEmail, nextItems);
+      setLocalChecklistRevision((revision) => revision + 1);
+      return;
+    }
+    deferCloudOrderSync(nextItems);
+    if (isOnline) {
+      await flushPendingCloudOrder();
+    }
+  };
 
   useEffect(() => {
     const flushWhenHidden = () => {
@@ -238,6 +298,7 @@ export const ChecklistPage = ({
     if (!label) return;
 
     setIsSavingList(true);
+    const now = new Date().toISOString();
     const nextItems = editingItemId
       ? activeChecklistData.map((item) =>
           item.id === editingItemId
@@ -245,6 +306,7 @@ export const ChecklistPage = ({
                 ...item,
                 category,
                 label,
+                updatedAt: now,
               }
             : item,
         )
@@ -254,6 +316,7 @@ export const ChecklistPage = ({
             id: `shared_${Date.now().toString(36)}`,
             category,
             label,
+            updatedAt: now,
           },
         ];
 
@@ -368,6 +431,7 @@ export const ChecklistPage = ({
         id: `shared_copy_${Date.now().toString(36)}_${index}`,
         category: item.category,
         label: item.label,
+        updatedAt: new Date().toISOString(),
       })),
     );
     setIsSavingList(false);

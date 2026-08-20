@@ -7,6 +7,7 @@ const PRIVATE_CHECKLIST_PENDING_PREFIX =
 export interface PrivateChecklistPendingState {
   revision: string;
   baseItemIds: string[] | null;
+  baseItems: PrivateChecklistItem[] | null;
 }
 
 const getPrivateChecklistStorageKey = (
@@ -106,21 +107,28 @@ const getPrivateChecklistPendingKey = (
 
 export const markPrivateChecklistPending = (
   checklist: PrivateChecklist,
-  baseItemIds: string[],
+  baseItems: PrivateChecklistItem[],
 ): string => {
   const revision = crypto.randomUUID();
   const currentPending = readPrivateChecklistPending(
     checklist.tripId,
     checklist.userEmail,
   );
-  const mergedBaseItemIds = Array.from(
-    new Set([...(currentPending?.baseItemIds ?? []), ...baseItemIds]),
+  const mergedBaseItemsById = new Map(
+    (currentPending?.baseItems ?? []).map((item) => [item.id, item]),
   );
+  baseItems.forEach((item) => {
+    if (!mergedBaseItemsById.has(item.id)) {
+      mergedBaseItemsById.set(item.id, item);
+    }
+  });
+  const mergedBaseItems = Array.from(mergedBaseItemsById.values());
   localStorage.setItem(
     getPrivateChecklistPendingKey(checklist.tripId, checklist.userEmail),
     JSON.stringify({
       revision,
-      baseItemIds: mergedBaseItemIds,
+      baseItemIds: mergedBaseItems.map((item) => item.id),
+      baseItems: mergedBaseItems,
     } satisfies PrivateChecklistPendingState),
   );
   return revision;
@@ -146,6 +154,11 @@ export const readPrivateChecklistPending = (
       return {
         revision: parsedData.revision,
         baseItemIds: parsedData.baseItemIds,
+        baseItems:
+          Array.isArray(parsedData.baseItems) &&
+          parsedData.baseItems.every(isPrivateChecklistItem)
+            ? parsedData.baseItems
+            : null,
       };
     }
   } catch {
@@ -155,6 +168,7 @@ export const readPrivateChecklistPending = (
   return {
     revision: rawData,
     baseItemIds: null,
+    baseItems: null,
   };
 };
 

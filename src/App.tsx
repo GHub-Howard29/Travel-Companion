@@ -22,15 +22,18 @@ import { getDefaultHomeScreen, setDefaultHomeScreen } from "./storage/defaultHom
 import { UpdatePrompt } from "./components/UpdatePrompt";
 import { VersionInfoModal } from "./components/VersionInfoModal";
 import { InstallAppPrompt } from "./components/InstallAppPrompt";
+import { ReconnectPrompt } from "./components/ReconnectPrompt";
 import { LoginSafetyModal } from "./components/LoginSafetyModal";
 import useExpenseBook from "./hooks/useExpenseBook";
 import { useAppUpdate } from "./hooks/useAppUpdate";
 import useTripWorkspace from "./hooks/useTripWorkspace";
 import { AppContext } from "./app/context/AppContext";
 import { ROLE } from "./permissions/roles";
+import { getCloudTripRecords } from "./services/tripCloudService";
 import { getTripDetail } from "./services/tripRepository";
 import { syncCloudOtherInfoItems } from "./services/otherInfoCloudService";
 import { syncPrivateChecklistWithCloud } from "./services/privateChecklistCloudService";
+import { syncCloudSharedChecklistSeedItems } from "./services/sharedChecklistCloudService";
 import { upsertCloudTripRecord } from "./services/tripCloudService";
 import { readStoredTripRecords } from "./storage/tripStorage";
 import { writeStoredOtherInfoItems } from "./storage/otherInfoStorage";
@@ -48,6 +51,7 @@ import {
   isSpecialInfoSidebarItem,
   resolveTravelToolType,
 } from "./utils/travelToolRegistry";
+import { mergeSharedChecklistItems } from "./utils/checklistMerge";
 
 const ExpenseScreen = lazy(() => import("./components/expense/ExpenseScreen"));
 const ItineraryPage = lazy(() =>
@@ -175,6 +179,7 @@ function ConfiguredApp({
     refreshTripOptionsAndSelect,
     saveCurrentTripDetail,
     saveCurrentTripDetailLocally,
+    reloadCurrentTrip,
     currentTripEditorEmails,
     superAdminEmails,
   } = useTripWorkspace({ supabase });
@@ -185,6 +190,12 @@ function ConfiguredApp({
   const [otherInfoSyncStatus, setOtherInfoSyncStatus] = useState<
     OtherInfoSyncStatus | "syncing" | null
   >(null);
+  const [reconnectPromptMode, setReconnectPromptMode] = useState<
+    "syncing" | "ready" | "reminder" | null
+  >(null);
+  const experiencedOfflineRef = useRef(!navigator.onLine);
+  const reconnectReadyTimerRef = useRef<number | null>(null);
+  const reconnectReminderTimerRef = useRef<number | null>(null);
   const otherInfoSyncingTripsRef = useRef(new Set<string>());
   const [checklistCopySources, setChecklistCopySources] = useState<
     Array<{ tripId: string; title: string; items: ChecklistItem[] }>
@@ -424,16 +435,39 @@ function ConfiguredApp({
       setIsLoading(false);
     }
   };
-  const handleSaveChecklistData = async (items: ChecklistItem[]) => {
+  const handleSaveChecklistData = async (
+    items: ChecklistItem[],
+    baseItems: ChecklistItem[] = checklistData,
+  ) => {
     if (!currentTrip) return;
+
+    const cloudTrip = navigator.onLine
+      ? (await getCloudTripRecords(supabase)).find(
+          (record) => record.meta.id === selectedTripId,
+        )
+      : null;
+    const mergedItems = cloudTrip
+      ? mergeSharedChecklistItems(
+          items,
+          cloudTrip.detail.content.checklistData ?? [],
+          baseItems,
+        )
+      : items;
 
     await saveCurrentTripDetail({
       ...currentTrip,
       content: {
         ...currentTrip.content,
-        checklistData: items,
+        checklistData: mergedItems,
       },
     });
+    await syncCloudSharedChecklistSeedItems(
+      supabase,
+      selectedTripId,
+      mergedItems,
+      [],
+      false,
+    );
   };
   const syncPendingOtherInfo = useCallback(async () => {
     const tripId = selectedTripId;
@@ -514,6 +548,55 @@ function ConfiguredApp({
     markOtherInfoSyncPending(selectedTripId);
     setOtherInfoSyncStatus("pending");
     void syncPendingOtherInfo();
+  };
+
+  useEffect(() => {
+    if (!isOnline) {
+      experiencedOfflineRef.current = true;
+      return;
+    }
+
+    if (!experiencedOfflineRef.current) return;
+    experiencedOfflineRef.current = false;
+    const openTimer = window.setTimeout(() => {
+      setReconnectPromptMode("syncing");
+      reconnectReadyTimerRef.current = window.setTimeout(() => {
+        setReconnectPromptMode("ready");
+      }, 3000);
+    }, 0);
+
+    return () => {
+      window.clearTimeout(openTimer);
+      if (reconnectReadyTimerRef.current !== null) {
+        window.clearTimeout(reconnectReadyTimerRef.current);
+        reconnectReadyTimerRef.current = null;
+      }
+    };
+  }, [isOnline]);
+
+  useEffect(() => () => {
+    if (reconnectReminderTimerRef.current !== null) {
+      window.clearTimeout(reconnectReminderTimerRef.current);
+    }
+  }, []);
+
+  const handleReconnectLater = () => {
+    setReconnectPromptMode("reminder");
+    if (reconnectReminderTimerRef.current !== null) {
+      window.clearTimeout(reconnectReminderTimerRef.current);
+    }
+    reconnectReminderTimerRef.current = window.setTimeout(() => {
+      setReconnectPromptMode(null);
+      reconnectReminderTimerRef.current = null;
+    }, 6000);
+  };
+
+  const dismissReconnectReminder = () => {
+    if (reconnectReminderTimerRef.current !== null) {
+      window.clearTimeout(reconnectReminderTimerRef.current);
+      reconnectReminderTimerRef.current = null;
+    }
+    setReconnectPromptMode(null);
   };
 
   useEffect(() => {
@@ -688,6 +771,12 @@ function ConfiguredApp({
       isAuthenticated={Boolean(userEmail)}
       isAppReady={isSessionReady && !isLoading}
     />
+    <ReconnectPrompt
+      mode={isOnline ? reconnectPromptMode : null}
+      onLater={handleReconnectLater}
+      onDismissReminder={dismissReconnectReminder}
+      onReload={() => window.location.reload()}
+    />
     <LoginSafetyModal
       isOpen={isLoginSafetyOpen}
       isIosStandalonePwa={isIosStandalonePwa()}
@@ -821,6 +910,7 @@ function ConfiguredApp({
                 canManageSharedChecklist={hasEditPermission || Boolean(userEmail)}
                 copySources={checklistCopySources}
                 onSaveChecklistData={handleSaveChecklistData}
+                onReloadChecklistData={reloadCurrentTrip}
               />
             )}
 

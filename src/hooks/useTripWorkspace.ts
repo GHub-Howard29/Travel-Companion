@@ -400,6 +400,20 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
     [currentTripEditorEmails, selectedTripMeta],
   );
 
+  const reloadCurrentTrip = useCallback(async () => {
+    if (!selectedTripId || !navigator.onLine) return;
+
+    const nextTrip = await getTripDetail(
+      supabase,
+      getBasePath(),
+      selectedTripId,
+      selectedTripMeta ?? undefined,
+    );
+    if (nextTrip) {
+      setCurrentTrip(nextTrip);
+    }
+  }, [getBasePath, selectedTripId, selectedTripMeta, supabase]);
+
   return {
     userEmail,
     userId,
@@ -444,6 +458,7 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
     refreshTripOptionsAndSelect,
     saveCurrentTripDetail,
     saveCurrentTripDetailLocally,
+    reloadCurrentTrip,
     currentTripEditorEmails,
     superAdminEmails,
   };

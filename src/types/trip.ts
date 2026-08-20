@@ -43,6 +43,7 @@ export interface ChecklistItem {
   id: string;
   category: string;
   label: string;
+  updatedAt?: string;
 }
 
 export type TripMode = "guided" | "selfGuided";
