@@ -8,6 +8,7 @@ interface ItineraryPageProps {
   trip: TripDetail;
   activeDay: number;
   hasEditPermission: boolean;
+  isOnline: boolean;
   onActiveDayChange: (day: number) => void;
   onSaveTripDetail: (trip: TripDetail) => Promise<void>;
 }
@@ -23,6 +24,7 @@ const ITINERARY_TYPE_OPTIONS = [
 
 const createEmptyItineraryDraft = (): ItineraryItem => ({
   time: "",
+  departureTime: "",
   title: "",
   type: "景點",
   typeColor: "bg-purple-50 text-purple-700 border-purple-200",
@@ -54,6 +56,7 @@ export const ItineraryPage = ({
   trip,
   activeDay,
   hasEditPermission,
+  isOnline,
   onActiveDayChange,
   onSaveTripDetail,
 }: ItineraryPageProps) => {
@@ -141,14 +144,20 @@ export const ItineraryPage = ({
     setIsManageMode(true);
   };
 
+  const canManageItinerary = hasEditPermission && isOnline;
+
   const saveItem = async () => {
     if (!draft.title.trim()) return;
 
     const dayKey = String(activeDay);
     const currentEvents = trip.content.daysData[dayKey] ?? [];
+    const arrivalTime = draft.time.trim();
+    const requestedDepartureTime = draft.departureTime?.trim() ?? "";
+    const departureTime = requestedDepartureTime || arrivalTime;
     const nextEvent: ItineraryItem = {
       ...draft,
-      time: draft.time.trim(),
+      time: arrivalTime || requestedDepartureTime,
+      departureTime,
       title: draft.title.trim(),
       desc: draft.desc.trim(),
       location: draft.location.trim(),
@@ -218,7 +227,7 @@ export const ItineraryPage = ({
               <h2>行程探索 Day {activeDay}</h2>
             </div>
           </div>
-          {hasEditPermission && (
+          {canManageItinerary && (
             <button
               type="button"
               onClick={toggleManageMode}
@@ -235,7 +244,7 @@ export const ItineraryPage = ({
         </div>
       </div>
 
-      {hasEditPermission && isManageMode && (
+      {canManageItinerary && isManageMode && (
         <div className="mb-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-bold text-slate-800">
@@ -251,30 +260,42 @@ export const ItineraryPage = ({
           </div>
 
           <p className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-xs leading-relaxed text-slate-500">
-            依照輸入時間做自動排序，無輸入時間的活動會被置放在最下方。
+            依到達時間排序，未填到達時間的活動會置於最下方；未填離開時間時，儲存後會沿用到達時間。
           </p>
 
           {isFormOpen && (
             <div className="mt-3 space-y-2">
-              <div className="grid grid-cols-[92px_1fr] gap-2">
-                <input
-                  value={draft.time}
-                  onChange={(event) => updateDraft({ time: event.target.value })}
-                  placeholder="09:00"
-                  className="rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                />
-                <select
-                  value={draft.type}
-                  onChange={(event) => handleTypeChange(event.target.value)}
-                  className="rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                >
-                  {ITINERARY_TYPE_OPTIONS.map((option) => (
-                    <option key={option.type} value={option.type}>
-                      {option.type}
-                    </option>
-                  ))}
-                </select>
+              <div className="grid grid-cols-2 gap-2">
+                <label className="space-y-1">
+                  <span className="text-xs font-bold text-slate-600">到達時間</span>
+                  <input
+                    value={draft.time}
+                    onChange={(event) => updateDraft({ time: event.target.value })}
+                    placeholder="例如 10:00"
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                </label>
+                <label className="space-y-1">
+                  <span className="text-xs font-bold text-slate-600">離開時間</span>
+                  <input
+                    value={draft.departureTime ?? ""}
+                    onChange={(event) => updateDraft({ departureTime: event.target.value })}
+                    placeholder="例如 12:20"
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                </label>
               </div>
+              <select
+                value={draft.type}
+                onChange={(event) => handleTypeChange(event.target.value)}
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              >
+                {ITINERARY_TYPE_OPTIONS.map((option) => (
+                  <option key={option.type} value={option.type}>
+                    {option.type}
+                  </option>
+                ))}
+              </select>
               <input
                 value={draft.title}
                 onChange={(event) => updateDraft({ title: event.target.value })}
@@ -314,10 +335,14 @@ export const ItineraryPage = ({
               key={originalIndex}
               className="bg-white border border-slate-200/60 rounded-xl p-4 shadow-sm"
             >
-              <div className="flex justify-between items-center mb-2">
-                <span className="text-sm font-bold text-slate-500">
-                  {event.time}
-                </span>
+              <div className="flex justify-between items-center gap-3 mb-2">
+                {event.time ? (
+                  <div className="flex min-w-0 items-center gap-2 text-sm font-bold text-slate-500">
+                    <span>到達 {event.time}</span>
+                    <span className="text-slate-300" aria-hidden="true">→</span>
+                    <span>離開 {event.departureTime || event.time}</span>
+                  </div>
+                ) : <span />}
                 <span
                   className={`px-2 py-0.5 border rounded text-xs font-semibold ${event.typeColor}`}
                 >
@@ -343,7 +368,7 @@ export const ItineraryPage = ({
                   </button>
                 </div>
               )}
-              {hasEditPermission && isManageMode && (
+              {canManageItinerary && isManageMode && (
                 <div className="mt-3 flex justify-end gap-2 border-t border-slate-100 pt-3">
                   <button
                     type="button"

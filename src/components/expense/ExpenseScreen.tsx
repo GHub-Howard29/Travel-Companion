@@ -18,6 +18,7 @@ import type { EditExpenseDraft, ExpenseItem } from "../../types";
 
 interface ExpenseScreenProps {
   canUseExpense: boolean;
+  isHistoricalOfflineReadOnly: boolean;
   isUsingSharedExpenseBook: boolean;
   exportsAllSharedExpenses: boolean;
   userEmail: string | null;
@@ -83,6 +84,7 @@ interface ExpenseScreenProps {
 
 export default function ExpenseScreen({
   canUseExpense,
+  isHistoricalOfflineReadOnly,
   isUsingSharedExpenseBook,
   exportsAllSharedExpenses,
   userEmail,
@@ -485,17 +487,17 @@ export default function ExpenseScreen({
             </button>
           </div>
         </form>
-      ) : (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex gap-3 text-amber-900 text-xs">
-          <ShieldAlert size={18} className="text-amber-600 shrink-0" />
+      ) : isHistoricalOfflineReadOnly ? (
+        <div className="flex gap-3 rounded-xl border border-sky-200 bg-sky-50 p-4 text-xs text-sky-900">
+          <ShieldAlert size={18} className="shrink-0 text-sky-600" />
           <div>
-            <p className="font-bold mb-0.5">此功能須先登入</p>
-            <p className="text-amber-700/90 leading-relaxed">
-              請先點選左側選單完成 Google 登入。登入後若不在核准名單內，系統會自動建立你的個人帳本。
+            <p className="mb-0.5 font-bold">歷史行程目前為離線唯讀</p>
+            <p className="leading-relaxed text-sky-700/90">
+              可查看既有帳目與匯出資料；恢復連線後，將依你的權限提供新增、編輯與刪除功能。
             </p>
           </div>
         </div>
-      )}
+      ) : null}
 
       <div className="space-y-3">
         {availableExpenseDates.length > 0 && (
@@ -528,8 +530,8 @@ export default function ExpenseScreen({
                 ? targetConfig.symbol
                 : currentCurrencySymbol;
               const itemCurrencyCode = item.currency || currentCurrencyCode;
-              const isEditing = editingExpenseId === String(item.id);
-              const isPendingDelete = pendingDeleteId === String(item.id);
+              const isEditing = canUseExpense && editingExpenseId === String(item.id);
+              const isPendingDelete = canUseExpense && pendingDeleteId === String(item.id);
               const hasAttachment = Boolean(
                 item.local_attachment_id ||
                   item.attachment_path ||

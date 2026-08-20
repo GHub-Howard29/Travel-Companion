@@ -627,7 +627,7 @@ export const saveTripRecord = (record: StoredTripRecord): TripMeta[] => {
 export const saveTripRecordWithCloudSync = async (
   supabase: SupabaseClient,
   record: StoredTripRecord,
-): Promise<void> => {
+): Promise<boolean> => {
   saveTripRecord(record);
   const syncedRecord = await upsertCloudTripRecord(supabase, record);
   if (syncedRecord) {
@@ -635,7 +635,10 @@ export const saveTripRecordWithCloudSync = async (
       ...syncedRecord,
       editorEmails: record.editorEmails,
     });
+    return true;
   }
+
+  return false;
 };
 
 export const deleteTripRecordWithCloudSync = async (

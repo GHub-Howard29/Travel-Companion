@@ -68,6 +68,8 @@ interface ExchangeRatePageProps {
   defaultForeignCurrency: string;
   supabase: SupabaseClient;
   canSyncCloudHistory: boolean;
+  /** 歷史行程離線時僅供查閱與換算。 */
+  isReadOnly?: boolean;
 }
 
 export const ExchangeRatePage = ({
@@ -75,6 +77,7 @@ export const ExchangeRatePage = ({
   defaultForeignCurrency,
   supabase,
   canSyncCloudHistory,
+  isReadOnly = false,
 }: ExchangeRatePageProps) => {
   const storageScope: ExchangePurchaseStorageScope = canSyncCloudHistory
     ? "cloud"
@@ -265,7 +268,7 @@ export const ExchangeRatePage = ({
   };
 
   const handleSave = () => {
-    if (!hasValidForm) return;
+    if (isReadOnly || !hasValidForm) return;
 
     const now = new Date().toISOString();
     const next = editingId
@@ -288,6 +291,7 @@ export const ExchangeRatePage = ({
   };
 
   const handleEdit = (item: TripExchangePurchase) => {
+    if (isReadOnly) return;
     setEditingId(item.id);
     setSelectedCurrency(item.foreignCurrency);
     setReferenceRate(readExchangeReferenceRate(item.foreignCurrency));
@@ -300,6 +304,7 @@ export const ExchangeRatePage = ({
   };
 
   const handleDelete = (id: string) => {
+    if (isReadOnly) return;
     if (!window.confirm("確定要刪除這筆換匯紀錄嗎？")) return;
 
     const next = purchases.filter((item) => item.id !== id);
@@ -460,6 +465,7 @@ export const ExchangeRatePage = ({
         )}
       </div>
 
+      {!isReadOnly && (
       <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="mb-3 flex items-center justify-between gap-3">
           <h3 className="font-bold text-slate-800">
@@ -532,6 +538,7 @@ export const ExchangeRatePage = ({
           {editingId ? "儲存變更" : "新增換匯紀錄"}
         </button>
       </div>
+      )}
 
       <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="mb-3 flex items-center justify-between">
@@ -558,7 +565,7 @@ export const ExchangeRatePage = ({
                       1 {item.foreignCurrency} = {formatRate(item.twdAmount / item.foreignAmount)} TWD
                     </p>
                   </div>
-                  <div className="flex gap-1">
+                  {!isReadOnly && <div className="flex gap-1">
                     <button
                       type="button"
                       onClick={() => handleEdit(item)}
@@ -576,6 +583,7 @@ export const ExchangeRatePage = ({
                       <Trash2 size={15} />
                     </button>
                   </div>
+                  }
                 </div>
               </article>
             ))}

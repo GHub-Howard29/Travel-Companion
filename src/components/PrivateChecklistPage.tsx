@@ -65,6 +65,7 @@ export const PrivateChecklistPage = ({
   const [editingLabel, setEditingLabel] = useState("");
   const [isDeleteLocked, setIsDeleteLocked] = useState(false);
   const deleteUnlockTimerRef = useRef<number | null>(null);
+  const editCancelledRef = useRef(false);
   const checkedCount = items.filter((item) => item.isChecked).length;
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
   const displayItems = [...items].sort(
@@ -186,6 +187,7 @@ export const PrivateChecklistPage = ({
   };
 
   const startEdit = (itemId: string, label: string) => {
+    editCancelledRef.current = false;
     setEditingItemId(itemId);
     setEditingLabel(label);
   };
@@ -197,11 +199,16 @@ export const PrivateChecklistPage = ({
   };
 
   const cancelEdit = () => {
+    editCancelledRef.current = true;
     setEditingItemId(null);
     setEditingLabel("");
   };
 
   const saveEdit = () => {
+    if (editCancelledRef.current) {
+      editCancelledRef.current = false;
+      return;
+    }
     const label = editingLabel.trim();
 
     if (!editingItemId || !label || !canEditPrivateChecklist) {
@@ -508,6 +515,8 @@ export const PrivateChecklistPage = ({
                     value={editingLabel}
                     onChange={(event) => setEditingLabel(event.target.value)}
                     onKeyDown={handleEditKeyDown}
+                    onBlur={saveEdit}
+                    autoFocus
                     className="min-w-0 flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 outline-none focus:border-rose-500"
                   />
                 ) : (
@@ -539,6 +548,7 @@ export const PrivateChecklistPage = ({
                         </button>
                         <button
                           type="button"
+                          onMouseDown={(event) => event.preventDefault()}
                           onClick={cancelEdit}
                           className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-800"
                           aria-label="取消"

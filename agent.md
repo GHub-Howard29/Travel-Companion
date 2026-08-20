@@ -1,17 +1,17 @@
 ﻿# Travel Companion Agent Guide
 
-## V3.4.1 程式實作交接（2026-08-19）
+## V3.4.1 發布交接（2026-08-20）
 
-- 目前 branch：`develop`；程式版本已升為 V3.4.1，尚未發布。
+- V3.4.1 已合併至 `main` 並完成部署。
 - 已修正 PWA 離線刷新 App Shell、更新前清空快取空窗、工具切換重跑雲端載入、連線／session 誤判。
 - Other Info 已完成本機先存、每 Trip 單一 revision、序列化背景同步、tombstone、pending 覆蓋保護及重試提示。
 - 帳本已完成 A+B 聯集與代記帳：付款人可選，`owner_user_id` 固定登入者，離線 queue 依 owner 隔離，`client_item_id` 去重。
 - 2026-08-11 已將 `docs/sql/011_expense_ownership_and_merge_schema.sql` 套用至正式 Supabase，並以 `012_expense_ownership_and_merge_validation.sql` 驗證通過；2 筆舊帳目已補 `client_item_id`，保留 `owner_user_id = null` 相容規則。
 - `npm run lint` 與 `npm run build` 已通過；build 初始 JS 495.63 kB（gzip 143.68 kB），PWA precache 33 筆。
-- 尚待實機驗證，未通過前不得把 V3.4.1 標記為完成或已發布。
+- 第一階段上線後實機驗證已通過；尚未完成的雙裝置衝突與同步回歸項目持續列於 `docs/09_待辦事項_TODO.md`。
 - 共同／私人清單管理 UI 已統一；兩者離線均不可複製，刪除不確認且每筆刪除後鎖定 1 秒。
 - 私人清單背景預載限今天與未來行程；同一 `tripId + userEmail` 的完整同步序列化，pending 累積連續修改基準並依 revision 正確清除，避免複製後連續刪除或最後一筆復活。
-- 發布前必驗：線上複製私人清單後逐筆刪至空清單，等待同步、切頁及重新登入後均不得復活。
+- 線上複製私人清單後逐筆刪至空清單、背景預載後離線讀取與雙裝置衝突情境均已通過；新增待驗：共同清單離線刪除的分類排序同步、原地文字編輯，以及既有／新分類輸入行為。
 - commit message 必須使用繁體中文。
 
 ## V3.4.0 前端載入效能交接（2026-08-05）
