@@ -22,15 +22,18 @@ import { getDefaultHomeScreen, setDefaultHomeScreen } from "./storage/defaultHom
 import { UpdatePrompt } from "./components/UpdatePrompt";
 import { VersionInfoModal } from "./components/VersionInfoModal";
 import { InstallAppPrompt } from "./components/InstallAppPrompt";
+import { ReconnectPrompt } from "./components/ReconnectPrompt";
 import { LoginSafetyModal } from "./components/LoginSafetyModal";
 import useExpenseBook from "./hooks/useExpenseBook";
 import { useAppUpdate } from "./hooks/useAppUpdate";
 import useTripWorkspace from "./hooks/useTripWorkspace";
 import { AppContext } from "./app/context/AppContext";
 import { ROLE } from "./permissions/roles";
+import { getCloudTripRecords } from "./services/tripCloudService";
 import { getTripDetail } from "./services/tripRepository";
 import { syncCloudOtherInfoItems } from "./services/otherInfoCloudService";
 import { syncPrivateChecklistWithCloud } from "./services/privateChecklistCloudService";
+import { syncCloudSharedChecklistSeedItems } from "./services/sharedChecklistCloudService";
 import { upsertCloudTripRecord } from "./services/tripCloudService";
 import { readStoredTripRecords } from "./storage/tripStorage";
 import { writeStoredOtherInfoItems } from "./storage/otherInfoStorage";
@@ -48,6 +51,7 @@ import {
   isSpecialInfoSidebarItem,
   resolveTravelToolType,
 } from "./utils/travelToolRegistry";
+import { mergeSharedChecklistItems } from "./utils/checklistMerge";
 
 const ExpenseScreen = lazy(() => import("./components/expense/ExpenseScreen"));
 const ItineraryPage = lazy(() =>
@@ -79,7 +83,10 @@ const screenLoadingFallback = (
 // --- 初始化 Supabase 雲端客戶端 ---
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
+const supabase =
+  supabaseUrl?.trim() && supabaseAnonKey?.trim()
+    ? createClient(supabaseUrl, supabaseAnonKey)
+    : null;
 
 const isIosStandalonePwa = () => {
   const navigatorWithStandalone = navigator as Navigator & {
@@ -93,6 +100,33 @@ const isIosStandalonePwa = () => {
 };
 
 export default function App() {
+  if (!supabase) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-slate-50 px-6 text-slate-800">
+        <section className="w-full max-w-lg rounded-2xl border border-amber-200 bg-white p-6 shadow-sm">
+          <h1 className="text-xl font-semibold">APP 設定尚未完成</h1>
+          <p className="mt-3 leading-7 text-slate-600">
+            目前缺少 Supabase 連線設定，請確認建置環境已設定
+            <code className="mx-1 rounded bg-slate-100 px-1.5 py-0.5 text-sm">VITE_SUPABASE_URL</code>
+            與
+            <code className="mx-1 rounded bg-slate-100 px-1.5 py-0.5 text-sm">
+              VITE_SUPABASE_ANON_KEY
+            </code>
+            後重新建置。
+          </p>
+        </section>
+      </main>
+    );
+  }
+
+  return <ConfiguredApp supabaseClient={supabase} />;
+}
+
+function ConfiguredApp({
+  supabaseClient: supabase,
+}: {
+  supabaseClient: NonNullable<typeof supabase>;
+}) {
   const {
     updateAvailable,
     promptMode,
@@ -145,6 +179,7 @@ export default function App() {
     refreshTripOptionsAndSelect,
     saveCurrentTripDetail,
     saveCurrentTripDetailLocally,
+    reloadCurrentTrip,
     currentTripEditorEmails,
     superAdminEmails,
   } = useTripWorkspace({ supabase });
@@ -155,6 +190,12 @@ export default function App() {
   const [otherInfoSyncStatus, setOtherInfoSyncStatus] = useState<
     OtherInfoSyncStatus | "syncing" | null
   >(null);
+  const [reconnectPromptMode, setReconnectPromptMode] = useState<
+    "syncing" | "ready" | "reminder" | null
+  >(null);
+  const experiencedOfflineRef = useRef(!navigator.onLine);
+  const reconnectReadyTimerRef = useRef<number | null>(null);
+  const reconnectReminderTimerRef = useRef<number | null>(null);
   const otherInfoSyncingTripsRef = useRef(new Set<string>());
   const [checklistCopySources, setChecklistCopySources] = useState<
     Array<{ tripId: string; title: string; items: ChecklistItem[] }>
@@ -394,16 +435,39 @@ export default function App() {
       setIsLoading(false);
     }
   };
-  const handleSaveChecklistData = async (items: ChecklistItem[]) => {
+  const handleSaveChecklistData = async (
+    items: ChecklistItem[],
+    baseItems: ChecklistItem[] = checklistData,
+  ) => {
     if (!currentTrip) return;
+
+    const cloudTrip = navigator.onLine
+      ? (await getCloudTripRecords(supabase)).find(
+          (record) => record.meta.id === selectedTripId,
+        )
+      : null;
+    const mergedItems = cloudTrip
+      ? mergeSharedChecklistItems(
+          items,
+          cloudTrip.detail.content.checklistData ?? [],
+          baseItems,
+        )
+      : items;
 
     await saveCurrentTripDetail({
       ...currentTrip,
       content: {
         ...currentTrip.content,
-        checklistData: items,
+        checklistData: mergedItems,
       },
     });
+    await syncCloudSharedChecklistSeedItems(
+      supabase,
+      selectedTripId,
+      mergedItems,
+      [],
+      false,
+    );
   };
   const syncPendingOtherInfo = useCallback(async () => {
     const tripId = selectedTripId;
@@ -467,7 +531,7 @@ export default function App() {
     } finally {
       otherInfoSyncingTripsRef.current.delete(tripId);
     }
-  }, [permission.canEditReference, selectedTripId, userId]);
+  }, [permission.canEditReference, selectedTripId, supabase, userId]);
 
   const handleSaveOtherInfoItems = async (items: OtherInfoItem[]) => {
     if (!currentTrip) return;
@@ -484,6 +548,55 @@ export default function App() {
     markOtherInfoSyncPending(selectedTripId);
     setOtherInfoSyncStatus("pending");
     void syncPendingOtherInfo();
+  };
+
+  useEffect(() => {
+    if (!isOnline) {
+      experiencedOfflineRef.current = true;
+      return;
+    }
+
+    if (!experiencedOfflineRef.current) return;
+    experiencedOfflineRef.current = false;
+    const openTimer = window.setTimeout(() => {
+      setReconnectPromptMode("syncing");
+      reconnectReadyTimerRef.current = window.setTimeout(() => {
+        setReconnectPromptMode("ready");
+      }, 3000);
+    }, 0);
+
+    return () => {
+      window.clearTimeout(openTimer);
+      if (reconnectReadyTimerRef.current !== null) {
+        window.clearTimeout(reconnectReadyTimerRef.current);
+        reconnectReadyTimerRef.current = null;
+      }
+    };
+  }, [isOnline]);
+
+  useEffect(() => () => {
+    if (reconnectReminderTimerRef.current !== null) {
+      window.clearTimeout(reconnectReminderTimerRef.current);
+    }
+  }, []);
+
+  const handleReconnectLater = () => {
+    setReconnectPromptMode("reminder");
+    if (reconnectReminderTimerRef.current !== null) {
+      window.clearTimeout(reconnectReminderTimerRef.current);
+    }
+    reconnectReminderTimerRef.current = window.setTimeout(() => {
+      setReconnectPromptMode(null);
+      reconnectReminderTimerRef.current = null;
+    }, 6000);
+  };
+
+  const dismissReconnectReminder = () => {
+    if (reconnectReminderTimerRef.current !== null) {
+      window.clearTimeout(reconnectReminderTimerRef.current);
+      reconnectReminderTimerRef.current = null;
+    }
+    setReconnectPromptMode(null);
   };
 
   useEffect(() => {
@@ -530,23 +643,43 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (
-      !isOnline ||
-      !selectedTripId ||
-      !userEmail ||
-      !permission.canSyncPrivateChecklist
-    ) {
+    if (!isOnline || !userEmail) {
       return;
     }
 
-    void syncPrivateChecklistWithCloud(
-      supabase,
-      selectedTripId,
-      userEmail.trim().toLowerCase(),
-    ).catch((error) => {
-      console.warn("Private checklist preload failed", error);
+    const now = new Date();
+    const today = [
+      now.getFullYear(),
+      String(now.getMonth() + 1).padStart(2, "0"),
+      String(now.getDate()).padStart(2, "0"),
+    ].join("-");
+    const preloadTripIds = tripOptions
+      .filter((trip) => trip.departureDate >= today)
+      .filter(
+        (trip) =>
+          role === ROLE.SUPER_ADMIN ||
+          (role === ROLE.TRIP_EDITOR && trip.id === adminProfile?.trip_id),
+      )
+      .map((trip) => trip.id);
+
+    if (preloadTripIds.length === 0) return;
+
+    const normalizedEmail = userEmail.trim().toLowerCase();
+    void Promise.allSettled(
+      preloadTripIds.map((tripId) =>
+        syncPrivateChecklistWithCloud(supabase, tripId, normalizedEmail),
+      ),
+    ).then((results) => {
+      results.forEach((result, index) => {
+        if (result.status === "rejected") {
+          console.warn(
+            `Private checklist preload failed: ${preloadTripIds[index]}`,
+            result.reason,
+          );
+        }
+      });
     });
-  }, [isOnline, permission.canSyncPrivateChecklist, selectedTripId, userEmail]);
+  }, [adminProfile?.trip_id, isOnline, role, supabase, tripOptions, userEmail]);
   const currentScreenType = getCurrentScreenType();
   const currentSidebarItem = currentTrip?.sidebarConfig.find(
     (item) => item.id === currentScreen,
@@ -611,7 +744,7 @@ export default function App() {
     return () => {
       isActive = false;
     };
-  }, [currentTrip, isOnline, selectedTripId, tripOptions]);
+  }, [currentTrip, isOnline, selectedTripId, supabase, tripOptions]);
 
   useEffect(() => {
     if (userEmail || !isAuthRequiredTravelTool(currentScreenType)) {
@@ -634,7 +767,16 @@ export default function App() {
       onUpdate={update}
       onDismiss={dismiss}
     />
-    <InstallAppPrompt />
+    <InstallAppPrompt
+      isAuthenticated={Boolean(userEmail)}
+      isAppReady={isSessionReady && !isLoading}
+    />
+    <ReconnectPrompt
+      mode={isOnline ? reconnectPromptMode : null}
+      onLater={handleReconnectLater}
+      onDismissReminder={dismissReconnectReminder}
+      onReload={() => window.location.reload()}
+    />
     <LoginSafetyModal
       isOpen={isLoginSafetyOpen}
       isIosStandalonePwa={isIosStandalonePwa()}
@@ -726,6 +868,7 @@ export default function App() {
         currentTrip={currentTrip}
         isUsingSharedExpenseBook={isUsingSharedExpenseBook}
         userEmail={userEmail}
+        isOnline={isOnline}
         onOpenMenu={() => setIsMenuOpen(true)}
         headerBgClassName={getTravelToolHeaderBgClassName(currentScreenType)}
       />
@@ -767,6 +910,7 @@ export default function App() {
                 canManageSharedChecklist={hasEditPermission || Boolean(userEmail)}
                 copySources={checklistCopySources}
                 onSaveChecklistData={handleSaveChecklistData}
+                onReloadChecklistData={reloadCurrentTrip}
               />
             )}
 

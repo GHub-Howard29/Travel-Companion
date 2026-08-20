@@ -4,6 +4,7 @@ export interface PendingSharedChecklistOrder {
   tripId: string;
   userEmail: string;
   items: ChecklistItem[];
+  baseItems: ChecklistItem[];
   revision: string;
 }
 
@@ -54,7 +55,13 @@ export const readPendingSharedChecklistOrder = (
       return null;
     }
 
-    return parsed as PendingSharedChecklistOrder;
+    return {
+      ...parsed,
+      baseItems:
+        Array.isArray(parsed.baseItems) && parsed.baseItems.every(isChecklistItem)
+          ? parsed.baseItems
+          : [],
+    } as PendingSharedChecklistOrder;
   } catch {
     return null;
   }
@@ -64,11 +71,22 @@ export const writePendingSharedChecklistOrder = (
   tripId: string,
   userEmail: string,
   items: ChecklistItem[],
+  baseItems: ChecklistItem[],
 ): PendingSharedChecklistOrder => {
+  const currentPending = readPendingSharedChecklistOrder(tripId, userEmail);
+  const mergedBaseItemsById = new Map(
+    (currentPending?.baseItems ?? []).map((item) => [item.id, item]),
+  );
+  baseItems.forEach((item) => {
+    if (!mergedBaseItemsById.has(item.id)) {
+      mergedBaseItemsById.set(item.id, item);
+    }
+  });
   const pending: PendingSharedChecklistOrder = {
     tripId,
     userEmail: userEmail.trim().toLowerCase(),
     items,
+    baseItems: Array.from(mergedBaseItemsById.values()),
     revision: crypto.randomUUID(),
   };
   localStorage.setItem(storageKey(tripId, userEmail), JSON.stringify(pending));

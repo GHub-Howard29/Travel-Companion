@@ -14,6 +14,7 @@ import {
 import { writeStoredChecklistProgress } from "../storage/checklistStorage";
 import {
   clearPendingSharedChecklistProgress,
+  readPendingSharedChecklistOrder,
   readPendingSharedChecklistProgress,
   writePendingSharedChecklistProgress,
 } from "../storage/sharedChecklistSyncStorage";
@@ -95,6 +96,13 @@ export const useChecklistState = (
 
       try {
         const localProgress = getChecklistProgress(tripId);
+        const pendingOrder = userEmail
+          ? readPendingSharedChecklistOrder(tripId, userEmail)
+          : null;
+        if (pendingOrder) {
+          setSyncStatus("local");
+          return;
+        }
         const pendingProgress = userEmail
           ? readPendingSharedChecklistProgress(tripId, userEmail)
           : null;

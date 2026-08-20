@@ -1,6 +1,6 @@
 ﻿# Travel Companion Agent Guide
 
-## V3.4.1 程式實作交接（2026-08-11）
+## V3.4.1 程式實作交接（2026-08-19）
 
 - 目前 branch：`develop`；程式版本已升為 V3.4.1，尚未發布。
 - 已修正 PWA 離線刷新 App Shell、更新前清空快取空窗、工具切換重跑雲端載入、連線／session 誤判。
@@ -9,6 +9,9 @@
 - 2026-08-11 已將 `docs/sql/011_expense_ownership_and_merge_schema.sql` 套用至正式 Supabase，並以 `012_expense_ownership_and_merge_validation.sql` 驗證通過；2 筆舊帳目已補 `client_item_id`，保留 `owner_user_id = null` 相容規則。
 - `npm run lint` 與 `npm run build` 已通過；build 初始 JS 495.63 kB（gzip 143.68 kB），PWA precache 33 筆。
 - 尚待實機驗證，未通過前不得把 V3.4.1 標記為完成或已發布。
+- 共同／私人清單管理 UI 已統一；兩者離線均不可複製，刪除不確認且每筆刪除後鎖定 1 秒。
+- 私人清單背景預載限今天與未來行程；同一 `tripId + userEmail` 的完整同步序列化，pending 累積連續修改基準並依 revision 正確清除，避免複製後連續刪除或最後一筆復活。
+- 發布前必驗：線上複製私人清單後逐筆刪至空清單，等待同步、切頁及重新登入後均不得復活。
 - commit message 必須使用繁體中文。
 
 ## V3.4.0 前端載入效能交接（2026-08-05）

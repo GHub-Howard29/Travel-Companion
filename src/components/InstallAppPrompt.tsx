@@ -6,7 +6,17 @@ type BeforeInstallPromptEvent = Event & {
   userChoice: Promise<{ outcome: "accepted" | "dismissed"; platform: string }>;
 };
 
+interface InstallAppPromptProps {
+  isAuthenticated: boolean;
+  isAppReady: boolean;
+}
+
 const INSTALL_DISMISSED_STORAGE_KEY = "travel_companion_install_prompt_dismissed";
+const INSTALL_SNOOZED_UNTIL_STORAGE_KEY =
+  "travel_companion_install_prompt_snoozed_until";
+const INSTALL_SESSION_DISMISSED_STORAGE_KEY =
+  "travel_companion_install_prompt_session_dismissed";
+const INSTALL_SNOOZE_DURATION_MS = 7 * 24 * 60 * 60 * 1000;
 
 const isInstalledApp = () => {
   const navigatorWithStandalone = navigator as Navigator & {
@@ -30,31 +40,38 @@ const isMobileBrowser = () => {
 
 const isIosBrowser = () => /iPhone|iPad|iPod/i.test(navigator.userAgent);
 
-const shouldShowInstallPrompt = () => {
+const isSnoozed = () => {
+  const snoozedUntil = Number(
+    localStorage.getItem(INSTALL_SNOOZED_UNTIL_STORAGE_KEY),
+  );
+  return Number.isFinite(snoozedUntil) && snoozedUntil > Date.now();
+};
+
+const canOfferInstallation = () => {
   return (
     !isInstalledApp() &&
     isMobileBrowser() &&
-    localStorage.getItem(INSTALL_DISMISSED_STORAGE_KEY) !== "true"
+    localStorage.getItem(INSTALL_DISMISSED_STORAGE_KEY) !== "true" &&
+    !isSnoozed() &&
+    sessionStorage.getItem(INSTALL_SESSION_DISMISSED_STORAGE_KEY) !== "true"
   );
 };
 
-export function InstallAppPrompt() {
+export function InstallAppPrompt({
+  isAuthenticated,
+  isAppReady,
+}: InstallAppPromptProps) {
   const [installEvent, setInstallEvent] =
     useState<BeforeInstallPromptEvent | null>(null);
-  const [isVisible, setIsVisible] = useState(shouldShowInstallPrompt);
-  const [isExpanded, setIsExpanded] = useState(shouldShowInstallPrompt);
-  const [showIosHint, setShowIosHint] = useState(false);
+  const [isPromptSuppressed, setIsPromptSuppressed] = useState(
+    () => !canOfferInstallation(),
+  );
   const isIos = useMemo(() => isIosBrowser(), []);
-
-  useEffect(() => {
-    if (!isVisible) return;
-
-    const collapseTimer = window.setTimeout(() => {
-      setIsExpanded(false);
-    }, 3000);
-
-    return () => window.clearTimeout(collapseTimer);
-  }, [isVisible]);
+  const isVisible =
+    isAuthenticated &&
+    isAppReady &&
+    !isPromptSuppressed &&
+    canOfferInstallation();
 
   useEffect(() => {
     if (!isMobileBrowser()) return;
@@ -62,12 +79,17 @@ export function InstallAppPrompt() {
     const handleBeforeInstallPrompt = (event: Event) => {
       event.preventDefault();
       setInstallEvent(event as BeforeInstallPromptEvent);
-      setIsVisible(true);
+
+      if (canOfferInstallation()) {
+        setIsPromptSuppressed(false);
+      }
     };
 
     const handleInstalled = () => {
-      setIsVisible(false);
+      setIsPromptSuppressed(true);
+      setInstallEvent(null);
       localStorage.setItem(INSTALL_DISMISSED_STORAGE_KEY, "true");
+      localStorage.removeItem(INSTALL_SNOOZED_UNTIL_STORAGE_KEY);
     };
 
     window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
@@ -83,44 +105,38 @@ export function InstallAppPrompt() {
 
   const closePrompt = () => {
     localStorage.setItem(INSTALL_DISMISSED_STORAGE_KEY, "true");
-    setIsVisible(false);
+    localStorage.removeItem(INSTALL_SNOOZED_UNTIL_STORAGE_KEY);
+    setIsPromptSuppressed(true);
+  };
+
+  const snoozePrompt = () => {
+    localStorage.setItem(
+      INSTALL_SNOOZED_UNTIL_STORAGE_KEY,
+      String(Date.now() + INSTALL_SNOOZE_DURATION_MS),
+    );
+    setIsPromptSuppressed(true);
   };
 
   const installApp = async () => {
-    if (!isExpanded) {
-      setIsExpanded(true);
-      return;
-    }
+    if (!installEvent) return;
 
-    if (!installEvent) {
-      setShowIosHint(true);
-      return;
-    }
+    try {
+      await installEvent.prompt();
+      const choice = await installEvent.userChoice;
+      setInstallEvent(null);
 
-    await installEvent.prompt();
-    const choice = await installEvent.userChoice;
-
-    if (choice.outcome === "accepted") {
-      localStorage.setItem(INSTALL_DISMISSED_STORAGE_KEY, "true");
-      setIsVisible(false);
-    } else {
-      setIsExpanded(false);
+      if (choice.outcome === "accepted") {
+        localStorage.setItem(INSTALL_DISMISSED_STORAGE_KEY, "true");
+        localStorage.removeItem(INSTALL_SNOOZED_UNTIL_STORAGE_KEY);
+      } else {
+        sessionStorage.setItem(INSTALL_SESSION_DISMISSED_STORAGE_KEY, "true");
+      }
+      setIsPromptSuppressed(true);
+    } catch (error) {
+      console.warn("無法開啟 App 安裝視窗。", error);
+      setInstallEvent(null);
     }
   };
-
-  if (!isExpanded) {
-    return (
-      <button
-        type="button"
-        onClick={() => setIsExpanded(true)}
-        className="fixed bottom-4 right-4 z-[70] inline-flex h-12 w-12 items-center justify-center rounded-full bg-slate-900 text-white shadow-xl shadow-slate-900/20"
-        aria-label="安裝旅行助手"
-        title="安裝旅行助手"
-      >
-        <Smartphone size={20} />
-      </button>
-    );
-  }
 
   return (
     <div className="fixed bottom-4 left-4 right-4 z-[70] mx-auto max-w-md rounded-xl border border-emerald-100 bg-white p-3 shadow-2xl shadow-slate-900/20">
@@ -133,7 +149,7 @@ export function InstallAppPrompt() {
           <p className="mt-0.5 text-xs leading-relaxed text-slate-500">
             安裝後可像 App 一樣從主畫面開啟，旅行中比較方便查看行程與記帳。
           </p>
-          {showIosHint && (
+          {!installEvent && (
             <p className="mt-2 rounded-lg bg-slate-50 px-3 py-2 text-xs leading-relaxed text-slate-600">
               {isIos
                 ? "iOS 請點 Safari 分享按鈕，再選「加入主畫面」。"
@@ -141,17 +157,19 @@ export function InstallAppPrompt() {
             </p>
           )}
           <div className="mt-3 flex gap-2">
+            {installEvent && (
+              <button
+                type="button"
+                onClick={() => void installApp()}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-700 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-800"
+              >
+                <Download size={14} />
+                立即安裝
+              </button>
+            )}
             <button
               type="button"
-              onClick={() => void installApp()}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-700 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-800"
-            >
-              <Download size={14} />
-              {installEvent ? "立即安裝" : "查看安裝方式"}
-            </button>
-            <button
-              type="button"
-              onClick={() => setIsExpanded(false)}
+              onClick={snoozePrompt}
               className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50"
             >
               稍後
