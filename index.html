@@ -17,10 +17,63 @@
     
     <link rel="icon" type="image/png" href="/favicon.png" />
     <link rel="apple-touch-icon" href="/pwa-192x192.png" />
-    
+    <style>
+      #preboot-splash {
+        position: fixed;
+        z-index: 999;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        overflow: hidden;
+        color: #fff;
+        font-family: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
+        background:
+          radial-gradient(circle at 18% 18%, rgba(255,255,255,.32) 0 4%, transparent 20%),
+          radial-gradient(circle at 84% 78%, rgba(255,209,161,.3) 0 8%, transparent 28%),
+          linear-gradient(150deg, #058bd6 0%, #0eace6 50%, #9de5eb 150%);
+      }
+      #preboot-splash .preboot-content { text-align: center; }
+      #preboot-splash img {
+        display: block;
+        width: min(15rem, 58vw);
+        margin: 0 auto 1rem;
+        filter: drop-shadow(0 16px 18px rgba(0,45,91,.25));
+        animation: preboot-float 2.4s ease-in-out infinite;
+      }
+      #preboot-splash p { margin: 0; font-size: .92rem; font-weight: 700; letter-spacing: .08em; opacity: .92; }
+      #preboot-splash span {
+        display: block;
+        width: min(12rem, 48vw);
+        height: .35rem;
+        margin: .85rem auto 0;
+        overflow: hidden;
+        border-radius: 999px;
+        background: rgba(255,255,255,.27);
+      }
+      #preboot-splash span::after {
+        display: block;
+        width: 45%;
+        height: 100%;
+        border-radius: inherit;
+        background: linear-gradient(90deg, #0b75b8, #0b9c91, #f29b1d);
+        content: "";
+        animation: preboot-load 1.4s ease-in-out infinite;
+      }
+      @keyframes preboot-float { 50% { transform: translateY(-.45rem) scale(1.02); } }
+      @keyframes preboot-load { 0% { transform: translateX(-110%); } 100% { transform: translateX(235%); } }
+      @media (prefers-reduced-motion: reduce) { #preboot-splash * { animation: none !important; } }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <section id="preboot-splash" aria-label="正在啟動旅行小幫手">
+        <div class="preboot-content">
+          <img src="./pwa-512x512.png" alt="" />
+          <p>正在啟動旅行小幫手</p>
+          <span aria-hidden="true"></span>
+        </div>
+      </section>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
