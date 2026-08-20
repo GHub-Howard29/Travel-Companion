@@ -1,0 +1,344 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#0b75b8" />
+    <title>Splash Animation Demo</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        margin: 0;
+        min-height: 100dvh;
+        overflow: hidden;
+        background: #fff3e8;
+      }
+
+      .splash {
+        position: relative;
+        display: grid;
+        min-height: 100dvh;
+        place-items: center;
+        isolation: isolate;
+        overflow: hidden;
+        background:
+          radial-gradient(circle at 18% 18%, rgba(255, 255, 255, .32) 0 4%, transparent 20%),
+          radial-gradient(circle at 84% 78%, rgba(255, 209, 161, .3) 0 8%, transparent 28%),
+          linear-gradient(150deg, #058bd6 0%, #0eace6 50%, #9de5eb 150%);
+      }
+
+      .orbit {
+        position: absolute;
+        z-index: -1;
+        width: min(94vw, 42rem);
+        aspect-ratio: 1;
+        border: 1px solid rgba(255, 255, 255, .22);
+        border-radius: 50%;
+        animation: orbit 12s linear infinite;
+      }
+
+      .orbit::before,
+      .orbit::after {
+        position: absolute;
+        width: .8rem;
+        aspect-ratio: 1;
+        border-radius: 50%;
+        content: "";
+      }
+
+      .orbit::before {
+        top: 7%;
+        left: 20%;
+        background: #ffcb54;
+        box-shadow: 0 0 0 10px rgba(255, 203, 84, .12);
+      }
+
+      .orbit::after {
+        right: 13%;
+        bottom: 20%;
+        background: #e95760;
+        box-shadow: 0 0 0 10px rgba(233, 87, 96, .12);
+      }
+
+      .content {
+        width: min(100%, 28rem);
+        padding: 1rem 2rem 2rem;
+        text-align: center;
+      }
+
+      .scene {
+        position: relative;
+        width: min(25rem, 92vw);
+        height: 27rem;
+        margin: 0 auto .7rem;
+      }
+
+      .cloud {
+        position: absolute;
+        z-index: 2;
+        width: 7.2rem;
+        height: auto;
+        filter: drop-shadow(0 9px 8px rgba(0, 58, 110, .22));
+        animation: cloud-float 4.7s ease-in-out infinite;
+      }
+      .cloud-one { top: .65rem; left: -.6rem; }
+      .cloud-two { top: 2.05rem; right: -.8rem; width: 5.4rem; animation-delay: -2.1s; }
+
+      .airplane {
+        position: absolute;
+        z-index: 4;
+        top: -.25rem;
+        left: 10.5rem;
+        width: 10.3rem;
+        height: auto;
+        filter: drop-shadow(0 9px 7px rgba(0, 55, 104, .28));
+        animation: fly-right-to-left 5.8s cubic-bezier(.25,.7,.35,1) infinite;
+      }
+
+      img[data-remove-black] { visibility: hidden; }
+      img[data-remove-black].asset-ready { visibility: visible; opacity: 1; transition: opacity .3s ease; }
+
+      .splash.is-restarting .scene,
+      .splash.is-restarting .eyebrow,
+      .splash.is-restarting h1,
+      .splash.is-restarting .message,
+      .splash.is-restarting .status { opacity: 0; }
+
+      .splash.is-restarting .scene *,
+      .splash.is-restarting .eyebrow,
+      .splash.is-restarting h1,
+      .splash.is-restarting .message,
+      .splash.is-restarting .progress > span,
+      .splash.is-restarting .status { animation: none !important; }
+
+      .map {
+        position: absolute;
+        z-index: 1;
+        top: 11.1rem;
+        left: 50%;
+        width: 19.6rem;
+        height: auto;
+        filter: drop-shadow(0 12px 12px rgba(0, 54, 102, .24));
+        transform: translateX(-50%);
+        animation: fade-in .8s ease .2s both, map-pulse 3.8s ease-in-out 1s infinite;
+      }
+
+      .suitcase {
+        position: absolute;
+        z-index: 3;
+        left: 50%;
+        top: 5rem;
+        width: 12rem;
+        height: auto;
+        filter: drop-shadow(0 16px 13px rgba(0, 45, 91, .32));
+        transform: translateX(-50%) perspective(900px) rotateY(-10deg) rotateZ(-1deg);
+        animation: suitcase-reveal 1.8s cubic-bezier(.2,.75,.25,1) .5s both, suitcase-sway 3.6s ease-in-out 2.3s infinite;
+      }
+
+      .petal {
+        position: absolute;
+        z-index: -1;
+        top: -1.5rem;
+        left: var(--left);
+        width: .7rem;
+        height: .46rem;
+        border-radius: 90% 20% 90% 20%;
+        background: linear-gradient(135deg, #fff7fa, #ffc1d5 55%, #e986ae);
+        box-shadow: 0 2px 5px rgba(121, 30, 70, .15);
+        opacity: 0;
+        animation: petal-fall var(--duration) linear var(--delay) infinite;
+      }
+
+      .eyebrow {
+        margin: 0 0 .6rem;
+        color: #eaf8ff;
+        font-size: .76rem;
+        font-weight: 800;
+        letter-spacing: .16em;
+        opacity: 0;
+        animation: text-fade 1.35s ease 1.45s forwards;
+      }
+
+      h1 {
+        margin: 0;
+        color: #ffffff;
+        text-shadow: 0 3px 14px rgba(0, 73, 127, .22);
+        font-size: clamp(1.7rem, 7vw, 2.4rem);
+        letter-spacing: .04em;
+        opacity: 0;
+        animation: text-fade 1.45s ease 1.6s forwards;
+      }
+
+      .message {
+        min-height: 1.6em;
+        margin: .8rem 0 1.65rem;
+        color: rgba(239, 252, 255, .9);
+        font-size: .95rem;
+        opacity: 0;
+        animation: text-fade 1.3s ease 1.78s forwards;
+      }
+
+      .progress {
+        height: .42rem;
+        overflow: hidden;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, .27);
+      }
+
+      .progress > span {
+        position: relative;
+        display: block;
+        width: 20%;
+        height: 100%;
+        border-radius: inherit;
+        background: linear-gradient(90deg, #0b75b8, #0b9c91, #f29b1d);
+        box-shadow: 0 0 12px rgba(11, 117, 184, .35);
+        animation: load 3.8s cubic-bezier(.3, .7, .3, 1) forwards;
+      }
+
+      .progress > span::after {
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(105deg, transparent 24%, rgba(255, 255, 255, .18) 42%, rgba(255, 255, 255, .88) 50%, rgba(255, 255, 255, .18) 58%, transparent 76%);
+        content: "";
+        transform: translateX(-115%);
+        animation: progress-shine 1.15s ease-in-out .45s infinite;
+      }
+
+      .status {
+        display: inline-flex;
+        align-items: center;
+        gap: .45rem;
+        min-height: 1.5rem;
+        margin-top: .85rem;
+        color: rgba(239, 252, 255, .92);
+        font-size: .78rem;
+        opacity: 0;
+        animation: text-fade 1.2s ease 2s forwards;
+      }
+
+      .status::before {
+        width: .48rem;
+        height: .48rem;
+        border-radius: 50%;
+        background: #ffcf5b;
+        content: "";
+        animation: blink 1.2s ease-in-out infinite;
+      }
+
+      .replay {
+        position: absolute;
+        right: 1rem;
+        bottom: calc(1rem + env(safe-area-inset-bottom));
+        border: 0;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, .72);
+        box-shadow: 0 5px 18px rgba(22, 54, 84, .12);
+        color: #17638e;
+        cursor: pointer;
+        font: inherit;
+        font-size: .78rem;
+        font-weight: 700;
+        padding: .65rem .95rem;
+      }
+
+      .replay:focus-visible { outline: 3px solid #0b75b8; outline-offset: 3px; }
+
+      @keyframes orbit { to { transform: rotate(360deg); } }
+      @keyframes load { to { width: 100%; } }
+      @keyframes blink { 50% { opacity: .28; transform: scale(.72); } }
+      @keyframes text-fade { from { opacity: 0; transform: translateY(.45rem); } to { opacity: 1; transform: translateY(0); } }
+      @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+      @keyframes suitcase-reveal { 0%, 22% { opacity: 0; } 100% { opacity: 1; } }
+      @keyframes suitcase-sway {
+        0%, 100% { transform: translateX(-50%) perspective(900px) rotateY(-10deg) rotateZ(-1deg); }
+        50% { transform: translateX(-50%) perspective(900px) rotateY(-10deg) rotateZ(1.1deg); }
+      }
+      @keyframes cloud-float { 0%, 100% { transform: translate3d(0, 0, 0) scale(1); } 50% { transform: translate3d(.55rem, -.28rem, 0) scale(1.035); } }
+      @keyframes fly-right-to-left { 0% { opacity: 0; transform: translate(6rem, .3rem) scale(.72); } 9% { opacity: 1; } 78% { opacity: 1; transform: translate(-18rem, -1.4rem) scale(1); } 91%, 100% { opacity: 0; transform: translate(-20rem, -1.7rem) scale(1.04); } }
+      @keyframes map-pulse { 0%, 100% { transform: translateX(-50%) scale(1); } 50% { transform: translateX(-50%) scale(1.035); } }
+      @keyframes progress-shine { to { transform: translateX(115%); } }
+      @keyframes petal-fall { 0% { opacity: 0; transform: translate3d(0, -1rem, 0) rotate(0deg); } 10% { opacity: .92; } 82% { opacity: .72; } 100% { opacity: 0; transform: translate3d(var(--drift), 108dvh, 0) rotate(520deg); } }
+
+      @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
+        .progress > span { width: 100%; }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="splash" aria-labelledby="title">
+      <div class="orbit" aria-hidden="true"></div>
+      <span class="petal" style="--left: 5%; --drift: 5rem; --duration: 8.2s; --delay: -2.8s" aria-hidden="true"></span>
+      <span class="petal" style="--left: 14%; --drift: -2rem; --duration: 9.6s; --delay: -6.1s" aria-hidden="true"></span>
+      <span class="petal" style="--left: 27%; --drift: 6rem; --duration: 7.5s; --delay: -1.3s" aria-hidden="true"></span>
+      <span class="petal" style="--left: 38%; --drift: -4rem; --duration: 10.4s; --delay: -4.7s" aria-hidden="true"></span>
+      <span class="petal" style="--left: 55%; --drift: 3rem; --duration: 8.8s; --delay: -7.2s" aria-hidden="true"></span>
+      <span class="petal" style="--left: 68%; --drift: -5rem; --duration: 9.1s; --delay: -3.8s" aria-hidden="true"></span>
+      <span class="petal" style="--left: 79%; --drift: 4rem; --duration: 7.9s; --delay: -5.5s" aria-hidden="true"></span>
+      <span class="petal" style="--left: 91%; --drift: -3rem; --duration: 10.1s; --delay: -1.9s" aria-hidden="true"></span>
+      <section class="content">
+        <div class="scene" aria-hidden="true">
+          <img class="cloud cloud-one" data-remove-black src="./splash-assets/cloud-3d.png" alt="" />
+          <img class="cloud cloud-two" data-remove-black src="./splash-assets/cloud-3d.png" alt="" />
+          <img class="airplane" data-remove-black src="./splash-assets/airplane-3d.png" alt="" />
+          <img class="map" data-remove-black src="./splash-assets/map-pins-3d.png" alt="" />
+          <img class="suitcase" data-remove-black src="./splash-assets/suitcase-3d.png" alt="" />
+        </div>
+        <p class="eyebrow">TRAVEL COMPANION</p>
+        <h1 id="title">旅行小幫手</h1>
+        <p class="message">正在準備你的下一段旅程</p>
+        <div class="progress" role="progressbar" aria-label="載入中"><span></span></div>
+        <div class="status" aria-live="polite">載入旅程資料中</div>
+      </section>
+    </main>
+    <script>
+    document.querySelectorAll("img[data-remove-black]").forEach((image) => {
+      const processImage = () => {
+        if (image.dataset.processed) return;
+        image.dataset.processed = "true";
+
+          const canvas = document.createElement("canvas");
+          canvas.width = image.naturalWidth;
+          canvas.height = image.naturalHeight;
+          const context = canvas.getContext("2d", { willReadFrequently: true });
+          context.drawImage(image, 0, 0);
+          const pixels = context.getImageData(0, 0, canvas.width, canvas.height);
+
+          for (let index = 0; index < pixels.data.length; index += 4) {
+            const red = pixels.data[index];
+            const green = pixels.data[index + 1];
+            const blue = pixels.data[index + 2];
+            const brightness = Math.max(red, green, blue);
+            const spread = brightness - Math.min(red, green, blue);
+            if (brightness < 18 && spread < 9) pixels.data[index + 3] = 0;
+          }
+
+          context.putImageData(pixels, 0, 0);
+        canvas.toBlob((blob) => {
+          if (!blob) return;
+          image.src = URL.createObjectURL(blob);
+          image.decode().catch(() => undefined).finally(() => image.classList.add("asset-ready"));
+        }, "image/png");
+      };
+
+      if (image.complete && image.naturalWidth) processImage();
+      else image.addEventListener("load", processImage, { once: true });
+    });
+
+    // Demo 沒有正式 App 的初始化狀態，因此只重啟動畫來模擬「尚未完成載入」；
+    // 不重載頁面，以避免素材回到尚未去背的原始黑底。
+    const splash = document.querySelector(".splash");
+    window.setInterval(() => {
+      splash.classList.add("is-restarting");
+      window.setTimeout(() => splash.classList.remove("is-restarting"), 180);
+    }, 5200);
+    </script>
+  </body>
+</html>
