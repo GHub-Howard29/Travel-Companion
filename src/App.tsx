@@ -886,10 +886,11 @@ function ConfiguredApp({
             {/* 1. 行程規劃模組 */}
             {currentScreenType === "itinerary" && currentTrip && (
               <ItineraryPage
-                key={`${selectedTripId}-${userEmail ?? "guest"}`}
+                key={`${selectedTripId}-${userEmail ?? "guest"}-${isOnline ? "online" : "offline"}`}
                 trip={currentTrip}
                 activeDay={activeDay}
                 hasEditPermission={hasEditPermission}
+                isOnline={isOnline}
                 onActiveDayChange={setActiveDay}
                 onSaveTripDetail={saveCurrentTripDetail}
               />

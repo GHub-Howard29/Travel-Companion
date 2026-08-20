@@ -55,7 +55,7 @@ export function ReconnectPrompt({
     <section
       role="status"
       aria-live="polite"
-      className="fixed bottom-4 left-4 right-4 z-[75] mx-auto max-w-md rounded-2xl border border-sky-100 bg-white p-4 shadow-2xl shadow-slate-900/20"
+      className="fixed bottom-4 left-4 right-4 z-[75] mx-auto max-w-md rounded-2xl border border-sky-300 bg-white p-4 shadow-2xl shadow-slate-900/20"
     >
       <div className="flex items-start gap-3">
         <div className="rounded-xl bg-sky-50 p-2 text-sky-600">

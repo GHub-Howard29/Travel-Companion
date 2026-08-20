@@ -1,5 +1,5 @@
-import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
-import { ArrowDown, ArrowUp, Check, Copy, Pencil, Plus, Trash2, X } from "lucide-react";
+import { FormEvent, KeyboardEvent, useCallback, useEffect, useRef, useState } from "react";
+import { ArrowDown, ArrowUp, Check, Copy, Pencil, Plus, Save, Trash2, X } from "lucide-react";
 import { DndContext, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { arrayMove, SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -61,6 +61,8 @@ export const ChecklistPage = ({
   const [isSavingList, setIsSavingList] = useState(false);
   const [isDeleteLocked, setIsDeleteLocked] = useState(false);
   const deleteUnlockTimerRef = useRef<number | null>(null);
+  const inlineEditSavingRef = useRef(false);
+  const inlineEditCancelledRef = useRef(false);
   const isLocalUserChecklist = Boolean(userEmail && !canSyncSharedChecklist);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
   const initialPendingCloudOrder =
@@ -264,7 +266,7 @@ export const ChecklistPage = ({
   const resetForm = () => {
     setIsFormOpen(false);
     setEditingItemId(null);
-    setDraftCategory("其他");
+    setDraftCategory("");
     setDraftLabel("");
   };
 
@@ -277,52 +279,96 @@ export const ChecklistPage = ({
 
   const startCreateItem = () => {
     setEditingItemId(null);
-    setDraftCategory(categories[0] ?? "其他");
+    setDraftCategory("");
     setDraftLabel("");
     setIsCopyOpen(false);
     setIsFormOpen(true);
   };
 
   const startEditItem = (item: ChecklistItem) => {
+    inlineEditCancelledRef.current = false;
     setEditingItemId(item.id);
-    setDraftCategory(item.category);
     setDraftLabel(item.label);
     setIsCopyOpen(false);
-    setIsFormOpen(true);
+    setIsFormOpen(false);
   };
 
   const saveChecklistItem = async (event: FormEvent) => {
     event.preventDefault();
-    const category = draftCategory.trim() || "其他";
+    const category = draftCategory.trim();
     const label = draftLabel.trim();
-    if (!label) return;
+    if (!category || !label) return;
 
     setIsSavingList(true);
     const now = new Date().toISOString();
-    const nextItems = editingItemId
-      ? activeChecklistData.map((item) =>
-          item.id === editingItemId
-            ? {
-                ...item,
-                category,
-                label,
-                updatedAt: now,
-              }
-            : item,
-        )
-      : [
-          ...activeChecklistData,
-          {
-            id: `shared_${Date.now().toString(36)}`,
-            category,
-            label,
-            updatedAt: now,
-          },
-        ];
+    const nextItems = [
+      ...activeChecklistData,
+      {
+        id: `shared_${Date.now().toString(36)}`,
+        category,
+        label,
+        updatedAt: now,
+      },
+    ];
 
     await saveChecklistData(nextItems);
     setIsSavingList(false);
     resetForm();
+  };
+
+  const saveInlineChecklistItem = async (itemId: string) => {
+    if (inlineEditSavingRef.current) return;
+    if (inlineEditCancelledRef.current) {
+      inlineEditCancelledRef.current = false;
+      return;
+    }
+
+    const item = activeChecklistData.find((currentItem) => currentItem.id === itemId);
+    const label = draftLabel.trim();
+    if (!item || !label || label === item.label) {
+      setEditingItemId(null);
+      setDraftLabel("");
+      return;
+    }
+
+    inlineEditSavingRef.current = true;
+    setIsSavingList(true);
+    try {
+      await saveChecklistData(
+        activeChecklistData.map((currentItem) =>
+          currentItem.id === itemId
+            ? { ...currentItem, label, updatedAt: new Date().toISOString() }
+            : currentItem,
+        ),
+      );
+      setEditingItemId(null);
+      setDraftLabel("");
+    } finally {
+      inlineEditSavingRef.current = false;
+      setIsSavingList(false);
+    }
+  };
+
+  const handleInlineEditKeyDown = (
+    event: KeyboardEvent<HTMLInputElement>,
+    itemId: string,
+  ) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      void saveInlineChecklistItem(itemId);
+    }
+    if (event.key === "Escape") {
+      event.preventDefault();
+      inlineEditCancelledRef.current = true;
+      setEditingItemId(null);
+      setDraftLabel("");
+    }
+  };
+
+  const cancelInlineEdit = () => {
+    inlineEditCancelledRef.current = true;
+    setEditingItemId(null);
+    setDraftLabel("");
   };
 
   const deleteChecklistItem = async (itemId: string) => {
@@ -590,7 +636,7 @@ export const ChecklistPage = ({
         <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm p-4 space-y-3">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-bold text-slate-800">
-              {editingItemId ? "編輯共同檢查事項" : "新增共同檢查事項"}
+              新增共同檢查事項
             </h3>
             <button
               type="button"
@@ -606,9 +652,14 @@ export const ChecklistPage = ({
               <input
                 value={draftCategory}
                 onChange={(event) => setDraftCategory(event.target.value)}
-                placeholder="分類"
+                list="shared-checklist-category-options"
+                placeholder="選擇或輸入分類"
                 className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-500"
+                required
               />
+              <datalist id="shared-checklist-category-options">
+                {categories.map((category) => <option key={category} value={category} />)}
+              </datalist>
               <input
                 value={draftLabel}
                 onChange={(event) => setDraftLabel(event.target.value)}
@@ -621,7 +672,7 @@ export const ChecklistPage = ({
                 disabled={isSavingList}
                 className="w-full rounded-lg bg-rose-700 px-3 py-2 text-sm font-bold text-white hover:bg-rose-800 disabled:opacity-60"
               >
-                {isSavingList ? "儲存中..." : editingItemId ? "儲存修改" : "新增項目"}
+                {isSavingList ? "儲存中..." : "新增項目"}
               </button>
             </form>
         </div>
@@ -645,9 +696,14 @@ export const ChecklistPage = ({
             <input
               value={draftCategory}
               onChange={(event) => setDraftCategory(event.target.value)}
-              placeholder="分類"
+              list="shared-checklist-category-options"
+              placeholder="選擇或輸入分類"
               className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-500"
+              required
             />
+            <datalist id="shared-checklist-category-options">
+              {categories.map((category) => <option key={category} value={category} />)}
+            </datalist>
             <input
               value={draftLabel}
               onChange={(event) => setDraftLabel(event.target.value)}
@@ -734,12 +790,10 @@ export const ChecklistPage = ({
                   >
                     <button
                       type="button"
-                      disabled={!canToggleSharedChecklist}
-                      onClick={() => {
-                        if (!canToggleSharedChecklist) return;
-                        toggleChecklistItem(item.id);
-                      }}
-                      className="flex min-w-0 flex-1 items-start gap-3 text-left"
+                      disabled={!canToggleSharedChecklist || editingItemId === item.id}
+                      onClick={() => toggleChecklistItem(item.id)}
+                      className="flex shrink-0 items-start text-left"
+                      aria-label={isChecked ? `取消勾選 ${item.label}` : `勾選 ${item.label}`}
                     >
                       <span
                         className={`w-5 h-5 rounded-md border flex items-center justify-center transition-all ${
@@ -750,56 +804,99 @@ export const ChecklistPage = ({
                       >
                         {isChecked && <Check size={14} strokeWidth={3} />}
                       </span>
-                      <span
-                        className={`min-w-0 flex-1 break-words text-sm font-medium leading-relaxed transition-all ${
+                    </button>
+                    {editingItemId === item.id ? (
+                      <input
+                        value={draftLabel}
+                        onChange={(event) => setDraftLabel(event.target.value)}
+                        onBlur={() => void saveInlineChecklistItem(item.id)}
+                        onKeyDown={(event) => handleInlineEditKeyDown(event, item.id)}
+                        autoFocus
+                        aria-label="編輯共同清單項目文字"
+                        className="min-w-0 flex-1 rounded-md border border-rose-300 bg-white px-2 py-1 text-sm font-medium leading-relaxed text-slate-700 outline-none ring-2 ring-rose-200"
+                      />
+                    ) : (
+                      <button
+                        type="button"
+                        disabled={!canToggleSharedChecklist}
+                        onClick={() => toggleChecklistItem(item.id)}
+                        className={`min-w-0 flex-1 break-words text-left text-sm font-medium leading-relaxed transition-all ${
                           isChecked ? "text-slate-400 line-through" : "text-slate-700"
                         }`}
                       >
                         {item.label}
-                      </span>
-                    </button>
+                      </button>
+                    )}
                     {canManageSharedChecklist && isManageMode && (
                       <div className="flex shrink-0 items-center gap-1">
-                        {dragHandle}
-                        <button
-                          type="button"
-                          disabled={itemIndex === 0 || isSavingList}
-                          onClick={() => void moveChecklistItem(item.id, -1)}
-                          className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:opacity-30"
-                          aria-label="上移項目"
-                          title="上移"
-                        >
-                          <ArrowUp size={14} />
-                        </button>
-                        <button
-                          type="button"
-                          disabled={itemIndex === categoryItems.length - 1 || isSavingList}
-                          onClick={() => void moveChecklistItem(item.id, 1)}
-                          className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:opacity-30"
-                          aria-label="下移項目"
-                          title="下移"
-                        >
-                          <ArrowDown size={14} />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => startEditItem(item)}
-                          className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
-                          aria-label="編輯共同清單項目"
-                          title="編輯共同清單項目"
-                        >
-                          <Pencil size={14} />
-                        </button>
-                        <button
-                          type="button"
-                          disabled={isSavingList || isDeleteLocked}
-                          onClick={() => void deleteChecklistItem(item.id)}
-                          className="rounded-lg p-2 text-slate-400 hover:bg-rose-50 hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-30"
-                          aria-label="刪除共同清單項目"
-                          title="刪除共同清單項目"
-                        >
-                          <Trash2 size={14} />
-                        </button>
+                        {editingItemId === item.id ? (
+                          <>
+                            <button
+                              type="button"
+                              disabled={isSavingList || !draftLabel.trim()}
+                              onClick={() => void saveInlineChecklistItem(item.id)}
+                              className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:opacity-30"
+                              aria-label="儲存"
+                              title="儲存"
+                            >
+                              <Save size={14} />
+                            </button>
+                            <button
+                              type="button"
+                              onMouseDown={(event) => event.preventDefault()}
+                              onClick={cancelInlineEdit}
+                              className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                              aria-label="取消"
+                              title="取消"
+                            >
+                              <X size={14} />
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            {dragHandle}
+                            <button
+                              type="button"
+                              disabled={itemIndex === 0 || isSavingList}
+                              onClick={() => void moveChecklistItem(item.id, -1)}
+                              className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:opacity-30"
+                              aria-label="上移項目"
+                              title="上移"
+                            >
+                              <ArrowUp size={14} />
+                            </button>
+                            <button
+                              type="button"
+                              disabled={itemIndex === categoryItems.length - 1 || isSavingList}
+                              onClick={() => void moveChecklistItem(item.id, 1)}
+                              className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:opacity-30"
+                              aria-label="下移項目"
+                              title="下移"
+                            >
+                              <ArrowDown size={14} />
+                            </button>
+                            <button
+                              type="button"
+                              disabled={isSavingList}
+                              onClick={() => startEditItem(item)}
+                              className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                              aria-label="編輯共同清單項目"
+                              title="編輯共同清單項目"
+                            >
+                              <Pencil size={14} />
+                            </button>
+                            <button
+                              type="button"
+                              disabled={isSavingList || isDeleteLocked}
+                              onClick={() => void deleteChecklistItem(item.id)}
+                              className="rounded-lg p-2 text-slate-400 hover:bg-rose-50 hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-30"
+                              aria-label="刪除共同清單項目"
+                              title="刪除共同清單項目"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </>
+                        )}
                       </div>
                     )}
                   </div>}

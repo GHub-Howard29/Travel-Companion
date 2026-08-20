@@ -30,7 +30,10 @@ export interface TripEditorInput {
 
 // 2. 對應詳細行程中的單一時間軸項目
 export interface ItineraryItem {
+  /** 到達時間；舊資料沿用既有 time 欄位 */
   time: string;
+  /** 離開時間；未輸入時儲存為到達時間 */
+  departureTime?: string;
   title: string;
   type: string;
   typeColor: string;

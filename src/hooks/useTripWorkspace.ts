@@ -370,14 +370,11 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
       );
 
       await saveTripRecordWithCloudSync(supabase, record);
-      const nextTrips = await getTripMetas(supabase, getBasePath());
-      setTripOptions(nextTrips);
       setCurrentTrip(record.detail);
       setIsLoading(false);
     },
     [
       currentTripEditorEmails,
-      getBasePath,
       selectedTripMeta,
       supabase,
     ],
