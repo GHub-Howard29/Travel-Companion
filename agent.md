@@ -8,7 +8,7 @@
 - 帳本已完成 A+B 聯集與代記帳：付款人可選，`owner_user_id` 固定登入者，離線 queue 依 owner 隔離，`client_item_id` 去重。
 - 2026-08-11 已將 `docs/sql/011_expense_ownership_and_merge_schema.sql` 套用至正式 Supabase，並以 `012_expense_ownership_and_merge_validation.sql` 驗證通過；2 筆舊帳目已補 `client_item_id`，保留 `owner_user_id = null` 相容規則。
 - `npm run lint` 與 `npm run build` 已通過；build 初始 JS 495.63 kB（gzip 143.68 kB），PWA precache 33 筆。
-- 尚未完成的實機回歸項目持續列於 `docs/09_待辦事項_TODO.md`，不影響本次已完成的合併與部署紀錄。
+- 第一階段上線後實機驗證已通過；尚未完成的雙裝置衝突與同步回歸項目持續列於 `docs/09_待辦事項_TODO.md`。
 - 共同／私人清單管理 UI 已統一；兩者離線均不可複製，刪除不確認且每筆刪除後鎖定 1 秒。
 - 私人清單背景預載限今天與未來行程；同一 `tripId + userEmail` 的完整同步序列化，pending 累積連續修改基準並依 revision 正確清除，避免複製後連續刪除或最後一筆復活。
 - 待補實機回歸：線上複製私人清單後逐筆刪至空清單，等待同步、切頁及重新登入後均不得復活。
