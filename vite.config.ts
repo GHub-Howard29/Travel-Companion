@@ -31,7 +31,7 @@ export default defineConfig({
         // bundle is loading. Keep them aligned with the travel artwork rather
         // than the page's neutral content background.
         theme_color: '#0b75b8',
-        background_color: '#fff3e8',
+        background_color: '#0589d6',
         display: 'standalone',
         orientation: 'portrait',
         id: '/Travel-Companion/',

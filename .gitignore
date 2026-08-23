@@ -23,7 +23,13 @@ dist-ssr
 *.sln
 *.sw?
 
+# Environment files may contain secrets
 .env
+.env.*
+!.env.example
+
+# Supabase CLI local state
+supabase/.temp/
 
 # Codex conversation attachments
 .codex-remote-attachments/
