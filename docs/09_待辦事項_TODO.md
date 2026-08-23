@@ -4,7 +4,7 @@
 >
 > 已發布版本：V3.4.2（已合併至 `main` 並完成部署）。
 >
-> 最後更新：2026-08-21
+> 最後更新：2026-08-23
 
 ---
 
@@ -23,8 +23,10 @@
 ## V3.4.3 啟動畫面優化（待發布）
 
 - [x] 在 React 程式完成載入前，以 HTML 預載 Splash 立即接續 PWA 系統啟動畫面，減少系統圖示與 App 動畫之間的空白等待。
+- [x] 統一系統 PWA Splash、HTML 預載 Splash 與 React App Splash 的藍色背景；完整彩色圖示柔邊淡出後，再載入地圖、行李箱、雲朵與無尾煙飛機 CSS 動畫。
+- [x] 確認 PWA 桌面圖示、網站 favicon 與 manifest 圖示檔皆未變動。
 - [x] 補回 V3.4.1 的版本歷史摘要，讓升級至 V3.4.3 後仍可查看前一版發布內容。
-- [x] `npm run build` 與格式檢查通過。
+- [x] `npm run lint`、`npm run build` 與 production manifest 檢查通過。
 - [ ] Product Owner 部署後，於 Android／iOS 已安裝 PWA 驗證系統啟動、預載 Splash 與完整動畫的銜接時間。
 
 ---
