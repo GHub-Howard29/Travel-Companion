@@ -28,10 +28,10 @@ export default defineConfig({
         short_name: '旅行小幫手',
         description: '我的最佳旅遊隨身特助',
         // Android PWA splash screen uses these manifest colors while the app
-        // bundle is loading. Keep them aligned with the travel artwork rather
-        // than the page's neutral content background.
-        theme_color: '#0b75b8',
-        background_color: '#0589d6',
+        // bundle is loading. Keep them aligned with the static HTML and React
+        // loading screens, without changing the installed-app icon files.
+        theme_color: '#54b6e7',
+        background_color: '#54b6e7',
         display: 'standalone',
         orientation: 'portrait',
         id: '/Travel-Companion/',

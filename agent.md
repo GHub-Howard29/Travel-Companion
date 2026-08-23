@@ -1,10 +1,10 @@
 ﻿# Travel Companion Agent Guide
 
-## V3.4.3 作業與後續安全 Roadmap（2026-08-23）
+## V3.4.4 PWA 預設載入畫面與後續安全 Roadmap（2026-08-23）
 
-- 已發布版本為 V3.4.2；目前作業版本為 V3.4.3「PWA 啟動畫面載入銜接優化」，程式、文件與本機驗證已完成，待 Product Owner 手動合併至 `main`、部署及 Android／iOS 已安裝 PWA 實機驗證。
-- V3.4.3 以同一套藍色串接系統 PWA Splash、HTML 預載 Splash 與 React App Splash；完整彩色圖示先以柔邊融入背景，再淡出並接續地圖、行李箱、雲朵與無尾煙飛機 CSS 動畫。PWA 桌面圖示、網站 favicon 與 manifest 圖示檔均維持不變。
-- V3.4.3 正式發布後，依序進行：V3.4.4 開發環境與依賴安全基線、V3.4.5 Trip 公開／私人與 Guest 存取、V3.4.6 Supabase Storage 附件權限、V3.4.7 Supabase 資料庫權限函式硬化、V3.4.8 前端瀏覽器安全防護。
+- V3.4.3 已發布；目前作業版本為 V3.4.4「PWA 預設載入畫面調整」，待完成本機驗證後由 Product Owner 合併、部署及以 Android／iOS 已安裝 PWA 實機驗證。
+- V3.4.4 只調整系統 PWA Splash、HTML 預載 Splash 與 React App Splash：背景統一為靜態明亮天空藍 `#54B6E7`，取消所有載入動畫。PWA 桌面圖示、網站 favicon、圖示檔與 manifest 圖示設定均維持不變。
+- V3.4.4 已完成開發環境與依賴安全基線盤點：`.env`、`supabase/.temp/` 忽略規則及 Node `22.23.2`、npm `10.9.8`、Supabase CLI `2.115.0` 均符合要求。完整 `npm audit` 僅有 ExcelJS 經 `uuid@8.3.2` 的 2 項中度風險，無非破壞性修復；不降版 ExcelJS，持續追蹤官方更新。後續依序進行 V3.4.5 Trip 公開／私人與 Guest 存取、V3.4.6 Supabase Storage 附件權限、V3.4.7 Supabase 資料庫權限函式硬化、V3.4.8 前端瀏覽器安全防護。
 - V3.5.0「地點間預估移動資訊」保留既有規格，於上述安全版本完成後啟動；開始前先讀 `docs/15_V3.5.0_地點間預估移動資訊規格.md`。
 - 安全版本目前只記錄標題與主要範圍；每版開始時重新檢查現況、逐項提出方案，取得 Product Owner 同意後才實作，不提前建立過度詳細規格。
 - 完整版本順序與範圍以 `docs/02_產品開發路線圖.md` 為準。
