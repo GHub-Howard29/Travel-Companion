@@ -1,8 +1,8 @@
 ﻿# 開發進度與待辦事項
 
-> 目前開發版本：V3.4.5（PWA 載入銜接與版本紀錄熱修）。
+> 目前開發版本：V3.4.6（PWA 系統列／啟動銜接與版本資訊優化，候選程式已完成）。
 >
-> 已發布版本：V3.4.4（已合併至 `main` 並完成部署）。
+> 已發布版本：V3.4.5（已合併至 `main` 並完成部署）。
 >
 > 最後更新：2026-08-23
 
@@ -20,30 +20,56 @@
 
 # 二、目前開發階段
 
-## V3.4.5 PWA 載入銜接與版本紀錄熱修（開發中）
+## V3.4.5 PWA 載入銜接與版本紀錄熱修（已發布）
 
-- [x] Product Owner 已確認：V3.4.5 僅處理已發布 V3.4.4 的 PWA 載入銜接與版本紀錄問題；Trip 公私有與 Supabase migration 移至 V3.4.6。
+- [x] Product Owner 已確認：V3.4.5 僅處理已發布 V3.4.4 的 PWA 載入銜接與版本紀錄問題；Trip 公私有與 Supabase migration 發布當時先移至 V3.4.6，後因 V3.4.6 新增顯示修正而再順延至 V3.4.7。
 - [x] 移除網頁層重複 Splash 圖示與 CSS 動畫；React 接管前只保留 `#54B6E7` 背景，避免與原生 PWA Splash 產生畫面縮放或位移感。
 - [x] 確認 PWA 桌面圖示、網站 favicon、實體圖示檔與 manifest `icons` 完全不變。
 - [x] 補回 V3.4.3 版本歷史摘要，並以 production build 阻擋遺漏、重複或 `app-version.json` 不一致的版本紀錄。
 - [x] 已執行 `npm run lint`、TypeScript、`npm run build` 與 production 產物檢查；產物未包含舊網頁 Splash。
-- [ ] Product Owner 於 Android／iOS 已安裝 PWA 驗證：原生 Splash 與 App 首畫面同色銜接、無網頁圖示重複出現、無 CSS 動畫、網站／桌面圖示不變。
+- [x] Product Owner 已安裝 PWA 實機驗證：載入畫面仍有原生圖示但沒有 CSS 動畫；原生 Splash 進入 App 時仍會跳動畫面，改列 V3.4.6 分析修正。
 - [x] V3.4.5 發布資訊已確認：App 更新提示僅保留「修正版本更新紀錄可能遺漏前一版本的問題」，`FORCE_UPDATE = false`；版本設定與文件已完成整理。
-- [ ] Product Owner 手動合併、部署後，以已安裝 PWA 完成載入銜接與更新提示實機驗證。
+- [x] Product Owner 已完成 V3.4.5 合併與部署。
+- [x] Product Owner 實機驗證：更新提示只顯示指定訊息；版本資訊顯示 V3.4.5，並依序保留 V3.4.4、V3.4.3；PWA 桌面圖示及網站小圖維持不變。
 
 ---
 
-## V3.4.6 Trip 公開／私人與 Guest 存取（完整安全發布，尚未開始發布作業）
+## V3.4.6 PWA 系統列／啟動銜接與版本資訊優化（候選程式已完成）
+
+### V3.4.6 手機瀏覽器與 PWA 顯示修正
+
+- [x] Android 一般瀏覽器實機確認：`theme-color = #54B6E7` 使上方狀態列／網址列及下方系統導覽列持續顯示藍色。
+- [x] Android 已安裝 PWA 實機確認：App 完成載入後，最上方系統狀態列仍持續顯示藍色。
+- [x] 比對 V3.4.1、V3.4.2、V3.4.5：V3.4.1 沒有網頁 Splash，也沒有固定亮藍根背景；manifest 使用深藍 `theme_color` 與接近 App 的米白 `background_color`。V3.4.5 將原生 Splash、根背景與系統列全部改為亮藍，中央原生圖示消失後直接切到綠色頁首／白色內容，放大了整張畫面跳動感。
+- [ ] 將原生 Splash 的藍色啟動背景與 App 載入完成後的系統列顏色分離；一般瀏覽器及 `standalone` PWA 分別處理。
+- [ ] React 接管後將頁面底色切回中性淺色，避免回彈或未覆蓋區域露出藍底。
+- [ ] 優先模擬「動畫前版本的銜接原理」：不增加第二層網頁圖示，改讓原生 Splash 背景接近 App 內容底色；若仍需保留亮藍啟動背景，再另行評估不改變圖示位置的淡化方式。
+- [x] 原生 Splash 維持現行 `#54B6E7` 與專案特製圖示；React 完成掛載後才切換系統列、文件與根節點背景為 V3.4.1 動畫前的 `#FFF3E8`。
+- [x] 保持 PWA 桌面圖示、網站 favicon、實體圖示檔與 manifest `icons` 不變。
+- [ ] 回歸 Android Chrome 一般瀏覽器上／下系統列、Android PWA 最上方狀態列、原生 Splash 藍色銜接與頁面回彈；可用時補測 iOS Safari／PWA。
+
+### V3.4.6 版本資訊顯示優化
+
+- [x] Product Owner 已指定：版本資訊主畫面只顯示當次版本更新訊息，並保留最近兩個舊版本摘要；其餘版本放入完整版本歷史。
+- [x] Product Owner 已通過完整版本歷史入口與顯示方式。
+- [x] 主版本資訊浮動視窗底部提供「查看完整版本歷史」文字按鈕；點擊後在同一浮動視窗切換為完整歷史畫面並提供返回，不疊加第二層浮動視窗。
+- [x] 主畫面固定顯示目前版本更新內容＋最近兩個舊版本；完整歷史依版本新到舊顯示全部已發布紀錄。
+- [x] `npm run lint`、版本歷史驗證、TypeScript 與 production build 已通過；發布版本資訊仍依實機驗證後流程另行設定。
+- [ ] 本版不包含 Supabase schema、RLS 或 migration；原 Trip 隱私版本完整順延至 V3.4.7。
+
+---
+
+## V3.4.7 Trip 公開／私人與 Guest 存取（完整安全發布，尚未開始發布作業）
 
 ### 不可回溯決策
 
-- [x] Product Owner 已決定既有雲端／靜態 Trip 全數改為私人；只在 V3.4.6 的單一 migration 執行，不建立「先公開、下一版再轉私人」的中間資料狀態。
+- [x] Product Owner 已決定既有雲端／靜態 Trip 全數改為私人；只在 V3.4.7 的單一 migration 執行，不建立「先公開、下一版再轉私人」的中間資料狀態。
 - [x] Product Owner 已接受公開轉私人無法遠端收回先前已下載資料的限制；公開設定介面必須於私人轉公開前明確告知。
 - [x] Product Owner 已確認：已發布版本、版本歷史與已套用 migration 不回寫；發布後發現問題只可以新版程式或向前修復 migration 處理。
 
 ### 實作與候選版驗證
 
-- [ ] 定義 `trips.is_public boolean not null default false` migration，並確認 Data API 角色 grant 與 RLS 的責任邊界；migration 必須與 V3.4.6 程式一起審核，不得提前套用。
+- [ ] 定義 `trips.is_public boolean not null default false` migration，並確認 Data API 角色 grant 與 RLS 的責任邊界；migration 必須與 V3.4.7 程式一起審核，不得提前套用。
 - [ ] 新建 Trip 預設為私人，並確認所有建立路徑均不可自行指定為公開。
 - [ ] App 加入公開／不公開設定；僅 `super_admin` 看得到並可執行狀態變更。
 - [ ] 私人轉公開前顯示個資警告並要求 `super_admin` 明確確認；依實際公開範圍提示 Trip 內容、參與者、聯絡資料、附件連結與自由輸入資料可能被 Guest 讀取。
@@ -60,10 +86,19 @@
 ### 發布窗口與正式驗收
 
 - [ ] 前端需在 migration 尚未完成時進入安全的唯讀／升級狀態，不可顯示可儲存但資料庫尚不支援的公開設定。
-- [ ] 維護窗口先部署候選前端，確認舊靜態網址為 `404`，再立即套用 V3.4.6 migration；兩者不得拆成不同已發布版本。
-- [ ] migration 後立即在正式環境重跑 Guest、`trip_editor`、`super_admin`、REST、靜態網址與快取驗收；全部通過前不得將 V3.4.6 標記為已發布。
+- [ ] 維護窗口先部署候選前端，確認舊靜態網址為 `404`，再立即套用 V3.4.7 migration；兩者不得拆成不同已發布版本。
+- [ ] migration 後立即在正式環境重跑 Guest、`trip_editor`、`super_admin`、REST、靜態網址與快取驗收；全部通過前不得將 V3.4.7 標記為已發布。
 - [ ] 本版預設建議 `FORCE_UPDATE = true`；由 Product Owner 於發布前最終確認，降低舊 PWA 繼續使用不相容快取流程的風險。
 - [ ] 若正式驗收失敗，保留事證並以新的向前修復 migration／新版程式處理；不得覆寫已發布版本紀錄或已套用 migration 歷程。
+
+---
+
+## 後續版本編號門檻
+
+- V3.4.8：原 V3.4.7 Supabase Storage 附件權限，整體順延。
+- V3.4.9：原 V3.4.8 Supabase 資料庫權限函式硬化，整體順延。
+- 開始任何 V3.4.9 程式或 migration 編輯前，AI 必須主動提醒 Product Owner，重新確認是否繼續 V3.4.9／暫定 V3.4.10，避免未經確認持續增加版號。
+- V3.4.10：原 V3.4.9 前端瀏覽器安全防護，僅為暫定編號；須先通過上述 V3.4.9 前版本門檻。
 
 ---
 
