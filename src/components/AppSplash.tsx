@@ -70,6 +70,7 @@ function SplashAsset({ className, src }: SplashAssetProps) {
 export function AppSplash({ isReady, onComplete }: AppSplashProps) {
   const completionTimerRef = useRef<number | null>(null);
   const basePath = import.meta.env.BASE_URL;
+  const appIconPath = `${basePath}pwa-512x512.png`;
 
   useEffect(() => {
     if (!isReady || completionTimerRef.current !== null) return;
@@ -91,6 +92,8 @@ export function AppSplash({ isReady, onComplete }: AppSplashProps) {
       aria-live="polite"
     >
       <div className="app-splash__orbit" aria-hidden="true" />
+      <img className="app-splash__icon-wash" src={appIconPath} alt="" aria-hidden="true" />
+      <img className="app-splash__icon-intro" src={appIconPath} alt="" aria-hidden="true" />
       <div className="app-splash__scene" aria-hidden="true">
         <SplashAsset className="app-splash__cloud app-splash__cloud--left" src={assetPath("cloud-3d.png")} />
         <SplashAsset className="app-splash__cloud app-splash__cloud--right" src={assetPath("cloud-3d.png")} />
