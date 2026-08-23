@@ -23,7 +23,6 @@ import { UpdatePrompt } from "./components/UpdatePrompt";
 import { VersionInfoModal } from "./components/VersionInfoModal";
 import { InstallAppPrompt } from "./components/InstallAppPrompt";
 import { LoginSafetyModal } from "./components/LoginSafetyModal";
-import { AppSplash } from "./components/AppSplash";
 import useExpenseBook from "./hooks/useExpenseBook";
 import { useAppUpdate } from "./hooks/useAppUpdate";
 import useTripWorkspace from "./hooks/useTripWorkspace";
@@ -184,7 +183,6 @@ function ConfiguredApp({
     currentTripEditorEmails,
     superAdminEmails,
   } = useTripWorkspace({ supabase });
-  const [isSplashVisible, setIsSplashVisible] = useState(true);
   const [tripEditorMode, setTripEditorMode] = useState<"create" | "edit">("create");
   const [isTripEditorOpen, setIsTripEditorOpen] = useState(false);
   const [isVersionInfoOpen, setIsVersionInfoOpen] = useState(false);
@@ -717,12 +715,6 @@ function ConfiguredApp({
 
   return (
     <AppContext.Provider value={appContextValue}>
-    {isSplashVisible && (
-      <AppSplash
-        isReady={isSessionReady && !isLoading}
-        onComplete={() => setIsSplashVisible(false)}
-      />
-    )}
     <UpdatePrompt
       isOpen={updateAvailable}
       mode={promptMode}

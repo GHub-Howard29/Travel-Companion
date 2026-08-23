@@ -14,6 +14,24 @@ export type VersionHistoryItem = {
 
 export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
+    version: "3.4.4",
+    date: "2026-08-23",
+    forceUpdate: false,
+    notes: [
+      "調整 PWA 預設載入畫面，統一使用明亮天空藍背景並移除載入動畫。",
+      "保留既有 PWA 桌面圖示、網站 favicon 與 manifest 圖示設定。",
+    ],
+  },
+  {
+    version: "3.4.3",
+    date: "2026-08-23",
+    forceUpdate: false,
+    notes: [
+      "優化 PWA 啟動畫面，讓系統 Splash、HTML 預載與 App 載入流程更連續。",
+      "保留既有 PWA 桌面圖示、網站 favicon 與 manifest 圖示設定。",
+    ],
+  },
+  {
     version: "3.4.2",
     date: "2026-08-20",
     forceUpdate: false,

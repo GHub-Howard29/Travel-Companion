@@ -1,8 +1,8 @@
 ﻿# 開發進度與待辦事項
 
-> 目前開發版本：V3.4.4（PWA 預設載入畫面調整待驗證；開發環境與依賴安全基線 Roadmap 已啟動）。
+> 目前開發版本：V3.4.5（PWA 載入銜接與版本紀錄熱修）。
 >
-> 已發布版本：V3.4.3（已合併至 `main` 並完成部署）。
+> 已發布版本：V3.4.4（已合併至 `main` 並完成部署）。
 >
 > 最後更新：2026-08-23
 
@@ -20,12 +20,59 @@
 
 # 二、目前開發階段
 
-## V3.4.4 PWA 預設載入畫面調整（待發布）
+## V3.4.5 PWA 載入銜接與版本紀錄熱修（開發中）
+
+- [x] Product Owner 已確認：V3.4.5 僅處理已發布 V3.4.4 的 PWA 載入銜接與版本紀錄問題；Trip 公私有與 Supabase migration 移至 V3.4.6。
+- [x] 移除網頁層重複 Splash 圖示與 CSS 動畫；React 接管前只保留 `#54B6E7` 背景，避免與原生 PWA Splash 產生畫面縮放或位移感。
+- [x] 確認 PWA 桌面圖示、網站 favicon、實體圖示檔與 manifest `icons` 完全不變。
+- [x] 補回 V3.4.3 版本歷史摘要，並以 production build 阻擋遺漏、重複或 `app-version.json` 不一致的版本紀錄。
+- [x] 已執行 `npm run lint`、TypeScript、`npm run build` 與 production 產物檢查；產物未包含舊網頁 Splash。
+- [ ] Product Owner 於 Android／iOS 已安裝 PWA 驗證：原生 Splash 與 App 首畫面同色銜接、無網頁圖示重複出現、無 CSS 動畫、網站／桌面圖示不變。
+- [x] V3.4.5 發布資訊已確認：App 更新提示僅保留「修正版本更新紀錄可能遺漏前一版本的問題」，`FORCE_UPDATE = false`；版本設定與文件已完成整理。
+- [ ] Product Owner 手動合併、部署後，以已安裝 PWA 完成載入銜接與更新提示實機驗證。
+
+---
+
+## V3.4.6 Trip 公開／私人與 Guest 存取（完整安全發布，尚未開始發布作業）
+
+### 不可回溯決策
+
+- [x] Product Owner 已決定既有雲端／靜態 Trip 全數改為私人；只在 V3.4.6 的單一 migration 執行，不建立「先公開、下一版再轉私人」的中間資料狀態。
+- [x] Product Owner 已接受公開轉私人無法遠端收回先前已下載資料的限制；公開設定介面必須於私人轉公開前明確告知。
+- [x] Product Owner 已確認：已發布版本、版本歷史與已套用 migration 不回寫；發布後發現問題只可以新版程式或向前修復 migration 處理。
+
+### 實作與候選版驗證
+
+- [ ] 定義 `trips.is_public boolean not null default false` migration，並確認 Data API 角色 grant 與 RLS 的責任邊界；migration 必須與 V3.4.6 程式一起審核，不得提前套用。
+- [ ] 新建 Trip 預設為私人，並確認所有建立路徑均不可自行指定為公開。
+- [ ] App 加入公開／不公開設定；僅 `super_admin` 看得到並可執行狀態變更。
+- [ ] 私人轉公開前顯示個資警告並要求 `super_admin` 明確確認；依實際公開範圍提示 Trip 內容、參與者、聯絡資料、附件連結與自由輸入資料可能被 Guest 讀取。
+- [ ] 建立並回歸存取矩陣：Guest 僅公開 Trip；`trip_editor` 為公開 Trip 加上自己負責的私人 Trip；`super_admin` 可讀取全部 Trip。
+- [ ] 調整 `trips`、Checklist 與 Other Info 的 RLS SELECT／INSERT／UPDATE policy 與 `WITH CHECK`，確保不得經由 REST API 讀取私人附屬資料或變更 `is_public`。
+- [ ] 設計並實作不同資料載入流程：公開 Trip 只能由明確公開的來源與快取載入；私人 Trip 必須在登入後由 RLS 授權結果載入，不能與公開靜態清單混用。
+- [ ] 將所有 Trip 清單、內容與相關資產移出 `public/trips/`；不得讓私有資料可由部署後的直接靜態網址取得。
+- [ ] 保留 Offline First：登入後僅將伺服器授權的私人 Trip 快取到帳號／角色隔離的本機儲存；離線時公開與私人資料流都不得擴大可讀取範圍。
+- [ ] 實作公開轉私人後的舊快取收斂：未登入者與失去權限帳號在下一次成功刷新時刪除舊清單、內容與關聯快取；仍有權限者才可保留離線快取。
+- [ ] 在隔離／測試環境演練完整 migration，並以 Guest、`trip_editor`、`super_admin` 驗證 RLS、REST、靜態網址、公開轉私人、離線快取及私人轉公開確認。
+- [ ] 建立正式環境變更前的 Trip 備份、筆數與 ID 清單；備份僅供災難復原，不作為一般發布回退。
+- [ ] 建置候選產物，確認不含 `dist/trips/` 靜態資料；完成 lint、TypeScript、build、migration 檢閱及 database advisor 檢查。
+
+### 發布窗口與正式驗收
+
+- [ ] 前端需在 migration 尚未完成時進入安全的唯讀／升級狀態，不可顯示可儲存但資料庫尚不支援的公開設定。
+- [ ] 維護窗口先部署候選前端，確認舊靜態網址為 `404`，再立即套用 V3.4.6 migration；兩者不得拆成不同已發布版本。
+- [ ] migration 後立即在正式環境重跑 Guest、`trip_editor`、`super_admin`、REST、靜態網址與快取驗收；全部通過前不得將 V3.4.6 標記為已發布。
+- [ ] 本版預設建議 `FORCE_UPDATE = true`；由 Product Owner 於發布前最終確認，降低舊 PWA 繼續使用不相容快取流程的風險。
+- [ ] 若正式驗收失敗，保留事證並以新的向前修復 migration／新版程式處理；不得覆寫已發布版本紀錄或已套用 migration 歷程。
+
+---
+
+## V3.4.4 PWA 預設載入畫面調整（已發布）
 
 - [x] 統一系統 PWA Splash、HTML 預載 Splash 與 React App Splash 為明亮天空藍 `#54B6E7`；僅顯示完整彩色圖示，不播放任何 CSS 載入動畫。
 - [x] 確認 PWA 桌面圖示、網站 favicon 與 manifest 圖示檔皆未變動。
 - [x] `npm run lint`、`npm run build` 與 production manifest 檢查。
-- [ ] Product Owner 部署後，於 Android／iOS 已安裝 PWA 驗證系統啟動、預載 Splash 與靜態畫面的銜接。
+- [x] Product Owner 已完成部署，並於已安裝 PWA 驗證系統啟動、預載 Splash 與靜態畫面的銜接。
 
 ---
 
