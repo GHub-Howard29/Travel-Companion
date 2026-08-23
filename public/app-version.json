@@ -1,9 +1,8 @@
 {
-  "version": "3.4.6",
+  "version": "3.4.7",
   "releaseDate": "2026-08-23",
   "releaseNotes": [
-    "改善 PWA 啟動畫面與手機系統列的顯示銜接",
-    "版本資訊主畫面保留最近兩版，並可查看完整版本歷史"
+    "修正 V3.4.6 發布後 App 與網頁仍顯示 V3.4.5 的問題"
   ],
   "forceUpdate": false
 }

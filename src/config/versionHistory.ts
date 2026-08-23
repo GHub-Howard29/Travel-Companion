@@ -14,6 +14,15 @@ export type VersionHistoryItem = {
 
 export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
+    version: "3.4.6",
+    date: "2026-08-23",
+    forceUpdate: false,
+    notes: [
+      "改善 PWA 啟動畫面與手機系統列的顯示銜接。",
+      "版本資訊主畫面保留最近兩版，並可查看完整版本歷史。",
+    ],
+  },
+  {
     version: "3.4.5",
     date: "2026-08-23",
     forceUpdate: false,
