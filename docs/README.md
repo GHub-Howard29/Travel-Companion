@@ -1,197 +1,34 @@
-﻿# Travel Companion（旅行管理助手）
+# Travel Companion 文件入口
 
-作者：Howard
+Travel Companion 是以 Trip 為核心的 Offline First 旅行管理 PWA，使用 React、TypeScript、Vite 與 Supabase，支援行程、清單、資訊、多人帳本、附件及外幣換算。
 
----
+> 已發布版本：V3.4.6
+>
+> 目前開發版本：V3.5.0「Trip 公開／私人與 Guest 存取」
+>
+> 最後更新：2026-08-23
 
-# 專案目標
+## 優先閱讀
 
-Travel Companion 是一套以「旅程（Trip）」為核心設計的旅行管理工具。
+1. [專案現況總覽](14_專案現況總覽.md)：目前有效功能、風險與下一步。
+2. [產品開發路線圖](02_產品開發路線圖.md)：唯一的版本順序、編號與範圍來源。
+3. [待辦事項](09_待辦事項_TODO.md)：尚未完成及待驗證工作。
+4. [開發規範](08_開發規範.md)：實作、測試與 Git 流程。
 
-最初以旅遊共同記帳為出發點，目前已發展為支援離線使用、雲端同步及附件管理的旅行管理系統。
+## 架構與規格
 
-目前主要功能包含：
+- [V3 架構藍圖](01_Travel%20Companion%20V3%20架構藍圖.md)
+- [架構決策](002%20V3-1_Architecture_Decisions.md)
+- [資料庫設計](04_資料庫設計.md)
+- [模組架構](05_模組架構說明.md)
+- [功能規格](06_功能規格.md)
+- [權限矩陣](13_權限設定資料表.md)
+- [Trip Cloud 驗證手冊](12_Trip%20Cloud%20驗證手冊.md)
+- [V3.6.0 地點間預估移動資訊規格](15_V3.6.0_地點間預估移動資訊規格.md)
+- [V3.4.1 離線同步規格](16_V3.4.1_離線狀態與OtherInfo本機優先同步規格.md)
 
-- 行程管理
-- 共用旅費記帳
-- 個人旅費記帳
-- 離線記帳（Offline First）
-- 照片附件管理
-- 自動同步
-- Excel 匯出
-- GitHub Pages 部署
+## 歷史
 
-目前已完成 Trip / Checklist / Expense / Other Info 主要基礎功能。接下來先以 Travel Tool 模組化與帳本體驗改善為主，不新增新的旅行工具。
-
-希望所有與旅行有關的資料，都能集中管理於同一套系統。
-
----
-
-# 開發目標
-
-本專案希望做到：
-
-- 完全前端架構
-- 可離線使用（Offline First）
-- 支援多人共同帳本
-- 支援本機帳本
-- 自動同步雲端資料
-- 不需要安裝 APP
-- 手機與電腦皆可使用
-- 持續保持模組化設計，方便未來維護
-
----
-
-# 使用技術
-
-## Frontend
-
-- React
-- TypeScript
-- Vite
-
-## Storage
-
-- IndexedDB
-- localStorage
-
-## Backend
-
-- Supabase Database
-- Supabase Storage
-- Supabase Authentication
-
-## Version Control
-
-- Git
-- GitHub
-
-## Deploy
-
-- GitHub Pages
-
----
-
-# 系統架構
-
-目前系統已完成 V2.0 重構。
-
-```
-UI
-│
-▼
-React State
-│
-▼
-Storage
-│
-├── localStorage
-├── IndexedDB
-└── Attachment Storage
-│
-▼
-Sync Manager
-│
-▼
-Supabase
-```
-
-程式模組：
-
-```
-App.tsx
-│
-├── Components
-├── Hooks
-├── Actions
-├── Storage
-├── Sync
-├── Services
-├── Utils
-└── Types
-```
-
----
-
-# 專案版本
-
-## V1.0.0
-
-建立第一版旅行記帳系統。
-
-完成：
-
-- 共用旅費記帳
-- 個人帳本
-- Google 登入
-- Excel 匯出
-- 附件功能
-
----
-
-## V2.0.0（目前正式版本）
-
-完成整體重構。
-
-完成內容：
-
-- App.tsx 模組化
-- Offline First
-- IndexedDB
-- Pending Queue
-- 自動同步
-- 附件同步
-- Git Branch 開發流程
-- 文件整理
-
-目前系統已可穩定進行旅行記帳及離線同步。
-
----
-
-## V3.x
-
-目前已完成：
-
-- 旅行資訊（Reference）
-- 私人物品準備清單（Checklist）
-- 使用者權限管理
-
-下一步預計：
-
-- Travel Tool 模組化
-- 帳本 UI 優化
-- 記帳日期
-- 日期分頁 / 分組
-- 最新排序
-- 附件管理改善
-
----
-
-# 開發原則
-
-1. 一次只完成一個功能（Feature）。
-2. 新增功能前先完成設計討論。
-3. 每次修改皆須通過 `npm run build`。
-4. 每完成一項功能皆需進行測試。
-5. Git Commit 使用繁體中文。
-6. 每個功能使用獨立 Feature Branch 開發。
-7. 文件採集中整理原則；平常小步實作不逐次更新文件，只有在要求整理文件、整理交接文件、準備 commit 或要求 commit 時再一次更新。
-8. 保持模組化設計，避免再次出現大型 App.tsx。
-9. 不破壞既有功能。
-10. 保持程式容易閱讀、容易維護。
-
----
-
-# 專案理念
-
-Travel Companion 的目標，不只是記錄每一筆旅費。
-
-而是希望成為一套能陪伴每一次旅行的管理工具。
-
-透過持續改善架構與功能，讓旅行前、旅行中、旅行後的所有資料，都能集中於同一套系統內管理。
-
----
-
-最後更新：2026/07/13
-
-目前版本：V3.2.0
+- [版本更新紀錄](07_版本更新紀錄.md)：精簡發布帳冊。
+- [Bug 修正紀錄](03_Bug修正紀錄.md)：保留具診斷價值的問題、原因與修正。
+- 更細的實作過程、舊交接狀態與修改檔案由 Git commit 保存，不再重複維護累積式交接文件。

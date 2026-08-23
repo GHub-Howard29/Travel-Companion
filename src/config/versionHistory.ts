@@ -14,6 +14,15 @@ export type VersionHistoryItem = {
 
 export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
+    version: "3.4.5",
+    date: "2026-08-23",
+    forceUpdate: false,
+    notes: [
+      "修正 PWA 載入銜接，移除重複的網頁 Splash 圖示與動畫。",
+      "補強版本歷史防漏驗證，避免遺漏上一個已發布版本。",
+    ],
+  },
+  {
     version: "3.4.4",
     date: "2026-08-23",
     forceUpdate: false,
