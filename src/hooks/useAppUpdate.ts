@@ -122,6 +122,20 @@ export const useAppUpdate = () => {
   });
   const dismissedRef = useRef(false);
   const updateServiceWorkerRef = useRef<UpdateServiceWorker | null>(null);
+  const updateInProgressRef = useRef(false);
+  const reloadStartedRef = useRef(false);
+  const fallbackReloadTimerRef = useRef<number | null>(null);
+
+  const reloadOnce = useCallback(() => {
+    if (reloadStartedRef.current) return;
+
+    reloadStartedRef.current = true;
+    if (fallbackReloadTimerRef.current !== null) {
+      window.clearTimeout(fallbackReloadTimerRef.current);
+      fallbackReloadTimerRef.current = null;
+    }
+    reloadPage();
+  }, []);
 
   useEffect(() => {
     updateServiceWorkerRef.current = registerSW({
@@ -139,32 +153,44 @@ export const useAppUpdate = () => {
           setUpdateAvailable(true);
         }
       },
-      onNeedReload: reloadPage,
+      // Wait until the new worker controls this page. Reloading immediately
+      // after SKIP_WAITING can reopen the old shell and repeat the prompt.
+      onNeedReload: reloadOnce,
       onRegisterError(error: unknown) {
         console.warn("PWA Service Worker registration failed.", error);
       },
     });
-  }, [canShowUpdatePrompt]);
+  }, [canShowUpdatePrompt, reloadOnce]);
 
   const update = useCallback(async () => {
+    if (updateInProgressRef.current) return;
+    updateInProgressRef.current = true;
+
     setStoredAppVersion(latestMetadata.version);
     setCurrentVersion(latestMetadata.version);
     setReleaseNoticeVisible(false);
     setUpdateAvailable(false);
 
     if (updateAvailable) {
-      const fallbackReloadTimer = window.setTimeout(reloadPage, 1500);
+      // Android WebView can occasionally miss Workbox's controlling event.
+      // Keep one delayed fallback without racing the normal takeover flow.
+      fallbackReloadTimerRef.current = window.setTimeout(reloadOnce, 8000);
       try {
-        await updateServiceWorkerRef.current?.(true);
-      } finally {
-        window.clearTimeout(fallbackReloadTimer);
+        const updateServiceWorker = updateServiceWorkerRef.current;
+        if (!updateServiceWorker) {
+          reloadOnce();
+          return;
+        }
+        await updateServiceWorker(true);
+      } catch (error) {
+        console.warn("PWA Service Worker update failed.", error);
+        reloadOnce();
       }
-      reloadPage();
       return;
     }
 
-    reloadPage();
-  }, [latestMetadata.version, updateAvailable]);
+    reloadOnce();
+  }, [latestMetadata.version, reloadOnce, updateAvailable]);
 
   const dismiss = useCallback(() => {
     dismissedRef.current = true;

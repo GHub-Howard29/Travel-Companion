@@ -477,6 +477,32 @@ V3.4.5 部署後，Android 手機一般瀏覽器的上方狀態列／網址列�
 
 ---
 
+### BUG020
+
+問題：
+
+PWA 顯示更新提示後，按下「馬上更新」可能再次顯示一次更新提示；Android 已安裝 PWA 更新後也可能只顯示純色啟動畫面，必須關閉 App 再重新開啟才能正常使用。
+
+原因：
+
+- `updateServiceWorker(true)` 傳送 `SKIP_WAITING` 後，其 Promise 可能在新版 Service Worker 真正接管目前頁面前就完成。
+- 舊流程在 Promise 完成後無條件呼叫 `location.reload()`，同時又在 Workbox 的 `controlling` 事件透過 `onNeedReload` 再次呼叫重載，形成過早與重複重載的競態。
+- 過早重載可能再次開啟舊版 App shell，因此同一新版提示會再出現；Android WebView 在連續切換控制器與頁面時，則可能停留在 manifest 的純色啟動背景。
+- 原本 1.5 秒備援計時器會在 Promise 完成時被清除，無法可靠處理 Android 偶發漏接 `controlling` 事件的情況。
+
+修正方式：
+
+- 正常流程只在 Workbox 確認新版 Service Worker 已透過 `controlling` 事件接管頁面後才重新載入。
+- 移除 `updateServiceWorker(true)` 完成後的無條件重載，避免載入舊 App shell 及二次重載。
+- 加入更新中與重載中的單次防護，避免重複點擊、接管事件及備援流程造成多次執行。
+- Android WebView 保留 8 秒延遲備援；正常接管事件發生時會取消備援，只有漏接事件時才執行一次重載。
+
+狀態：
+
+🟡 已完成程式修正與 lint／build 驗證，待 Android PWA 由 V3.4.7 更新至 V3.4.8 實機回歸（V3.4.8）
+
+---
+
 ## Bug 管理原則
 
 每個 Bug 皆記錄：
@@ -493,4 +519,4 @@ V3.4.5 部署後，Android 手機一般瀏覽器的上方狀態列／網址列�
 
 最後更新：2026/08/23
 
-目前已發布版本：V3.4.6
+目前已發布版本：V3.4.7；待發布版本：V3.4.8

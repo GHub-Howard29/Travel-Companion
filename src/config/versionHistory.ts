@@ -14,6 +14,14 @@ export type VersionHistoryItem = {
 
 export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
+    version: "3.4.7",
+    date: "2026-08-23",
+    forceUpdate: false,
+    notes: [
+      "修正 V3.4.6 發布後 App 與網頁仍顯示 V3.4.5 的問題。",
+    ],
+  },
+  {
     version: "3.4.6",
     date: "2026-08-23",
     forceUpdate: false,
