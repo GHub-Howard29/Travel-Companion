@@ -4,85 +4,12 @@
   inset: 0;
   display: grid;
   place-items: center;
-  overflow: hidden;
-  isolation: isolate;
-  background:
-    radial-gradient(circle at 18% 18%, rgb(255 255 255 / .32) 0 4%, transparent 20%),
-    radial-gradient(circle at 84% 78%, rgb(171 239 255 / .26) 0 8%, transparent 28%),
-    linear-gradient(150deg, #0589d6 0%, #0c9fe4 50%, #70d1eb 150%);
-  opacity: 1;
-  transition: opacity .5s ease;
+  background: #54b6e7;
 }
 
-.app-splash--exit { opacity: 0; pointer-events: none; }
-
-.app-splash__orbit {
-  position: absolute;
-  z-index: -1;
-  width: min(94vw, 42rem);
-  aspect-ratio: 1;
-  border: 1px solid rgb(255 255 255 / .22);
-  border-radius: 50%;
-  animation: app-splash-orbit 12s linear infinite;
-}
-
-.app-splash__icon-wash {
-  position: absolute;
-  z-index: -2;
-  width: 145%;
-  max-width: none;
-  filter: blur(2.2rem) saturate(1.08);
-  opacity: .58;
-  transform: scale(1.08);
-  animation: app-splash-icon-wash 1.85s ease both;
-}
-
-.app-splash__icon-intro {
-  position: absolute;
-  z-index: 5;
-  width: min(27rem, 92vw);
+.app-splash__icon {
+  width: min(15rem, 58vw);
   height: auto;
-  filter: drop-shadow(0 12px 22px rgb(0 69 123 / .18));
-  mask-image: radial-gradient(ellipse 64% 62% at 50% 48%, #000 52%, transparent 90%);
-  -webkit-mask-image: radial-gradient(ellipse 64% 62% at 50% 48%, #000 52%, transparent 90%);
-  animation: app-splash-icon-intro 1.85s cubic-bezier(.2,.72,.3,1) both;
-}
-
-.app-splash__scene { position: relative; width: min(25rem, 92vw); height: 27rem; }
-.app-splash__scene img { position: absolute; height: auto; }
-.app-splash__scene img:not(.app-splash__asset--ready) { visibility: hidden; }
-.app-splash__scene img.app-splash__asset--ready { opacity: 1; transition: opacity .3s ease; }
-.app-splash__cloud { z-index: 2; width: 7.2rem; filter: drop-shadow(0 9px 8px rgb(0 58 110 / .22)); animation: app-splash-fade .5s ease 1.35s both, app-splash-cloud 4.7s ease-in-out 1.85s infinite; }
-.app-splash__cloud--left { top: .65rem; left: -.6rem; }
-.app-splash__cloud--right { top: 2.05rem; right: -.8rem; width: 5.4rem; animation: app-splash-fade .5s ease 1.5s both, app-splash-cloud 4.7s ease-in-out -.25s infinite; }
-.app-splash__plane { z-index: 4; top: -.25rem; left: 10.5rem; width: 10.3rem; filter: drop-shadow(0 9px 7px rgb(0 55 104 / .28)); animation: app-splash-plane 5.8s cubic-bezier(.25,.7,.35,1) 1.35s infinite backwards; }
-.app-splash__map { z-index: 1; top: 11.1rem; left: 50%; width: 19.6rem; filter: drop-shadow(0 12px 12px rgb(0 54 102 / .24)); transform: translateX(-50%); animation: app-splash-fade .8s ease 1.2s both, app-splash-map 3.8s ease-in-out 2s infinite; }
-.app-splash__suitcase { z-index: 3; top: 5rem; left: 50%; width: 12rem; filter: drop-shadow(0 16px 13px rgb(0 45 91 / .32)); transform: translateX(-50%) perspective(900px) rotateY(-10deg) rotateZ(-1deg); animation: app-splash-suitcase-in 1.8s cubic-bezier(.2,.75,.25,1) 1.4s both, app-splash-suitcase-sway 3.6s ease-in-out 3.2s infinite; }
-
-.app-splash__copy { width: min(100%, 28rem); margin-top: -1.4rem; padding: 0 2rem 2rem; text-align: center; }
-.app-splash__copy p { margin-left: 0; margin-right: 0; }
-.app-splash__eyebrow { margin: 0 0 .6rem; color: #eaf8ff; font-size: .76rem; font-weight: 800; letter-spacing: .16em; opacity: 0; animation: app-splash-text 1.35s ease 2.1s forwards; }
-.app-splash h1 { margin: 0; color: #fff; font-size: clamp(1.7rem, 7vw, 2.4rem); letter-spacing: .04em; text-shadow: 0 3px 14px rgb(0 73 127 / .22); opacity: 0; animation: app-splash-text 1.45s ease 2.25s forwards; }
-.app-splash__message { min-height: 1.6em; margin: .8rem 0 1.65rem; color: rgb(239 252 255 / .9); font-size: .95rem; opacity: 0; animation: app-splash-text 1.3s ease 2.43s forwards; }
-.app-splash__progress { height: .42rem; overflow: hidden; border-radius: 999px; background: rgb(255 255 255 / .27); }
-.app-splash__progress > span { position: relative; display: block; width: 0; height: 100%; overflow: hidden; border-radius: inherit; background: linear-gradient(90deg, #0b75b8, #0b9c91, #f29b1d); box-shadow: 0 0 12px rgb(11 117 184 / .35); animation: app-splash-load 3.8s cubic-bezier(.3,.7,.3,1) infinite; }
-.app-splash__progress > span::after { position: absolute; inset: 0; background: linear-gradient(105deg, transparent 24%, rgb(255 255 255 / .18) 42%, rgb(255 255 255 / .88) 50%, rgb(255 255 255 / .18) 58%, transparent 76%); content: ""; transform: translateX(-115%); animation: app-splash-shine 1.15s ease-in-out .45s infinite; }
-.app-splash__status { margin: .85rem 0 0; color: rgb(239 252 255 / .92); font-size: .78rem; opacity: 0; animation: app-splash-text 1.2s ease 2.65s forwards; }
-
-@keyframes app-splash-orbit { to { transform: rotate(360deg); } }
-@keyframes app-splash-icon-wash { 0%,48% { opacity: .58; } 100% { opacity: 0; } }
-@keyframes app-splash-icon-intro { 0% { opacity: 0; transform: scale(.92); } 15%,46% { opacity: 1; transform: scale(1); } 100% { opacity: 0; transform: scale(1.07); } }
-@keyframes app-splash-fade { from { opacity: 0; } to { opacity: 1; } }
-@keyframes app-splash-text { from { opacity: 0; transform: translateY(.45rem); } to { opacity: 1; transform: translateY(0); } }
-@keyframes app-splash-cloud { 0%,100% { transform: translate3d(0,0,0) scale(1); } 50% { transform: translate3d(.55rem,-.28rem,0) scale(1.035); } }
-@keyframes app-splash-plane { 0% { opacity: 0; transform: translate(6rem,.3rem) scale(.72); } 9% { opacity: 1; } 78% { opacity: 1; transform: translate(-18rem,-1.4rem) scale(1); } 91%,100% { opacity: 0; transform: translate(-20rem,-1.7rem) scale(1.04); } }
-@keyframes app-splash-map { 0%,100% { transform: translateX(-50%) scale(1); } 50% { transform: translateX(-50%) scale(1.035); } }
-@keyframes app-splash-suitcase-in { 0%,22% { opacity: 0; } 100% { opacity: 1; } }
-@keyframes app-splash-suitcase-sway { 0%,100% { transform: translateX(-50%) perspective(900px) rotateY(-10deg) rotateZ(-1deg); } 50% { transform: translateX(-50%) perspective(900px) rotateY(-10deg) rotateZ(1.1deg); } }
-@keyframes app-splash-load { 0% { width: 0; } 82%,100% { width: 100%; } }
-@keyframes app-splash-shine { to { transform: translateX(115%); } }
-
-@media (prefers-reduced-motion: reduce) {
-  .app-splash *, .app-splash *::before, .app-splash *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
-  .app-splash__progress > span { width: 100%; }
+  border-radius: 23%;
+  box-shadow: 0 9px 22px rgb(23 57 80 / .28);
 }

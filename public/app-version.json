@@ -1,8 +1,8 @@
 {
-  "version": "3.4.3",
-  "releaseDate": "2026-08-20",
+  "version": "3.4.4",
+  "releaseDate": "2026-08-23",
   "releaseNotes": [
-    "優化啟動畫面"
+    "調整 PWA 預設載入畫面"
   ],
   "forceUpdate": false
 }
