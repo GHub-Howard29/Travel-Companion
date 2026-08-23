@@ -18,35 +18,16 @@
     <link rel="icon" type="image/png" href="/favicon.png" />
     <link rel="apple-touch-icon" href="/pwa-192x192.png" />
     <style>
-      #preboot-splash {
-        position: fixed;
-        z-index: 999;
-        inset: 0;
-        display: grid;
-        place-items: center;
-        overflow: hidden;
-        color: #fff;
-        font-family: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
+      html,
+      body,
+      #root {
+        min-height: 100%;
         background: #54b6e7;
-      }
-      #preboot-splash .preboot-content { text-align: center; }
-      #preboot-splash img {
-        display: block;
-        width: min(15rem, 58vw);
-        margin: 0 auto;
-        border-radius: 23%;
-        box-shadow: 0 9px 22px rgba(23, 57, 80, .28);
       }
     </style>
   </head>
   <body>
-    <div id="root">
-      <section id="preboot-splash" aria-label="正在啟動旅行小幫手">
-        <div class="preboot-content">
-          <img src="./pwa-512x512.png" alt="" />
-        </div>
-      </section>
-    </div>
+    <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

@@ -1,7 +1,7 @@
 {
   "name": "travel-companion",
   "private": true,
-  "version": "3.4.4",
+  "version": "3.4.5",
   "type": "module",
   "engines": {
     "node": "22.23.2",
@@ -10,7 +10,8 @@
   "packageManager": "npm@10.9.8",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "npm run verify:release-history && tsc && vite build",
+    "verify:release-history": "node scripts/verify-release-history.mjs",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
     "predeploy": "npm run build",

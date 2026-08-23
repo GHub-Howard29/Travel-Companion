@@ -1,8 +1,8 @@
 {
-  "version": "3.4.4",
+  "version": "3.4.5",
   "releaseDate": "2026-08-23",
   "releaseNotes": [
-    "調整 PWA 預設載入畫面"
+    "修正版本更新紀錄可能遺漏前一版本的問題"
   ],
   "forceUpdate": false
 }
