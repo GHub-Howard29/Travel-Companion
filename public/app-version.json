@@ -1,9 +1,9 @@
 {
-  "version": "3.4.10",
+  "version": "3.4.11",
   "releaseDate": "2026-08-24",
   "releaseNotes": [
-    "移除 Android 原生啟動畫面後重複出現的網頁層 App 圖示",
-    "載入期間保留一致藍底，完成後一次切換至操作介面"
+    "統一 Android 原生啟動畫面、等待畫面與 App 系統資訊列為暖米白色",
+    "保留單次原生圖示並降低啟動階段系統列與底圖的色差"
   ],
   "forceUpdate": false
 }
