@@ -1,6 +1,7 @@
 import { FormEvent, useState } from "react";
 import { Save, X } from "lucide-react";
 import type { TripDetail, TripEditorInput, TripMeta, TripMode } from "../types";
+import { releaseFocusedControl } from "../utils/viewportUtils";
 
 interface TripEditorModalProps {
   mode: "create" | "edit";
@@ -218,6 +219,7 @@ export const TripEditorModal = ({
 
     setFormError("");
     setIsSaving(true);
+    releaseFocusedControl();
     await onSubmit({
       title,
       departureDate,
@@ -244,6 +246,7 @@ export const TripEditorModal = ({
     if (!secondConfirm) return;
 
     setIsDeleting(true);
+    releaseFocusedControl();
     await onDelete();
     setIsDeleting(false);
   };
@@ -260,7 +263,10 @@ export const TripEditorModal = ({
           </h2>
           <button
             type="button"
-            onClick={onClose}
+            onClick={() => {
+              releaseFocusedControl();
+              onClose();
+            }}
             className="p-2 rounded-full text-slate-500 hover:bg-slate-100"
             aria-label="關閉"
             title="關閉"

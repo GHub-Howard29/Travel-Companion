@@ -3,6 +3,7 @@ import { ExternalLink, MapPin, Settings2, X } from "lucide-react";
 
 import type { ItineraryItem, TripDetail } from "../types";
 import { handleNavigate } from "../utils/navigationUtils";
+import { releaseFocusedControl } from "../utils/viewportUtils";
 
 interface ItineraryPageProps {
   trip: TripDetail;
@@ -94,6 +95,7 @@ export const ItineraryPage = ({
   };
 
   const closeManageMode = () => {
+    releaseFocusedControl();
     setIsManageMode(false);
     resetForm();
   };

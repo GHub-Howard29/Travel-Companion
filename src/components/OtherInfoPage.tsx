@@ -33,6 +33,7 @@ import { useOtherInfoForm } from "../hooks/useOtherInfoForm";
 import { SortableCard } from "./SortableCard";
 import type { Role } from "../permissions/roles";
 import type { OtherInfoSyncStatus } from "../storage/otherInfoSyncStorage";
+import { releaseFocusedControl } from "../utils/viewportUtils";
 
 interface OtherInfoPageProps {
   tripId: string;
@@ -186,6 +187,7 @@ export const OtherInfoPage = ({
   );
 
   const closeManageMode = () => {
+    releaseFocusedControl();
     void flushPendingOrder();
     setIsManageMode(false);
     closeForm(activeFolderId);

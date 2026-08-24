@@ -2,42 +2,37 @@
 
 > Travel Companion V3-1
 >
-> 最後更新：2026-08-23
+> 最後更新：2026-08-25
 
 ---
 
-## V3.5.0 Trip 公開／私人驗證（完整安全發布）
+## V3.5.0 敏感資訊卡片權限驗證（待開發）
 
-V3.5.0 是單一完整發布：同版前端、`is_public` migration、RLS、快取隔離與靜態 Trip 移除必須一起驗證。既有 Trip 僅在本版 migration 中一次性轉為私人；不可先以公開資料狀態發布，再在後續版本改寫。
+V3.5.0 維持現行 Trip 瀏覽與角色制度，不新增 Trip 公開／私人設定或 `is_public` migration。所有新增畫面必須先提供模擬圖並經 Product Owner 確認，確認前不得修改程式。
 
-### A. 正式環境變更前
+### A. 開發前
 
-1. 在隔離／測試環境以候選 migration 演練：至少有一筆公開 Trip、一筆 `trip_editor` 私人 Trip、一筆未被指派的私人 Trip，並建立對應的 Checklist、Other Info 與快取測試資料。
-2. 以 Guest、`trip_editor`、`super_admin` 三種身分完成本節所有 REST、UI、快取與離線測試。
-3. 以 production build 確認產物沒有 `dist/trips/` 或舊 Trip detail JSON；不得只以 Vite 開發伺服器的 SPA fallback 判斷靜態網址是否移除。
-4. 對正式環境建立 Trip 匯出、筆數與 ID 清單，並記錄執行人與時間。備份僅用於災難復原，不用來覆寫已套用 migration 或已發布版本的歷程。
-5. 確認候選前端在 `is_public` 欄位尚不存在時會顯示安全唯讀／升級狀態，不會讓管理者儲存必然失敗的公開設定。
+1. 確認新增／編輯卡片模擬圖包含「資訊可見範圍」、敏感資料警告、兩種設定及管理者限定標示。
+2. 確認 App 分享入口模擬圖與確切位置；分享只使用固定 App 首頁，不建立單一 Trip 網址。
+3. 確認敏感附件是否納入本版；若納入，先完成 private Storage 與 RLS 設計。
 
-### B. 維護窗口
+### B. 卡片權限驗收
 
-1. 先部署 V3.5.0 候選前端，確認舊 `public/trips/` 靜態網址已無法取得資料。
-2. 在同一窗口立即套用已審核的 V3.5.0 migration；既有 Trip 全數設為私人。
-3. migration 成功後重新載入 App，確認公開／私人設定介面解除唯讀，且僅 `super_admin` 可儲存狀態變更。
-4. 在本節 C 驗收全數通過前，V3.5.0 僅是正式環境候選版，不得標示為已發布或回寫版本更新紀錄。
+1. Guest、User 可讀 `allowed_roles is null` 的卡片，不可從 UI 或 REST 取得管理者限定卡片。
+2. 目前 Trip 被指派的 `trip_editor` 與 `super_admin` 可讀取及管理兩種卡片。
+3. 其他 Trip 的 `trip_editor` 在目標 Trip 視為 User，不可取得管理者限定卡片。
+4. 未授權角色不顯示受限制卡片、數量或存在提示；資料夾內其他一般卡片正常顯示。
+5. 新增、編輯、複製、排序、同步及重新載入後，可見範圍保持不變。
+6. 卡片從所有人可看改為僅管理者可看後，Guest／User 下一次成功刷新時清除舊快取。
+7. 登出及切換帳號後，不得讀取前一管理者的敏感卡片快取。
+8. 直接呼叫 Data API 驗證 RLS，前端隱藏不得作為唯一保護。
 
-### C. 正式環境驗收
+### C. PWA 實機驗收
 
-必測情境：
-
-1. Guest：REST 只能列出 `is_public = true` 的 Trip；本版既有 Trip 全數私人時，結果必須為空。
-2. Guest：直接開啟舊 `trips/list.json` 與任一舊 detail JSON，均須為 `404`，不可有資料內容。
-3. `trip_editor`：可讀取自己被指派的私人 Trip，不可列出或讀取其他私人 Trip，也不可變更 `is_public`。
-4. `super_admin`：可讀取全部 Trip；新 Trip 預設私人；轉公開時 App 顯示個資警告並要求確認。
-5. 快取：公開轉私人後，Guest 與失去權限帳號在下一次成功連線刷新、重開或回到前景時不再看到該 Trip；仍有權限帳號可離線讀取自己的私人快取。
-6. 限制確認：先前已下載的公開資料無法遠端收回；轉公開警告須明確說明此限制。
-7. 附屬 REST endpoint：Guest 與未被指派帳號無法透過 `checklists`、`checklist_items` 或 `other_info_items` 讀取私人 Trip 內容。
-8. 權限變更：`trip_editor` 嘗試以 REST 修改 `is_public` 必須失敗；`super_admin` 的合法狀態切換必須成功，並在下一次授權刷新收斂快取。
-9. 完成所有情境後，才可將 V3.5.0 標示為已發布並由 Product Owner 決定是否啟用強制更新。若任一項失敗，只可用新的向前修復 migration／新版程式處理，不覆寫已套用 migration 或已發布紀錄。
+1. iOS standalone PWA 啟動時顯示專案圖示，HTML 載入階段不得只有純色底圖。
+2. Android 維持 V3.4.11 的單次原生 Splash 圖示，不得新增第二張圖示或改變載入順序。
+3. iOS 聚焦與退出行程、清單、其他資訊及旅程管理後，畫面維持正常寬度，不需兩指縮小且不能左右移動。
+4. iOS 正常雙指縮放能力仍保留，不使用禁止縮放的 viewport 設定。
 
 ---
 
