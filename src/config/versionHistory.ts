@@ -14,6 +14,16 @@ export type VersionHistoryItem = {
 
 export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
+    version: "3.4.9",
+    date: "2026-08-24",
+    forceUpdate: false,
+    notes: [
+      "修正共同清單首次同步期間勾選狀態可能回彈的問題。",
+      "歷史行程離線時改用明確的清單唯讀提示。",
+      "統一 PWA 網頁載入畫面，降低進入操作介面前的跳動。",
+    ],
+  },
+  {
     version: "3.4.8",
     date: "2026-08-24",
     forceUpdate: false,

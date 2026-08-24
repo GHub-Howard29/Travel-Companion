@@ -4,7 +4,7 @@ Travel Companion 是以 Trip 為核心的 Offline First 旅行管理 PWA，使�
 
 > 已發布版本：V3.4.9
 >
-> 目前待發布版本：無
+> 目前待發布版本：V3.4.10「PWA 重複啟動圖示修正」
 >
 > 下一個功能版本：V3.5.0「Trip 公開／私人與 Guest 存取」
 >
