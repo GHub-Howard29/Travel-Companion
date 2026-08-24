@@ -24,9 +24,34 @@
         min-height: 100%;
         background: #54b6e7;
       }
+
+      body {
+        margin: 0;
+      }
+
+      #app-launch-screen {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        display: grid;
+        place-items: center;
+        box-sizing: border-box;
+        min-height: 100dvh;
+        background: #54b6e7;
+      }
+
+      #app-launch-screen img {
+        display: block;
+        width: min(62vw, 320px);
+        height: auto;
+        border-radius: 22%;
+      }
     </style>
   </head>
   <body>
+    <div id="app-launch-screen" role="status" aria-label="App 載入中">
+      <img src="/pwa-512x512.png" alt="" />
+    </div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

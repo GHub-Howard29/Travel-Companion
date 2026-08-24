@@ -24,6 +24,7 @@ interface ChecklistPageProps {
   canToggleSharedChecklist: boolean;
   canSyncSharedChecklist: boolean;
   isOnline: boolean;
+  isHistoricalOfflineReadOnly: boolean;
   canManageSharedChecklist: boolean;
   copySources: Array<{
     tripId: string;
@@ -46,6 +47,7 @@ export const ChecklistPage = ({
   canToggleSharedChecklist,
   canSyncSharedChecklist,
   isOnline,
+  isHistoricalOfflineReadOnly,
   canManageSharedChecklist,
   copySources,
   onSaveChecklistData,
@@ -538,12 +540,17 @@ export const ChecklistPage = ({
             style={{ width: `${progressPercent}%` }}
           />
         </div>
-        {!canToggleSharedChecklist && (
+        {isHistoricalOfflineReadOnly && (
+          <p className="mt-3 text-xs font-medium text-slate-500">
+            目前屬於離線狀態，無法更新及管理清單，請在網路連線後嘗試同步更新索取最新狀態
+          </p>
+        )}
+        {!isHistoricalOfflineReadOnly && !canToggleSharedChecklist && (
           <p className="mt-3 text-xs font-medium text-slate-500">
             目前角色可查看共同檢查清單，但不可勾選。
           </p>
         )}
-        {canSyncSharedChecklist && (
+        {!isHistoricalOfflineReadOnly && canSyncSharedChecklist && (
           <p className="mt-3 text-xs font-medium text-slate-500">
             {!isOnline &&
               "目前為離線狀態，資料先保存於本機；恢復連線後才會完整同步更新。"}
@@ -553,7 +560,7 @@ export const ChecklistPage = ({
             {isOnline && syncStatus === "local" && "目前資料先保存於本機。"}
           </p>
         )}
-        {!canSyncSharedChecklist && userEmail && (
+        {!isHistoricalOfflineReadOnly && !canSyncSharedChecklist && userEmail && (
           <p className="mt-3 text-xs font-medium text-slate-500">
             已從雲端下載原始清單，編輯後只儲存在本地設備上。
           </p>

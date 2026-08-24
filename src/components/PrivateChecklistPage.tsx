@@ -19,6 +19,7 @@ interface PrivateChecklistPageProps {
   canTogglePrivateChecklist: boolean;
   canSyncPrivateChecklist: boolean;
   isOnline: boolean;
+  isHistoricalOfflineReadOnly: boolean;
   tripOptions: TripMeta[];
 }
 
@@ -31,6 +32,7 @@ export const PrivateChecklistPage = ({
   canTogglePrivateChecklist,
   canSyncPrivateChecklist,
   isOnline,
+  isHistoricalOfflineReadOnly,
   tripOptions,
 }: PrivateChecklistPageProps) => {
   const {
@@ -292,17 +294,40 @@ export const PrivateChecklistPage = ({
           />
         </div>
         <p className="mt-3 text-xs font-medium text-slate-500">
-          {!canSyncPrivateChecklist && "目前資料僅保存於此裝置。"}
-          {canSyncPrivateChecklist && !isOnline &&
+          {isHistoricalOfflineReadOnly &&
+            "目前屬於離線狀態，無法更新及管理清單，請在網路連線後嘗試同步更新索取最新狀態"}
+          {!isHistoricalOfflineReadOnly &&
+            !canSyncPrivateChecklist &&
+            "目前資料僅保存於此裝置。"}
+          {!isHistoricalOfflineReadOnly &&
+            canSyncPrivateChecklist &&
+            !isOnline &&
             "目前為離線狀態，資料先保存於本機；恢復連線後才會完整同步更新。"}
-          {canSyncPrivateChecklist && isOnline && syncStatus === "syncing" && "正在同步雲端..."}
-          {canSyncPrivateChecklist && isOnline && syncStatus === "synced" && "已同步到雲端。"}
-          {canSyncPrivateChecklist &&
+          {!isHistoricalOfflineReadOnly &&
+            canSyncPrivateChecklist &&
+            isOnline &&
+            syncStatus === "syncing" &&
+            "正在同步雲端..."}
+          {!isHistoricalOfflineReadOnly &&
+            canSyncPrivateChecklist &&
+            isOnline &&
+            syncStatus === "synced" &&
+            "已同步到雲端。"}
+          {!isHistoricalOfflineReadOnly &&
+            canSyncPrivateChecklist &&
             isOnline &&
             syncStatus === "emptyCloud" &&
             "雲端私人清單已準備好，新增項目後會同步。"}
-          {canSyncPrivateChecklist && isOnline && syncStatus === "error" && syncError}
-          {canSyncPrivateChecklist && isOnline && syncStatus === "local" && "目前資料先保存於本機。"}
+          {!isHistoricalOfflineReadOnly &&
+            canSyncPrivateChecklist &&
+            isOnline &&
+            syncStatus === "error" &&
+            syncError}
+          {!isHistoricalOfflineReadOnly &&
+            canSyncPrivateChecklist &&
+            isOnline &&
+            syncStatus === "local" &&
+            "目前資料先保存於本機。"}
         </p>
         {canEditPrivateChecklist && (
           <div className="mt-3 flex justify-end">

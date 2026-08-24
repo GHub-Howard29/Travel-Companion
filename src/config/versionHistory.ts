@@ -14,6 +14,15 @@ export type VersionHistoryItem = {
 
 export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
+    version: "3.4.8",
+    date: "2026-08-24",
+    forceUpdate: false,
+    notes: [
+      "修正 PWA 更新時的過早與重複重載。",
+      "降低 Android PWA 更新後停留在純色啟動畫面的機率。",
+    ],
+  },
+  {
     version: "3.4.7",
     date: "2026-08-23",
     forceUpdate: false,

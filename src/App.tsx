@@ -99,7 +99,35 @@ const isIosStandalonePwa = () => {
   return isIosDevice && navigatorWithStandalone.standalone === true;
 };
 
+const finishAppLaunch = () => {
+  const appBackgroundColor = "#fff3e8";
+  document
+    .querySelector<HTMLMetaElement>('meta[name="theme-color"]')
+    ?.setAttribute("content", appBackgroundColor);
+  document.documentElement.style.backgroundColor = appBackgroundColor;
+  document.body.style.backgroundColor = appBackgroundColor;
+  document.getElementById("root")?.style.setProperty(
+    "background-color",
+    appBackgroundColor,
+  );
+  document.getElementById("app-launch-screen")?.remove();
+};
+
+const AppLaunchReady = () => {
+  useEffect(() => {
+    finishAppLaunch();
+  }, []);
+
+  return null;
+};
+
 export default function App() {
+  useEffect(() => {
+    if (!supabase) {
+      finishAppLaunch();
+    }
+  }, []);
+
   if (!supabase) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-slate-50 px-6 text-slate-800">
@@ -836,6 +864,7 @@ function ConfiguredApp({
         ) : (
           <Suspense fallback={screenLoadingFallback}>
           <>
+            {isSessionReady && <AppLaunchReady />}
             {/* 1. 行程規劃模組 */}
             {currentScreenType === "itinerary" && currentTrip && (
               <ItineraryPage
@@ -866,6 +895,7 @@ function ConfiguredApp({
                 }
                 canSyncSharedChecklist={hasEditPermission}
                 isOnline={isOnline}
+                isHistoricalOfflineReadOnly={isHistoricalOfflineReadOnly}
                 canManageSharedChecklist={
                   (hasEditPermission || Boolean(userEmail)) && !isHistoricalOfflineReadOnly
                 }
@@ -890,6 +920,7 @@ function ConfiguredApp({
                 }
                 canSyncPrivateChecklist={permission.canSyncPrivateChecklist}
                 isOnline={isOnline}
+                isHistoricalOfflineReadOnly={isHistoricalOfflineReadOnly}
                 tripOptions={tripOptions}
               />
             )}

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import {
@@ -58,6 +58,9 @@ export const useChecklistState = (
     "local" | "syncing" | "synced" | "error"
   >("local");
   const [syncError, setSyncError] = useState<string | null>(null);
+  const localMutationRevisionRef = useRef(0);
+  const initialSyncPromiseRef = useRef<Promise<void>>(Promise.resolve());
+  const cloudWriteQueueRef = useRef<Promise<void>>(Promise.resolve());
   const canSyncToCloud = canSyncSharedChecklist && isOnline;
 
   const checkedItemIds = useMemo(
@@ -91,6 +94,7 @@ export const useChecklistState = (
     let isActive = true;
 
     const syncInitialChecklist = async () => {
+      const syncStartMutationRevision = localMutationRevisionRef.current;
       setSyncStatus("syncing");
       setSyncError(null);
 
@@ -126,6 +130,14 @@ export const useChecklistState = (
           );
 
           if (!isActive) {
+            return;
+          }
+
+          // The cloud request may have started before the user toggled an
+          // item. Never let that older snapshot replace a newer optimistic
+          // state; the queued toggle write below will be the final cloud
+          // operation.
+          if (localMutationRevisionRef.current !== syncStartMutationRevision) {
             return;
           }
 
@@ -174,6 +186,10 @@ export const useChecklistState = (
             return;
           }
 
+          if (localMutationRevisionRef.current !== syncStartMutationRevision) {
+            return;
+          }
+
           if (initializedChecklist) {
             setCloudItemsByTripId((currentItemsByTripId) => ({
               ...currentItemsByTripId,
@@ -182,7 +198,10 @@ export const useChecklistState = (
           }
         }
 
-        if (isActive) {
+        if (
+          isActive &&
+          localMutationRevisionRef.current === syncStartMutationRevision
+        ) {
           setSyncStatus("synced");
         }
       } catch (error) {
@@ -194,7 +213,9 @@ export const useChecklistState = (
       }
     };
 
-    void syncInitialChecklist();
+    const initialSyncPromise = syncInitialChecklist();
+    initialSyncPromiseRef.current = initialSyncPromise;
+    void initialSyncPromise;
 
     return () => {
       isActive = false;
@@ -202,6 +223,9 @@ export const useChecklistState = (
   }, [canSyncToCloud, seedItems, supabase, tripId, userEmail]);
 
   const toggleChecklistItem = useCallback((itemId: string) => {
+    const mutationRevision = localMutationRevisionRef.current + 1;
+    localMutationRevisionRef.current = mutationRevision;
+
     setCheckedItemIdsByTripId((currentIdsByTripId) => {
       const currentIds =
         currentIdsByTripId[tripId] ??
@@ -252,29 +276,40 @@ export const useChecklistState = (
       if (canSyncToCloud) {
         setSyncStatus("syncing");
         setSyncError(null);
-        void (async () => {
-          const didUpdate = await updateCloudSharedChecklistItemChecked(
-            supabase,
-            tripId,
-            itemId,
-            nextIsChecked,
-          );
+        const writeOperation = cloudWriteQueueRef.current
+          .catch(() => undefined)
+          .then(async () => {
+            // Serialize the user's cloud write after the in-flight initial
+            // read and all earlier toggles. The newest click therefore stays
+            // last even if network responses would otherwise arrive out of
+            // order.
+            await initialSyncPromiseRef.current;
 
-          if (!didUpdate) {
-            await initializeCloudSharedChecklist(
-              supabase,
-              tripId,
-              seedItems,
-              nextCheckedItemIds,
-            );
-            await updateCloudSharedChecklistItemChecked(
+            const didUpdate = await updateCloudSharedChecklistItemChecked(
               supabase,
               tripId,
               itemId,
               nextIsChecked,
             );
-          }
-        })()
+
+            if (!didUpdate) {
+              await initializeCloudSharedChecklist(
+                supabase,
+                tripId,
+                seedItems,
+                nextCheckedItemIds,
+              );
+              await updateCloudSharedChecklistItemChecked(
+                supabase,
+                tripId,
+                itemId,
+                nextIsChecked,
+              );
+            }
+          });
+        cloudWriteQueueRef.current = writeOperation;
+
+        void writeOperation
           .then(() => {
             if (pendingProgress && userEmail) {
               clearPendingSharedChecklistProgress(
@@ -283,12 +318,16 @@ export const useChecklistState = (
                 pendingProgress.revision,
               );
             }
-            setSyncStatus("synced");
+            if (localMutationRevisionRef.current === mutationRevision) {
+              setSyncStatus("synced");
+            }
           })
           .catch((error) => {
             console.warn(error);
-            setSyncStatus("error");
-            setSyncError("共同檢查清單雲端同步失敗，變更已保存在本機。");
+            if (localMutationRevisionRef.current === mutationRevision) {
+              setSyncStatus("error");
+              setSyncError("共同檢查清單雲端同步失敗，變更已保存在本機。");
+            }
           });
       }
 
