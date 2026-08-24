@@ -14,6 +14,15 @@ export type VersionHistoryItem = {
 
 export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
+    version: "3.4.10",
+    date: "2026-08-24",
+    forceUpdate: false,
+    notes: [
+      "移除 Android 原生啟動畫面後重複出現的網頁層 App 圖示。",
+      "載入期間保留一致底圖，完成後一次切換至操作介面。",
+    ],
+  },
+  {
     version: "3.4.9",
     date: "2026-08-24",
     forceUpdate: false,

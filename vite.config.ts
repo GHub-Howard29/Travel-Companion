@@ -30,8 +30,8 @@ export default defineConfig({
         // Android PWA splash screen uses these manifest colors while the app
         // bundle is loading. Keep them aligned with the static HTML and React
         // loading screens, without changing the installed-app icon files.
-        theme_color: '#54b6e7',
-        background_color: '#54b6e7',
+        theme_color: '#fff3e8',
+        background_color: '#fff3e8',
         display: 'standalone',
         orientation: 'portrait',
         id: '/Travel-Companion/',
