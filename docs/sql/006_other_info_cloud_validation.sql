@@ -3,6 +3,7 @@
 --
 -- Run this in Supabase SQL Editor after:
 -- docs/sql/005_other_info_cloud_schema.sql
+-- and docs/sql/013_v350_other_info_security_scheme.sql
 
 -- 1. Table
 select
@@ -118,3 +119,15 @@ where routine_schema = 'public'
   )
   and grantee in ('anon', 'authenticated')
 order by routine_name, grantee;
+
+-- 10. V3.5.0 role values must be NULL or the manager-only pair.
+select
+  count(*) filter (where allowed_roles is null) as general_count,
+  count(*) filter (
+    where allowed_roles = array['trip_editor', 'super_admin']::text[]
+  ) as sensitive_count,
+  count(*) filter (
+    where allowed_roles is not null
+      and allowed_roles <> array['trip_editor', 'super_admin']::text[]
+  ) as invalid_count
+from public.other_info_items;

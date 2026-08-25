@@ -33,3 +33,31 @@ export const ROLE = {
  * 系統角色型別
  */
 export type Role = (typeof ROLE)[keyof typeof ROLE];
+
+/** 其他資訊敏感卡片的唯一可見角色集合。 */
+export const MANAGER_ONLY_ROLES: Role[] = [
+  ROLE.TRIP_EDITOR,
+  ROLE.SUPER_ADMIN,
+];
+
+export const normalizeOtherInfoAllowedRoles = (
+  roles?: readonly Role[] | null,
+): Role[] | undefined => {
+  if (!roles || roles.length === 0) return undefined;
+
+  const roleSet = new Set(roles);
+  const isExplicitlyPublic =
+    roles.length === 4 &&
+    roleSet.size === 4 &&
+    roleSet.has(ROLE.GUEST) &&
+    roleSet.has(ROLE.USER) &&
+    roleSet.has(ROLE.TRIP_EDITOR) &&
+    roleSet.has(ROLE.SUPER_ADMIN);
+  if (isExplicitlyPublic) return undefined;
+
+  return [...MANAGER_ONLY_ROLES];
+};
+
+export const isRestrictedOtherInfoRoles = (
+  roles?: readonly Role[] | null,
+): boolean => Boolean(roles && roles.length > 0);

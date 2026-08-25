@@ -7,6 +7,7 @@ import {
   ExternalLink,
   FileText,
   FolderOpen,
+  LockKeyhole,
   Pencil,
   Plus,
   Save,
@@ -26,12 +27,18 @@ import {
 import {
   getStandaloneHttpUrl,
   getOtherInfoItemsByFolderId,
+  isOtherInfoItemVisibleToRole,
   parseOtherInfoContentLinks,
   sortOtherInfoItemsByOrder,
 } from "../utils/otherInfoUtils";
 import { useOtherInfoForm } from "../hooks/useOtherInfoForm";
 import { SortableCard } from "./SortableCard";
-import type { Role } from "../permissions/roles";
+import {
+  isRestrictedOtherInfoRoles,
+  MANAGER_ONLY_ROLES,
+  normalizeOtherInfoAllowedRoles,
+  type Role,
+} from "../permissions/roles";
 import type { OtherInfoSyncStatus } from "../storage/otherInfoSyncStorage";
 import { releaseFocusedControl } from "../utils/viewportUtils";
 
@@ -76,6 +83,9 @@ const renderContentWithLinks = (content: string) => {
   });
 };
 
+const isSensitiveItem = (item: OtherInfoItem): boolean =>
+  isRestrictedOtherInfoRoles(item.allowedRoles);
+
 export const OtherInfoPage = ({
   tripId,
   canEdit,
@@ -100,15 +110,14 @@ export const OtherInfoPage = ({
       items.filter(
         (item) =>
           !item.isDeleted &&
-          (!item.allowedRoles ||
-            item.allowedRoles.length === 0 ||
-            item.allowedRoles.includes(currentRole)),
+          isOtherInfoItemVisibleToRole(item, currentRole),
       ),
     [currentRole, items],
   );
   const [activeFolderId, setActiveFolderId] = useState(initialFolderId);
   const [isManageMode, setIsManageMode] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isSensitiveSaveConfirmationOpen, setIsSensitiveSaveConfirmationOpen] = useState(false);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
   const {
     editingItemId,
@@ -189,6 +198,7 @@ export const OtherInfoPage = ({
   const closeManageMode = () => {
     releaseFocusedControl();
     void flushPendingOrder();
+    setIsSensitiveSaveConfirmationOpen(false);
     setIsManageMode(false);
     closeForm(activeFolderId);
   };
@@ -218,6 +228,7 @@ export const OtherInfoPage = ({
     folderId: string,
     title: string,
     content: string,
+    isSensitive: boolean,
   ): OtherInfoItem => {
     const now = new Date().toISOString();
     const nextOrder =
@@ -229,13 +240,16 @@ export const OtherInfoPage = ({
       folderId,
       title,
       content,
+      allowedRoles: isSensitive
+        ? normalizeOtherInfoAllowedRoles(MANAGER_ONLY_ROLES)
+        : undefined,
       order: nextOrder,
       createdAt: now,
       updatedAt: now,
     };
   };
 
-  const handleSave = async () => {
+  const saveForm = async () => {
     if (isSaving) {
       return;
     }
@@ -248,6 +262,9 @@ export const OtherInfoPage = ({
     }
 
     const targetFolderId = isSpecialInfoPage ? initialFolderId : form.folderId;
+    const allowedRoles = form.isSensitive
+      ? normalizeOtherInfoAllowedRoles(MANAGER_ONLY_ROLES)
+      : undefined;
     const nextItems = onSaveItems
       ? editingItemId
         ? items.map((item) =>
@@ -257,18 +274,20 @@ export const OtherInfoPage = ({
                   folderId: targetFolderId,
                   title,
                   content,
+                  allowedRoles,
                   updatedAt: new Date().toISOString(),
                 }
               : item,
           )
-        : [...items, createSyncedOtherInfoItem(targetFolderId, title, content)]
+        : [...items, createSyncedOtherInfoItem(targetFolderId, title, content, form.isSensitive)]
       : editingItemId
         ? updateOtherInfoItem(tripId, editingItemId, {
             folderId: targetFolderId,
             title,
             content,
+            allowedRoles,
           })
-        : createOtherInfoItem(tripId, targetFolderId, title, content);
+        : createOtherInfoItem(tripId, targetFolderId, title, content, allowedRoles);
 
     setIsSaving(true);
     try {
@@ -278,6 +297,23 @@ export const OtherInfoPage = ({
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const handleSave = async () => {
+    if (isSaving) return;
+    if (isSaveDisabled) return;
+
+    if (form.isSensitive) {
+      setIsSensitiveSaveConfirmationOpen(true);
+      return;
+    }
+
+    await saveForm();
+  };
+
+  const confirmSensitiveSave = async () => {
+    setIsSensitiveSaveConfirmationOpen(false);
+    await saveForm();
   };
 
   const handleDelete = async (item: OtherInfoItem) => {
@@ -425,44 +461,64 @@ export const OtherInfoPage = ({
                 {isSpecialInfoPage ? `${pageTitle}管理` : "其他資訊管理"}
               </h3>
             </div>
-            <button
-              type="button"
-              onClick={() => {
-                if (isFormOpen) {
-                  closeForm(activeFolderId);
-                  return;
-                }
-
-                openCreateForm(activeFolderId);
-              }}
-              disabled={isSaving}
-              className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-stone-900 px-3 py-2 text-xs font-bold text-white hover:bg-stone-700"
-            >
-              {isFormOpen ? <X size={14} /> : <Plus size={14} />}
-              {isFormOpen ? "取消" : "新增"}
-            </button>
+            {!isFormOpen && (
+              <button
+                type="button"
+                onClick={() => openCreateForm(activeFolderId)}
+                disabled={isSaving}
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-stone-900 px-3 py-2 text-xs font-bold text-white hover:bg-stone-700"
+              >
+                <Plus size={14} />
+                新增
+              </button>
+            )}
           </div>
         </div>
       )}
 
       {canEdit && isManageMode && isFormOpen && (
         <div className="rounded-lg border border-stone-200 bg-white p-4 shadow-sm">
-          <div className="mb-3 flex items-center justify-between">
+          <div className="mb-3">
             <h3 className="text-base font-bold text-slate-800">
               {editingItemId ? "編輯資訊" : "新增資訊"}
             </h3>
-            <button
-              type="button"
-              onClick={() => closeForm(activeFolderId)}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100"
-              aria-label="關閉"
-              title="關閉"
-            >
-              <X size={16} />
-            </button>
           </div>
 
           <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-2 rounded-lg bg-slate-100 p-1" role="group" aria-label="資訊類型">
+              <button
+                type="button"
+                onClick={() => updateForm({ isSensitive: false })}
+                aria-pressed={!form.isSensitive}
+                className={`rounded-md border px-3 py-2 text-xs font-bold transition-colors ${
+                  form.isSensitive
+                    ? "border-transparent bg-transparent text-slate-500"
+                    : "border-slate-300 bg-white text-slate-700 shadow-sm"
+                }`}
+              >
+                一般資訊
+              </button>
+              <button
+                type="button"
+                onClick={() => updateForm({ isSensitive: true })}
+                aria-pressed={form.isSensitive}
+                className={`inline-flex items-center justify-center gap-1 rounded-md border px-3 py-2 text-xs font-bold transition-colors ${
+                  form.isSensitive
+                    ? "border-sky-400 bg-white text-sky-800 shadow-sm"
+                    : "border-transparent bg-transparent text-slate-500"
+                }`}
+              >
+                <LockKeyhole size={14} />
+                新增敏感資料
+              </button>
+            </div>
+
+            <p className="text-xs leading-relaxed text-slate-400">
+              {form.isSensitive
+                ? "快捷入口不建立新資料夾；資料仍歸在目前選擇的分類，並自動套用管理者限定。"
+                : "進入管理時預設為一般資訊；需要保護資料時，再按「新增敏感資料」。"}
+            </p>
+
             {!isSpecialInfoPage && (
             <select
               value={form.folderId}
@@ -507,6 +563,16 @@ export const OtherInfoPage = ({
               https:// 與 https:\\ 格式）。
             </p>
 
+            {form.isSensitive && (
+              <div className="flex items-start gap-3 rounded-lg border border-sky-300 bg-sky-50 px-3 py-2.5 text-sky-900" role="status">
+                <LockKeyhole className="mt-0.5 shrink-0 text-sky-700" size={18} />
+                <div className="space-y-1 text-xs leading-relaxed">
+                  <p className="font-bold">僅行程管理者可查看（已自動套用）</p>
+                  <p className="text-sky-800">本行程參與者與系統管理者可查看；訪客與一般使用者不會看到此卡片。</p>
+                </div>
+              </div>
+            )}
+
             <button
               type="button"
               onClick={handleSave}
@@ -516,6 +582,53 @@ export const OtherInfoPage = ({
               <Save size={16} />
               {isSaving ? "儲存中..." : "儲存"}
             </button>
+          </div>
+        </div>
+      )}
+
+      {isSensitiveSaveConfirmationOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 px-4"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              setIsSensitiveSaveConfirmationOpen(false);
+            }
+          }}
+        >
+          <div
+            className="w-full max-w-md rounded-xl border border-amber-200 bg-white p-5 shadow-2xl"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="sensitive-save-confirmation-title"
+          >
+            <div className="mb-3 flex items-start gap-3">
+              <LockKeyhole className="mt-0.5 shrink-0 text-amber-600" size={20} />
+              <div>
+                <h3 id="sensitive-save-confirmation-title" className="text-base font-bold text-slate-900">
+                  確認儲存敏感資料
+                </h3>
+                <p className="mt-1 text-xs leading-relaxed text-slate-600">
+                  訂房編號、訂位代碼、租車確認碼、私人電話、個資或受限文件連結，請設為「僅行程管理者可查看」。一般公開網路連結可視為非敏感；固定帳號保護的雲端文件仍屬敏感內容。
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setIsSensitiveSaveConfirmationOpen(false)}
+                className="flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50"
+              >
+                返回修改
+              </button>
+              <button
+                type="button"
+                onClick={() => void confirmSensitiveSave()}
+                className="flex-1 rounded-lg bg-stone-900 px-3 py-2 text-sm font-bold text-white hover:bg-stone-700"
+              >
+                確認儲存
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -565,6 +678,12 @@ export const OtherInfoPage = ({
                       item.title
                     )}
                   </h4>
+                  {isSensitiveItem(item) && (
+                    <span className="mt-0.5 inline-flex items-center gap-1 rounded-md bg-sky-50 px-1.5 py-0.5 text-[11px] font-semibold text-sky-700" title="僅行程管理者可查看">
+                      <LockKeyhole size={12} aria-hidden="true" />
+                      僅行程管理者可查看
+                    </span>
+                  )}
                 </div>
 
                 {canEdit && isManageMode && (

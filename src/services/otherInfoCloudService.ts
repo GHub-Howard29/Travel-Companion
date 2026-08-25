@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { OtherInfoItem } from "../types";
-import type { Role } from "../permissions/roles";
+import { normalizeOtherInfoAllowedRoles, type Role } from "../permissions/roles";
 
 interface CloudOtherInfoItemRow {
   id: string;
@@ -32,7 +32,7 @@ const toAllowedRoles = (value: unknown): Role[] | undefined => {
     typeof item === "string" && VALID_ROLES.has(item as Role),
   );
 
-  return roles.length > 0 ? roles : undefined;
+  return normalizeOtherInfoAllowedRoles(roles);
 };
 
 const toCloudAllowedRoles = (
@@ -44,7 +44,7 @@ const toCloudAllowedRoles = (
 
   const normalizedRoles = roles.filter((role) => VALID_ROLES.has(role));
 
-  return normalizedRoles.length > 0 ? normalizedRoles : null;
+  return normalizeOtherInfoAllowedRoles(normalizedRoles) ?? null;
 };
 
 const toOtherInfoItem = (row: CloudOtherInfoItemRow): OtherInfoItem => {

@@ -1,11 +1,13 @@
 import { useCallback, useState } from "react";
 
 import type { OtherInfoItem } from "../types";
+import { isRestrictedOtherInfoRoles } from "../permissions/roles";
 
 export interface OtherInfoFormState {
   folderId: string;
   title: string;
   content: string;
+  isSensitive: boolean;
 }
 
 export const createEmptyOtherInfoForm = (
@@ -14,7 +16,11 @@ export const createEmptyOtherInfoForm = (
   folderId,
   title: "",
   content: "",
+  isSensitive: false,
 });
+
+const isSensitiveItem = (item: OtherInfoItem): boolean =>
+  isRestrictedOtherInfoRoles(item.allowedRoles);
 
 export const useOtherInfoForm = (initialFolderId: string) => {
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
@@ -41,6 +47,7 @@ export const useOtherInfoForm = (initialFolderId: string) => {
       folderId: item.folderId,
       title: item.title,
       content: item.content,
+      isSensitive: isSensitiveItem(item),
     });
     setIsFormOpen(true);
   }, []);

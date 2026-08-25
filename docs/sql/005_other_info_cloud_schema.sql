@@ -54,7 +54,7 @@ create table if not exists public.other_info_items (
   deleted_at timestamptz null,
   constraint other_info_items_allowed_roles_check check (
     allowed_roles is null
-    or allowed_roles <@ array['guest', 'user', 'trip_editor', 'super_admin']::text[]
+    or allowed_roles = array['trip_editor', 'super_admin']::text[]
   )
 );
 
