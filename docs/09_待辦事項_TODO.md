@@ -4,18 +4,23 @@
 >
 > 最後更新：2026-08-25
 >
-> 已發布版本：V3.4.11；目前待發布版本：V3.5.0（候選內容已整理，migration 已套用，待實機驗證）。
+> 已發布版本：V3.4.11；目前待發布版本：V3.5.0（候選內容已整理，migration 已套用，發布前功能與安全驗證已完成；PWA／iOS 實機驗證列發布後）。
 
-## V3.5.0 iOS PWA 與敏感資訊可見範圍強化（發布前不含 iOS 實機驗證）
+## V3.5.0 iOS PWA 與敏感資訊可見範圍強化（發布前不含 PWA 實機驗證）
 
-### 發布前實機驗證（Android／Chrome PWA）
+### 發布前驗證（同步、權限與離線佇列）
+
+- [x] `haw1971.yahoo@gmail.com` 已完成一般其他資訊、購物卡片及領隊／導遊聯絡資訊同步；同步失敗時可按手動重試。
+- [x] 另一台管理者裝置新增其他資訊後，原裝置可重新載入；共同／私人同步不受影響。
+- [x] `trip_editor` 欄位與刪除權限、`super_admin` 管理權限及敏感卡片可見範圍已完成角色回歸。
+- [x] 離線資料與同步佇列已完成驗證，資料可保留於本機並於連線後同步。
+
+### 發布後補驗證（Android／Chrome PWA）
 
 - [ ] Android 維持 V3.4.11 原生 Splash 流程，確認沒有重複圖示或順序改變。
 - [ ] Android PWA 管理／編輯欄位聚焦、關閉後維持正常寬度，不左右溢出；一般縮放仍可使用。
-- [ ] `haw1971.yahoo@gmail.com` 回歸一般其他資訊、購物卡片及領隊／導遊聯絡資訊同步，失敗時可按手動重試。
-- [ ] 另一台管理者裝置新增其他資訊後，原裝置可重新載入；共同／私人同步不受影響。
-- [ ] `trip_editor` 欄位與刪除權限、`super_admin` 管理權限及敏感卡片可見範圍完成角色回歸。
 - [ ] App 分享入口、固定首頁連結、原生分享目標與上下滑動清單完成 Android／Chrome 驗證。
+- [ ] 以 V3.4.11 作為基準升級至 V3.5.0，確認強制更新只需按一次、更新後非空白頁、提示不可稍後、資料仍在，未儲存表單警語正常。
 
 #### 實機驗證項目 2、3 的修改邊界
 
@@ -35,9 +40,9 @@
 - [x] 沿用 `allowed_roles`，完成前端過濾、RLS migration、Data API 方案、複製／排序／編輯保留權限的程式補全。
 - [x] 卡片改為限制後，未授權帳號成功刷新時移除舊快取；登出後不沿用管理者敏感快取。
 - [x] 敏感快捷入口加入全中文自動套用文案，並在儲存敏感資料時顯示二次提醒。
-- [x] 已套用 `docs/sql/013_v350_other_info_security_scheme.sql`（migration `20260825082245`）；角色回歸仍待實機完成。
-- [x] 已套用 `docs/sql/014_other_info_sync_deleted_rows.sql`（migration `20260825082258`）；管理者帳號的其他資訊／領隊導遊同步與手動重試仍待實機回歸。
-- [ ] 以 `trip_editor` 回歸：參與者與登入 Email 欄位不可編輯、不可刪除整個旅程；其他旅程編輯功能維持可用。
+- [x] 已套用 `docs/sql/013_v350_other_info_security_scheme.sql`（migration `20260825082245`）；角色回歸已通過。
+- [x] 已套用 `docs/sql/014_other_info_sync_deleted_rows.sql`（migration `20260825082258`）；管理者帳號的其他資訊／領隊導遊同步與手動重試已通過。
+- [x] `trip_editor` 參與者與登入 Email 欄位不可編輯、不可刪除整個旅程；其他旅程編輯功能維持可用。
 
 ### V3.5.0 納入 V3.4.11 BUG024 修正
 
@@ -45,18 +50,14 @@
 - [x] `trip_editor` 不可修改參與者／登入 Email，也不可刪除整個旅程；`super_admin` 仍保有原管理權限。
 - [x] `docs/sql/014_other_info_sync_deleted_rows.sql` 已加入 V3.5.0 候選發布內容。
 - [x] V3.5.0 候選版採 `FORCE_UPDATE = true`；理由為 RLS／敏感資料快取隔離與同步流程修正需前端及 migration 一起生效。
-- [x] `013`、`014` migration 已套用正式 Supabase 專案；待完成 `haw1971.yahoo@gmail.com` 與 `trip_editor`／`super_admin` 角色回歸。
+- [x] `013`、`014` migration 已套用正式 Supabase 專案；`haw1971.yahoo@gmail.com`、`trip_editor`／`super_admin` 角色回歸已完成。
 - [x] 候選 build 已同步更新 `appVersion.ts`、`public/app-version.json`、`package.json`、`package-lock.json` 與 `versionHistory.ts` 為 V3.5.0；`FORCE_UPDATE = true`。
 
 ### 分享、離線與待確認範圍
 
-- [ ] App 分享只提供原生分享與複製固定首頁網址，不建立單一 Trip 分享連結。
-- [ ] Guest 不提供離線行程內容；登入帳號的離線資料依帳號與權限隔離。
+- [x] 已定案 App 分享只提供原生分享與複製固定首頁網址，不建立單一 Trip 分享連結；實機分享清單列發布後 PWA 驗證。
+- [x] Guest 不提供離線行程內容；登入帳號的離線資料依帳號與權限隔離。
 - [x] 已決定 V3.5.0 候選版的 `FORCE_UPDATE = true`；PWA 舊版升級流程改列發布後補驗證，不作為發布前阻擋項目。
-
-### 發布後補驗證（PWA 更新流程）
-
-- [ ] 以 V3.4.11 作為基準升級至 V3.5.0，確認強制更新只需按一次、更新後非空白頁、提示不可稍後、資料仍在，未儲存表單警語正常。
 
 ### 發布後補驗證（iOS）
 
