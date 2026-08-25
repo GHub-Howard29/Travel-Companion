@@ -5,7 +5,8 @@
     "完成其他資訊敏感資料卡片的角色限制與 Supabase RLS 保護",
     "修正其他資訊同步失敗，並新增手動重新同步按鈕",
     "限制 trip_editor 修改參與者／登入 Email 及刪除整個旅程的權限",
-    "補強 Android／Chrome PWA 更新與資料同步驗證流程"
+    "補強 Android／Chrome PWA 更新與資料同步驗證流程",
+    "修正 PWA 更新接管時序，避免重複點擊與更新後空白頁"
   ],
   "forceUpdate": true
 }

@@ -602,6 +602,31 @@ V3.4.10 的 Android 原生 Splash 與 HTML 等待畫面使用亮藍色，但 App
 
 ---
 
+### BUG025
+
+問題：
+
+使用 `npm run preview` 測試桌面 PWA 更新時，第一次按下強制更新可能沒有完成接管，必須再按一次；重載時若舊版 App shell 仍被重新開啟，頁面可能停在空白畫面。
+
+原因：
+
+- `updateServiceWorker(true)` 的 Promise 只代表已送出 `SKIP_WAITING` 訊息，不代表新版 Service Worker 已接管目前頁面。
+- 原流程在按鈕事件中先隱藏更新提示並寫入新版號，接管失敗時會失去可重試的更新入口。
+- 頁面若在 `controllerchange` 之前重載，可能取得舊版 `index.html` 與新版快取尚未完成的資源組合，造成空白頁。
+
+修正方式：
+
+- 在送出 `SKIP_WAITING` 前先監聽瀏覽器 `controllerchange`，只有確認新版 Service Worker 接管後才關閉提示並重新載入。
+- 若第一次接管事件遺失，自動重送一次更新訊息；使用者不需重複按強制更新。
+- 更新未完成或發生例外時保留強制更新提示，不提前寫入已更新版本，避免失去復原入口。
+- 保留 Workbox `onNeedReload` 作為非按鈕流程的安全備援，並以單次重載防護避免重複 reload。
+
+狀態：
+
+✅ 已併入 V3.5.0 候選版；`npm run build`、ESLint 與 `git diff --check` 已通過，需在桌面 PWA 實機完成舊版升級至 V3.5.0 的單次按鈕與更新後非空白驗證。
+
+---
+
 ## Bug 管理原則
 
 每個 Bug 皆記錄：
@@ -618,4 +643,4 @@ V3.4.10 的 Android 原生 Splash 與 HTML 等待畫面使用亮藍色，但 App
 
 最後更新：2026/08/25
 
-目前已發布版本：V3.4.11；目前待發布版本：V3.5.0（BUG024 已納入候選內容）
+目前已發布版本：V3.4.11；目前待發布版本：V3.5.0（BUG024、BUG025 已納入候選內容）

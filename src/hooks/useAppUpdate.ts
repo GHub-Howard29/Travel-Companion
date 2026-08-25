@@ -96,6 +96,54 @@ const reloadPage = () => {
   window.location.reload();
 };
 
+const waitForServiceWorkerControl = (
+  previousController: ServiceWorker | null,
+  timeoutMs = 8000,
+) => {
+  if (!("serviceWorker" in navigator)) {
+    return Promise.resolve(false);
+  }
+
+  return new Promise<boolean>((resolve) => {
+    let settled = false;
+    let timeoutId: number | null = null;
+
+    const finish = (controlled: boolean) => {
+      if (settled) return;
+      settled = true;
+      if (timeoutId !== null) {
+        window.clearTimeout(timeoutId);
+      }
+      navigator.serviceWorker.removeEventListener(
+        "controllerchange",
+        handleControllerChange,
+      );
+      resolve(controlled);
+    };
+
+    const handleControllerChange = () => {
+      const nextController = navigator.serviceWorker.controller;
+      finish(Boolean(nextController && nextController !== previousController));
+    };
+
+    navigator.serviceWorker.addEventListener(
+      "controllerchange",
+      handleControllerChange,
+    );
+
+    const currentController = navigator.serviceWorker.controller;
+    if (currentController && currentController !== previousController) {
+      finish(true);
+      return;
+    }
+
+    timeoutId = window.setTimeout(() => {
+      const current = navigator.serviceWorker.controller;
+      finish(Boolean(current && current !== previousController));
+    }, timeoutMs);
+  });
+};
+
 export const useAppUpdate = () => {
   const [{ canShowUpdatePrompt }] = useState(getRuntimeDisplayMode);
   const [updateAvailable, setUpdateAvailable] = useState(false);
@@ -124,16 +172,11 @@ export const useAppUpdate = () => {
   const updateServiceWorkerRef = useRef<UpdateServiceWorker | null>(null);
   const updateInProgressRef = useRef(false);
   const reloadStartedRef = useRef(false);
-  const fallbackReloadTimerRef = useRef<number | null>(null);
 
   const reloadOnce = useCallback(() => {
     if (reloadStartedRef.current) return;
 
     reloadStartedRef.current = true;
-    if (fallbackReloadTimerRef.current !== null) {
-      window.clearTimeout(fallbackReloadTimerRef.current);
-      fallbackReloadTimerRef.current = null;
-    }
     reloadPage();
   }, []);
 
@@ -153,9 +196,14 @@ export const useAppUpdate = () => {
           setUpdateAvailable(true);
         }
       },
-      // Wait until the new worker controls this page. Reloading immediately
-      // after SKIP_WAITING can reopen the old shell and repeat the prompt.
-      onNeedReload: reloadOnce,
+      // The update handler below waits for controllerchange before reloading.
+      // Keep this callback as a safety net for Workbox events that arrive
+      // outside the button flow, without racing an update already in progress.
+      onNeedReload: () => {
+        if (!updateInProgressRef.current) {
+          reloadOnce();
+        }
+      },
       onRegisterError(error: unknown) {
         console.warn("PWA Service Worker registration failed.", error);
       },
@@ -166,29 +214,58 @@ export const useAppUpdate = () => {
     if (updateInProgressRef.current) return;
     updateInProgressRef.current = true;
 
-    setStoredAppVersion(latestMetadata.version);
-    setCurrentVersion(latestMetadata.version);
-    setReleaseNoticeVisible(false);
-    setUpdateAvailable(false);
-
     if (updateAvailable) {
-      // Android WebView can occasionally miss Workbox's controlling event.
-      // Keep one delayed fallback without racing the normal takeover flow.
-      fallbackReloadTimerRef.current = window.setTimeout(reloadOnce, 8000);
       try {
         const updateServiceWorker = updateServiceWorkerRef.current;
         if (!updateServiceWorker) {
-          reloadOnce();
-          return;
+          throw new Error("Service Worker update handler is not ready.");
         }
+
+        // Register the browser-level listener before sending SKIP_WAITING.
+        // The Workbox promise resolves when the message is sent, not when the
+        // new worker controls the page. Reloading earlier can reopen the old
+        // shell, show the prompt twice, or leave the PWA on a blank page.
+        const previousController = navigator.serviceWorker?.controller ?? null;
+        const controlPromise = waitForServiceWorkerControl(previousController);
         await updateServiceWorker(true);
+
+        let controlled = await controlPromise;
+
+        // A few Chromium/PWA builds occasionally miss the first controller
+        // transition. Re-send the same idempotent message once so one button
+        // click still completes the update instead of requiring a second click.
+        if (!controlled) {
+          const retryControlPromise =
+            waitForServiceWorkerControl(navigator.serviceWorker?.controller ?? null);
+          await updateServiceWorker(true);
+          controlled = await retryControlPromise;
+        }
+
+        if (!controlled) {
+          throw new Error("新版 Service Worker 尚未接管目前頁面。");
+        }
+
+        setStoredAppVersion(latestMetadata.version);
+        setCurrentVersion(latestMetadata.version);
+        setReleaseNoticeVisible(false);
+        setUpdateAvailable(false);
+        updateInProgressRef.current = false;
+        reloadOnce();
       } catch (error) {
         console.warn("PWA Service Worker update failed.", error);
-        reloadOnce();
+        // Keep the forced-update prompt visible so a transient registration
+        // failure does not hide the only recovery action or mark the version
+        // as already updated before the new bundle is running.
+        updateInProgressRef.current = false;
       }
       return;
     }
 
+    setStoredAppVersion(latestMetadata.version);
+    setCurrentVersion(latestMetadata.version);
+    setReleaseNoticeVisible(false);
+    setUpdateAvailable(false);
+    updateInProgressRef.current = false;
     reloadOnce();
   }, [latestMetadata.version, reloadOnce, updateAvailable]);
 
