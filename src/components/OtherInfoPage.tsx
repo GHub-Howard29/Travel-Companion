@@ -10,6 +10,7 @@ import {
   LockKeyhole,
   Pencil,
   Plus,
+  RefreshCw,
   Save,
   Settings2,
   Trash2,
@@ -52,6 +53,7 @@ interface OtherInfoPageProps {
   isSpecialInfoPage?: boolean;
   specialFolderId?: string;
   syncStatus?: OtherInfoSyncStatus | "syncing" | null;
+  onRetrySync?: () => void;
 }
 
 const renderContentWithLinks = (content: string) => {
@@ -96,6 +98,7 @@ export const OtherInfoPage = ({
   isSpecialInfoPage = false,
   specialFolderId,
   syncStatus,
+  onRetrySync,
 }: OtherInfoPageProps) => {
   const folders = useMemo<Folder[]>(() => getFolders(tripId), [tripId]);
   const initialFolderId =
@@ -410,11 +413,26 @@ export const OtherInfoPage = ({
               : "border-amber-200 bg-amber-50 text-amber-800"
           }`}
         >
-          {syncStatus === "syncing"
-            ? "同步中…"
-            : syncStatus === "failed"
-              ? "同步失敗，資料已保存在本機，連線恢復後會自動重試。"
-              : "已儲存於本機，待連線同步。"}
+          <div className="flex items-center justify-between gap-3">
+            <span>
+              {syncStatus === "syncing"
+                ? "同步中…"
+                : syncStatus === "failed"
+                  ? "同步失敗，資料已保存在本機，連線恢復後會自動重試。"
+                  : "已儲存於本機，待連線同步。"}
+            </span>
+            {syncStatus === "failed" && onRetrySync && (
+              <button
+                type="button"
+                onClick={onRetrySync}
+                className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-rose-700 transition-colors hover:bg-rose-100"
+                aria-label="手動重新同步"
+                title="手動重新同步"
+              >
+                <RefreshCw size={16} />
+              </button>
+            )}
+          </div>
         </div>
       )}
 

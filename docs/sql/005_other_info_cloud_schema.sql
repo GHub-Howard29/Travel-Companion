@@ -109,7 +109,7 @@ create policy other_info_items_select_policy
 on public.other_info_items
 for select
 using (
-  deleted_at is null
+  (deleted_at is null or public.tc_can_edit_other_info(trip_id))
   and (
     allowed_roles is null
     or cardinality(allowed_roles) = 0

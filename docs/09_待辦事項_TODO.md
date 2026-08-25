@@ -34,6 +34,8 @@
 - [x] 卡片改為限制後，未授權帳號成功刷新時移除舊快取；登出後不沿用管理者敏感快取。
 - [x] 敏感快捷入口加入全中文自動套用文案，並在儲存敏感資料時顯示二次提醒。
 - [ ] 執行 `docs/sql/013_v350_other_info_security_scheme.sql`，完成 Supabase 角色回歸與 Data API 驗證。
+- [ ] 執行 `docs/sql/014_other_info_sync_deleted_rows.sql`，以管理者帳號回歸其他資訊／領隊導遊同步與手動重試。
+- [ ] 以 `trip_editor` 回歸：參與者與登入 Email 欄位不可編輯、不可刪除整個旅程；其他旅程編輯功能維持可用。
 
 ### 分享、離線與待確認範圍
 

@@ -26,6 +26,7 @@ V3.5.0 維持現行 Trip 瀏覽與角色制度，不新增 Trip 公開／私人�
 7. 登出及切換帳號後，不得讀取前一管理者的敏感卡片快取。
 8. 一般資訊儲存不顯示二次提醒；敏感資料按下儲存後才顯示二次提醒，提醒文案不出現在編輯畫面。
 9. 直接呼叫 Data API 驗證 RLS，前端隱藏不得作為唯一保護。
+10. 執行 `docs/sql/014_other_info_sync_deleted_rows.sql` 後，管理者可重新同步既有卡片；同步失敗時按下紅色提示右側的圓形雙箭頭按鈕，狀態應回到同步中並完成重試。
 
 ### C. PWA 實機驗收
 
@@ -246,12 +247,14 @@ docs/sql/004_trip_cloud_validation.sql
 3. 點選「編輯旅程」。
 4. 修改旅程名稱或天數。
 5. 確認可編輯者 Email 欄位為鎖定狀態。
+6. 確認「參與者與登入 Email」欄位為鎖定狀態，且畫面沒有「刪除整個旅程」按鈕。
 6. 儲存。
 
 預期結果：
 
 - `trip_editor` 可編輯旅程基本資料。
 - `trip_editor` 不可管理可編輯者 Email。
+- `trip_editor` 不可修改參與者與登入 Email，也不可刪除整個旅程；其餘旅程編輯功能維持可用。
 - Supabase `trips` row 更新。
 - Supabase `admin_users` 不會被 `trip_editor` 修改。
 
@@ -335,6 +338,7 @@ Trip 管理第一階段可視為完成，需同時符合：
 - Guest 可瀏覽旅程。
 - `super_admin` 可新增旅程。
 - `super_admin` 可管理可編輯者 Email。
+- `super_admin` 可修改參與者與登入 Email，並可刪除整個旅程。
 - `trip_editor` 可編輯被指派旅程。
 - 未被指派的一般登入使用者不可編輯共享旅程。
 - `npm run lint` 通過。

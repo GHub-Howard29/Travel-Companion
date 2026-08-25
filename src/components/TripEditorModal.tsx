@@ -157,8 +157,10 @@ export const TripEditorModal = ({
     if (!title.trim() || !departureDate || dayCount < 1) return;
 
     const participantRows = parseParticipantAssignments(participantAssignments);
-    const nextParticipants = participantRows.map((row) => row.participant);
-    if (nextParticipants.length === 0) {
+    const nextParticipants = canManageEditors
+      ? participantRows.map((row) => row.participant)
+      : trip?.participants ?? [];
+    if (canManageEditors && nextParticipants.length === 0) {
       const message = "請至少輸入一位參與者後再儲存。";
       setFormError(message);
       alert(message);
@@ -175,30 +177,32 @@ export const TripEditorModal = ({
       (participant, index) => nextParticipants.indexOf(participant) !== index,
     );
 
-    if (invalidParticipantRows.length > 0) {
+    if (canManageEditors && invalidParticipantRows.length > 0) {
       const message = `請用「名稱=Email」格式填寫參與者，例如 Howard=howard@example.com。格式不完整：${invalidParticipantRows.map((row) => row.raw).join("、")}。`;
       setFormError(message);
       alert(message);
       return;
     }
 
-    if (invalidParticipantEmails.length > 0) {
+    if (canManageEditors && invalidParticipantEmails.length > 0) {
       const message = `以下參與者的 Email 格式不正確：${invalidParticipantEmails.map((row) => row.participant).join("、")}。`;
       setFormError(message);
       alert(message);
       return;
     }
 
-    if (duplicatedParticipants.length > 0) {
+    if (canManageEditors && duplicatedParticipants.length > 0) {
       const message = `參與者名稱不可重複：${Array.from(new Set(duplicatedParticipants)).join("、")}。`;
       setFormError(message);
       alert(message);
       return;
     }
 
-    const participantEmailMap = Object.fromEntries(
-      participantRows.map((row) => [row.participant, row.email]),
-    );
+    const participantEmailMap = canManageEditors
+      ? Object.fromEntries(
+          participantRows.map((row) => [row.participant, row.email]),
+        )
+      : trip?.participantEmailMap ?? tripDetail?.content.participantEmailMap ?? {};
 
     const nextEditorEmails = splitLines(editorEmailText).map((email) =>
       email.toLowerCase(),
@@ -235,7 +239,7 @@ export const TripEditorModal = ({
   };
 
   const handleDelete = async () => {
-    if (mode !== "edit" || !trip || !onDelete) return;
+    if (mode !== "edit" || !trip || !onDelete || !canManageEditors) return;
 
     const firstConfirm = confirm(`確定要刪除「${trip.title}」整個旅程？`);
     if (!firstConfirm) return;
@@ -335,13 +339,15 @@ export const TripEditorModal = ({
           <p className="mt-1 text-xs leading-relaxed text-slate-400">
             每行填寫「名稱=Email」。左邊名稱會顯示在記帳本付款人，右邊 Email
             用於預設登入者的付款人名稱；記帳時仍可改選其他參與者代為記帳。新增旅程時會先帶入目前登入 Email。
+            {!canManageEditors && " 參與者與登入 Email 僅限系統管理者編輯。"}
           </p>
           <textarea
             value={participantAssignments}
             onChange={(event) => setParticipantAssignments(event.target.value)}
+            disabled={!canManageEditors}
             rows={3}
             placeholder="Howard=howard@example.com&#10;Carol=carol@example.com"
-            className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:bg-slate-100 disabled:text-slate-500"
             required
           />
         </label>
@@ -396,7 +402,7 @@ export const TripEditorModal = ({
           {isSaving ? "儲存中..." : "儲存旅程"}
         </button>
 
-        {mode === "edit" && onDelete && (
+        {mode === "edit" && onDelete && canManageEditors && (
           <div className="border-t border-slate-100 pt-3">
             <button
               type="button"
