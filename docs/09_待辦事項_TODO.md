@@ -4,7 +4,7 @@
 >
 > 最後更新：2026-08-25
 >
-> 已發布版本：V3.4.11；目前待發布版本：V3.5.0（候選內容已整理，待 migration／實機驗證）。
+> 已發布版本：V3.4.11；目前待發布版本：V3.5.0（候選內容已整理，migration 已套用，待實機驗證）。
 
 ## V3.5.0 iOS PWA 與敏感資訊可見範圍強化
 
@@ -33,8 +33,8 @@
 - [x] 沿用 `allowed_roles`，完成前端過濾、RLS migration、Data API 方案、複製／排序／編輯保留權限的程式補全。
 - [x] 卡片改為限制後，未授權帳號成功刷新時移除舊快取；登出後不沿用管理者敏感快取。
 - [x] 敏感快捷入口加入全中文自動套用文案，並在儲存敏感資料時顯示二次提醒。
-- [ ] 執行 `docs/sql/013_v350_other_info_security_scheme.sql`，完成 Supabase 角色回歸與 Data API 驗證。
-- [ ] 執行 `docs/sql/014_other_info_sync_deleted_rows.sql`，以管理者帳號回歸其他資訊／領隊導遊同步與手動重試。
+- [x] 已套用 `docs/sql/013_v350_other_info_security_scheme.sql`（migration `20260825082245`）；角色回歸仍待實機完成。
+- [x] 已套用 `docs/sql/014_other_info_sync_deleted_rows.sql`（migration `20260825082258`）；管理者帳號的其他資訊／領隊導遊同步與手動重試仍待實機回歸。
 - [ ] 以 `trip_editor` 回歸：參與者與登入 Email 欄位不可編輯、不可刪除整個旅程；其他旅程編輯功能維持可用。
 
 ### V3.5.0 納入 V3.4.11 BUG024 修正
@@ -43,7 +43,7 @@
 - [x] `trip_editor` 不可修改參與者／登入 Email，也不可刪除整個旅程；`super_admin` 仍保有原管理權限。
 - [x] `docs/sql/014_other_info_sync_deleted_rows.sql` 已加入 V3.5.0 候選發布內容。
 - [x] V3.5.0 候選版採 `FORCE_UPDATE = true`；理由為 RLS／敏感資料快取隔離與同步流程修正需前端及 migration 一起生效。
-- [ ] 正式發布前執行 `013`、`014` migration，完成 `haw1971.yahoo@gmail.com` 與 `trip_editor`／`super_admin` 角色回歸。
+- [x] `013`、`014` migration 已套用正式 Supabase 專案；待完成 `haw1971.yahoo@gmail.com` 與 `trip_editor`／`super_admin` 角色回歸。
 - [ ] 正式候選版才更新 `appVersion.ts`、`public/app-version.json`、`package.json` 與 `versionHistory.ts`；目前 V3.4.11 runtime 設定維持 `FORCE_UPDATE = false`。
 
 ### 分享、離線與待確認範圍
