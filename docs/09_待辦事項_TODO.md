@@ -47,7 +47,7 @@
 - [x] `docs/sql/014_other_info_sync_deleted_rows.sql` 已加入 V3.5.0 候選發布內容。
 - [x] V3.5.0 候選版採 `FORCE_UPDATE = true`；理由為 RLS／敏感資料快取隔離與同步流程修正需前端及 migration 一起生效。
 - [x] `013`、`014` migration 已套用正式 Supabase 專案；待完成 `haw1971.yahoo@gmail.com` 與 `trip_editor`／`super_admin` 角色回歸。
-- [ ] 正式候選版才更新 `appVersion.ts`、`public/app-version.json`、`package.json` 與 `versionHistory.ts`；目前 V3.4.11 runtime 設定維持 `FORCE_UPDATE = false`。
+- [x] 候選 build 已同步更新 `appVersion.ts`、`public/app-version.json`、`package.json`、`package-lock.json` 與 `versionHistory.ts` 為 V3.5.0；`FORCE_UPDATE = true`。
 
 ### 分享、離線與待確認範圍
 

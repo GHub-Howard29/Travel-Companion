@@ -1,9 +1,11 @@
 {
-  "version": "3.4.11",
-  "releaseDate": "2026-08-24",
+  "version": "3.5.0",
+  "releaseDate": "2026-08-25",
   "releaseNotes": [
-    "統一 Android 原生啟動畫面、等待畫面與 App 系統資訊列為暖米白色",
-    "保留單次原生圖示並降低啟動階段系統列與底圖的色差"
+    "完成其他資訊敏感資料卡片的角色限制與 Supabase RLS 保護",
+    "修正其他資訊同步失敗，並新增手動重新同步按鈕",
+    "限制 trip_editor 修改參與者／登入 Email 及刪除整個旅程的權限",
+    "補強 Android／Chrome PWA 更新與資料同步驗證流程"
   ],
-  "forceUpdate": false
+  "forceUpdate": true
 }

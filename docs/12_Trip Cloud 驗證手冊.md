@@ -10,7 +10,7 @@
 
 V3.5.0 維持現行 Trip 瀏覽與角色制度，不新增 Trip 公開／私人設定或 `is_public` migration。相關模擬圖已經 Product Owner 確認，本手冊用於程式補全後的 migration 與角色驗證。
 
-V3.5.0 候選內容已納入 V3.4.11 BUG024 的其他資訊同步修正與行程管理權限修正；候選發布採 `FORCE_UPDATE = true`。`013`／`014` migration 已套用正式 Supabase 專案，目前 V3.4.11 執行中的 runtime 設定仍為 `FORCE_UPDATE = false`，不得在尚未升版前直接改動正式版本設定。
+V3.5.0 候選內容已納入 V3.4.11 BUG024 的其他資訊同步修正與行程管理權限修正；候選 build 已使用 `APP_VERSION = 3.5.0` 與 `FORCE_UPDATE = true`。`013`／`014` migration 已套用正式 Supabase 專案；V3.4.11 是上一個正式發布基準，不得回寫其版本設定。
 
 ### A. 開發前
 

@@ -1,17 +1,19 @@
 /** App 發布版本設定；須與 public/app-version.json 保持一致。 */
-export const APP_VERSION = "3.4.11";
+export const APP_VERSION = "3.5.0";
 
 /**
  * 最近一次已發布版本；此版本必須存在於 versionHistory.ts。
  * production build 會驗證這個規則，避免升版後遺漏版本歷史。
  */
-export const PREVIOUS_RELEASE_VERSION = "3.4.10";
+export const PREVIOUS_RELEASE_VERSION = "3.4.11";
 
-export const RELEASE_DATE = "2026-08-24";
+export const RELEASE_DATE = "2026-08-25";
 
 export const RELEASE_NOTES = [
-  "統一 Android 原生啟動畫面、等待畫面與 App 系統資訊列為暖米白色",
-  "保留單次原生圖示並降低啟動階段系統列與底圖的色差",
+  "完成其他資訊敏感資料卡片的角色限制與 Supabase RLS 保護",
+  "修正其他資訊同步失敗，並新增手動重新同步按鈕",
+  "限制 trip_editor 修改參與者／登入 Email 及刪除整個旅程的權限",
+  "補強 Android／Chrome PWA 更新與資料同步驗證流程",
 ];
 
-export const FORCE_UPDATE = false;
+export const FORCE_UPDATE = true;
