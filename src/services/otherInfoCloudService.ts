@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { OtherInfoItem } from "../types";
-import type { Role } from "../permissions/roles";
+import { normalizeOtherInfoAllowedRoles, type Role } from "../permissions/roles";
 
 interface CloudOtherInfoItemRow {
   id: string;
@@ -32,7 +32,7 @@ const toAllowedRoles = (value: unknown): Role[] | undefined => {
     typeof item === "string" && VALID_ROLES.has(item as Role),
   );
 
-  return roles.length > 0 ? roles : undefined;
+  return normalizeOtherInfoAllowedRoles(roles);
 };
 
 const toCloudAllowedRoles = (
@@ -44,7 +44,7 @@ const toCloudAllowedRoles = (
 
   const normalizedRoles = roles.filter((role) => VALID_ROLES.has(role));
 
-  return normalizedRoles.length > 0 ? normalizedRoles : null;
+  return normalizeOtherInfoAllowedRoles(normalizedRoles) ?? null;
 };
 
 const toOtherInfoItem = (row: CloudOtherInfoItemRow): OtherInfoItem => {
@@ -116,25 +116,28 @@ export const upsertCloudOtherInfoItems = async (
   if (activeRows.length === 0) return true;
 
   for (const row of activeRows) {
-    const { data: existingRow, error: selectError } = await supabase
+    // 先 UPDATE 再 INSERT：UPDATE 可重新啟用同 client_item_id 的軟刪除列，
+    // 不依賴 SELECT 是否會因舊版 RLS 隱藏 deleted_at 列。
+    const { data: updatedRows, error: updateError } = await supabase
       .from("other_info_items")
-      .select("id")
+      .update(row)
       .eq("trip_id", row.trip_id)
       .eq("client_item_id", row.client_item_id)
-      .maybeSingle();
+      .select("id");
 
-    if (selectError) {
-      console.warn("Failed to find cloud other info before sync", selectError);
+    if (updateError) {
+      console.warn("Failed to update cloud other info", updateError);
       return false;
     }
 
-    const request = existingRow
-      ? supabase.from("other_info_items").update(row).eq("id", existingRow.id)
-      : supabase.from("other_info_items").insert(row);
-    const { error } = await request;
+    if ((updatedRows ?? []).length > 0) continue;
 
-    if (error) {
-      console.warn("Failed to sync cloud other info", error);
+    const { error: insertError } = await supabase
+      .from("other_info_items")
+      .insert(row);
+
+    if (insertError) {
+      console.warn("Failed to insert cloud other info", insertError);
       return false;
     }
   }

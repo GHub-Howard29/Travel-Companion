@@ -438,7 +438,15 @@ function ConfiguredApp({
     const canManageEditors = adminProfile?.role === "super_admin";
     const nextInput = canManageEditors
       ? input
-      : { ...input, editorEmails: currentTripEditorEmails };
+      : {
+          ...input,
+          participants: selectedTripMeta?.participants ?? input.participants,
+          participantEmailMap:
+            selectedTripMeta?.participantEmailMap ??
+            currentTrip?.content.participantEmailMap ??
+            input.participantEmailMap,
+          editorEmails: currentTripEditorEmails,
+        };
 
     if (tripEditorMode === "create") {
       await createTrip(nextInput, canManageEditors);
@@ -568,6 +576,11 @@ function ConfiguredApp({
       otherInfoSyncingTripsRef.current.delete(tripId);
     }
   }, [permission.canEditReference, selectedTripId, supabase, userId]);
+
+  const retryOtherInfoSync = useCallback(() => {
+    setOtherInfoSyncStatus("syncing");
+    void syncPendingOtherInfo();
+  }, [syncPendingOtherInfo]);
 
   const handleSaveOtherInfoItems = async (items: OtherInfoItem[]) => {
     if (!currentTrip || isHistoricalOfflineReadOnly) return;
@@ -840,7 +853,11 @@ function ConfiguredApp({
           isOpen={isTripEditorOpen}
           onClose={() => setIsTripEditorOpen(false)}
           onSubmit={handleTripEditorSubmit}
-          onDelete={tripEditorMode === "edit" ? handleTripDelete : undefined}
+          onDelete={
+            tripEditorMode === "edit" && adminProfile?.role === ROLE.SUPER_ADMIN
+              ? handleTripDelete
+              : undefined
+          }
         />
         </Suspense>
       )}
@@ -943,6 +960,7 @@ function ConfiguredApp({
                 isSpecialInfoPage={isSpecialInfoPage}
                 specialFolderId={specialInfoFolderId}
                 syncStatus={otherInfoSyncStatus}
+                onRetrySync={retryOtherInfoSync}
               />
             )}
 

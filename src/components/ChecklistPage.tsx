@@ -14,6 +14,7 @@ import {
   type PendingSharedChecklistOrder,
 } from "../storage/sharedChecklistSyncStorage";
 import { SortableCard } from "./SortableCard";
+import { releaseFocusedControl } from "../utils/viewportUtils";
 
 interface ChecklistPageProps {
   tripId: string;
@@ -311,6 +312,7 @@ export const ChecklistPage = ({
   };
 
   const closeManageMode = () => {
+    releaseFocusedControl();
     void flushPendingCloudOrder();
     setIsManageMode(false);
     setIsCopyOpen(false);

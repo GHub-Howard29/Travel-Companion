@@ -11,6 +11,11 @@
 // Import
 // ================================
 
+import type { Role } from "../permissions/roles";
+import {
+  isRestrictedOtherInfoRoles,
+  normalizeOtherInfoAllowedRoles,
+} from "../permissions/roles";
 import type { OtherInfoItem } from "../types";
 
 // ================================
@@ -23,6 +28,21 @@ export interface OtherInfoContentSegment {
 }
 
 export type OtherInfoContentLine = OtherInfoContentSegment[];
+
+export const normalizeOtherInfoItem = (item: OtherInfoItem): OtherInfoItem => ({
+  ...item,
+  allowedRoles: normalizeOtherInfoAllowedRoles(item.allowedRoles),
+});
+
+export const normalizeOtherInfoItems = (
+  items: OtherInfoItem[],
+): OtherInfoItem[] => items.map(normalizeOtherInfoItem);
+
+export const isOtherInfoItemVisibleToRole = (
+  item: OtherInfoItem,
+  role: Role,
+): boolean =>
+  !isRestrictedOtherInfoRoles(item.allowedRoles) || item.allowedRoles?.includes(role) === true;
 
 // ================================
 // Constants

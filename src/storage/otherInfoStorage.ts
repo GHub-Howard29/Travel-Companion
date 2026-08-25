@@ -10,6 +10,11 @@
 
 
 import type { OtherInfoItem } from "../types";
+import {
+  isRestrictedOtherInfoRoles,
+  normalizeOtherInfoAllowedRoles,
+  type Role,
+} from "../permissions/roles";
 
 const OTHER_INFO_STORAGE_PREFIX = "travel_companion_other_info";
 
@@ -37,9 +42,20 @@ const isStoredOtherInfoItem = (value: unknown): value is OtherInfoItem => {
     isNumber(item.order) &&
     isString(item.createdAt) &&
     isString(item.updatedAt) &&
+    (item.allowedRoles === undefined ||
+      item.allowedRoles === null ||
+      (Array.isArray(item.allowedRoles) &&
+        item.allowedRoles.every((role) => typeof role === "string"))) &&
     (item.isDeleted === undefined || typeof item.isDeleted === "boolean")
   );
 };
+
+const normalizeStoredOtherInfoItem = (item: OtherInfoItem): OtherInfoItem => ({
+  ...item,
+  allowedRoles: normalizeOtherInfoAllowedRoles(
+    item.allowedRoles as Role[] | undefined,
+  ),
+});
 
 const getOtherInfoStorageKey = (tripId: string): string => {
   return `${OTHER_INFO_STORAGE_PREFIX}_${tripId}`;
@@ -64,7 +80,9 @@ export const readStoredOtherInfoItems = (
       return [];
     }
 
-    return parsedData.filter(isStoredOtherInfoItem);
+    return parsedData
+      .filter(isStoredOtherInfoItem)
+      .map(normalizeStoredOtherInfoItem);
   } catch {
     return [];
   }
@@ -77,7 +95,29 @@ export const writeStoredOtherInfoItems = (
   tripId: string,
   items: OtherInfoItem[],
 ): void => {
-  localStorage.setItem(getOtherInfoStorageKey(tripId), JSON.stringify(items));
+  localStorage.setItem(
+    getOtherInfoStorageKey(tripId),
+    JSON.stringify(items.map(normalizeStoredOtherInfoItem)),
+  );
+};
+
+/**
+ * 未授權帳號成功載入行程後，移除共用本機快取中的敏感卡片。
+ * 管理者重新登入時會由 Supabase RLS 重新取得可見資料。
+ */
+export const removeRestrictedStoredOtherInfoItems = (
+  tripId: string,
+): OtherInfoItem[] => {
+  const items = readStoredOtherInfoItems(tripId);
+  const visibleItems = items.filter(
+    (item) => !isRestrictedOtherInfoRoles(item.allowedRoles),
+  );
+
+  if (visibleItems.length !== items.length) {
+    writeStoredOtherInfoItems(tripId, visibleItems);
+  }
+
+  return visibleItems;
 };
 
 /**

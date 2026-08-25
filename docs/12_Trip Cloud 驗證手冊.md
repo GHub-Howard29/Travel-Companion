@@ -2,42 +2,62 @@
 
 > Travel Companion V3-1
 >
-> 最後更新：2026-08-23
+> 最後更新：2026-08-25
 
 ---
 
-## V3.5.0 Trip 公開／私人驗證（完整安全發布）
+## V3.5.0 敏感資訊卡片權限驗證（已通過；PWA／iOS 實機列發布後）
 
-V3.5.0 是單一完整發布：同版前端、`is_public` migration、RLS、快取隔離與靜態 Trip 移除必須一起驗證。既有 Trip 僅在本版 migration 中一次性轉為私人；不可先以公開資料狀態發布，再在後續版本改寫。
+V3.5.0 維持現行 Trip 瀏覽與角色制度，不新增 Trip 公開／私人設定或 `is_public` migration。相關模擬圖已經 Product Owner 確認，本手冊用於程式補全後的 migration 與角色驗證。
 
-### A. 正式環境變更前
+V3.5.0 候選內容已納入 V3.4.11 BUG024 的其他資訊同步修正與行程管理權限修正；候選 build 已使用 `APP_VERSION = 3.5.0` 與 `FORCE_UPDATE = true`。`013`／`014` migration 已套用正式 Supabase 專案，角色、同步與離線佇列驗證已通過；V3.4.11 是上一個正式發布基準，不得回寫其版本設定。
 
-1. 在隔離／測試環境以候選 migration 演練：至少有一筆公開 Trip、一筆 `trip_editor` 私人 Trip、一筆未被指派的私人 Trip，並建立對應的 Checklist、Other Info 與快取測試資料。
-2. 以 Guest、`trip_editor`、`super_admin` 三種身分完成本節所有 REST、UI、快取與離線測試。
-3. 以 production build 確認產物沒有 `dist/trips/` 或舊 Trip detail JSON；不得只以 Vite 開發伺服器的 SPA fallback 判斷靜態網址是否移除。
-4. 對正式環境建立 Trip 匯出、筆數與 ID 清單，並記錄執行人與時間。備份僅用於災難復原，不用來覆寫已套用 migration 或已發布版本的歷程。
-5. 確認候選前端在 `is_public` 欄位尚不存在時會顯示安全唯讀／升級狀態，不會讓管理者儲存必然失敗的公開設定。
+### A. 開發前
 
-### B. 維護窗口
+1. 確認新增／編輯卡片模擬圖預設為一般資訊，並包含「新增敏感資料」快捷入口與管理者限定標示；一般資訊不顯示可見範圍選項。
+2. 確認 App 分享入口模擬圖與確切位置；分享只使用固定 App 首頁，不建立單一 Trip 網址。
 
-1. 先部署 V3.5.0 候選前端，確認舊 `public/trips/` 靜態網址已無法取得資料。
-2. 在同一窗口立即套用已審核的 V3.5.0 migration；既有 Trip 全數設為私人。
-3. migration 成功後重新載入 App，確認公開／私人設定介面解除唯讀，且僅 `super_admin` 可儲存狀態變更。
-4. 在本節 C 驗收全數通過前，V3.5.0 僅是正式環境候選版，不得標示為已發布或回寫版本更新紀錄。
+### B. 卡片權限驗收
 
-### C. 正式環境驗收
+1. Guest、User 可讀一般資訊（`allowed_roles is null`）卡片，不可從 UI 或 REST 取得敏感卡片。
+2. 目前 Trip 被指派的 `trip_editor` 與 `super_admin` 可讀取及管理兩種卡片。
+3. 其他 Trip 的 `trip_editor` 在目標 Trip 視為 User，不可取得管理者限定卡片。
+4. 未授權角色不顯示受限制卡片、數量或存在提示；資料夾內其他一般卡片正常顯示。
+5. 新增一般資訊與新增敏感資料快捷入口後，`allowed_roles` 分別保持為 `null` 與 `['trip_editor', 'super_admin']`；編輯、複製、排序、同步及重新載入後，模式保持不變。
+6. 卡片從所有人可看改為僅管理者可看後，Guest／User 下一次成功刷新時清除舊快取。
+7. 登出及切換帳號後，不得讀取前一管理者的敏感卡片快取。
+8. 一般資訊儲存不顯示二次提醒；敏感資料按下儲存後才顯示二次提醒，提醒文案不出現在編輯畫面。
+9. 直接呼叫 Data API 驗證 RLS，前端隱藏不得作為唯一保護。
+10. 確認 `docs/sql/014_other_info_sync_deleted_rows.sql` 已套用後，管理者可重新同步既有卡片；同步失敗時按下紅色提示右側的圓形雙箭頭按鈕，狀態應回到同步中並完成重試。
 
-必測情境：
+### B-1. V3.5.0 同步 BUG 回歸（已通過）
 
-1. Guest：REST 只能列出 `is_public = true` 的 Trip；本版既有 Trip 全數私人時，結果必須為空。
-2. Guest：直接開啟舊 `trips/list.json` 與任一舊 detail JSON，均須為 `404`，不可有資料內容。
-3. `trip_editor`：可讀取自己被指派的私人 Trip，不可列出或讀取其他私人 Trip，也不可變更 `is_public`。
-4. `super_admin`：可讀取全部 Trip；新 Trip 預設私人；轉公開時 App 顯示個資警告並要求確認。
-5. 快取：公開轉私人後，Guest 與失去權限帳號在下一次成功連線刷新、重開或回到前景時不再看到該 Trip；仍有權限帳號可離線讀取自己的私人快取。
-6. 限制確認：先前已下載的公開資料無法遠端收回；轉公開警告須明確說明此限制。
-7. 附屬 REST endpoint：Guest 與未被指派帳號無法透過 `checklists`、`checklist_items` 或 `other_info_items` 讀取私人 Trip 內容。
-8. 權限變更：`trip_editor` 嘗試以 REST 修改 `is_public` 必須失敗；`super_admin` 的合法狀態切換必須成功，並在下一次授權刷新收斂快取。
-9. 完成所有情境後，才可將 V3.5.0 標示為已發布並由 Product Owner 決定是否啟用強制更新。若任一項失敗，只可用新的向前修復 migration／新版程式處理，不覆寫已套用 migration 或已發布紀錄。
+1. 以 `haw1971.yahoo@gmail.com` 登入，修改一般其他資訊購物卡片並儲存。
+2. 進入領隊／導遊聯絡資訊，新增或修改一筆資料並儲存。
+3. 於同步失敗提示按下手動重新同步按鈕，確認狀態回到同步中，成功後提示消失。
+4. 於另一台管理者裝置新增其他資訊，確認原裝置可重新載入資料。
+5. 以 `trip_editor` 回歸：參與者／登入 Email 為鎖定、沒有刪除整個旅程按鈕；其他旅程編輯功能仍可用。
+
+### B-2. V3.5.0 強制更新設定確認（已通過）
+
+1. `appVersion.ts`、`public/app-version.json` 與發布 metadata 的版本均為 V3.5.0，且 `forceUpdate` 為 `true`。
+2. 確認 V3.5.0 的更新提示設定為不可關閉或選擇「稍後更新」。
+3. 更新提示需說明本次敏感資訊 RLS、同步修正與權限修正；已儲存資料不被清除，未儲存表單需先儲存。
+4. migration 與角色回歸完成後，才能將 V3.5.0 標示為已發布；PWA 舊版升級流程改列發布後補驗證。
+
+### C. 發布後補驗證（Android／Chrome PWA）
+
+1. Android 維持 V3.4.11 的單次原生 Splash 圖示，不得新增第二張圖示或改變載入順序。
+2. Android 管理／編輯欄位聚焦與關閉後，畫面維持正常寬度，不左右溢出；一般縮放能力仍保留。
+3. 電腦 PWA 啟動時可短暫顯示米白底並正常進入 App，不得持續停在空白頁。
+4. 以 V3.4.11 作為基準升級至 V3.5.0，確認強制更新只需按一次且更新後不是空白頁；更新後已儲存資料仍在，未儲存表單警語正常。
+5. App 分享入口、固定首頁連結、原生分享目標與上下滑動清單完成 Android／Chrome 驗證。
+
+### D. 發布後補驗證（iOS）
+
+1. iOS standalone PWA 啟動時顯示專案圖示，HTML 載入階段不得只有純色底圖。
+2. iOS 聚焦與退出行程、清單、其他資訊及旅程管理後，畫面維持正常寬度，不需兩指縮小且不能左右移動。
+3. iOS Safari／standalone 回歸 Google 登入、附件、更新提示、同步與分享功能。
 
 ---
 
@@ -251,12 +271,14 @@ docs/sql/004_trip_cloud_validation.sql
 3. 點選「編輯旅程」。
 4. 修改旅程名稱或天數。
 5. 確認可編輯者 Email 欄位為鎖定狀態。
+6. 確認「參與者與登入 Email」欄位為鎖定狀態，且畫面沒有「刪除整個旅程」按鈕。
 6. 儲存。
 
 預期結果：
 
 - `trip_editor` 可編輯旅程基本資料。
 - `trip_editor` 不可管理可編輯者 Email。
+- `trip_editor` 不可修改參與者與登入 Email，也不可刪除整個旅程；其餘旅程編輯功能維持可用。
 - Supabase `trips` row 更新。
 - Supabase `admin_users` 不會被 `trip_editor` 修改。
 
@@ -340,6 +362,7 @@ Trip 管理第一階段可視為完成，需同時符合：
 - Guest 可瀏覽旅程。
 - `super_admin` 可新增旅程。
 - `super_admin` 可管理可編輯者 Email。
+- `super_admin` 可修改參與者與登入 Email，並可刪除整個旅程。
 - `trip_editor` 可編輯被指派旅程。
 - 未被指派的一般登入使用者不可編輯共享旅程。
 - `npm run lint` 通過。

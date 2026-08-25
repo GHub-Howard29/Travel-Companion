@@ -22,6 +22,7 @@ import {
 import { getCloudOtherInfoItems } from "./otherInfoCloudService";
 import { sortTripsByDateDesc } from "../utils/tripHelpers";
 import { readOtherInfoSyncState } from "../storage/otherInfoSyncStorage";
+import { normalizeOtherInfoItems } from "../utils/otherInfoUtils";
 
 const SPECIAL_INFO_SCREEN_ID = "trip_special_info";
 const LEGACY_SPECIAL_INFO_SCREEN_IDS = new Set([
@@ -198,20 +199,24 @@ const normalizeTripDetail = (
   const shouldNormalizeOtherInfoItems =
     otherInfoItems !== undefined || detail.content.otherInfoItems !== undefined;
 
+  const normalizedOtherInfoItems = shouldNormalizeOtherInfoItems
+    ? normalizeOtherInfoItems(
+        ensureSpecialInfoItems(
+          detail.id,
+          mode,
+          otherInfoItems ?? detail.content.otherInfoItems,
+        ),
+      )
+    : undefined;
+
   return {
     ...detail,
     sidebarConfig: normalizeSidebarConfig(detail.sidebarConfig, mode),
     content: {
       ...detail.content,
       mode,
-      ...(shouldNormalizeOtherInfoItems
-        ? {
-            otherInfoItems: ensureSpecialInfoItems(
-              detail.id,
-              mode,
-              otherInfoItems ?? detail.content.otherInfoItems,
-            ),
-          }
+      ...(shouldNormalizeOtherInfoItems && normalizedOtherInfoItems
+        ? { otherInfoItems: normalizedOtherInfoItems }
         : {}),
     },
   };

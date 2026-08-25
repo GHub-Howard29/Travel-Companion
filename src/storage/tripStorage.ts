@@ -66,3 +66,45 @@ export const replaceStoredTripRecords = (
   writeStoredTripRecords(records);
   return records;
 };
+
+/** 未授權帳號成功載入後，清除行程快取中的敏感其他資訊卡片。 */
+export const removeRestrictedOtherInfoFromStoredTrip = (
+  tripId: string,
+): StoredTripRecord | null => {
+  const records = readStoredTripRecords();
+  let changed = false;
+  let updatedRecord: StoredTripRecord | null = null;
+
+  const nextRecords = records.map((record) => {
+    if (
+      record.meta.id !== tripId ||
+      !record.detail.content.otherInfoItems
+    ) {
+      return record;
+    }
+
+    const nextItems = record.detail.content.otherInfoItems.filter(
+      (item) => !item.allowedRoles || item.allowedRoles.length === 0,
+    );
+    if (nextItems.length === record.detail.content.otherInfoItems.length) {
+      return record;
+    }
+
+    changed = true;
+    const nextRecord: StoredTripRecord = {
+      ...record,
+      detail: {
+        ...record.detail,
+        content: {
+          ...record.detail.content,
+          otherInfoItems: nextItems,
+        },
+      },
+    };
+    updatedRecord = nextRecord;
+    return nextRecord;
+  });
+
+  if (changed) writeStoredTripRecords(nextRecords);
+  return updatedRecord;
+};

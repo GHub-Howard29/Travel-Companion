@@ -9,6 +9,7 @@ import { listCloudPrivateChecklistCopies } from "../services/privateChecklistClo
 import { readStoredPrivateChecklist } from "../storage/privateChecklistStorage";
 import { SortableCard } from "./SortableCard";
 import type { PrivateChecklist, TripMeta } from "../types";
+import { releaseFocusedControl } from "../utils/viewportUtils";
 
 interface PrivateChecklistPageProps {
   tripId: string;
@@ -180,6 +181,7 @@ export const PrivateChecklistPage = ({
   };
 
   const closeManageMode = () => {
+    releaseFocusedControl();
     void flushPendingReorder();
     setIsManageMode(false);
     setIsFormOpen(false);

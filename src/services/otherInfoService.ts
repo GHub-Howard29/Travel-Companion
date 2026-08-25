@@ -15,6 +15,7 @@
 // ================================
 
 import type { Folder, OtherInfoItem } from "../types";
+import { normalizeOtherInfoAllowedRoles, type Role } from "../permissions/roles";
 
 import {
   createDefaultFoldersForTrip,
@@ -125,6 +126,7 @@ export const createOtherInfoItem = (
   folderId: string,
   title: string,
   content: string,
+  allowedRoles?: Role[],
 ): OtherInfoItem[] => {
   const normalizedTitle = normalizeEditableText(title);
   const normalizedContent = normalizeEditableText(content);
@@ -146,6 +148,7 @@ export const createOtherInfoItem = (
       folderId,
       title: normalizedTitle,
       content: normalizedContent,
+      allowedRoles: normalizeOtherInfoAllowedRoles(allowedRoles),
       order: nextOrder,
       createdAt: now,
       updatedAt: now,
@@ -158,7 +161,7 @@ export const createOtherInfoItem = (
 export const updateOtherInfoItem = (
   tripId: string,
   itemId: string,
-  patch: Pick<OtherInfoItem, "folderId" | "title" | "content">,
+  patch: Pick<OtherInfoItem, "folderId" | "title" | "content" | "allowedRoles">,
 ): OtherInfoItem[] => {
   const normalizedTitle = normalizeEditableText(patch.title);
   const normalizedContent = normalizeEditableText(patch.content);
@@ -179,6 +182,7 @@ export const updateOtherInfoItem = (
     ...patch,
     title: normalizedTitle,
     content: normalizedContent,
+    allowedRoles: normalizeOtherInfoAllowedRoles(patch.allowedRoles),
     updatedAt: new Date().toISOString(),
   };
   const hasStoredItem = storedItems.some((item) => item.id === itemId);

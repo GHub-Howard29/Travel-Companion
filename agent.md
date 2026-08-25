@@ -2,17 +2,18 @@
 
 ## 目前狀態
 
-- 已發布版本：V3.4.10。
-- 目前待發布版本：V3.4.11「PWA 啟動色彩統一」，待合併、部署與 Android PWA 實機驗證。
-- 下一個功能版本：V3.5.0「Trip 公開／私人與 Guest 存取」。
-- 後續依序為 V3.5.1 Storage 附件權限、V3.5.2 資料庫權限函式硬化、暫定 V3.5.3 前端瀏覽器安全防護、V3.6.0 地點間預估移動資訊。
+- 已發布版本：V3.4.11。
+- 目前待發布版本：V3.5.0（安全方案程式已補全，待 Supabase migration 與實機驗證）。
+- 下一個功能版本：V3.5.0「iOS PWA 與敏感資訊可見範圍強化」。
+- 後續依序為 V3.5.1 Storage 附件安全維護（不新增敏感附件可見層級）、V3.5.2 資料庫權限函式硬化、暫定 V3.5.3 前端瀏覽器安全防護、V3.6.0 地點間預估移動資訊。
 - 版本順序與範圍唯一以 `docs/02_產品開發路線圖.md` 為準；未完成工作以 `docs/09_待辦事項_TODO.md` 為準；目前有效狀態以 `docs/14_專案現況總覽.md` 為準。
 
 ## 開發與安全規則
 
 - 使用繁體中文溝通及撰寫 commit message。
 - 新功能先討論範圍與風險，經 Product Owner 確認後實作。
-- V3.5.0 的 UI、`is_public` migration、RLS、REST、靜態 Trip 移除與快取隔離是同一完整安全發布，不得拆版或提前套用正式 migration。
+- V3.5.0 維持現行 Guest、User、`trip_editor`、`super_admin` 權限制度，不開發 Trip 公開／私人介面或 `is_public` migration。
+- V3.5.0 所有新增或調整畫面都必須先提供模擬圖，經 Product Owner 確認後才能修改程式；未確認模擬圖不得先行實作 UI。
 - 正式 migration、已發布版本與版本歷史不可回寫；問題只以向前修復處理。
 - 不得自行合併、部署、推送或對正式 Supabase 執行 migration，除非 Product Owner 明確要求。
 - 修改完成後至少執行與風險相稱的 lint、TypeScript、build 或專項測試。

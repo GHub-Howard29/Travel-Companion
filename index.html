@@ -17,6 +17,16 @@
     
     <link rel="icon" type="image/png" href="/favicon.png" />
     <link rel="apple-touch-icon" href="/pwa-192x192.png" />
+    <script>
+      (() => {
+        const isIosDevice =
+          /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+          (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+        if (isIosDevice && navigator.standalone === true) {
+          document.documentElement.classList.add("ios-standalone-pwa");
+        }
+      })();
+    </script>
     <style>
       html,
       body,
@@ -39,10 +49,23 @@
         min-height: 100dvh;
         background: #fff3e8;
       }
+
+      #app-launch-screen img {
+        display: none;
+      }
+
+      .ios-standalone-pwa #app-launch-screen img {
+        display: block;
+        width: min(58vw, 280px);
+        height: auto;
+        border-radius: 22%;
+      }
     </style>
   </head>
   <body>
-    <div id="app-launch-screen" role="status" aria-label="App 載入中"></div>
+    <div id="app-launch-screen" role="status" aria-label="App 載入中">
+      <img src="%BASE_URL%pwa-512x512.png" alt="" />
+    </div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

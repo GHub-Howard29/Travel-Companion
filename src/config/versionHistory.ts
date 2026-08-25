@@ -14,6 +14,15 @@ export type VersionHistoryItem = {
 
 export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
+    version: "3.4.11",
+    date: "2026-08-24",
+    forceUpdate: false,
+    notes: [
+      "統一 Android 原生啟動畫面、等待畫面與 App 系統資訊列為暖米白色。",
+      "保留單次原生圖示並降低啟動階段系統列與底圖的色差。",
+    ],
+  },
+  {
     version: "3.4.10",
     date: "2026-08-24",
     forceUpdate: false,

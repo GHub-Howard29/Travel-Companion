@@ -20,6 +20,9 @@ import {
   syncTripEditorEmails,
   updateTripRecord,
 } from "../services/tripRepository";
+import { ROLE, type Role } from "../permissions/roles";
+import { removeRestrictedOtherInfoFromStoredTrip } from "../storage/tripStorage";
+import { removeRestrictedStoredOtherInfoItems } from "../storage/otherInfoStorage";
 
 interface UseTripWorkspaceOptions {
   supabase: SupabaseClient;
@@ -238,6 +241,36 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
         (profile?.role === "trip_editor" && profile.trip_id === selectedTripId);
 
       setHasEditPermission(isAuthorized);
+
+      const resolvedRole: Role = mapRole({
+        isSignedIn: Boolean(userEmail),
+        adminRole: profile?.role ?? null,
+        isAssignedTrip: profile?.role === ROLE.TRIP_EDITOR &&
+          profile?.trip_id === selectedTripId,
+      });
+
+      if (resolvedRole === ROLE.GUEST || resolvedRole === ROLE.USER) {
+        removeRestrictedOtherInfoFromStoredTrip(selectedTripId);
+        removeRestrictedStoredOtherInfoItems(selectedTripId);
+        setCurrentTrip((current) => {
+          if (!current || current.id !== selectedTripId) return current;
+
+          const visibleItems = (current.content.otherInfoItems ?? []).filter(
+            (item) => !item.allowedRoles || item.allowedRoles.length === 0,
+          );
+          if (visibleItems.length === (current.content.otherInfoItems ?? []).length) {
+            return current;
+          }
+
+          return {
+            ...current,
+            content: {
+              ...current.content,
+              otherInfoItems: visibleItems,
+            },
+          };
+        });
+      }
 
       if (profile?.role === "super_admin") {
         getSuperAdminEmails(supabase)

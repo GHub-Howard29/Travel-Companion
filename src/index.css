@@ -4,12 +4,20 @@
   html {
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  body,
+  #root {
+    max-width: 100%;
+    overflow-x: hidden;
   }
 
   input,
   select,
   textarea {
-    font-size: 16px;
+    font-size: 16px !important;
   }
 
   button,
