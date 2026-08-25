@@ -4,7 +4,7 @@
 >
 > 最後更新：2026-08-25
 >
-> 已發布版本：V3.4.11；目前無待發布版本；下一個功能版本：V3.5.0。
+> 已發布版本：V3.4.11；目前待發布版本：V3.5.0（候選內容已整理，待 migration／實機驗證）。
 
 ## V3.5.0 iOS PWA 與敏感資訊可見範圍強化
 
@@ -37,11 +37,20 @@
 - [ ] 執行 `docs/sql/014_other_info_sync_deleted_rows.sql`，以管理者帳號回歸其他資訊／領隊導遊同步與手動重試。
 - [ ] 以 `trip_editor` 回歸：參與者與登入 Email 欄位不可編輯、不可刪除整個旅程；其他旅程編輯功能維持可用。
 
+### V3.5.0 納入 V3.4.11 BUG024 修正
+
+- [x] 其他資訊同步改為先 UPDATE、無對應資料列才 INSERT，並加入失敗提示右側的手動重新同步按鈕。
+- [x] `trip_editor` 不可修改參與者／登入 Email，也不可刪除整個旅程；`super_admin` 仍保有原管理權限。
+- [x] `docs/sql/014_other_info_sync_deleted_rows.sql` 已加入 V3.5.0 候選發布內容。
+- [x] V3.5.0 候選版採 `FORCE_UPDATE = true`；理由為 RLS／敏感資料快取隔離與同步流程修正需前端及 migration 一起生效。
+- [ ] 正式發布前執行 `013`、`014` migration，完成 `haw1971.yahoo@gmail.com` 與 `trip_editor`／`super_admin` 角色回歸。
+- [ ] 正式候選版才更新 `appVersion.ts`、`public/app-version.json`、`package.json` 與 `versionHistory.ts`；目前 V3.4.11 runtime 設定維持 `FORCE_UPDATE = false`。
+
 ### 分享、離線與待確認範圍
 
 - [ ] App 分享只提供原生分享與複製固定首頁網址，不建立單一 Trip 分享連結。
 - [ ] Guest 不提供離線行程內容；登入帳號的離線資料依帳號與權限隔離。
-- [ ] 發布前最終確認 `FORCE_UPDATE`。
+- [x] 已決定 V3.5.0 候選版的 `FORCE_UPDATE = true`；仍需完成正式發布前的更新流程實機驗證。
 
 ## 後續版本
 

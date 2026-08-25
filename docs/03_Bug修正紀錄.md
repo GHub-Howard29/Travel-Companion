@@ -598,7 +598,7 @@ V3.4.10 的 Android 原生 Splash 與 HTML 等待畫面使用亮藍色，但 App
 
 狀態：
 
-✅ 程式修正與 `npm run build`、ESLint 已通過；`014` migration 與兩種角色的實機同步回歸仍需於目標 Supabase 專案執行。
+✅ 程式修正與 `npm run build`、ESLint 已通過；本 BUG 已由 V3.4.11 修正併入 V3.5.0 候選內容。`014` migration 與兩種角色的實機同步回歸仍需於目標 Supabase 專案執行；V3.5.0 候選版採 `FORCE_UPDATE = true`。
 
 ---
 
@@ -618,4 +618,4 @@ V3.4.10 的 Android 原生 Splash 與 HTML 等待畫面使用亮藍色，但 App
 
 最後更新：2026/08/25
 
-目前已發布版本：V3.4.11；目前無待發布版本
+目前已發布版本：V3.4.11；目前待發布版本：V3.5.0（BUG024 已納入候選內容）
