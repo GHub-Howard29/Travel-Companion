@@ -14,6 +14,17 @@ export type VersionHistoryItem = {
 
 export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
+    version: "3.5.1",
+    date: "2026-08-26",
+    forceUpdate: true,
+    notes: [
+      "強化帳本附件的私有儲存空間、Trip 權限與短期連結保護。",
+      "新增 App 首頁分享入口與系統原生分享功能。",
+      "修正其他資訊與共同準備清單的跨裝置即時刷新。",
+      "保留離線同步佇列，避免遠端事件覆蓋尚未送出的本機變更。",
+    ],
+  },
+  {
     version: "3.5.0",
     date: "2026-08-25",
     forceUpdate: true,

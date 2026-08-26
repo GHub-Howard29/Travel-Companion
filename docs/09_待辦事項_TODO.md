@@ -4,7 +4,7 @@
 >
 > 最後更新：2026-08-26
 >
-> 已發布 App 版本：V3.5.1；V3.5.2 資料庫維護已完成且無獨立 App 發布；V3.5.3 開發中且尚未發布。
+> 已發布 App 版本：V3.5.1；V3.5.2 資料庫維護已完成且無獨立 App 發布；V3.5.3 發布準備完成，待合併與部署。
 
 ## V3.5.0 iOS PWA 與敏感資訊可見範圍強化（發布前不含 PWA 實機驗證）
 
@@ -75,12 +75,13 @@
 ## 後續版本
 
 - [x] V3.5.1：已於 2026-08-26 發布並結案；程式與正式 Supabase migration、雙端跨裝置即時刷新、角色、多帳號同筆競態、宜蘭附件與 Storage 四角色 RLS 回歸均已通過，且未新增敏感附件可見層級。
-- [ ] V3.5.3：前端瀏覽器安全防護開發中，尚未發布。
+- [ ] V3.5.3：前端瀏覽器安全防護發布準備完成，待 Product Owner 合併與部署。
   - [x] 範圍與 Patch 版號重新確認；不改 schema、RLS、角色或同步資料流。
   - [x] CSP、Referrer Policy、URL／外部視窗及 OAuth DOM 安全修正。
   - [x] lint、正式 build 與 postbuild 瀏覽器安全規則驗證。
-  - [ ] 一般瀏覽器與 iOS standalone PWA OAuth 實機回歸。
-  - [ ] Service Worker 更新／離線、附件、Excel、分享及外部連結實機回歸。
+  - [x] 一般瀏覽器 Google OAuth 實機回歸；iOS standalone PWA OAuth 改列日後補驗證。
+  - [x] Service Worker 安裝／離線、附件、Excel、分享及外部連結實機回歸；正式部署後的新版本更新提示另行驗證。
+  - [ ] 補驗證 iOS standalone PWA Google OAuth：建立可由 iPhone／iPad 存取的 HTTPS 測試站，在 Supabase Redirect URL 加入該站精確的 `/Travel-Companion/` 回呼網址；以 Safari 加入主畫面後完成 Google 登入，確認可回到 App、登入狀態正確且沒有白畫面或停留在等待頁；驗證完畢後移除暫時 Redirect URL。
 - [ ] V3.5.4：管理者帳號名稱映射、統一 Trip ID 與新增旅程預帶入（已定案）：建立 `admin_profiles`，App 依固定顯示名稱與 Email 預帶入參與者；新 Trip ID 固定為 `free-travel-YYYY-MM-DD` 或 `group-tour-YYYY-MM-DD`，同型同日不可重複；既有 `admin_users` 僅維持角色／Trip 指派，既有 Trip ID 不修改。
 - [ ] V3.6.0：地點間預估移動資訊，依專屬規格開發。
 
