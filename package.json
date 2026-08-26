@@ -11,6 +11,8 @@
   "scripts": {
     "dev": "vite",
     "build": "npm run verify:release-history && tsc && vite build",
+    "postbuild": "npm run verify:browser-security",
+    "verify:browser-security": "node scripts/verify-browser-security.mjs",
     "verify:release-history": "node scripts/verify-release-history.mjs",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",

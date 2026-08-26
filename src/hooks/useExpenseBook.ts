@@ -27,6 +27,10 @@ import {
   isExpenseAttachmentPathForTrip,
 } from "../utils/attachmentUtils";
 import { cancelEditExpense, startEditExpense } from "../utils/expenseActions";
+import {
+  getTrustedHttpUrl,
+  openPendingWindow,
+} from "../utils/browserSecurity";
 import { getExportFileNameXlsx } from "../utils/exportUtils";
 import { getExpenseRecorderAlias } from "../utils/participantUtils";
 import type { EditExpenseDraft, ExpenseItem, LocalAttachmentRecord } from "../types";
@@ -1018,12 +1022,14 @@ useEffect(() => {
     const signedUrl = data?.signedUrl;
     if (!signedUrl) throw new Error("missing-expense-attachment-signed-url");
 
-    const signedUrlProtocol = new URL(signedUrl, window.location.origin).protocol;
-    if (signedUrlProtocol !== "https:" && signedUrlProtocol !== "http:") {
+    const trustedSignedUrl = getTrustedHttpUrl(signedUrl, {
+      baseUrl: window.location.origin,
+    });
+    if (!trustedSignedUrl) {
       throw new Error("invalid-expense-attachment-signed-url");
     }
 
-    return signedUrl;
+    return trustedSignedUrl;
   };
 
   const uploadAttachmentToStorage = async (
@@ -1070,10 +1076,7 @@ useEffect(() => {
       return;
     }
 
-    const popup = window.open("about:blank", "_blank");
-    if (popup) {
-      popup.opener = null;
-    }
+    const popup = openPendingWindow();
     const openUrl = (url: string) => {
       if (popup) {
         popup.location.href = url;

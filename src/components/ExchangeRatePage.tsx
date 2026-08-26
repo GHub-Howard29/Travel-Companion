@@ -398,7 +398,7 @@ export const ExchangeRatePage = ({
           <a
             href="https://rate.bot.com.tw/xrt?Lang=zh-TW"
             target="_blank"
-            rel="noreferrer"
+            rel="noopener noreferrer"
             className="mr-3 text-xs font-semibold text-sky-700 underline underline-offset-2"
           >
             來源：臺灣銀行牌告匯率
