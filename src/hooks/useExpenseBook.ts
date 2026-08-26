@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from "react"
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   ATTACHMENT_BUCKET,
+  ATTACHMENT_SIGNED_URL_EXPIRES_IN_SECONDS,
   SUPPORTED_CURRENCIES,
 } from "../constants/appConstants";
 import {
@@ -20,9 +21,10 @@ import {
   toBookStorageKey,
 } from "../storage/expenseStorage";
 import {
+  buildExpenseAttachmentPath,
   compressImageFile,
   formatFileSize,
-  sanitizeStorageFileName,
+  isExpenseAttachmentPathForTrip,
 } from "../utils/attachmentUtils";
 import { cancelEditExpense, startEditExpense } from "../utils/expenseActions";
 import { getExportFileNameXlsx } from "../utils/exportUtils";
@@ -710,7 +712,13 @@ useEffect(() => {
           .eq("id", removedExpense.id);
         if (error) throw error;
 
-        if (removedExpense.attachment_path) {
+        if (
+          isExpenseAttachmentPathForTrip(
+            removedExpense.attachment_path,
+            selectedTripId,
+            String(removedExpense.id),
+          )
+        ) {
           const { error: attachmentDeleteError } = await supabase.storage
             .from(ATTACHMENT_BUCKET)
             .remove([removedExpense.attachment_path]);
@@ -884,7 +892,13 @@ useEffect(() => {
         return updated;
       });
       if (shouldRemoveAttachment || editAttachmentFile) {
-        if (targetExpense.attachment_path) {
+        if (
+          isExpenseAttachmentPathForTrip(
+            targetExpense.attachment_path,
+            selectedTripId,
+            String(targetExpense.id),
+          )
+        ) {
           const { error: attachmentDeleteError } = await supabase.storage
             .from(ATTACHMENT_BUCKET)
             .remove([targetExpense.attachment_path]);
@@ -986,13 +1000,30 @@ useEffect(() => {
     void finalizeDeleteExpense(targetExpense, targetIndex);
   };
 
-  const getSignedAttachmentUrl = async (path?: string | null) => {
-    if (!path) return "";
+  const getSignedAttachmentUrl = async (
+    path: string | null | undefined,
+    expenseId: string,
+  ) => {
+    if (
+      !isExpenseAttachmentPathForTrip(path, selectedTripId, expenseId)
+    ) {
+      throw new Error("invalid-expense-attachment-path");
+    }
+
     const { data, error } = await supabase.storage
       .from(ATTACHMENT_BUCKET)
-      .createSignedUrl(path, 60 * 60 * 24 * 7);
+      .createSignedUrl(path, ATTACHMENT_SIGNED_URL_EXPIRES_IN_SECONDS);
     if (error) throw error;
-    return data?.signedUrl || "";
+
+    const signedUrl = data?.signedUrl;
+    if (!signedUrl) throw new Error("missing-expense-attachment-signed-url");
+
+    const signedUrlProtocol = new URL(signedUrl, window.location.origin).protocol;
+    if (signedUrlProtocol !== "https:" && signedUrlProtocol !== "http:") {
+      throw new Error("invalid-expense-attachment-signed-url");
+    }
+
+    return signedUrl;
   };
 
   const uploadAttachmentToStorage = async (
@@ -1060,7 +1091,10 @@ useEffect(() => {
 
     try {
       if (item.attachment_path && item.attachment_status === "synced") {
-        const url = await getSignedAttachmentUrl(item.attachment_path);
+        const url = await getSignedAttachmentUrl(
+          item.attachment_path,
+          String(item.id),
+        );
         if (url) {
           openUrl(url);
         } else {
@@ -1185,9 +1219,11 @@ useEffect(() => {
           continue;
         }
 
-        const stamp = new Date().toISOString().replace(/[:.]/g, "-");
-        const fileName = sanitizeStorageFileName(attachment.fileName);
-        const path = `${selectedTripId}/${item.id}/${stamp}-${fileName}`;
+        const path = buildExpenseAttachmentPath(
+          selectedTripId,
+          String(item.id),
+          attachment.fileName,
+        );
 
         await uploadAttachmentToStorage(path, attachment);
 
@@ -1380,7 +1416,10 @@ useEffect(() => {
         item.attachment_status === "synced"
       ) {
         try {
-          attachmentUrl = await getSignedAttachmentUrl(item.attachment_path);
+          attachmentUrl = await getSignedAttachmentUrl(
+            item.attachment_path,
+            String(item.id),
+          );
         } catch {
           attachmentUrl = "";
         }

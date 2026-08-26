@@ -26,6 +26,21 @@ interface CloudChecklistItemIdentityRow {
 const SHARED_CHECKLIST_TITLE = "共同檢查清單";
 const FALLBACK_CATEGORY = "其他";
 
+export const getCloudSharedChecklistId = async (
+  supabase: SupabaseClient,
+  tripId: string,
+): Promise<string | null> => {
+  const { data, error } = await supabase
+    .from("checklists")
+    .select("id")
+    .eq("trip_id", tripId)
+    .eq("scope", "shared")
+    .maybeSingle();
+
+  if (error) throw error;
+  return data?.id ?? null;
+};
+
 const getCurrentUserId = async (
   supabase: SupabaseClient,
 ): Promise<string | null> => {

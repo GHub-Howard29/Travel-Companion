@@ -2,9 +2,9 @@
 
 > 本文件只保留尚未完成或仍需驗證的工作；版本順序與範圍以《02_產品開發路線圖》為準。
 >
-> 最後更新：2026-08-25
+> 最後更新：2026-08-26
 >
-> 已發布版本：V3.4.11；目前待發布版本：V3.5.0（候選內容已整理，migration 已套用，發布前功能與安全驗證已完成；PWA／iOS 實機驗證列發布後）。
+> 已發布版本：V3.5.0；目前待發布版本：V3.5.1（程式、正式 Supabase migration、靜態驗證、角色、跨裝置競態、宜蘭附件與 Storage 四角色 RLS 回歸均已完成）。
 
 ## V3.5.0 iOS PWA 與敏感資訊可見範圍強化（發布前不含 PWA 實機驗證）
 
@@ -17,10 +17,10 @@
 
 ### 發布後補驗證（Android／Chrome PWA）
 
-- [ ] Android 維持 V3.4.11 原生 Splash 流程，確認沒有重複圖示或順序改變。
-- [ ] Android PWA 管理／編輯欄位聚焦、關閉後維持正常寬度，不左右溢出；一般縮放仍可使用。
-- [ ] App 分享入口、固定首頁連結、原生分享目標與上下滑動清單完成 Android／Chrome 驗證。
-- [ ] 以 V3.4.11 作為基準升級至 V3.5.0，確認強制更新只需按一次、更新後非空白頁、提示不可稍後、資料仍在，未儲存表單警語正常。
+- [x] ✅ 已通過（2026-08-26）：以 V3.4.11 作為基準升級至 V3.5.0，強制更新只需按一次、更新後非空白頁、提示不可稍後、資料仍在，未儲存表單警語正常。
+- [x] ✅ 已通過（2026-08-26）第 2 項 Android／Chrome PWA 啟動與版面：Android 維持 V3.4.11 原生 Splash 流程，管理／編輯欄位聚焦與關閉後維持正常寬度；電腦 Chrome PWA 可由米白底正常進入 App，未停在空白頁。
+
+> 第 1 項強制更新與第 2 項 Android／Chrome PWA 啟動／版面均已通過；iOS PWA 實機驗證仍未測試。同步、權限與離線佇列已於發布前完成驗證。
 
 #### 實機驗證項目 2、3 的修改邊界
 
@@ -55,23 +55,60 @@
 
 ### 分享、離線與待確認範圍
 
-- [x] 已定案 App 分享只提供原生分享與複製固定首頁網址，不建立單一 Trip 分享連結；實機分享清單列發布後 PWA 驗證。
+- [x] App 分享規格、模擬圖與修改邊界已確認；功能尚未納入 V3.5.0，移至 V3.5.1 實作與驗證。
 - [x] Guest 不提供離線行程內容；登入帳號的離線資料依帳號與權限隔離。
 - [x] 已決定 V3.5.0 候選版的 `FORCE_UPDATE = true`；PWA 舊版升級流程改列發布後補驗證，不作為發布前阻擋項目。
 
 ### 發布後補驗證（iOS）
 
+> ⏭ 2026-08-26：目前沒有 iOS 實機設備，本大項保留未驗證並暫時跳過；不判定失敗，也不回溯阻擋已發布的 V3.5.0。
+
 - [ ] iOS standalone PWA 啟動時顯示專案圖示，不得只有純色底圖。
 - [ ] iOS 聚焦管理／編輯欄位及退出後維持正常寬度，不需兩指縮小，也不可左右移動。
 - [ ] iOS Safari／standalone 回歸行程、共同／私人清單、其他資訊、旅程編輯、更新提示與同步。
-- [ ] iOS Google 登入、拍照／相簿附件、附件重試及分享功能回歸。
+- [ ] iOS Google 登入、拍照／相簿附件及附件重試回歸。
+
+### V3.5.0 發布後驗證結案
+
+- [x] ✅ 第 4 項已通過（2026-08-26）：V3.5.0 發布後驗證正式結案；第 1、2 項通過，第 3 項 iOS 因無設備保留未驗證，BUG026 與 App 分享移入 V3.5.1。
 
 ## 後續版本
 
-- [ ] V3.5.1：Supabase Storage 附件安全維護；不新增敏感附件可見層級。
+- [x] V3.5.1：程式與正式 Supabase migration 已完成；雙端跨裝置即時刷新、角色、多帳號同筆競態、宜蘭附件與 Storage 四角色 RLS 回歸均已通過，不新增敏感附件可見層級，可進入發布流程。
 - [ ] V3.5.2：Supabase 資料庫權限函式硬化。
 - [ ] V3.5.3：前端瀏覽器安全防護；開始前重新確認範圍與版號。
+- [ ] V3.5.4：管理者帳號名稱映射、統一 Trip ID 與新增旅程預帶入（已定案）：建立 `admin_profiles`，App 依固定顯示名稱與 Email 預帶入參與者；新 Trip ID 固定為 `free-travel-YYYY-MM-DD` 或 `group-tour-YYYY-MM-DD`，同型同日不可重複；既有 `admin_users` 僅維持角色／Trip 指派，既有 Trip ID 不修改。
 - [ ] V3.6.0：地點間預估移動資訊，依專屬規格開發。
+
+### V3.5.1 已確認新增功能（App 分享）
+
+- [x] 頁首於既有關閉按鈕左側新增小型分享圖示；既有 App 文案與小圖示未變動。
+- [x] 浮動視窗顯示本專案圖示、首頁超連結與分享連結；系統原生分享面板依平台以 App 圖示清單呈現，超出時由原生面板滑動。
+- [x] 原生分享由使用者選擇通訊軟體頻道或其他系統分享目標；未新增「更多」按鈕。
+- [x] 保留原本關閉按鈕，點擊後返回當下 App 主畫面；未建立單一 Trip 分享網址。
+
+### V3.5.1 待修正開發（跨裝置即時刷新）
+
+- [x] 監聽 `other_info_items` 針對目前 `trip_id` 的 Supabase Realtime 事件，涵蓋新增、修改及軟刪除（UPDATE）。
+- [x] 監聽 shared `checklists`（`trip_id`、`scope = shared`）及 `checklist_items`（shared checklist ID）的 Supabase Realtime 事件，涵蓋新增、修改、勾選、刪除／軟刪除與排序。
+- [x] 收到事件後以 RLS-safe query 重新載入目前行程資料，不直接採用事件 payload。
+- [x] 保留 focus／visibility／reconnect 重新載入備援，且 pending／本機 cloud write 期間略過遠端刷新。
+- [x] 以兩個不同帳號同時編輯共同清單，最後成功雲端寫入狀態會成為最新資料，完成同步後不回滾；不新增衝突 UI。
+- [x] Realtime publication migration 已於正式 Supabase 套用並驗證；Codex 內建瀏覽器與電腦桌面版 PWA 雙端在同步完成後均於 1 秒內顯示更新，跨裝置即時刷新回歸通過，既有 `trip_editor`／`super_admin` 權限矩陣不變。
+
+### V3.5.1 Storage 驗證
+
+- [x] 已建立 private bucket／Storage RLS migration、路徑檢查及 15 分鐘簽名網址檢查。
+- [x] `npm run lint`、`npm run build` 與 release history 驗證已通過。
+- [x] 正式 Supabase migration 已套用並驗證：private bucket、1 MiB／MIME 限制、四項 Storage RLS policy、三張 Realtime publication table 與 migration history 均正確；既有附件物件為 0。
+- [x] BUG027 含中文舊 Trip ID 的附件 key 修正已套用正式 Supabase；UTF-8 hex scope 函式與四項 Storage RLS policy 已驗證。
+- [x] 以宜蘭行程的兩筆既有失敗照片按「同步照片」回歸，兩筆均成功上傳。
+- [x] 以 anon、其他 Trip editor、所屬 Trip editor、super admin 完成 Storage RLS 回歸（2026-08-26）：以自動 ROLLBACK 的遠端資料庫交易模擬 JWT／Postgres role；讀取／簽名可見性、上傳與更新均符合預期，刪除 policy 已驗證存在。直接 SQL 刪除由 Supabase `protect_objects_delete` 內建觸發器禁止，實際刪除須經 Storage HTTP API 與登入 session 執行。
+
+### V3.5.1 補充實機權限回歸
+
+- [x] Guest、User 的相關操作介面依權限阻擋。
+- [x] `trip_editor` 無法建立行程，且只能修改被授權的行程。
 
 ## 跨版本待驗證／改善
 

@@ -1,3 +1,4 @@
+import { useCallback, useState } from "react";
 import {
   Calendar,
   CircleDollarSign,
@@ -12,6 +13,7 @@ import {
   LogOut,
   Pencil,
   Plus,
+  Share2,
   Star,
   Wallet,
   X,
@@ -29,6 +31,7 @@ import {
   isSelfGuidedSpecialInfoIcon,
   shouldUseSpecialInfoIcon,
 } from "../../utils/travelToolRegistry";
+import AppShareModal from "../AppShareModal";
 
 interface AppSidebarProps {
   isMenuOpen: boolean;
@@ -112,6 +115,11 @@ export default function AppSidebar({
   appVersion,
   onOpenVersionInfo,
 }: AppSidebarProps) {
+  const [isShareOpen, setIsShareOpen] = useState(false);
+  const closeSidebar = useCallback(() => {
+    setIsShareOpen(false);
+    onClose();
+  }, [onClose]);
   const sidebarItems = expandSidebarItemsWithPrivateChecklist(
     currentTrip?.sidebarConfig,
     userEmail,
@@ -122,7 +130,7 @@ export default function AppSidebar({
       {isMenuOpen && (
         <div
           className="fixed inset-0 bg-black/40 z-50 transition-opacity duration-300"
-          onClick={onClose}
+          onClick={closeSidebar}
         />
       )}
 
@@ -137,12 +145,23 @@ export default function AppSidebar({
               </h3>
               <p className="text-xs text-slate-400">雲端權限多行程管理</p>
             </div>
-            <button
-              onClick={onClose}
-              className="p-1.5 hover:bg-slate-200 rounded-full text-slate-500 transition-colors"
-            >
-              <X size={20} />
-            </button>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => setIsShareOpen(true)}
+                className="p-1.5 hover:bg-slate-200 rounded-full text-slate-500 transition-colors"
+                aria-label="分享 App 首頁"
+                title="分享"
+              >
+                <Share2 size={18} />
+              </button>
+              <button
+                onClick={closeSidebar}
+                className="p-1.5 hover:bg-slate-200 rounded-full text-slate-500 transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
           </div>
 
           <div className="mt-2">
@@ -314,6 +333,10 @@ export default function AppSidebar({
           </button>
         </div>
       </div>
+      <AppShareModal
+        isOpen={isShareOpen}
+        onClose={() => setIsShareOpen(false)}
+      />
     </>
   );
 }

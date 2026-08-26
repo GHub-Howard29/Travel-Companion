@@ -582,6 +582,49 @@ function ConfiguredApp({
     void syncPendingOtherInfo();
   }, [syncPendingOtherInfo]);
 
+  useEffect(() => {
+    if (!selectedTripId || !isOnline) return;
+
+    let refreshTimer: number | null = null;
+    const refreshCurrentTrip = () => {
+      if (readOtherInfoSyncState(selectedTripId)) return;
+      if (refreshTimer !== null) window.clearTimeout(refreshTimer);
+      refreshTimer = window.setTimeout(() => {
+        refreshTimer = null;
+        void reloadCurrentTrip();
+      }, 400);
+    };
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible") refreshCurrentTrip();
+    };
+
+    const channel = supabase
+      .channel(`travel-companion-other-info-${selectedTripId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "other_info_items",
+          filter: `trip_id=eq.${selectedTripId}`,
+        },
+        refreshCurrentTrip,
+      )
+      .subscribe();
+
+    window.addEventListener("focus", refreshCurrentTrip);
+    window.addEventListener("online", refreshCurrentTrip);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+
+    return () => {
+      if (refreshTimer !== null) window.clearTimeout(refreshTimer);
+      window.removeEventListener("focus", refreshCurrentTrip);
+      window.removeEventListener("online", refreshCurrentTrip);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+      void supabase.removeChannel(channel);
+    };
+  }, [isOnline, reloadCurrentTrip, selectedTripId, supabase]);
+
   const handleSaveOtherInfoItems = async (items: OtherInfoItem[]) => {
     if (!currentTrip || isHistoricalOfflineReadOnly) return;
 

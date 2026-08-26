@@ -6,6 +6,7 @@ import {
   toggleChecklistItem as toggleChecklistItemProgress,
 } from "../services/checklistService";
 import {
+  getCloudSharedChecklistId,
   getCloudSharedChecklist,
   initializeCloudSharedChecklist,
   syncCloudSharedChecklistSeedItems,
@@ -61,6 +62,16 @@ export const useChecklistState = (
   const localMutationRevisionRef = useRef(0);
   const initialSyncPromiseRef = useRef<Promise<void>>(Promise.resolve());
   const cloudWriteQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const isCloudWritePendingRef = useRef(false);
+  const realtimeRefreshTimerRef = useRef<number | null>(null);
+  const [realtimeChecklistScope, setRealtimeChecklistScope] = useState<{
+    tripId: string;
+    checklistId: string | null;
+  } | null>(null);
+  const realtimeChecklistId =
+    realtimeChecklistScope?.tripId === tripId
+      ? realtimeChecklistScope.checklistId
+      : null;
   const canSyncToCloud = canSyncSharedChecklist && isOnline;
 
   const checkedItemIds = useMemo(
@@ -222,6 +233,130 @@ export const useChecklistState = (
     };
   }, [canSyncToCloud, seedItems, supabase, tripId, userEmail]);
 
+  const reloadSharedChecklistFromCloud = useCallback(async () => {
+    if (!canSyncToCloud || isCloudWritePendingRef.current) return;
+    if (
+      userEmail &&
+      (readPendingSharedChecklistOrder(tripId, userEmail) ||
+        readPendingSharedChecklistProgress(tripId, userEmail))
+    ) {
+      return;
+    }
+
+    const mutationRevision = localMutationRevisionRef.current;
+    const cloudChecklist = await getCloudSharedChecklist(supabase, tripId, seedItems);
+    if (
+      !cloudChecklist ||
+      isCloudWritePendingRef.current ||
+      localMutationRevisionRef.current !== mutationRevision ||
+      (userEmail &&
+        (readPendingSharedChecklistOrder(tripId, userEmail) ||
+          readPendingSharedChecklistProgress(tripId, userEmail)))
+    ) {
+      return;
+    }
+
+    const nextCheckedItemIds = cloudChecklist.items
+      .filter((item) => item.isChecked)
+      .map((item) => item.id);
+    writeStoredChecklistProgress({
+      tripId,
+      checkedItemIds: nextCheckedItemIds,
+      updatedAt: cloudChecklist.updatedAt,
+    });
+    setCheckedItemIdsByTripId((current) => ({
+      ...current,
+      [tripId]: nextCheckedItemIds,
+    }));
+    setCloudItemsByTripId((current) => ({
+      ...current,
+      [tripId]: cloudChecklist.items,
+    }));
+    setSyncStatus("synced");
+  }, [canSyncToCloud, seedItems, supabase, tripId, userEmail]);
+
+  const scheduleRealtimeRefresh = useCallback(() => {
+    if (realtimeRefreshTimerRef.current !== null) {
+      window.clearTimeout(realtimeRefreshTimerRef.current);
+    }
+    realtimeRefreshTimerRef.current = window.setTimeout(() => {
+      realtimeRefreshTimerRef.current = null;
+      void reloadSharedChecklistFromCloud().catch(console.warn);
+    }, 400);
+  }, [reloadSharedChecklistFromCloud]);
+
+  useEffect(() => {
+    if (!canSyncToCloud) return;
+
+    let isActive = true;
+    const resolveChecklistId = async () => {
+      try {
+        const checklistId = await getCloudSharedChecklistId(supabase, tripId);
+        if (isActive) {
+          setRealtimeChecklistScope({ tripId, checklistId });
+        }
+      } catch (error) {
+        console.warn(error);
+      }
+    };
+    void resolveChecklistId();
+
+    const channel = supabase
+      .channel(`travel-companion-shared-checklist-${tripId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "checklists",
+          filter: `trip_id=eq.${tripId}`,
+        },
+        () => {
+          void resolveChecklistId();
+          scheduleRealtimeRefresh();
+        },
+      )
+      .subscribe();
+
+    return () => {
+      isActive = false;
+      void supabase.removeChannel(channel);
+    };
+  }, [canSyncToCloud, scheduleRealtimeRefresh, supabase, tripId]);
+
+  useEffect(() => {
+    if (!canSyncToCloud || !realtimeChecklistId) return;
+
+    const channel = supabase
+      .channel(`travel-companion-shared-checklist-items-${realtimeChecklistId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "checklist_items",
+          filter: `checklist_id=eq.${realtimeChecklistId}`,
+        },
+        scheduleRealtimeRefresh,
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [
+    canSyncToCloud,
+    realtimeChecklistId,
+    scheduleRealtimeRefresh,
+    supabase,
+  ]);
+
+  useEffect(() => () => {
+    if (realtimeRefreshTimerRef.current !== null) {
+      window.clearTimeout(realtimeRefreshTimerRef.current);
+    }
+  }, []);
+
   const toggleChecklistItem = useCallback((itemId: string) => {
     const mutationRevision = localMutationRevisionRef.current + 1;
     localMutationRevisionRef.current = mutationRevision;
@@ -276,6 +411,7 @@ export const useChecklistState = (
       if (canSyncToCloud) {
         setSyncStatus("syncing");
         setSyncError(null);
+        isCloudWritePendingRef.current = true;
         const writeOperation = cloudWriteQueueRef.current
           .catch(() => undefined)
           .then(async () => {
@@ -327,6 +463,11 @@ export const useChecklistState = (
             if (localMutationRevisionRef.current === mutationRevision) {
               setSyncStatus("error");
               setSyncError("共同檢查清單雲端同步失敗，變更已保存在本機。");
+            }
+          })
+          .finally(() => {
+            if (localMutationRevisionRef.current === mutationRevision) {
+              isCloudWritePendingRef.current = false;
             }
           });
       }

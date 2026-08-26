@@ -623,7 +623,56 @@ V3.4.10 的 Android 原生 Splash 與 HTML 等待畫面使用亮藍色，但 App
 
 狀態：
 
-✅ 已併入 V3.5.0 候選版；`npm run build`、ESLint 與 `git diff --check` 已通過。舊版升級至 V3.5.0 的單次按鈕與更新後非空白實機驗證改列發布後補驗證，不作為候選發布前阻擋項目。
+✅ 已併入 V3.5.0 候選版；`npm run build`、ESLint 與 `git diff --check` 已通過。舊版升級至 V3.5.0 的單次按鈕與更新後非空白實機驗證已於 2026-08-26 通過。
+
+---
+
+### BUG026
+
+問題：
+
+- V3.5.0 發布後，電腦 PWA（`haw1971.yahoo@gmail.com`，`trip_editor`）與 Android PWA（`haw1971`，`super_admin`）在同一「日本九州」行程中操作。
+- 電腦在領隊／導遊聯絡資訊新增資料 1、2 後，畫面顯示已同步且資料建立成功；手機端不會即時更新，切換功能目錄仍看不到，切換行程資料庫後才載入最新資料。
+- 刪除資料及「其他資訊」也有相同現象。
+- 另發現共同準備清單相同問題：電腦刪除一筆或勾選一筆後顯示已同步，手機端不會自動更新，只有手機 App 重新取得焦點後才會載入雲端結果。
+
+判斷：
+
+- 雲端寫入與既有同步流程正常，問題是另一台裝置缺少目前 Trip 的即時事件訂閱與畫面重新載入；此現象同時涵蓋 `other_info_items`、領隊／導遊資料及共同準備清單。
+- 目前 `other_info_items` 沒有針對 `trip_id` 的 `postgres_changes` 訂閱；`currentTrip` 只在行程重新選取等既有生命週期更新，切換功能目錄不會觸發重新查詢。
+- 共同準備清單目前只有進入頁面、focus／visibility／online 等時機重新讀取，未訂閱 `checklists`／`checklist_items` 的 Realtime 事件，因此勾選、刪除或管理操作不會即時反映到另一台裝置。
+
+修正方式（V3.5.1）：
+
+- 監聽 `other_info_items` 的 INSERT／UPDATE／DELETE Realtime 事件，限定目前 `trip_id`；收到事件後透過 RLS-safe query 重新載入，不直接信任事件 payload。
+- 共同準備清單監聽 shared `checklists`（`trip_id`）及 `checklist_items`（`checklist_id`）的 INSERT／UPDATE／DELETE 事件；收到事件後重新讀取 shared checklist，涵蓋勾選、刪除／軟刪除、排序與新增。
+- 軟刪除需處理 UPDATE 事件；保留 focus／visibility／reconnect 重新載入備援。
+- 重新載入不得覆蓋尚未送出的本機同步佇列，並補上 Realtime publication／migration 與雙裝置角色回歸。
+
+狀態：
+
+✅ V3.5.1 程式與 Realtime publication migration 已完成並於 2026-08-26 套用正式 Supabase；事件僅作為失效通知並以 RLS-safe query 重新載入，pending order、pending progress、Other Info pending 與本機 cloud write 期間不接受遠端快照覆蓋。`npm run lint`、`npm run build` 與 publication 驗證已通過。2026-08-26 以 Codex 內建瀏覽器與電腦桌面版 PWA 完成雙端實機回歸：任一端同步完成後，另一端均在 1 秒內顯示更新；兩帳號同時編輯共同清單後以最後成功寫入狀態為準，完成同步後不回滾，均通過。
+
+---
+
+### BUG027
+
+問題：
+
+- 「宜蘭」行程的既有 Trip ID 含中文。帳目同步成功，但附件上傳到 `expense-attachments` 時，Supabase Storage 回傳 `Invalid key`；同帳號其他使用 ASCII Trip ID 的行程正常。
+
+原因：
+
+- 舊附件路徑直接以原始 Trip／expense ID 作為資料夾名稱；Supabase Storage 拒絕該中文 object key，導致 Blob 與 ArrayBuffer 重試都失敗。
+
+修正方式（V3.5.1）：
+
+- 附件資料夾改用原始 ID 的 UTF-8 hex ASCII scope；前端路徑檢查與 Storage RLS policy 共用相同、可逆的 scope 規則，不改變 Trip／expense ownership 或簽名網址權限。
+- 新增 migration `20260826062146_v351_storage_safe_attachment_path.sql`；正式部署前既有附件物件數為 0，因此不需搬移物件。
+
+狀態：
+
+✅ 修正已於 2026-08-26 套用正式 Supabase，且已唯讀驗證 scope 轉換函式與四項 Storage policy 均存在；宜蘭行程原先失敗的兩筆照片已按「同步照片」完成實機回歸並成功上傳。
 
 ---
 
@@ -641,6 +690,6 @@ V3.4.10 的 Android 原生 Splash 與 HTML 等待畫面使用亮藍色，但 App
 
 ---
 
-最後更新：2026/08/25
+最後更新：2026/08/26
 
-目前已發布版本：V3.4.11；目前待發布版本：V3.5.0（BUG024、BUG025 已納入候選內容；BUG025 舊版 PWA 升級實機驗證列為發布後補驗證）
+目前已發布版本：V3.5.0；目前待發布版本：V3.5.1（BUG026 權限、即時刷新與多帳號競態回歸已完成；BUG027 正式修正與宜蘭附件回歸已完成；待 Storage API 角色回歸）
