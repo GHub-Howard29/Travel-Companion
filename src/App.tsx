@@ -52,6 +52,10 @@ import {
 } from "./utils/travelToolRegistry";
 import { mergeSharedChecklistItems } from "./utils/checklistMerge";
 import { isHistoricalTrip } from "./utils/tripHelpers";
+import {
+  getTrustedHttpUrl,
+  openPendingWindow,
+} from "./utils/browserSecurity";
 
 const ExpenseScreen = lazy(() => import("./components/expense/ExpenseScreen"));
 const ItineraryPage = lazy(() =>
@@ -314,14 +318,19 @@ function ConfiguredApp({
       ? undefined
       : { prompt: "select_account" };
     const authPopup = shouldUseIosPwaOAuthFallback
-      ? window.open("about:blank", "_blank")
+      ? openPendingWindow()
       : null;
 
     if (authPopup) {
-      authPopup.opener = null;
       authPopup.document.title = "Google 登入";
-      authPopup.document.body.innerHTML =
-        '<p style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;padding:24px;line-height:1.6;color:#334155;">正在開啟 Google 登入...</p>';
+      const loadingMessage = authPopup.document.createElement("p");
+      loadingMessage.textContent = "正在開啟 Google 登入...";
+      loadingMessage.style.fontFamily =
+        "-apple-system, BlinkMacSystemFont, sans-serif";
+      loadingMessage.style.padding = "24px";
+      loadingMessage.style.lineHeight = "1.6";
+      loadingMessage.style.color = "#334155";
+      authPopup.document.body.replaceChildren(loadingMessage);
     }
 
     const { data, error } = await supabase.auth.signInWithOAuth({
@@ -341,10 +350,19 @@ function ConfiguredApp({
 
     if (shouldUseIosPwaOAuthFallback) {
       if (data.url) {
+        const trustedOAuthUrl = getTrustedHttpUrl(data.url, {
+          allowedOrigins: [new URL(supabaseUrl).origin],
+        });
+        if (!trustedOAuthUrl) {
+          authPopup?.close();
+          alert("登入連結來源驗證失敗，請稍後再試。");
+          return;
+        }
+
         if (authPopup) {
-          authPopup.location.href = data.url;
+          authPopup.location.href = trustedOAuthUrl;
         } else {
-          window.location.href = data.url;
+          window.location.href = trustedOAuthUrl;
         }
       } else {
         authPopup?.close();

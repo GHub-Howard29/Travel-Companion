@@ -1,13 +1,68 @@
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
 
+const CSP_PLACEHOLDER = '__TRAVEL_COMPANION_CSP__'
+
+const getSupabaseConnectSources = (supabaseUrl: string | undefined) => {
+  if (!supabaseUrl?.trim()) return []
+
+  try {
+    const url = new URL(supabaseUrl)
+    if (url.protocol !== 'https:' && url.protocol !== 'http:') return []
+
+    const websocketUrl = new URL(url.origin)
+    websocketUrl.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:'
+
+    return [url.origin, websocketUrl.origin]
+  } catch {
+    return []
+  }
+}
+
+const createContentSecurityPolicy = (supabaseUrl: string | undefined) =>
+  [
+    "default-src 'self'",
+    "base-uri 'self'",
+    "object-src 'none'",
+    "script-src 'self'",
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: blob:",
+    "font-src 'self'",
+    `connect-src 'self' ${getSupabaseConnectSources(supabaseUrl).join(' ')}`.trim(),
+    "worker-src 'self' blob:",
+    "manifest-src 'self'",
+    "media-src 'self' blob:",
+    "frame-src 'none'",
+    "form-action 'self'",
+  ].join('; ')
+
 // https://vitejs.dev/config/
-export default defineConfig({
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), '')
+  const isProduction = mode === 'production'
+
+  return {
   // ⚠️ 嚴格修正：必須是斜線開頭、斜線結尾的儲存庫名稱，不可帶有 https:// 網址
   base: '/Travel-Companion/', 
   plugins: [
+    {
+      name: 'travel-companion-browser-security',
+      transformIndexHtml(html) {
+        if (isProduction) {
+          return html.replace(
+            CSP_PLACEHOLDER,
+            createContentSecurityPolicy(env.VITE_SUPABASE_URL),
+          )
+        }
+
+        return html.replace(
+          /\s*<meta http-equiv="Content-Security-Policy" content="__TRAVEL_COMPANION_CSP__" \/>/,
+          '',
+        )
+      },
+    },
     react(),
     tailwindcss(),
     VitePWA({
@@ -59,4 +114,5 @@ export default defineConfig({
     // 以 1 MB 為非首屏 chunk 警告門檻，初始 bundle 仍應維持在 500 kB 以下。
     chunkSizeWarningLimit: 1000,
   },
+  }
 })

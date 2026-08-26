@@ -17,6 +17,7 @@ import {
   normalizeOtherInfoAllowedRoles,
 } from "../permissions/roles";
 import type { OtherInfoItem } from "../types";
+import { getTrustedHttpUrl } from "./browserSecurity";
 
 // ================================
 // Types
@@ -53,6 +54,12 @@ const EXACT_HTTP_URL_PATTERN = /^https?:[\\/]+[^\s]+$/i;
 
 const normalizeHttpUrl = (value: string): string =>
   value.replace(/^(https?):[\\/]+/i, "$1://");
+
+const normalizeTrustedHttpUrl = (value: string): string | null => {
+  const normalizedUrl = normalizeHttpUrl(value);
+
+  return getTrustedHttpUrl(normalizedUrl) ? normalizedUrl : null;
+};
 
 // ================================
 // Public Functions
@@ -97,10 +104,15 @@ export const parseOtherInfoContentLinks = (
     line
       .split(HTTP_URL_PATTERN)
       .filter((part) => part.length > 0)
-      .map((part) => ({
-        type: EXACT_HTTP_URL_PATTERN.test(part) ? "link" : "text",
-        text: EXACT_HTTP_URL_PATTERN.test(part) ? normalizeHttpUrl(part) : part,
-      })),
+      .map((part) => {
+        const trustedUrl = EXACT_HTTP_URL_PATTERN.test(part)
+          ? normalizeTrustedHttpUrl(part)
+          : null;
+
+        return trustedUrl
+          ? { type: "link" as const, text: trustedUrl }
+          : { type: "text" as const, text: part };
+      }),
   );
 };
 
@@ -110,5 +122,7 @@ export const parseOtherInfoContentLinks = (
 export const getStandaloneHttpUrl = (content: string): string | null => {
   const value = content.trim();
 
-  return EXACT_HTTP_URL_PATTERN.test(value) ? normalizeHttpUrl(value) : null;
+  return EXACT_HTTP_URL_PATTERN.test(value)
+    ? normalizeTrustedHttpUrl(value)
+    : null;
 };

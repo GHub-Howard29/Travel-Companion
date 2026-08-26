@@ -2,11 +2,11 @@
 
 Travel Companion 是以 Trip 為核心的 Offline First 旅行管理 PWA，使用 React、TypeScript、Vite 與 Supabase，支援行程、清單、資訊、多人帳本、附件及外幣換算。
 
-> 已發布版本：V3.5.0
+> 已發布版本：V3.5.1
 >
-> 目前待發布版本：V3.5.1（程式、正式 Supabase migration、角色、跨裝置即時刷新、多帳號競態、宜蘭附件實機回歸與 Storage 四角色 RLS 回歸均已完成）
+> 已完成資料庫維護：V3.5.2（無獨立 App build／tag）
 >
-> 下一個規劃版本：V3.5.2「Supabase 資料庫權限函式硬化」
+> 發布準備版本：V3.5.3「前端瀏覽器安全防護」（待合併與部署）
 >
 > 最後更新：2026-08-26
 
@@ -28,6 +28,7 @@ Travel Companion 是以 Trip 為核心的 Offline First 旅行管理 PWA，使�
 - [Trip Cloud 驗證手冊](12_Trip%20Cloud%20驗證手冊.md)
 - [V3.6.0 地點間預估移動資訊規格](15_V3.6.0_地點間預估移動資訊規格.md)
 - [V3.4.1 離線同步規格](16_V3.4.1_離線狀態與OtherInfo本機優先同步規格.md)
+- [V3.5.3 前端瀏覽器安全防護驗證](17_V3.5.3_前端瀏覽器安全防護驗證.md)
 
 ## 歷史
 

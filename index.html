@@ -2,6 +2,8 @@
 <html lang="zh-Hant">
   <head>
     <meta charset="UTF-8" />
+    <meta http-equiv="Content-Security-Policy" content="__TRAVEL_COMPANION_CSP__" />
+    <meta name="referrer" content="no-referrer" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#fff3e8" />
     
@@ -17,16 +19,7 @@
     
     <link rel="icon" type="image/png" href="/favicon.png" />
     <link rel="apple-touch-icon" href="/pwa-192x192.png" />
-    <script>
-      (() => {
-        const isIosDevice =
-          /iPad|iPhone|iPod/.test(navigator.userAgent) ||
-          (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-        if (isIosDevice && navigator.standalone === true) {
-          document.documentElement.classList.add("ios-standalone-pwa");
-        }
-      })();
-    </script>
+    <script src="%BASE_URL%ios-standalone.js" vite-ignore></script>
     <style>
       html,
       body,

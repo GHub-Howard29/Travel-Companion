@@ -72,7 +72,7 @@ const renderContentWithLinks = (content: string) => {
               key={`${part.text}-${partIndex}`}
               href={part.text}
               target="_blank"
-              rel="noreferrer"
+              rel="noopener noreferrer"
               className="break-all font-semibold text-sky-700 underline decoration-sky-300 underline-offset-2 hover:text-sky-900"
             >
               {part.text}
@@ -686,7 +686,7 @@ export const OtherInfoPage = ({
                       <a
                         href={standaloneUrl}
                         target="_blank"
-                        rel="noreferrer"
+                        rel="noopener noreferrer"
                         className="inline-flex items-center gap-1 text-sky-700 underline decoration-sky-300 underline-offset-2 hover:text-sky-900"
                       >
                         {item.title}
