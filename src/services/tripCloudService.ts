@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { SidebarItemConfig, TripDetail, TripMeta, TripMode } from "../types";
 import type { StoredTripRecord } from "../storage/tripStorage";
 import { ATTACHMENT_BUCKET } from "../constants/appConstants";
+import { isExpenseAttachmentPathForTrip } from "../utils/attachmentUtils";
 
 interface CloudTripRow {
   id: string;
@@ -51,7 +52,9 @@ const removeCloudAttachmentsForTrip = async (
   supabase: SupabaseClient,
   tripId: string,
 ): Promise<void> => {
-  const paths = await getCloudAttachmentPaths(supabase, tripId);
+  const paths = (await getCloudAttachmentPaths(supabase, tripId)).filter(
+    (path) => isExpenseAttachmentPathForTrip(path, tripId),
+  );
 
   for (let index = 0; index < paths.length; index += STORAGE_REMOVE_BATCH_SIZE) {
     const { error } = await supabase.storage

@@ -42,11 +42,18 @@ const getDefaultParticipantName = (email: string): string => {
 const toParticipantAssignmentText = (
   participants: string[],
   participantEmailMap?: Record<string, string>,
-  fallbackEmail?: string | null,
+  fallbackEmails: string[] = [],
 ): string => {
-  if (participants.length === 0 && fallbackEmail) {
-    const normalizedEmail = fallbackEmail.trim().toLowerCase();
-    return `${getDefaultParticipantName(normalizedEmail)}=${normalizedEmail}`;
+  if (participants.length === 0 && fallbackEmails.length > 0) {
+    return Array.from(
+      new Set(
+        fallbackEmails
+          .map((email) => email.trim().toLowerCase())
+          .filter(Boolean),
+      ),
+    )
+      .map((email) => `${getDefaultParticipantName(email)}=${email}`)
+      .join("\n");
   }
 
   return participants
@@ -124,15 +131,17 @@ export const TripEditorModal = ({
     toParticipantAssignmentText(
       trip?.participants ?? [],
       trip?.participantEmailMap ?? tripDetail?.content.participantEmailMap,
-      userEmail,
+      mode === "create"
+        ? superAdminEmails.length > 0
+          ? superAdminEmails
+          : userEmail
+            ? [userEmail]
+            : []
+        : [],
     ),
   );
   const [editorEmailText, setEditorEmailText] = useState(
-    toTextareaValue(
-      mode === "create" && userEmail
-        ? Array.from(new Set([userEmail.trim().toLowerCase(), ...editorEmails]))
-        : editorEmails,
-    ),
+    toTextareaValue(editorEmails),
   );
   const [currencyCode, setCurrencyCode] = useState(
     trip?.currencyConfig.code ?? "TWD",
@@ -337,8 +346,8 @@ export const TripEditorModal = ({
             參與者與登入 Email
           </span>
           <p className="mt-1 text-xs leading-relaxed text-slate-400">
-            每行填寫「名稱=Email」。左邊名稱會顯示在記帳本付款人，右邊 Email
-            用於預設登入者的付款人名稱；記帳時仍可改選其他參與者代為記帳。新增旅程時會先帶入目前登入 Email。
+            每行填寫「名稱=Email」。左側名稱會顯示在記帳本付款人；右側 Email
+            用於辨識預設登入者，記帳時仍可代其他同行者記帳。本欄會先帶入目前已設定的帳號，請勿刪除既有內容。若要新增同行者，請依上述格式逐行新增；若要授權同行者編輯本行程，再將其 Email 填入下方「可編輯者 Email」。
             {!canManageEditors && " 參與者與登入 Email 僅限系統管理者編輯。"}
           </p>
           <textarea

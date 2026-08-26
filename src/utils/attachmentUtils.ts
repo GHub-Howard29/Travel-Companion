@@ -33,6 +33,60 @@ export const sanitizeStorageFileName = (value: string) => {
   return clean || 'receipt-photo';
 };
 
+const isStoragePathSegment = (value: string): boolean =>
+  Boolean(value) &&
+  value !== "." &&
+  value !== ".." &&
+  !value.includes("/") &&
+  !value.includes("\\") &&
+  !Array.from(value).some((character) => character.charCodeAt(0) < 32);
+
+/**
+ * Supabase Storage rejects some Unicode object keys. Keep the object path
+ * ASCII-only while retaining a deterministic one-to-one relation with the
+ * real Trip and expense identifiers used by the RLS policies.
+ */
+export const toExpenseAttachmentStorageScope = (value: string): string => {
+  if (!isStoragePathSegment(value)) {
+    throw new Error("invalid-expense-attachment-scope");
+  }
+
+  const hex = Array.from(new TextEncoder().encode(value), (byte) =>
+    byte.toString(16).padStart(2, "0"),
+  ).join("");
+  return `s_${hex}`;
+};
+
+export const buildExpenseAttachmentPath = (
+  tripId: string,
+  expenseId: string,
+  fileName: string,
+  uploadedAt = new Date(),
+): string => {
+  if (!isStoragePathSegment(tripId) || !isStoragePathSegment(expenseId)) {
+    throw new Error("invalid-expense-attachment-scope");
+  }
+
+  const stamp = uploadedAt.toISOString().replace(/[:.]/g, "-");
+  return `${toExpenseAttachmentStorageScope(tripId)}/${toExpenseAttachmentStorageScope(expenseId)}/${stamp}-${sanitizeStorageFileName(fileName)}`;
+};
+
+export const isExpenseAttachmentPathForTrip = (
+  path: string | null | undefined,
+  tripId: string,
+  expenseId?: string,
+): boolean => {
+  if (!path || !isStoragePathSegment(tripId)) return false;
+
+  const segments = path.split("/");
+  return (
+    segments.length === 3 &&
+    segments.every(isStoragePathSegment) &&
+    segments[0] === toExpenseAttachmentStorageScope(tripId) &&
+    (!expenseId || segments[1] === toExpenseAttachmentStorageScope(expenseId))
+  );
+};
+
 export const formatFileSize = (bytes?: number | null) => {
   if (!bytes) return '';
   if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;

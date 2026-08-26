@@ -1,20 +1,19 @@
 /** App 發布版本設定；須與 public/app-version.json 保持一致。 */
-export const APP_VERSION = "3.5.0";
+export const APP_VERSION = "3.5.1";
 
 /**
  * 最近一次已發布版本；此版本必須存在於 versionHistory.ts。
  * production build 會驗證這個規則，避免升版後遺漏版本歷史。
  */
-export const PREVIOUS_RELEASE_VERSION = "3.4.11";
+export const PREVIOUS_RELEASE_VERSION = "3.5.0";
 
-export const RELEASE_DATE = "2026-08-25";
+export const RELEASE_DATE = "2026-08-26";
 
 export const RELEASE_NOTES = [
-  "完成其他資訊敏感資料卡片的角色限制與 Supabase RLS 保護",
-  "修正其他資訊同步失敗，並新增手動重新同步按鈕",
-  "限制 trip_editor 修改參與者／登入 Email 及刪除整個旅程的權限",
-  "補強 Android／Chrome PWA 更新與資料同步驗證流程",
-  "修正 PWA 更新接管時序，避免重複點擊與更新後空白頁",
+  "強化帳本附件的私有儲存空間、Trip 權限與短期連結保護",
+  "新增 App 首頁分享入口與系統原生分享功能",
+  "修正其他資訊與共同準備清單的跨裝置即時刷新",
+  "保留離線同步佇列，避免遠端事件覆蓋尚未送出的本機變更",
 ];
 
 export const FORCE_UPDATE = true;

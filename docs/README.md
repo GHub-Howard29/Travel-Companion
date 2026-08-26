@@ -4,11 +4,11 @@ Travel Companion 是以 Trip 為核心的 Offline First 旅行管理 PWA，使�
 
 > 已發布版本：V3.5.0
 >
-> 目前待發布版本：V3.5.1（Supabase Storage 附件安全維護與已確認的 App 分享功能）
+> 目前待發布版本：V3.5.1（程式、正式 Supabase migration、角色、跨裝置即時刷新、多帳號競態、宜蘭附件實機回歸與 Storage 四角色 RLS 回歸均已完成）
 >
-> 下一個功能版本：V3.5.1「Supabase Storage 附件安全維護與 App 分享功能」
+> 下一個規劃版本：V3.5.2「Supabase 資料庫權限函式硬化」
 >
-> 最後更新：2026-08-25
+> 最後更新：2026-08-26
 
 ## 優先閱讀
 

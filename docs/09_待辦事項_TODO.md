@@ -4,7 +4,7 @@
 >
 > 最後更新：2026-08-26
 >
-> 已發布版本：V3.5.0；目前待發布版本：V3.5.1（V3.5.0 發布後驗證已結案；iOS 因無設備保留未驗證）。
+> 已發布版本：V3.5.0；目前待發布版本：V3.5.1（程式、正式 Supabase migration、靜態驗證、角色、跨裝置競態、宜蘭附件與 Storage 四角色 RLS 回歸均已完成）。
 
 ## V3.5.0 iOS PWA 與敏感資訊可見範圍強化（發布前不含 PWA 實機驗證）
 
@@ -74,26 +74,41 @@
 
 ## 後續版本
 
-- [ ] V3.5.1：Supabase Storage 附件安全維護、已確認的 App 分享功能，以及其他資訊／領隊導遊資料／共同準備清單跨裝置即時刷新與多帳號更新競態修正；不新增敏感附件可見層級。
+- [x] V3.5.1：程式與正式 Supabase migration 已完成；雙端跨裝置即時刷新、角色、多帳號同筆競態、宜蘭附件與 Storage 四角色 RLS 回歸均已通過，不新增敏感附件可見層級，可進入發布流程。
 - [ ] V3.5.2：Supabase 資料庫權限函式硬化。
 - [ ] V3.5.3：前端瀏覽器安全防護；開始前重新確認範圍與版號。
+- [ ] V3.5.4：管理者帳號名稱映射、統一 Trip ID 與新增旅程預帶入（已定案）：建立 `admin_profiles`，App 依固定顯示名稱與 Email 預帶入參與者；新 Trip ID 固定為 `free-travel-YYYY-MM-DD` 或 `group-tour-YYYY-MM-DD`，同型同日不可重複；既有 `admin_users` 僅維持角色／Trip 指派，既有 Trip ID 不修改。
 - [ ] V3.6.0：地點間預估移動資訊，依專屬規格開發。
 
 ### V3.5.1 已確認新增功能（App 分享）
 
-- [ ] 頁首於既有關閉按鈕左側新增小型分享圖示；既有 App 文案與小圖示不得變動。
-- [ ] 浮動視窗顯示本專案圖示、首頁超連結、分享連結文字及每行四個原生分享 App 圖示。
-- [ ] 原生分享由使用者選擇通訊軟體頻道或其他系統分享目標；清單超出視窗時可上下滑動，不新增「更多」按鈕。
-- [ ] 保留原本關閉按鈕，點擊後返回當下 App 主畫面；不建立單一 Trip 分享網址。
+- [x] 頁首於既有關閉按鈕左側新增小型分享圖示；既有 App 文案與小圖示未變動。
+- [x] 浮動視窗顯示本專案圖示、首頁超連結與分享連結；系統原生分享面板依平台以 App 圖示清單呈現，超出時由原生面板滑動。
+- [x] 原生分享由使用者選擇通訊軟體頻道或其他系統分享目標；未新增「更多」按鈕。
+- [x] 保留原本關閉按鈕，點擊後返回當下 App 主畫面；未建立單一 Trip 分享網址。
 
 ### V3.5.1 待修正開發（跨裝置即時刷新）
 
-- [ ] 監聽 `other_info_items` 針對目前 `trip_id` 的 Supabase Realtime 事件，涵蓋新增、修改及軟刪除（UPDATE）。
-- [ ] 監聽 shared `checklists`（`trip_id`、`scope = shared`）及 `checklist_items`（shared checklist ID）的 Supabase Realtime 事件，涵蓋新增、修改、勾選、刪除／軟刪除與排序。
-- [ ] 收到事件後以 RLS-safe query 重新載入目前行程資料，讓其他資訊、領隊／導遊資料及共同準備清單在另一台裝置自動刷新，不需切換行程資料庫。
-- [ ] 保留 focus／visibility／reconnect 重新載入備援，且不得覆蓋尚未送出的本機同步佇列。
-- [ ] 以兩個不同帳號同時操作同一共同清單項目，驗證勾選、編輯、刪除／軟刪除的競態結果可預期；同一欄位維持最後成功雲端寫入結果，不新增衝突 UI。
-- [ ] 補上 Realtime publication／migration 與雙裝置角色回歸驗證；維持既有 `trip_editor`／`super_admin` 權限矩陣。
+- [x] 監聽 `other_info_items` 針對目前 `trip_id` 的 Supabase Realtime 事件，涵蓋新增、修改及軟刪除（UPDATE）。
+- [x] 監聽 shared `checklists`（`trip_id`、`scope = shared`）及 `checklist_items`（shared checklist ID）的 Supabase Realtime 事件，涵蓋新增、修改、勾選、刪除／軟刪除與排序。
+- [x] 收到事件後以 RLS-safe query 重新載入目前行程資料，不直接採用事件 payload。
+- [x] 保留 focus／visibility／reconnect 重新載入備援，且 pending／本機 cloud write 期間略過遠端刷新。
+- [x] 以兩個不同帳號同時編輯共同清單，最後成功雲端寫入狀態會成為最新資料，完成同步後不回滾；不新增衝突 UI。
+- [x] Realtime publication migration 已於正式 Supabase 套用並驗證；Codex 內建瀏覽器與電腦桌面版 PWA 雙端在同步完成後均於 1 秒內顯示更新，跨裝置即時刷新回歸通過，既有 `trip_editor`／`super_admin` 權限矩陣不變。
+
+### V3.5.1 Storage 驗證
+
+- [x] 已建立 private bucket／Storage RLS migration、路徑檢查及 15 分鐘簽名網址檢查。
+- [x] `npm run lint`、`npm run build` 與 release history 驗證已通過。
+- [x] 正式 Supabase migration 已套用並驗證：private bucket、1 MiB／MIME 限制、四項 Storage RLS policy、三張 Realtime publication table 與 migration history 均正確；既有附件物件為 0。
+- [x] BUG027 含中文舊 Trip ID 的附件 key 修正已套用正式 Supabase；UTF-8 hex scope 函式與四項 Storage RLS policy 已驗證。
+- [x] 以宜蘭行程的兩筆既有失敗照片按「同步照片」回歸，兩筆均成功上傳。
+- [x] 以 anon、其他 Trip editor、所屬 Trip editor、super admin 完成 Storage RLS 回歸（2026-08-26）：以自動 ROLLBACK 的遠端資料庫交易模擬 JWT／Postgres role；讀取／簽名可見性、上傳與更新均符合預期，刪除 policy 已驗證存在。直接 SQL 刪除由 Supabase `protect_objects_delete` 內建觸發器禁止，實際刪除須經 Storage HTTP API 與登入 session 執行。
+
+### V3.5.1 補充實機權限回歸
+
+- [x] Guest、User 的相關操作介面依權限阻擋。
+- [x] `trip_editor` 無法建立行程，且只能修改被授權的行程。
 
 ## 跨版本待驗證／改善
 

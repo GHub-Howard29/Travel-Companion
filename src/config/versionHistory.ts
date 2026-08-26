@@ -14,6 +14,16 @@ export type VersionHistoryItem = {
 
 export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
+    version: "3.5.0",
+    date: "2026-08-25",
+    forceUpdate: true,
+    notes: [
+      "完成其他資訊敏感資料卡片的角色限制與 Supabase RLS 保護。",
+      "修正其他資訊同步失敗並提供手動重試，收斂行程編輯權限。",
+      "修正 PWA 更新接管時序，並完成 Android／Chrome 發布後驗證。",
+    ],
+  },
+  {
     version: "3.4.11",
     date: "2026-08-24",
     forceUpdate: false,

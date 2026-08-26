@@ -18,6 +18,9 @@ export const SUPPORTED_CURRENCIES = [
 // Supabase Storage Bucket 名稱
 export const ATTACHMENT_BUCKET = 'expense-attachments';
 
+// 私有附件簽名網址僅供當次開啟或匯出使用，15 分鐘後失效。
+export const ATTACHMENT_SIGNED_URL_EXPIRES_IN_SECONDS = 15 * 60;
+
 // IndexedDB 資料庫名稱
 export const ATTACHMENT_DB_NAME = 'travel-companion-attachments';
 
