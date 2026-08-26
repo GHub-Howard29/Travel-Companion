@@ -15,3 +15,11 @@ export interface AdminUser {
   role: 'super_admin' | 'trip_editor';
   trip_id: string | null;
 }
+
+export interface AdminProfile {
+  user_id: string;
+  email: string;
+  display_name: string;
+  include_in_new_trip: boolean;
+  sort_order: number;
+}

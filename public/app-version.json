@@ -1,10 +1,10 @@
 {
-  "version": "3.5.3",
+  "version": "3.5.4",
   "releaseDate": "2026-08-26",
   "releaseNotes": [
-    "正式版加入內容安全政策與 no-referrer，限制瀏覽器載入與連線來源。",
-    "強化 Google OAuth 等待畫面、外部網址與新視窗的安全處理。",
-    "保留附件、PWA、Excel 匯出、分享與既有權限／同步資料流相容性。"
+    "新增 Super Admin 固定顯示名稱，建立旅程時只預帶 Howard 與 Carol。",
+    "統一新 Trip ID 規則，並阻擋本機、雲端及併發造成的重複 Trip。",
+    "新增旅程必須保持連線；既有旅程的 ID、編輯與離線使用方式維持不變。"
   ],
   "forceUpdate": false
 }

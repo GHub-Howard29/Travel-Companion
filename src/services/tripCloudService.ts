@@ -15,6 +15,23 @@ interface CloudTripRow {
   updated_at: string;
 }
 
+const toCloudTripInsert = (record: StoredTripRecord) => ({
+  id: record.meta.id,
+  title: record.meta.title,
+  departure_date: record.meta.departureDate,
+  participants: record.meta.participants,
+  currency_config: record.meta.currencyConfig,
+  sidebar_config: record.detail.sidebarConfig,
+  content: {
+    ...record.detail.content,
+    mode: record.meta.mode ?? "guided",
+    participantEmailMap:
+      record.meta.participantEmailMap ??
+      record.detail.content.participantEmailMap ??
+      {},
+  },
+});
+
 const STORAGE_REMOVE_BATCH_SIZE = 1_000;
 
 const getCloudAttachmentPaths = async (
@@ -204,25 +221,7 @@ export const upsertCloudTripRecord = async (
 
   const { data, error } = await supabase
     .from("trips")
-    .upsert(
-      {
-        id: record.meta.id,
-        title: record.meta.title,
-        departure_date: record.meta.departureDate,
-        participants: record.meta.participants,
-        currency_config: record.meta.currencyConfig,
-        sidebar_config: record.detail.sidebarConfig,
-        content: {
-          ...record.detail.content,
-          mode: record.meta.mode ?? "guided",
-          participantEmailMap:
-            record.meta.participantEmailMap ??
-            record.detail.content.participantEmailMap ??
-            {},
-        },
-      },
-      { onConflict: "id" },
-    )
+    .upsert(toCloudTripInsert(record), { onConflict: "id" })
     .select(
       "id, title, departure_date, participants, currency_config, sidebar_config, content, updated_at",
     )
@@ -234,6 +233,50 @@ export const upsertCloudTripRecord = async (
   }
 
   return toTripRecord(data as CloudTripRow);
+};
+
+export const cloudTripExists = async (
+  supabase: SupabaseClient,
+  tripId: string,
+): Promise<boolean> => {
+  if (!navigator.onLine) {
+    throw new Error("新增旅程需要網路連線");
+  }
+
+  const { data, error } = await supabase
+    .from("trips")
+    .select("id")
+    .eq("id", tripId)
+    .maybeSingle();
+
+  if (error) throw error;
+  return Boolean(data);
+};
+
+export const insertCloudTripRecord = async (
+  supabase: SupabaseClient,
+  record: StoredTripRecord,
+): Promise<StoredTripRecord> => {
+  if (!navigator.onLine) {
+    throw new Error("新增旅程需要網路連線");
+  }
+
+  const { data, error } = await supabase
+    .from("trips")
+    .insert(toCloudTripInsert(record))
+    .select(
+      "id, title, departure_date, participants, currency_config, sidebar_config, content, updated_at",
+    )
+    .single();
+
+  if (error) throw error;
+
+  const insertedRecord = toTripRecord(data as CloudTripRow);
+  if (!insertedRecord) {
+    throw new Error("雲端回傳的旅程資料格式不正確");
+  }
+
+  return insertedRecord;
 };
 
 export const deleteCloudTripRecord = async (

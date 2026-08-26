@@ -29,7 +29,11 @@ import useTripWorkspace from "./hooks/useTripWorkspace";
 import { AppContext } from "./app/context/AppContext";
 import { ROLE } from "./permissions/roles";
 import { getCloudTripRecords } from "./services/tripCloudService";
-import { getTripDetail } from "./services/tripRepository";
+import {
+  DuplicateTripIdError,
+  getTripDetail,
+  TripCreationOfflineError,
+} from "./services/tripRepository";
 import { syncCloudOtherInfoItems } from "./services/otherInfoCloudService";
 import { syncPrivateChecklistWithCloud } from "./services/privateChecklistCloudService";
 import { syncCloudSharedChecklistSeedItems } from "./services/sharedChecklistCloudService";
@@ -214,6 +218,8 @@ function ConfiguredApp({
     reloadCurrentTrip,
     currentTripEditorEmails,
     superAdminEmails,
+    defaultParticipantProfiles,
+    refreshDefaultParticipantProfiles,
   } = useTripWorkspace({ supabase });
   const [tripEditorMode, setTripEditorMode] = useState<"create" | "edit">("create");
   const [isTripEditorOpen, setIsTripEditorOpen] = useState(false);
@@ -440,10 +446,20 @@ function ConfiguredApp({
   const isHistoricalOfflineReadOnly = Boolean(
     selectedTripMeta && !isOnline && isHistoricalTrip(selectedTripMeta),
   );
-  const openCreateTrip = () => {
+  const openCreateTrip = async () => {
     if (isHistoricalOfflineReadOnly) return;
-    setTripEditorMode("create");
-    setIsTripEditorOpen(true);
+    if (!isOnline || !navigator.onLine) {
+      alert("新增旅程需要網路連線");
+      return;
+    }
+    try {
+      await refreshDefaultParticipantProfiles();
+      setTripEditorMode("create");
+      setIsTripEditorOpen(true);
+    } catch (error) {
+      console.error("Failed to load administrator profiles:", error);
+      alert("無法載入管理者名稱設定，請稍後再試。");
+    }
   };
   const openEditTrip = () => {
     if (isHistoricalOfflineReadOnly) return;
@@ -466,13 +482,27 @@ function ConfiguredApp({
           editorEmails: currentTripEditorEmails,
         };
 
-    if (tripEditorMode === "create") {
-      await createTrip(nextInput, canManageEditors);
-    } else {
-      await updateTrip(nextInput, canManageEditors);
+    try {
+      if (tripEditorMode === "create") {
+        await createTrip(nextInput, canManageEditors);
+      } else {
+        await updateTrip(nextInput, canManageEditors);
+      }
+      setIsTripEditorOpen(false);
+      setIsMenuOpen(false);
+    } catch (error) {
+      console.error("Trip save failed:", error);
+      if (error instanceof DuplicateTripIdError) {
+        alert(
+          "相同旅程型態與初始出發日期的旅程已存在，請調整初始出發日期或旅程型態後再試。",
+        );
+      } else if (error instanceof TripCreationOfflineError) {
+        alert("新增旅程需要網路連線");
+      } else {
+        alert("無法儲存旅程，請確認網路連線後再試一次。");
+      }
+      setIsLoading(false);
     }
-    setIsTripEditorOpen(false);
-    setIsMenuOpen(false);
   };
   const handleTripDelete = async () => {
     if (!selectedTripId || isHistoricalOfflineReadOnly) return;
@@ -909,8 +939,8 @@ function ConfiguredApp({
           tripDetail={tripEditorMode === "edit" ? currentTrip : null}
           editorEmails={tripEditorMode === "edit" ? currentTripEditorEmails : []}
           superAdminEmails={superAdminEmails}
+          defaultParticipantProfiles={defaultParticipantProfiles}
           canManageEditors={adminProfile?.role === "super_admin"}
-          userEmail={userEmail}
           isOpen={isTripEditorOpen}
           onClose={() => setIsTripEditorOpen(false)}
           onSubmit={handleTripEditorSubmit}

@@ -14,6 +14,16 @@ export type VersionHistoryItem = {
 
 export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
+    version: "3.5.3",
+    date: "2026-08-26",
+    forceUpdate: false,
+    notes: [
+      "加入內容安全政策與 no-referrer，限制瀏覽器載入與連線來源。",
+      "強化 Google OAuth 等待畫面、外部網址與新視窗的安全處理。",
+      "保留附件、PWA、Excel 匯出、分享與既有權限／同步資料流相容性。",
+    ],
+  },
+  {
     version: "3.5.1",
     date: "2026-08-26",
     forceUpdate: true,
