@@ -2,9 +2,9 @@
 
 ## 目前狀態
 
-- 已發布版本：V3.5.3。
+- 已發布版本：V3.5.4。
 - V3.5.2「Supabase 資料庫權限函式硬化」已完成；正式 migration、advisors 與角色回歸通過，Product Owner 確認不建立獨立 App build／tag，App 顯示版本維持 V3.5.1。
-- V3.5.3「前端瀏覽器安全防護」已於 2026-08-26 發布；iOS standalone PWA Google OAuth 保留日後補驗證，不阻擋發布結案。V3.5.4 管理者帳號名稱映射與新 Trip ID 已完成正式 migration、資料庫角色回歸及 Super Admin 介面驗收；Product Owner 已確認 2026-08-26、`FORCE_UPDATE = false`，目前為已同步版本 metadata 的發布候選，尚未部署、合併或建立 tag；後續為 V3.6.0 地點間預估移動資訊。
+- V3.5.4「管理者帳號名稱映射與新 Trip ID」已於 2026-08-27 合併、建立 `v3.5.4` tag 並部署；採非強制更新。正式 migration、資料庫角色回歸及 Super Admin 介面驗收均已完成。離線新增阻擋、本機重複提示與正式站版本更新提示保留後續實機驗證；後續開發版本為 V3.6.0 地點間預估移動資訊。
 - 版本順序與範圍唯一以 `docs/02_產品開發路線圖.md` 為準；未完成工作以 `docs/09_待辦事項_TODO.md` 為準；目前有效狀態以 `docs/14_專案現況總覽.md` 為準。
 
 ## 開發與安全規則
