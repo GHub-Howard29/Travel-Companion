@@ -83,7 +83,7 @@
   - [x] Service Worker 安裝／離線、附件、Excel、分享及外部連結實機回歸。
   - [ ] 補驗證 V3.5.3 正式站的新版本更新提示：以舊版快取或既有 PWA 開啟正式站，確認可偵測 `3.5.3`、顯示正確更新內容，並可完成非強制更新。
   - [ ] 補驗證 iOS standalone PWA Google OAuth：建立可由 iPhone／iPad 存取的 HTTPS 測試站，在 Supabase Redirect URL 加入該站精確的 `/Travel-Companion/` 回呼網址；以 Safari 加入主畫面後完成 Google 登入，確認可回到 App、登入狀態正確且沒有白畫面或停留在等待頁；驗證完畢後移除暫時 Redirect URL。
-- [ ] V3.5.4：管理者帳號名稱映射、統一 Trip ID 與新增旅程預帶入（已定案）：建立 `admin_profiles`，App 依固定顯示名稱與 Email 預帶入參與者；新 Trip ID 依初始型態與出發開始日期固定為 `free-travel-YYYY-MM-DD` 或 `group-tour-YYYY-MM-DD`，同型同初始日期不可重複；新增 Trip 必須在線並同時檢查本機與 Supabase，既有 Trip 的離線能力不受影響；既有 `admin_users` 僅維持角色／Trip 指派，既有 Trip ID 不修改。
+- [ ] V3.5.4：管理者帳號名稱映射、統一 Trip ID 與新增旅程預帶入（正式 migration、資料庫角色回歸、Super Admin 介面驗收與非強制發布 metadata 已完成；尚未部署、合併或建立 tag）：建立 `admin_profiles`，App 依固定顯示名稱與 Email 預帶入參與者；新 Trip ID 依初始型態與出發開始日期固定為 `free-travel-YYYY-MM-DD` 或 `group-tour-YYYY-MM-DD`，同型同初始日期不可重複；新增 Trip 必須在線並同時檢查本機與 Supabase，既有 Trip 的離線能力不受影響；既有 `admin_users` 僅維持角色／Trip 指派，既有 Trip ID 不修改。
 - [ ] V3.6.0：地點間預估移動資訊，依專屬規格開發。
 
 ### V3.5.1 已確認新增功能（App 分享）

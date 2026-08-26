@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { AdminUser, TripDetail, TripEditorInput, TripMeta } from "../types";
+import type {
+  AdminProfile,
+  AdminUser,
+  TripDetail,
+  TripEditorInput,
+  TripMeta,
+} from "../types";
 import { findDefaultTrip, getDefaultActiveDay } from "../utils/tripHelpers";
 import { getParticipantAliasByEmail } from "../utils/participantUtils";
 import { toPersonalBookTripId } from "../storage/expenseStorage";
@@ -8,15 +14,17 @@ import { createPermission } from "../permissions/permission";
 import { mapRole } from "../permissions/roleMapper";
 import {
   createTripRecord,
+  createTripRecordWithCloudSync,
   createTripRecordFromDetail,
   createTripRecordFromExisting,
   deleteTripRecordWithCloudSync,
+  getAdminProfiles,
   getTripDetail,
   getTripEditorEmails,
   getTripMetas,
   getSuperAdminEmails,
-  saveTripRecordWithCloudSync,
   saveTripRecord,
+  saveTripRecordWithCloudSync,
   syncTripEditorEmails,
   updateTripRecord,
 } from "../services/tripRepository";
@@ -45,6 +53,9 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
   const [expenseBookTripId, setExpenseBookTripId] = useState<string>("");
   const [currentTripEditorEmails, setCurrentTripEditorEmails] = useState<string[]>([]);
   const [superAdminEmails, setSuperAdminEmails] = useState<string[]>([]);
+  const [defaultParticipantProfiles, setDefaultParticipantProfiles] = useState<
+    AdminProfile[]
+  >([]);
   // 防止重連時較早開始的讀取，在較新的儲存後才回寫舊快照。
   const tripLoadRevisionRef = useRef(0);
 
@@ -100,6 +111,12 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
     if (path.includes("/Travel-Companion")) return "/Travel-Companion/";
     return "/";
   }, []);
+
+  const refreshDefaultParticipantProfiles = useCallback(async () => {
+    const profiles = await getAdminProfiles(supabase);
+    setDefaultParticipantProfiles(profiles);
+    return profiles;
+  }, [supabase]);
 
   useEffect(() => {
     void supabase.auth.getSession().then(({ data: { session } }) => {
@@ -279,8 +296,14 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
             console.warn(error);
             setSuperAdminEmails([]);
           });
+        refreshDefaultParticipantProfiles()
+          .catch((error) => {
+            console.warn(error);
+            setDefaultParticipantProfiles([]);
+          });
       } else {
         setSuperAdminEmails([]);
+        setDefaultParticipantProfiles([]);
       }
 
       if (isAuthorized) {
@@ -302,12 +325,24 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
     };
 
     void loadTripAndAuthData();
-  }, [getBasePath, isOnline, selectedTripId, selectedTripMeta, supabase, userEmail]);
+  }, [
+    getBasePath,
+    isOnline,
+    refreshDefaultParticipantProfiles,
+    selectedTripId,
+    selectedTripMeta,
+    supabase,
+    userEmail,
+  ]);
 
   const createTrip = useCallback(
     async (input: TripEditorInput, syncEditors = true) => {
       const record = createTripRecord(input);
-      await saveTripRecordWithCloudSync(supabase, record);
+      await createTripRecordWithCloudSync(
+        supabase,
+        record,
+        tripOptions.map((trip) => trip.id),
+      );
       if (syncEditors) {
         await syncTripEditorEmails(supabase, record.meta.id, record.editorEmails);
       }
@@ -320,7 +355,7 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
       setActiveDay(getDefaultActiveDay(record.detail.departureDate, record.detail.content.days));
       setIsLoading(false);
     },
-    [getBasePath, supabase],
+    [getBasePath, supabase, tripOptions],
   );
 
   const updateTrip = useCallback(
@@ -501,5 +536,7 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
     reloadCurrentTrip,
     currentTripEditorEmails,
     superAdminEmails,
+    defaultParticipantProfiles,
+    refreshDefaultParticipantProfiles,
   };
 }

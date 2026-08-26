@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
+  AdminProfile,
   OtherInfoItem,
   SidebarItemConfig,
   TripDetail,
@@ -15,8 +16,10 @@ import {
   type StoredTripRecord,
 } from "../storage/tripStorage";
 import {
+  cloudTripExists,
   deleteCloudTripRecord,
   getCloudTripRecords,
+  insertCloudTripRecord,
   upsertCloudTripRecord,
 } from "./tripCloudService";
 import { getCloudOtherInfoItems } from "./otherInfoCloudService";
@@ -222,19 +225,12 @@ const normalizeTripDetail = (
   };
 };
 
-const toSlug = (value: string): string => {
-  const normalized = value
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9\u4e00-\u9fa5]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-
-  return normalized || "trip";
-};
-
-const createTripId = (title: string, departureDate: string): string => {
-  const suffix = Date.now().toString(36);
-  return `${toSlug(title)}-${departureDate}-${suffix}`;
+export const createTripId = (
+  mode: TripMode,
+  departureDate: string,
+): string => {
+  const prefix = mode === "selfGuided" ? "free-travel" : "group-tour";
+  return `${prefix}-${departureDate}`;
 };
 
 const createDays = (dayCount: number): number[] => {
@@ -451,7 +447,7 @@ export const getTripDetail = async (
 };
 
 export const createTripRecord = (input: TripEditorInput): StoredTripRecord => {
-  const id = createTripId(input.title, input.departureDate);
+  const id = createTripId(input.mode, input.departureDate);
   const days = createDays(input.dayCount);
   const editorEmails = normalizeEmails(input.editorEmails);
   const mode = input.mode;
@@ -499,6 +495,69 @@ export const createTripRecord = (input: TripEditorInput): StoredTripRecord => {
     editorEmails,
     updatedAt: new Date().toISOString(),
   };
+};
+
+export class DuplicateTripIdError extends Error {
+  constructor(public readonly tripId: string) {
+    super(`Trip ID 已存在：${tripId}`);
+    this.name = "DuplicateTripIdError";
+  }
+}
+
+export class TripCreationOfflineError extends Error {
+  constructor() {
+    super("新增旅程需要網路連線");
+    this.name = "TripCreationOfflineError";
+  }
+}
+
+const isUniqueViolation = (error: unknown): boolean => {
+  return (
+    Boolean(error) &&
+    typeof error === "object" &&
+    "code" in error &&
+    (error as { code?: unknown }).code === "23505"
+  );
+};
+
+export const createTripRecordWithCloudSync = async (
+  supabase: SupabaseClient,
+  record: StoredTripRecord,
+  knownTripIds: string[],
+): Promise<StoredTripRecord> => {
+  if (!navigator.onLine) throw new TripCreationOfflineError();
+
+  const localTripIds = new Set([
+    ...knownTripIds,
+    ...readStoredTripRecords().map((item) => item.meta.id),
+  ]);
+  if (localTripIds.has(record.meta.id)) {
+    throw new DuplicateTripIdError(record.meta.id);
+  }
+
+  if (await cloudTripExists(supabase, record.meta.id)) {
+    throw new DuplicateTripIdError(record.meta.id);
+  }
+
+  try {
+    const insertedRecord = await insertCloudTripRecord(supabase, record);
+    const storedRecord = {
+      ...insertedRecord,
+      editorEmails: record.editorEmails,
+    };
+    try {
+      saveTripRecord(storedRecord);
+    } catch (error) {
+      console.warn("Cloud Trip created but local cache could not be updated", error);
+    }
+    return storedRecord;
+  } catch (error) {
+    if (isUniqueViolation(error)) {
+      throw new DuplicateTripIdError(record.meta.id);
+    }
+    if (!navigator.onLine) throw new TripCreationOfflineError();
+    throw error;
+  }
 };
 
 export const updateTripRecord = (
@@ -745,6 +804,40 @@ export const getSuperAdminEmails = async (
 
   return normalizeEmails(
     ((data ?? []) as Array<{ email: string | null }>).map((row) => row.email ?? ""),
+  );
+};
+
+export const getAdminProfiles = async (
+  supabase: SupabaseClient,
+): Promise<AdminProfile[]> => {
+  if (!navigator.onLine) return [];
+
+  const [profileResult, superAdminResult] = await Promise.all([
+    supabase
+      .from("admin_profiles")
+      .select(
+        "user_id, email, display_name, include_in_new_trip, sort_order",
+      )
+      .eq("include_in_new_trip", true)
+      .order("sort_order", { ascending: true })
+      .order("email", { ascending: true }),
+    supabase
+      .from("admin_users")
+      .select("email")
+      .eq("role", "super_admin"),
+  ]);
+
+  if (profileResult.error) throw profileResult.error;
+  if (superAdminResult.error) throw superAdminResult.error;
+
+  const superAdminEmailSet = new Set(
+    ((superAdminResult.data ?? []) as Array<{ email: string | null }>)
+      .map((row) => row.email?.trim().toLowerCase())
+      .filter((email): email is string => Boolean(email)),
+  );
+
+  return ((profileResult.data ?? []) as AdminProfile[]).filter((profile) =>
+    superAdminEmailSet.has(profile.email.trim().toLowerCase()),
   );
 };
 

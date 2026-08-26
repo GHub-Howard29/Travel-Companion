@@ -8,6 +8,8 @@ Travel Companion 是以 Trip 為核心的 Offline First 旅行管理 PWA，使�
 >
 > 最新發布：V3.5.3「前端瀏覽器安全防護」（2026-08-26；iOS standalone PWA Google OAuth 保留日後補驗證）
 >
+> V3.5.4 正式資料庫 migration、Super Admin 介面驗收與非強制發布 metadata 已完成，尚未部署
+>
 > 最後更新：2026-08-26
 
 ## 優先閱讀
@@ -29,6 +31,7 @@ Travel Companion 是以 Trip 為核心的 Offline First 旅行管理 PWA，使�
 - [V3.6.0 地點間預估移動資訊規格](15_V3.6.0_地點間預估移動資訊規格.md)
 - [V3.4.1 離線同步規格](16_V3.4.1_離線狀態與OtherInfo本機優先同步規格.md)
 - [V3.5.3 前端瀏覽器安全防護驗證](17_V3.5.3_前端瀏覽器安全防護驗證.md)
+- [V3.5.4 管理者名稱與 Trip 建立驗證](18_V3.5.4_管理者名稱與Trip建立驗證.md)
 
 ## 歷史
 

@@ -1,6 +1,12 @@
 import { FormEvent, useState } from "react";
 import { Save, X } from "lucide-react";
-import type { TripDetail, TripEditorInput, TripMeta, TripMode } from "../types";
+import type {
+  AdminProfile,
+  TripDetail,
+  TripEditorInput,
+  TripMeta,
+  TripMode,
+} from "../types";
 import { releaseFocusedControl } from "../utils/viewportUtils";
 
 interface TripEditorModalProps {
@@ -9,8 +15,8 @@ interface TripEditorModalProps {
   tripDetail: TripDetail | null;
   editorEmails: string[];
   superAdminEmails: string[];
+  defaultParticipantProfiles: AdminProfile[];
   canManageEditors: boolean;
-  userEmail: string | null;
   isOpen: boolean;
   onClose: () => void;
   onSubmit: (input: TripEditorInput) => Promise<void>;
@@ -34,25 +40,20 @@ const splitLines = (value: string): string[] => {
 
 const toTextareaValue = (items: string[]): string => items.join("\n");
 
-const getDefaultParticipantName = (email: string): string => {
-  const [name] = email.split("@");
-  return name?.trim() || "我";
-};
-
 const toParticipantAssignmentText = (
   participants: string[],
   participantEmailMap?: Record<string, string>,
-  fallbackEmails: string[] = [],
+  defaultProfiles: AdminProfile[] = [],
 ): string => {
-  if (participants.length === 0 && fallbackEmails.length > 0) {
-    return Array.from(
-      new Set(
-        fallbackEmails
-          .map((email) => email.trim().toLowerCase())
-          .filter(Boolean),
-      ),
-    )
-      .map((email) => `${getDefaultParticipantName(email)}=${email}`)
+  if (participants.length === 0 && defaultProfiles.length > 0) {
+    return defaultProfiles
+      .filter((profile) => profile.include_in_new_trip)
+      .sort(
+        (left, right) =>
+          left.sort_order - right.sort_order ||
+          left.email.localeCompare(right.email),
+      )
+      .map((profile) => `${profile.display_name}=${profile.email}`)
       .join("\n");
   }
 
@@ -112,8 +113,8 @@ export const TripEditorModal = ({
   tripDetail,
   editorEmails,
   superAdminEmails,
+  defaultParticipantProfiles,
   canManageEditors,
-  userEmail,
   isOpen,
   onClose,
   onSubmit,
@@ -131,13 +132,7 @@ export const TripEditorModal = ({
     toParticipantAssignmentText(
       trip?.participants ?? [],
       trip?.participantEmailMap ?? tripDetail?.content.participantEmailMap,
-      mode === "create"
-        ? superAdminEmails.length > 0
-          ? superAdminEmails
-          : userEmail
-            ? [userEmail]
-            : []
-        : [],
+      mode === "create" ? defaultParticipantProfiles : [],
     ),
   );
   const [editorEmailText, setEditorEmailText] = useState(
