@@ -331,6 +331,8 @@ V3-1 目前狀態：
 - 暫不規劃 Checklist Conflict Resolution：本機與雲端同一筆清單資料都被修改時的合併或取捨規則。
 - 若多人同時修改同一筆共同清單項目，以最後成功上傳到 Supabase 的資料為準。
 
+> V3-1 的「暫不規劃 Checklist Conflict Resolution」是當時的最小同步範圍紀錄；V3.5.1 針對跨裝置刷新補上 Realtime，但不新增衝突 UI。現行相容規則為：同一 ID 的同欄位／勾選狀態仍採最後成功雲端寫入結果，離線或結構修改則依《16_V3.4.1_離線狀態與OtherInfo本機優先同步規格》三方合併，且 pending 不得被遠端事件覆蓋。
+
 ---
 
 ## Checklist Supabase Schema
