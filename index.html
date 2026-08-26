@@ -2,6 +2,8 @@
 <html lang="zh-Hant">
   <head>
     <meta charset="UTF-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'self'; object-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' https://omnnmpcbcicpltkkobae.supabase.co wss://omnnmpcbcicpltkkobae.supabase.co; worker-src 'self' blob:; manifest-src 'self'; media-src 'self' blob:; frame-src 'none'; form-action 'self'" />
+    <meta name="referrer" content="no-referrer" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#fff3e8" />
     
@@ -17,16 +19,7 @@
     
     <link rel="icon" type="image/png" href="/Travel-Companion/favicon.png" />
     <link rel="apple-touch-icon" href="/Travel-Companion/pwa-192x192.png" />
-    <script>
-      (() => {
-        const isIosDevice =
-          /iPad|iPhone|iPod/.test(navigator.userAgent) ||
-          (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-        if (isIosDevice && navigator.standalone === true) {
-          document.documentElement.classList.add("ios-standalone-pwa");
-        }
-      })();
-    </script>
+    <script src="/Travel-Companion/ios-standalone.js" ></script>
     <style>
       html,
       body,
@@ -61,8 +54,9 @@
         border-radius: 22%;
       }
     </style>
-    <script type="module" crossorigin src="/Travel-Companion/assets/index-BS4zmpt-.js"></script>
+    <script type="module" crossorigin src="/Travel-Companion/assets/index-BfDh89L0.js"></script>
     <link rel="modulepreload" crossorigin href="/Travel-Companion/assets/chunk-BHe-jwch.js">
+    <link rel="modulepreload" crossorigin href="/Travel-Companion/assets/jsx-runtime-BcVZmybE.js">
     <link rel="stylesheet" crossorigin href="/Travel-Companion/assets/index-DU03uvuW.css">
   <link rel="manifest" href="/Travel-Companion/manifest.webmanifest"></head>
   <body>
