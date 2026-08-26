@@ -68,7 +68,7 @@
 
 ## 後續版本
 
-- [ ] V3.5.1：Supabase Storage 附件安全維護、已確認的 App 分享功能，以及其他資訊／領隊導遊資料跨裝置即時刷新修正；不新增敏感附件可見層級。
+- [ ] V3.5.1：Supabase Storage 附件安全維護、已確認的 App 分享功能，以及其他資訊／領隊導遊資料／共同準備清單跨裝置即時刷新修正；不新增敏感附件可見層級。
 - [ ] V3.5.2：Supabase 資料庫權限函式硬化。
 - [ ] V3.5.3：前端瀏覽器安全防護；開始前重新確認範圍與版號。
 - [ ] V3.6.0：地點間預估移動資訊，依專屬規格開發。
@@ -83,7 +83,8 @@
 ### V3.5.1 待修正開發（跨裝置即時刷新）
 
 - [ ] 監聽 `other_info_items` 針對目前 `trip_id` 的 Supabase Realtime 事件，涵蓋新增、修改及軟刪除（UPDATE）。
-- [ ] 收到事件後以 RLS-safe query 重新載入目前行程資料，讓其他資訊與領隊／導遊資料在另一台裝置自動刷新，不需切換行程資料庫。
+- [ ] 監聽 shared `checklists`（`trip_id`、`scope = shared`）及 `checklist_items`（shared checklist ID）的 Supabase Realtime 事件，涵蓋新增、修改、勾選、刪除／軟刪除與排序。
+- [ ] 收到事件後以 RLS-safe query 重新載入目前行程資料，讓其他資訊、領隊／導遊資料及共同準備清單在另一台裝置自動刷新，不需切換行程資料庫。
 - [ ] 保留 focus／visibility／reconnect 重新載入備援，且不得覆蓋尚未送出的本機同步佇列。
 - [ ] 補上 Realtime publication／migration 與雙裝置角色回歸驗證；維持既有 `trip_editor`／`super_admin` 權限矩陣。
 

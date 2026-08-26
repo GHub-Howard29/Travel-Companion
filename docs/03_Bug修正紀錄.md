@@ -634,21 +634,24 @@ V3.4.10 的 Android 原生 Splash 與 HTML 等待畫面使用亮藍色，但 App
 - V3.5.0 發布後，電腦 PWA（`haw1971.yahoo@gmail.com`，`trip_editor`）與 Android PWA（`haw1971`，`super_admin`）在同一「日本九州」行程中操作。
 - 電腦在領隊／導遊聯絡資訊新增資料 1、2 後，畫面顯示已同步且資料建立成功；手機端不會即時更新，切換功能目錄仍看不到，切換行程資料庫後才載入最新資料。
 - 刪除資料及「其他資訊」也有相同現象。
+- 另發現共同準備清單相同問題：電腦刪除一筆或勾選一筆後顯示已同步，手機端不會自動更新，只有手機 App 重新取得焦點後才會載入雲端結果。
 
 判斷：
 
-- 雲端寫入與既有同步流程正常，問題是另一台裝置缺少目前 Trip 的即時事件訂閱與畫面重新載入。
+- 雲端寫入與既有同步流程正常，問題是另一台裝置缺少目前 Trip 的即時事件訂閱與畫面重新載入；此現象同時涵蓋 `other_info_items`、領隊／導遊資料及共同準備清單。
 - 目前 `other_info_items` 沒有針對 `trip_id` 的 `postgres_changes` 訂閱；`currentTrip` 只在行程重新選取等既有生命週期更新，切換功能目錄不會觸發重新查詢。
+- 共同準備清單目前只有進入頁面、focus／visibility／online 等時機重新讀取，未訂閱 `checklists`／`checklist_items` 的 Realtime 事件，因此勾選、刪除或管理操作不會即時反映到另一台裝置。
 
 建議修正（列入 V3.5.1）：
 
 - 監聽 `other_info_items` 的 INSERT／UPDATE／DELETE Realtime 事件，限定目前 `trip_id`；收到事件後透過 RLS-safe query 重新載入，不直接信任事件 payload。
+- 共同準備清單監聽 shared `checklists`（`trip_id`）及 `checklist_items`（`checklist_id`）的 INSERT／UPDATE／DELETE 事件；收到事件後重新讀取 shared checklist，涵蓋勾選、刪除／軟刪除、排序與新增。
 - 軟刪除需處理 UPDATE 事件；保留 focus／visibility／reconnect 重新載入備援。
 - 重新載入不得覆蓋尚未送出的本機同步佇列，並補上 Realtime publication／migration 與雙裝置角色回歸。
 
 狀態：
 
-⚠️ 已確認為跨裝置即時刷新缺失，雲端寫入正常；列入 V3.5.1 待修正，不回溯修改已發布 V3.5.0。
+⚠️ 已確認為跨裝置即時刷新缺失，雲端寫入正常；涵蓋其他資訊、領隊／導遊資料及共同準備清單，列入 V3.5.1 待修正，不回溯修改已發布 V3.5.0。
 
 ---
 
@@ -668,4 +671,4 @@ V3.4.10 的 Android 原生 Splash 與 HTML 等待畫面使用亮藍色，但 App
 
 最後更新：2026/08/26
 
-目前已發布版本：V3.5.0；目前待發布版本：V3.5.1（BUG024、BUG025 已納入 V3.5.0 且舊版 PWA 升級實機驗證已通過；BUG026 跨裝置即時刷新與 App 分享功能移至 V3.5.1）
+目前已發布版本：V3.5.0；目前待發布版本：V3.5.1（BUG024、BUG025 已納入 V3.5.0 且舊版 PWA 升級實機驗證已通過；BUG026 其他資訊／領隊導遊／共同準備清單跨裝置即時刷新與 App 分享功能移至 V3.5.1）
