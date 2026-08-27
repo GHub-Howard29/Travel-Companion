@@ -5,6 +5,11 @@ import type { ItineraryItem, TripDetail } from "../types";
 import { handleNavigate } from "../utils/navigationUtils";
 import { releaseFocusedControl } from "../utils/viewportUtils";
 import { trimRichText } from "../utils/richText";
+import {
+  getItineraryTimeValue,
+  normalizeItineraryTime,
+  sortItineraryItemsByTime,
+} from "../utils/itineraryTime";
 import { RichTextColorEditor } from "./RichTextColorEditor";
 import { RichTextDisplay } from "./RichTextDisplay";
 
@@ -35,26 +40,6 @@ const createEmptyItineraryDraft = (): ItineraryItem => ({
   desc: "",
   location: "",
 });
-
-const getItineraryTimeValue = (value: string): number | null => {
-  const match = value.trim().match(/^(\d{1,2}):(\d{2})$/);
-  if (!match) return null;
-
-  const hour = Number(match[1]);
-  const minute = Number(match[2]);
-  return hour < 24 && minute < 60 ? hour * 60 + minute : null;
-};
-
-const sortItineraryItemsByTime = (items: ItineraryItem[]): ItineraryItem[] =>
-  items
-    .map((item, index) => ({ item, index, time: getItineraryTimeValue(item.time) }))
-    .sort((left, right) => {
-      if (left.time === null && right.time === null) return left.index - right.index;
-      if (left.time === null) return 1;
-      if (right.time === null) return -1;
-      return left.time - right.time || left.index - right.index;
-    })
-    .map(({ item }) => item);
 
 export const ItineraryPage = ({
   trip,
@@ -156,8 +141,8 @@ export const ItineraryPage = ({
 
     const dayKey = String(activeDay);
     const currentEvents = trip.content.daysData[dayKey] ?? [];
-    const arrivalTime = draft.time.trim();
-    const requestedDepartureTime = draft.departureTime?.trim() ?? "";
+    const arrivalTime = normalizeItineraryTime(draft.time);
+    const requestedDepartureTime = normalizeItineraryTime(draft.departureTime ?? "");
     const departureTime = requestedDepartureTime || arrivalTime;
     const nextEvent: ItineraryItem = {
       ...draft,
