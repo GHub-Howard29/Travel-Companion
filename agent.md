@@ -2,9 +2,9 @@
 
 ## 目前狀態
 
-- 已發布版本：V3.5.3。
+- 已發布版本：V3.5.4。
 - V3.5.2「Supabase 資料庫權限函式硬化」已完成；正式 migration、advisors 與角色回歸通過，Product Owner 確認不建立獨立 App build／tag，App 顯示版本維持 V3.5.1。
-- V3.5.3「前端瀏覽器安全防護」已於 2026-08-26 發布；iOS standalone PWA Google OAuth 保留日後補驗證，不阻擋發布結案。V3.5.4 管理者帳號名稱映射與新 Trip ID 已完成正式 migration、資料庫角色回歸及 Super Admin 介面驗收；Product Owner 已確認 2026-08-26、`FORCE_UPDATE = false`，目前為已同步版本 metadata 的發布候選，尚未部署、合併或建立 tag；後續為 V3.6.0 地點間預估移動資訊。
+- V3.5.4「管理者帳號名稱映射與新 Trip ID」已於 2026-08-27 合併、建立 `v3.5.4` tag 並部署；採非強制更新。正式 migration、資料庫角色回歸、Super Admin 介面驗收、離線新增阻擋、本機重複提示與正式站版本更新提示均已通過。V3.5.5「行程返回、外部連結與資訊文字醒目」候選實作及電腦版驗證已完成，metadata 為 `3.5.5`，由 Product Owner 手動發布，手機實機驗證延後。V3.5.6 已規劃「版本更新最低支援版本機制」，修正舊版略過中間強制更新的缺口，尚未實作。其後為 V3.6.0 地點間預估移動資訊。iOS standalone PWA Google OAuth 仍保留日後補驗證。
 - 版本順序與範圍唯一以 `docs/02_產品開發路線圖.md` 為準；未完成工作以 `docs/09_待辦事項_TODO.md` 為準；目前有效狀態以 `docs/14_專案現況總覽.md` 為準。
 
 ## 開發與安全規則
@@ -20,7 +20,7 @@
 ## 版本與發布
 
 - 採 `MAJOR.MINOR.PATCH`：Major 為產品世代／大規模不相容變更；Minor 為主要新功能；Patch 為修正、維護及小型改善。
-- `FORCE_UPDATE` 與版號分開決定，預設為 `false`。
+- `FORCE_UPDATE` 與版號分開決定，預設為 `false`；V3.5.6 起另以 `minimumSupportedVersion` 作為新客戶端的必要更新依據，橋接期間 `forceUpdate` 保留供舊客戶端相容判斷。
 - 資料不相容、安全修正、Supabase schema／RLS、同步或 Pending Queue 重大資料風險，才建議強制更新。
 - Product Owner 確認版本號、發布日期、更新內容與是否強制更新後，才同步更新 `src/config/appVersion.ts`、`public/app-version.json`、`src/config/versionHistory.ts`、`package.json`、`package-lock.json` 與發布文件。
 - `public/app-version.json` 不得被 PWA precache，確保更新檢查取得真正最新版。

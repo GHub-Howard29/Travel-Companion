@@ -4,6 +4,9 @@ import { ExternalLink, MapPin, Settings2, X } from "lucide-react";
 import type { ItineraryItem, TripDetail } from "../types";
 import { handleNavigate } from "../utils/navigationUtils";
 import { releaseFocusedControl } from "../utils/viewportUtils";
+import { trimRichText } from "../utils/richText";
+import { RichTextColorEditor } from "./RichTextColorEditor";
+import { RichTextDisplay } from "./RichTextDisplay";
 
 interface ItineraryPageProps {
   trip: TripDetail;
@@ -161,7 +164,7 @@ export const ItineraryPage = ({
       time: arrivalTime || requestedDepartureTime,
       departureTime,
       title: draft.title.trim(),
-      desc: draft.desc.trim(),
+      desc: trimRichText(draft.desc),
       location: draft.location.trim(),
     };
     const nextEvents =
@@ -304,12 +307,12 @@ export const ItineraryPage = ({
                 placeholder="活動標題"
                 className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
               />
-              <textarea
+              <RichTextColorEditor
                 value={draft.desc}
-                onChange={(event) => updateDraft({ desc: event.target.value })}
-                rows={3}
+                onChange={(desc) => updateDraft({ desc })}
                 placeholder="說明"
-                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                minHeightClassName="min-h-24"
+                focusClassName="focus:ring-2 focus:ring-emerald-500"
               />
               <input
                 value={draft.location}
@@ -356,7 +359,7 @@ export const ItineraryPage = ({
               </h3>
               {event.desc && (
                 <p className="mb-4 whitespace-pre-wrap break-words text-sm leading-relaxed text-slate-600">
-                  {event.desc}
+                  <RichTextDisplay value={event.desc} />
                 </p>
               )}
               {event.location && (

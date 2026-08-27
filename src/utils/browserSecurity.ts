@@ -49,12 +49,18 @@ export const openExternalUrl = (value: string): void => {
   const trustedUrl = getTrustedHttpUrl(value);
   if (!trustedUrl) return;
 
-  const openedWindow = window.open(
-    trustedUrl,
-    "_blank",
-    "noopener,noreferrer",
-  );
-  if (openedWindow) openedWindow.opener = null;
+  // Use a real external anchor instead of an in-app navigation. Installed
+  // PWAs hand this target back to the operating system, which also lets
+  // Google Maps universal URLs open the dedicated Maps app when available.
+  const anchor = document.createElement("a");
+  anchor.href = trustedUrl;
+  anchor.target = "_blank";
+  anchor.rel = "external noopener noreferrer";
+  anchor.referrerPolicy = "no-referrer";
+  anchor.style.display = "none";
+  document.body.append(anchor);
+  anchor.click();
+  anchor.remove();
 };
 
 /**

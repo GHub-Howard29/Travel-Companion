@@ -42,6 +42,9 @@ import {
 } from "../permissions/roles";
 import type { OtherInfoSyncStatus } from "../storage/otherInfoSyncStorage";
 import { releaseFocusedControl } from "../utils/viewportUtils";
+import { openExternalUrl } from "../utils/browserSecurity";
+import { getRichTextRuns, trimRichText } from "../utils/richText";
+import { RichTextColorEditor } from "./RichTextColorEditor";
 
 interface OtherInfoPageProps {
   tripId: string;
@@ -58,13 +61,27 @@ interface OtherInfoPageProps {
 
 const renderContentWithLinks = (content: string) => {
   const lines = parseOtherInfoContentLinks(content);
+  let contentOffset = 0;
 
   return lines.map((line, lineIndex) => {
-    return (
+    const renderedLine = (
       <span key={`${lineIndex}-${line.map((part) => part.text).join("")}`}>
         {line.map((part, partIndex) => {
+          const partStart = contentOffset;
+          contentOffset += part.text.length;
+          const coloredText = getRichTextRuns(content, partStart, contentOffset).map(
+            (run, runIndex) => (
+              <span
+                key={`${runIndex}-${run.text}`}
+                style={run.color ? { color: run.color } : undefined}
+              >
+                {run.text}
+              </span>
+            ),
+          );
+
           if (part.type === "text") {
-            return part.text;
+            return <span key={`${partIndex}-${part.text}`}>{coloredText}</span>;
           }
 
           return (
@@ -73,15 +90,21 @@ const renderContentWithLinks = (content: string) => {
               href={part.text}
               target="_blank"
               rel="noopener noreferrer"
+              onClick={(event) => {
+                event.preventDefault();
+                openExternalUrl(part.text);
+              }}
               className="break-all font-semibold text-sky-700 underline decoration-sky-300 underline-offset-2 hover:text-sky-900"
             >
-              {part.text}
+              {coloredText}
             </a>
           );
         })}
         {lineIndex < lines.length - 1 && <br />}
       </span>
     );
+    if (lineIndex < lines.length - 1) contentOffset += 1;
+    return renderedLine;
   });
 };
 
@@ -258,7 +281,7 @@ export const OtherInfoPage = ({
     }
 
     const title = form.title.trim();
-    const content = form.content.trim();
+    const content = trimRichText(form.content);
 
     if (!title || !content || !form.folderId) {
       return;
@@ -566,14 +589,13 @@ export const OtherInfoPage = ({
               placeholder="標題"
             />
 
-            <textarea
+            <RichTextColorEditor
               value={form.content}
-              onChange={(event) =>
+              onChange={(content) =>
                 updateForm({
-                  content: event.target.value,
+                  content,
                 })
               }
-              className="min-h-32 w-full resize-y rounded-lg border border-slate-200 px-3 py-2 text-sm leading-relaxed text-slate-700 outline-none focus:border-stone-500"
               placeholder="內容"
             />
             <p className="text-xs leading-relaxed text-slate-400">
@@ -687,6 +709,10 @@ export const OtherInfoPage = ({
                         href={standaloneUrl}
                         target="_blank"
                         rel="noopener noreferrer"
+                        onClick={(event) => {
+                          event.preventDefault();
+                          openExternalUrl(standaloneUrl);
+                        }}
                         className="inline-flex items-center gap-1 text-sky-700 underline decoration-sky-300 underline-offset-2 hover:text-sky-900"
                       >
                         {item.title}
