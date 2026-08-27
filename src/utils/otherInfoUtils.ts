@@ -18,6 +18,7 @@ import {
 } from "../permissions/roles";
 import type { OtherInfoItem } from "../types";
 import { getTrustedHttpUrl } from "./browserSecurity";
+import { getRichTextPlainText } from "./richText";
 
 // ================================
 // Types
@@ -100,7 +101,7 @@ export const hasOtherInfoItems = (
 export const parseOtherInfoContentLinks = (
   content: string,
 ): OtherInfoContentLine[] => {
-  return content.split("\n").map((line) =>
+  return getRichTextPlainText(content).split("\n").map((line) =>
     line
       .split(HTTP_URL_PATTERN)
       .filter((part) => part.length > 0)
@@ -120,7 +121,7 @@ export const parseOtherInfoContentLinks = (
  * 將單一網址內容轉成可直接使用的超連結網址。
  */
 export const getStandaloneHttpUrl = (content: string): string | null => {
-  const value = content.trim();
+  const value = getRichTextPlainText(content).trim();
 
   return EXACT_HTTP_URL_PATTERN.test(value)
     ? normalizeTrustedHttpUrl(value)

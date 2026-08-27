@@ -2,6 +2,7 @@ import { useCallback, useState } from "react";
 
 import type { OtherInfoItem } from "../types";
 import { isRestrictedOtherInfoRoles } from "../permissions/roles";
+import { getRichTextPlainText } from "../utils/richText";
 
 export interface OtherInfoFormState {
   folderId: string;
@@ -75,7 +76,7 @@ export const useOtherInfoForm = (initialFolderId: string) => {
     editingItemId,
     form,
     isFormOpen,
-    isSaveDisabled: !form.title.trim() || !form.content.trim(),
+    isSaveDisabled: !form.title.trim() || !getRichTextPlainText(form.content).trim(),
     closeForm,
     openCreateForm,
     openEditForm,

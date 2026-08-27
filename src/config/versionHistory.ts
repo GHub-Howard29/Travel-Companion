@@ -14,6 +14,16 @@ export type VersionHistoryItem = {
 
 export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
+    version: "3.5.4",
+    date: "2026-08-26",
+    forceUpdate: false,
+    notes: [
+      "新增 Super Admin 固定顯示名稱，建立旅程時只預帶 Howard 與 Carol。",
+      "統一新 Trip ID 規則，阻擋本機、雲端及併發造成的重複 Trip。",
+      "新增旅程必須保持連線，既有旅程 ID、編輯與離線能力維持不變。",
+    ],
+  },
+  {
     version: "3.5.3",
     date: "2026-08-26",
     forceUpdate: false,

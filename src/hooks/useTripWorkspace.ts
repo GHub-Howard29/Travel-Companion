@@ -420,7 +420,7 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
 
     await deleteTripRecordWithCloudSync(supabase, tripId);
     const nextTrips = await getTripMetas(supabase, getBasePath());
-    const nextTrip = nextTrips.find((trip) => trip.id !== tripId) ?? nextTrips[0];
+    const nextTrip = findDefaultTrip(nextTrips) ?? nextTrips[0];
 
     setTripOptions(nextTrips);
     setSelectedTripId(nextTrip?.id ?? "");
