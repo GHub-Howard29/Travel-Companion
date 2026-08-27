@@ -155,6 +155,19 @@ export const RichTextColorEditor = ({
     return () => document.removeEventListener("selectionchange", updateSelection);
   }, []);
 
+  useEffect(() => {
+    const closePaletteOnOutsidePointerDown = (event: PointerEvent) => {
+      const palette = paletteRef.current;
+      if (palette?.open && !palette.contains(event.target as Node)) {
+        palette.open = false;
+      }
+    };
+
+    document.addEventListener("pointerdown", closePaletteOnOutsidePointerDown);
+    return () =>
+      document.removeEventListener("pointerdown", closePaletteOnOutsidePointerDown);
+  }, []);
+
   const emitEditorValue = (event: FormEvent<HTMLDivElement>) => {
     const documentValue = readEditorDocument(event.currentTarget);
     const nextValue = serializeRichText(documentValue.text, documentValue.colors);
@@ -189,6 +202,13 @@ export const RichTextColorEditor = ({
           <summary
             role="button"
             aria-haspopup="true"
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={(event) => {
+              event.preventDefault();
+              if (paletteRef.current) {
+                paletteRef.current.open = !paletteRef.current.open;
+              }
+            }}
             className="inline-flex h-9 w-9 cursor-pointer list-none items-center justify-center rounded-md border border-slate-200 bg-white text-base font-bold text-slate-700 hover:bg-slate-50 [&::-webkit-details-marker]:hidden"
             aria-label="文字顏色"
             title="文字顏色"
@@ -196,7 +216,11 @@ export const RichTextColorEditor = ({
             <span className="border-b-2 border-red-600 leading-none">A</span>
           </summary>
 
-          <div className="absolute left-2 top-12 z-20 grid grid-cols-4 gap-2 rounded-lg border border-slate-200 bg-white p-3 shadow-xl" role="group" aria-label="選擇文字顏色">
+          <div
+            className="absolute bottom-0 left-11 z-20 grid w-44 grid-cols-4 gap-2 rounded-lg border border-slate-200 bg-white p-3 shadow-xl"
+            role="group"
+            aria-label="選擇文字顏色"
+          >
             {RICH_TEXT_COLORS.map((color) => (
               <button
                 key={color}
@@ -211,6 +235,9 @@ export const RichTextColorEditor = ({
             ))}
           </div>
         </details>
+        <span className="pointer-events-none absolute left-14 right-2 top-1/2 -translate-y-1/2 text-[11px] leading-snug text-slate-500">
+          請先選取要強調的說明文字內容後，再選取要套用的顏色
+        </span>
       </div>
 
       <div className="relative">
