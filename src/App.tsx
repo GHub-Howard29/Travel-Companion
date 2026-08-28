@@ -983,6 +983,7 @@ function ConfiguredApp({
             {currentScreenType === "itinerary" && currentTrip && (
               <ItineraryPage
                 key={`${selectedTripId}-${userEmail ?? "guest"}-${isOnline ? "online" : "offline"}`}
+                supabase={supabase}
                 trip={currentTrip}
                 activeDay={activeDay}
                 hasEditPermission={hasEditPermission}

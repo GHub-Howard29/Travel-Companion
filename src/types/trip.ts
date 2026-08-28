@@ -28,6 +28,34 @@ export interface TripEditorInput {
   currencySymbol: string;
 }
 
+export interface ConfirmedPlace {
+  /** Google Maps 政策允許永久保存的穩定識別；顯示文案仍沿用使用者輸入。 */
+  placeId: string;
+}
+
+export type TravelMode = "drive" | "walk" | "transit";
+
+export type TransitVehicle =
+  | "bus"
+  | "rail"
+  | "subway"
+  | "tram"
+  | "ferry"
+  | "other";
+
+export interface SavedTravelEstimate {
+  mode: TravelMode;
+  durationSeconds: number;
+  distanceMeters: number;
+  originKey: string;
+  destinationKey: string;
+  queriedAt: string;
+  expiresAt: string;
+  departureTimeBasis?: string;
+  transitDaytimeFallback?: boolean;
+  transitVehicle?: TransitVehicle;
+}
+
 // 2. 對應詳細行程中的單一時間軸項目
 export interface ItineraryItem {
   /** 到達時間；舊資料沿用既有 time 欄位 */
@@ -39,6 +67,14 @@ export interface ItineraryItem {
   typeColor: string;
   desc: string;
   location: string;
+  /** 經管理者確認、可穩定供 Places／Routes 使用的地點。 */
+  place?: ConfirmedPlace;
+  /** 明確標記航班卡片；不依標題是否包含「機場」推測。 */
+  travelKind?: "flight";
+  /** 永久保留的交通方式偏好；Google 預估資料過期後仍用於維持區段。 */
+  travelModeToNext?: TravelMode;
+  /** 由本卡片前往下一張相鄰卡片的最後儲存交通結果。 */
+  travelToNext?: SavedTravelEstimate;
 }
 
 // 3. 對應詳細行程中的行前檢查清單項目
