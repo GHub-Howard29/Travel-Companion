@@ -5,6 +5,12 @@ import type { ItineraryItem, TripDetail } from "../types";
 import { handleNavigate } from "../utils/navigationUtils";
 import { releaseFocusedControl } from "../utils/viewportUtils";
 import { trimRichText } from "../utils/richText";
+import {
+  getItineraryTimeValue,
+  isDepartureBeforeArrival,
+  sortItineraryItemsByTime,
+  validateItineraryTime,
+} from "../utils/itineraryTime";
 import { RichTextColorEditor } from "./RichTextColorEditor";
 import { RichTextDisplay } from "./RichTextDisplay";
 
@@ -36,26 +42,6 @@ const createEmptyItineraryDraft = (): ItineraryItem => ({
   location: "",
 });
 
-const getItineraryTimeValue = (value: string): number | null => {
-  const match = value.trim().match(/^(\d{1,2}):(\d{2})$/);
-  if (!match) return null;
-
-  const hour = Number(match[1]);
-  const minute = Number(match[2]);
-  return hour < 24 && minute < 60 ? hour * 60 + minute : null;
-};
-
-const sortItineraryItemsByTime = (items: ItineraryItem[]): ItineraryItem[] =>
-  items
-    .map((item, index) => ({ item, index, time: getItineraryTimeValue(item.time) }))
-    .sort((left, right) => {
-      if (left.time === null && right.time === null) return left.index - right.index;
-      if (left.time === null) return 1;
-      if (right.time === null) return -1;
-      return left.time - right.time || left.index - right.index;
-    })
-    .map(({ item }) => item);
-
 export const ItineraryPage = ({
   trip,
   activeDay,
@@ -68,6 +54,10 @@ export const ItineraryPage = ({
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [draft, setDraft] = useState<ItineraryItem>(createEmptyItineraryDraft);
+  const [timeErrors, setTimeErrors] = useState<{
+    arrival?: string;
+    departure?: string;
+  }>({});
 
   useEffect(() => {
     if (editingIndex === null) return;
@@ -95,6 +85,7 @@ export const ItineraryPage = ({
     setIsFormOpen(false);
     setEditingIndex(null);
     setDraft(createEmptyItineraryDraft());
+    setTimeErrors({});
   };
 
   const closeManageMode = () => {
@@ -108,6 +99,16 @@ export const ItineraryPage = ({
       ...currentDraft,
       ...patch,
     }));
+  };
+
+  const updateArrivalTime = (value: string) => {
+    updateDraft({ time: value });
+    setTimeErrors((current) => ({ ...current, arrival: undefined }));
+  };
+
+  const updateDepartureTime = (value: string) => {
+    updateDraft({ departureTime: value });
+    setTimeErrors((current) => ({ ...current, departure: undefined }));
   };
 
   const handleDayChange = (day: number) => {
@@ -131,12 +132,14 @@ export const ItineraryPage = ({
   const startCreateItem = () => {
     setEditingIndex(null);
     setDraft(createEmptyItineraryDraft());
+    setTimeErrors({});
     setIsFormOpen(true);
   };
 
   const startEditItem = (event: ItineraryItem, index: number) => {
     setEditingIndex(index);
     setDraft(event);
+    setTimeErrors({});
     setIsFormOpen(true);
   };
 
@@ -156,8 +159,45 @@ export const ItineraryPage = ({
 
     const dayKey = String(activeDay);
     const currentEvents = trip.content.daysData[dayKey] ?? [];
-    const arrivalTime = draft.time.trim();
-    const requestedDepartureTime = draft.departureTime?.trim() ?? "";
+    const arrivalResult = validateItineraryTime(draft.time);
+    const departureResult = validateItineraryTime(draft.departureTime ?? "");
+    const nextTimeErrors = {
+      ...(!arrivalResult.isValid
+        ? {
+            arrival:
+              "到達時間格式有誤。請輸入HH:MM，例如 08:00",
+          }
+        : {}),
+      ...(!departureResult.isValid
+        ? {
+            departure:
+              "離開時間格式有誤。請輸入HH:MM，例如 08:00",
+          }
+        : {}),
+    };
+
+    if (!arrivalResult.isValid || !departureResult.isValid) {
+      setTimeErrors(nextTimeErrors);
+      return;
+    }
+
+    if (
+      arrivalResult.normalized &&
+      departureResult.normalized &&
+      isDepartureBeforeArrival(
+        arrivalResult.normalized,
+        departureResult.normalized,
+      )
+    ) {
+      setTimeErrors({
+        departure: "同一天內，離開時間不得早於到達時間。",
+      });
+      return;
+    }
+
+    setTimeErrors({});
+    const arrivalTime = arrivalResult.normalized;
+    const requestedDepartureTime = departureResult.normalized;
     const departureTime = requestedDepartureTime || arrivalTime;
     const nextEvent: ItineraryItem = {
       ...draft,
@@ -265,7 +305,7 @@ export const ItineraryPage = ({
           </div>
 
           <p className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-xs leading-relaxed text-slate-500">
-            依到達時間排序，未填到達時間的活動會置於最下方；未填離開時間時，儲存後會沿用到達時間。
+            依到達時間排序，未填到達時間的活動會置於最下方；未填離開時間時，儲存後會沿用到達時間。時間可使用半形或全形冒號，但冒號前後不可空格。
           </p>
 
           {isFormOpen && (
@@ -275,19 +315,41 @@ export const ItineraryPage = ({
                   <span className="text-xs font-bold text-slate-600">到達時間</span>
                   <input
                     value={draft.time}
-                    onChange={(event) => updateDraft({ time: event.target.value })}
-                    placeholder="例如 10:00"
-                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    onChange={(event) => updateArrivalTime(event.target.value)}
+                    placeholder="例如 08:00"
+                    aria-invalid={Boolean(timeErrors.arrival)}
+                    aria-describedby={timeErrors.arrival ? "arrival-time-error" : undefined}
+                    className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 ${
+                      timeErrors.arrival
+                        ? "border-rose-400 focus:ring-rose-400"
+                        : "border-slate-200 focus:ring-emerald-500"
+                    }`}
                   />
+                  {timeErrors.arrival && (
+                    <span id="arrival-time-error" className="block text-xs leading-relaxed text-rose-700">
+                      {timeErrors.arrival}
+                    </span>
+                  )}
                 </label>
                 <label className="space-y-1">
                   <span className="text-xs font-bold text-slate-600">離開時間</span>
                   <input
                     value={draft.departureTime ?? ""}
-                    onChange={(event) => updateDraft({ departureTime: event.target.value })}
+                    onChange={(event) => updateDepartureTime(event.target.value)}
                     placeholder="例如 12:20"
-                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    aria-invalid={Boolean(timeErrors.departure)}
+                    aria-describedby={timeErrors.departure ? "departure-time-error" : undefined}
+                    className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 ${
+                      timeErrors.departure
+                        ? "border-rose-400 focus:ring-rose-400"
+                        : "border-slate-200 focus:ring-emerald-500"
+                    }`}
                   />
+                  {timeErrors.departure && (
+                    <span id="departure-time-error" className="block text-xs leading-relaxed text-rose-700">
+                      {timeErrors.departure}
+                    </span>
+                  )}
                 </label>
               </div>
               <select

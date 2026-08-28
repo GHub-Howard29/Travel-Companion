@@ -14,7 +14,9 @@ type UpdatePromptProps = {
   latestVersion: string;
   releaseDate: string;
   releaseNotes: string[];
-  forceUpdate: boolean;
+  isMandatoryUpdate: boolean;
+  updateError: string | null;
+  isChecking: boolean;
   onUpdate: () => void;
   onDismiss: () => void;
 };
@@ -26,7 +28,9 @@ export function UpdatePrompt({
   latestVersion,
   releaseDate,
   releaseNotes,
-  forceUpdate,
+  isMandatoryUpdate,
+  updateError,
+  isChecking,
   onUpdate,
   onDismiss,
 }: UpdatePromptProps) {
@@ -35,10 +39,16 @@ export function UpdatePrompt({
   const isUpdateAvailable = mode === "update";
   const updateMessage = !isUpdateAvailable
     ? "目前已經是最新版本，以下是本次更新內容"
-    : forceUpdate
+    : isMandatoryUpdate
       ? "本次更新必須安裝才能繼續使用"
       : "可以馬上更新，也可以稍後再更新";
-  const primaryActionLabel = forceUpdate ? "立即更新" : "馬上更新";
+  const primaryActionLabel = isChecking
+    ? "正在檢查更新…"
+    : updateError
+      ? "重試更新"
+      : isMandatoryUpdate
+        ? "立即更新"
+        : "馬上更新";
   const secondaryActionLabel = "稍後更新";
 
   return (
@@ -58,7 +68,7 @@ export function UpdatePrompt({
               </p>
             </div>
           </div>
-          {isUpdateAvailable && !forceUpdate && (
+          {isUpdateAvailable && !isMandatoryUpdate && (
             <button
               type="button"
               onClick={onDismiss}
@@ -107,14 +117,23 @@ export function UpdatePrompt({
               更新會清除 App 暫存並重新載入頁面。已儲存的旅程、清單、記帳與附件資料不會被清除；如果現在有尚未儲存的資料，請先儲存後再更新，避免重新載入後遺失。
             </div>
           )}
+
+          {isUpdateAvailable && updateError && (
+            <div
+              role="alert"
+              className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold leading-relaxed text-rose-800"
+            >
+              {updateError}
+            </div>
+          )}
         </div>
 
         <div
           className={`grid min-h-[68px] shrink-0 gap-2 border-t border-slate-100 bg-white px-3 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] ${
-            !isUpdateAvailable || forceUpdate ? "grid-cols-1" : "grid-cols-2"
+            !isUpdateAvailable || isMandatoryUpdate ? "grid-cols-1" : "grid-cols-2"
           }`}
         >
-          {isUpdateAvailable && !forceUpdate && (
+          {isUpdateAvailable && !isMandatoryUpdate && (
             <button
               type="button"
               onClick={onDismiss}
@@ -126,7 +145,8 @@ export function UpdatePrompt({
           <button
             type="button"
             onClick={isUpdateAvailable ? onUpdate : onDismiss}
-            className="flex min-h-11 items-center justify-center rounded-lg bg-emerald-700 px-3 text-sm font-bold leading-none text-white hover:bg-emerald-800"
+            disabled={isChecking}
+            className="flex min-h-11 items-center justify-center rounded-lg bg-emerald-700 px-3 text-sm font-bold leading-none text-white hover:bg-emerald-800 disabled:cursor-wait disabled:opacity-70"
           >
             {isUpdateAvailable ? primaryActionLabel : "我知道了"}
           </button>

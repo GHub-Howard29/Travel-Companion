@@ -197,7 +197,25 @@ export const RichTextColorEditor = ({
 
   return (
     <div className="rounded-lg border border-slate-200 bg-white">
-      <div className="relative flex items-center border-b border-slate-200 px-2 py-1.5">
+      <div className="relative">
+        {!plainText && (
+          <span className="pointer-events-none absolute left-3 top-2 text-sm text-slate-400">
+            {placeholder}
+          </span>
+        )}
+        <div
+          ref={editorRef}
+          contentEditable
+          suppressContentEditableWarning
+          onInput={emitEditorValue}
+          className={`${minHeightClassName} w-full whitespace-pre-wrap break-words px-3 py-2 text-sm leading-relaxed text-slate-700 outline-none ${focusClassName}`}
+          role="textbox"
+          aria-multiline="true"
+          aria-label={placeholder}
+        />
+      </div>
+
+      <div className="relative flex items-center border-t border-slate-200 px-2 py-1.5">
         <details ref={paletteRef} className="relative">
           <summary
             role="button"
@@ -240,23 +258,6 @@ export const RichTextColorEditor = ({
         </span>
       </div>
 
-      <div className="relative">
-        {!plainText && (
-          <span className="pointer-events-none absolute left-3 top-2 text-sm text-slate-400">
-            {placeholder}
-          </span>
-        )}
-        <div
-          ref={editorRef}
-          contentEditable
-          suppressContentEditableWarning
-          onInput={emitEditorValue}
-          className={`${minHeightClassName} w-full whitespace-pre-wrap break-words px-3 py-2 text-sm leading-relaxed text-slate-700 outline-none ${focusClassName}`}
-          role="textbox"
-          aria-multiline="true"
-          aria-label={placeholder}
-        />
-      </div>
     </div>
   );
 };
