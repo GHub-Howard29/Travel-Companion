@@ -23,6 +23,9 @@ const getExportedString = (name) => {
 
 const appVersion = getExportedString("APP_VERSION");
 const previousReleaseVersion = getExportedString("PREVIOUS_RELEASE_VERSION");
+const minimumSupportedVersion = getExportedString("MINIMUM_SUPPORTED_VERSION");
+const releaseDate = getExportedString("RELEASE_DATE");
+const packageMetadata = JSON.parse(readProjectFile("package.json"));
 const historyVersions = [
   ...versionHistorySource.matchAll(/version:\s*"([^"]+)"/g),
 ].map((match) => match[1]);
@@ -35,6 +38,40 @@ if (publicVersionMetadata.version !== appVersion) {
   throw new Error(
     `public/app-version.json 版本 ${publicVersionMetadata.version} 與 APP_VERSION ${appVersion} 不一致。`,
   );
+}
+
+if (packageMetadata.version !== appVersion) {
+  throw new Error(`package.json 版本 ${packageMetadata.version} 與 APP_VERSION ${appVersion} 不一致。`);
+}
+
+if (publicVersionMetadata.minimumSupportedVersion !== minimumSupportedVersion) {
+  throw new Error("公開 metadata 與 App 的 minimumSupportedVersion 不一致。");
+}
+
+if (publicVersionMetadata.releaseDate !== releaseDate) {
+  throw new Error("公開 metadata 與 App 的發布日期不一致。");
+}
+
+const parseVersion = (value) => {
+  const match = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.exec(value);
+  return match ? match.slice(1).map(Number) : null;
+};
+const compareVersions = (left, right) => {
+  const leftParts = parseVersion(left);
+  const rightParts = parseVersion(right);
+  if (!leftParts || !rightParts) return null;
+  for (let index = 0; index < leftParts.length; index += 1) {
+    if (leftParts[index] !== rightParts[index]) return leftParts[index] - rightParts[index];
+  }
+  return 0;
+};
+
+if (compareVersions(minimumSupportedVersion, appVersion) > 0) {
+  throw new Error("minimumSupportedVersion 不可高於目前發布版本。");
+}
+
+if (publicVersionMetadata.forceUpdate !== true) {
+  throw new Error("版本政策橋接期間 public/app-version.json 的 forceUpdate 必須維持 true。");
 }
 
 if (!historyVersions.includes(previousReleaseVersion)) {

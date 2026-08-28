@@ -20,12 +20,34 @@ const parseItineraryTime = (
   };
 };
 
+export type ItineraryTimeValidationResult =
+  | { isValid: true; normalized: string }
+  | { isValid: false; normalized: string };
+
+export const validateItineraryTime = (value: string): ItineraryTimeValidationResult => {
+  const trimmedValue = value.trim();
+  if (!trimmedValue) return { isValid: true, normalized: "" };
+
+  const parsed = parseItineraryTime(trimmedValue);
+  if (!parsed) return { isValid: false, normalized: trimmedValue };
+
+  return { isValid: true, normalized: parsed.normalized };
+};
+
 export const getItineraryTimeValue = (value: string): number | null =>
   parseItineraryTime(value)?.minutes ?? null;
 
+export const isDepartureBeforeArrival = (
+  arrivalTime: string,
+  departureTime: string,
+): boolean => {
+  const arrival = parseItineraryTime(arrivalTime);
+  const departure = parseItineraryTime(departureTime);
+  return Boolean(arrival && departure && departure.minutes < arrival.minutes);
+};
+
 export const normalizeItineraryTime = (value: string): string => {
-  const trimmedValue = value.trim();
-  return parseItineraryTime(trimmedValue)?.normalized ?? trimmedValue;
+  return validateItineraryTime(value).normalized;
 };
 
 export const sortItineraryItemsByTime = <Item extends ItineraryTimeItem>(

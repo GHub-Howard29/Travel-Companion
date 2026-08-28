@@ -14,6 +14,16 @@ export type VersionHistoryItem = {
 
 export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
+    version: "3.5.5",
+    date: "2026-08-27",
+    forceUpdate: false,
+    notes: [
+      "修正刪除目前行程後的預設行程選取，與進入 App 時的規則保持一致。",
+      "資訊卡片連結改由系統外部處理，Google Maps 連結優先交由專用 App 開啟。",
+      "資訊卡片內容與每日詳細行程說明支援選取局部文字設定顏色。",
+    ],
+  },
+  {
     version: "3.5.4",
     date: "2026-08-26",
     forceUpdate: false,

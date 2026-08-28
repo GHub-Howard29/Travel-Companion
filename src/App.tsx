@@ -170,7 +170,11 @@ function ConfiguredApp({
     latestVersion,
     releaseDate,
     releaseNotes,
-    forceUpdate,
+    currentReleaseDate,
+    currentReleaseNotes,
+    isMandatoryForCurrentClient,
+    updateError,
+    isChecking,
     update,
     dismiss,
   } = useAppUpdate();
@@ -854,7 +858,9 @@ function ConfiguredApp({
       latestVersion={latestVersion}
       releaseDate={releaseDate}
       releaseNotes={releaseNotes}
-      forceUpdate={forceUpdate}
+      isMandatoryUpdate={isMandatoryForCurrentClient}
+      updateError={updateError}
+      isChecking={isChecking}
       onUpdate={update}
       onDismiss={dismiss}
     />
@@ -870,10 +876,10 @@ function ConfiguredApp({
     />
     <VersionInfoModal
       isOpen={isVersionInfoOpen}
-      currentVersion={latestVersion}
-      releaseDate={releaseDate}
-      releaseNotes={releaseNotes}
-      forceUpdate={forceUpdate}
+      currentVersion={currentVersion}
+      releaseDate={currentReleaseDate}
+      releaseNotes={currentReleaseNotes}
+      isMandatoryUpdate={isMandatoryForCurrentClient}
       onClose={() => setIsVersionInfoOpen(false)}
     />
     <div className="min-h-screen bg-slate-50 text-slate-800 font-sans antialiased overflow-x-hidden">
