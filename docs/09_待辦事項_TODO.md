@@ -4,7 +4,7 @@
 >
 > 最後更新：2026-08-30
 >
-> 已發布 App 版本：V3.5.6；V3.5.2 資料庫維護已完成且無獨立 App 發布。
+> 已發布 App 版本：V3.6.0；V3.5.2 資料庫維護已完成且無獨立 App 發布。
 
 ## V3.5.0 iOS PWA 與敏感資訊可見範圍強化（發布前不含 PWA 實機驗證）
 
@@ -106,7 +106,7 @@
   - [x] 同一天內離開時間不得早於到達時間；格式錯誤範例只顯示半形 `08:00`，另明確提示半形／全形冒號皆可且冒號前後不可空格。
   - [x] ✅ 舊版／新版、PWA／一般瀏覽器、線上／離線回歸矩陣及其餘項目均已通過。
   - [x] ✅ 已覆驗本次修正：`08:00` 到達、`06:00` 離開會阻擋儲存；格式錯誤提示不再以全形冒號時間作為範例。
-- [ ] V3.6.0：地點間預估移動資訊（候選程式、正式後端與桌面整合已完成；等待 Product Owner 合併／部署前端後結案）。
+- [ ] V3.6.0：地點間預估移動資訊已於 2026-08-30 發布；完整角色矩陣、正式站 OAuth 自動化登入與 Android／iOS 實機仍待發布後補驗證。
   - [x] 已完成 UI 方向與正式文案確認：卡片「在地圖中查看」、路線面板「使用 Google Maps 查看路線」、地點確認「保留原設定地點」。
   - [x] 已完成 Place ID、永久交通方式偏好、交通結果、時間警告與 30 天快取失效的前端型別及純函式；過期後保留區段並顯示「路線資訊待更新」。
   - [x] route cache／每日 100 次配額 migration 已套用正式 Supabase；`020`、advisors、migration history 與 dry-run 已通過，Edge Function 已部署且保持 JWT 驗證。
@@ -115,11 +115,12 @@
   - [x] 2026-08-30 已核對 Google Cloud：Places API (New)、Routes API、同一把 Server Key 的兩項 API 限制、每日 50／每分鐘 10 的初始查詢配額，以及每月 US$5 的 50%／90%／100% 預算警示均有效。
   - [x] 以正式 Google Maps API key 完成 `localhost:4173` 的 Routes 整合驗證；正式 Console 亦已有 Places 成功請求紀錄，瀏覽器 bundle／Network 未洩漏 key。
   - [x] 已執行資料庫 advisors、`020`、migration history 與 dry-run；V3.6.0 新增物件沒有警告，既有 Auth／checklist advisor 項目另行追蹤。
-  - [ ] 前端發布前完成 Guest／User／其他 Trip editor／所屬 Trip editor／super_admin 的電腦版整合、權限與付費 API 邊界回歸。
+  - [ ] 補驗證 Guest／User／其他 Trip editor／所屬 Trip editor／super_admin 的完整電腦版整合、權限與付費 API 邊界回歸；目前已有 Guest 顯示、super_admin 成功查詢與未登入 401 證據。
   - [x] 2026-08-29 決定因目前沒有 staging，採正式環境受控發布；先完成電腦版整合與角色 smoke test，通過後才發布前端。
   - [ ] 發布後補驗證 Android／iOS 手機版面、PWA、外部開圖、離線與重新連線；未取得設備時保留為未驗證。
   - [x] 已建立《21_V3.6.0_發布前測試與正式發布流程》，記錄完整測試、候選版、正式 migration、Edge Function、smoke test、前端發布與停止原則。
-  - [x] 候選程式已建立 commit `3e89cbc`；本文件紀錄 commit 與候選 commit 同批 push 至 `develop` 後暫停。Product Owner 接手合併、tag 與正式前端部署，完成後再回報以更新發布狀態。
+  - [x] 候選程式 `3e89cbc` 已合併至 `main`（`0cce637`），建立 `v3.6.0` tag 並部署；正式 `app-version.json`、V3.6.0 Service Worker 接管、版本顯示、Guest 行程及已存路線均已通過。
+  - [ ] 正式站 Google OAuth 本次自動化點擊未完成跳轉；既有 OAuth 設定未修改，`localhost:4173` 已登入驗證，正式站登入列為發布後補驗證。
 
 ### V3.5.1 已確認新增功能（App 分享）
 
