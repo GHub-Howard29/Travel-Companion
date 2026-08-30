@@ -14,6 +14,16 @@ export type VersionHistoryItem = {
 
 export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
+    version: "3.5.6",
+    date: "2026-08-28",
+    forceUpdate: true,
+    notes: [
+      "新增最低支援版本政策，必要更新不再受裝置模式或稍後更新狀態影響。",
+      "將資訊卡片內容與行程說明的文字選色工具列移到輸入框下方。",
+      "支援全形冒號時間、統一儲存格式，並阻擋無效時間進入行程排序。",
+    ],
+  },
+  {
     version: "3.5.5",
     date: "2026-08-27",
     forceUpdate: false,

@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   formatTravelDistance,
   formatTravelDuration,
+  getAdjacentTravelOriginIndexesNeedingEstimate,
   getPlaceKey,
   getPreferredTravelMode,
   getSavedTravelEstimate,
@@ -108,6 +109,21 @@ const expiredContent = removeExpiredTravelEstimates({
 assert.equal(expiredContent.daysData["1"][0].travelToNext, undefined);
 assert.equal(expiredContent.daysData["1"][0].travelModeToNext, "drive");
 assert.equal(getPreferredTravelMode(expiredContent.daysData["1"][0]), "drive");
+assert.deepEqual(
+  getAdjacentTravelOriginIndexesNeedingEstimate(
+    [
+      { ...origin, travelToNext: undefined },
+      destination,
+      { ...destination, title: "C", place: { placeId: "ChIJ-place-c" } },
+    ],
+    1,
+  ),
+  [0, 1],
+);
+assert.deepEqual(
+  getAdjacentTravelOriginIndexesNeedingEstimate([origin, destination], 1),
+  [],
+);
 const unchangedContent = { daysData: { "1": [{ ...origin, travelToNext: undefined }] } };
 assert.equal(removeExpiredTravelEstimates(unchangedContent), unchangedContent);
 const expiredRecord = sanitizeStoredTripRecord({

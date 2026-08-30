@@ -50,6 +50,26 @@ export const hasDistinctConfirmedPlaces = (
   isConfirmedPlace(destination.place) &&
   getPlaceKey(origin.place) !== getPlaceKey(destination.place);
 
+/**
+ * 找出剛儲存的活動前後，已具備兩個有效地點但尚無可用估算的交通區段。
+ * 回傳值是每個區段起點在 items 中的索引。
+ */
+export const getAdjacentTravelOriginIndexesNeedingEstimate = (
+  items: ItineraryItem[],
+  changedIndex: number,
+): number[] =>
+  [changedIndex - 1, changedIndex].filter((originIndex) => {
+    const origin = items[originIndex];
+    const destination = items[originIndex + 1];
+    return Boolean(
+      origin &&
+        destination &&
+        hasDistinctConfirmedPlaces(origin, destination) &&
+        !isFlightConnection(origin, destination) &&
+        !getSavedTravelEstimate(origin, destination),
+    );
+  });
+
 export const getSavedTravelEstimate = (
   origin: ItineraryItem,
   destination: ItineraryItem,
