@@ -1,1 +1,0 @@
-var e=()=>{document.activeElement instanceof HTMLElement&&document.activeElement.blur()};export{e as t};
