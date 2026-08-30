@@ -119,7 +119,7 @@
   - [x] 2026-08-29 決定因目前沒有 staging，採正式環境受控發布；先完成電腦版整合與角色 smoke test，通過後才發布前端。
   - [ ] 發布後補驗證 Android／iOS 手機版面、PWA、外部開圖、離線與重新連線；未取得設備時保留為未驗證。
   - [x] 已建立《21_V3.6.0_發布前測試與正式發布流程》，記錄完整測試、候選版、正式 migration、Edge Function、smoke test、前端發布與停止原則。
-  - [ ] Codex 完成本次候選 commit／push 後暫停；Product Owner 接手合併、tag 與正式前端部署，完成後再回報以更新發布狀態。
+  - [x] 候選程式已建立 commit `3e89cbc`；本文件紀錄 commit 與候選 commit 同批 push 至 `develop` 後暫停。Product Owner 接手合併、tag 與正式前端部署，完成後再回報以更新發布狀態。
 
 ### V3.5.1 已確認新增功能（App 分享）
 
