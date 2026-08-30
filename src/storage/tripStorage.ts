@@ -1,4 +1,5 @@
 import type { TripDetail, TripMeta } from "../types";
+import { removeExpiredTravelEstimates } from "../utils/itineraryTravel.ts";
 
 export interface StoredTripRecord {
   meta: TripMeta;
@@ -22,6 +23,19 @@ const isStoredTripRecord = (value: unknown): value is StoredTripRecord => {
   );
 };
 
+export const sanitizeStoredTripRecord = (
+  record: StoredTripRecord,
+): StoredTripRecord => {
+  if (!record.detail.content?.daysData) return record;
+  const content = removeExpiredTravelEstimates(record.detail.content);
+  return content === record.detail.content
+    ? record
+    : {
+        ...record,
+        detail: { ...record.detail, content },
+      };
+};
+
 export const readStoredTripRecords = (): StoredTripRecord[] => {
   const rawData = localStorage.getItem(TRIP_STORAGE_KEY);
   if (!rawData) return [];
@@ -30,7 +44,15 @@ export const readStoredTripRecords = (): StoredTripRecord[] => {
     const parsedData = JSON.parse(rawData) as unknown;
     if (!Array.isArray(parsedData)) return [];
 
-    return parsedData.filter(isStoredTripRecord);
+    const records = parsedData.filter(isStoredTripRecord);
+    let changed = false;
+    const sanitizedRecords = records.map((record) => {
+      const sanitizedRecord = sanitizeStoredTripRecord(record);
+      if (sanitizedRecord !== record) changed = true;
+      return sanitizedRecord;
+    });
+    if (changed) localStorage.setItem(TRIP_STORAGE_KEY, JSON.stringify(sanitizedRecords));
+    return sanitizedRecords;
   } catch {
     return [];
   }

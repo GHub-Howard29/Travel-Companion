@@ -1,7 +1,7 @@
 {
   "name": "travel-companion",
   "private": true,
-  "version": "3.5.6",
+  "version": "3.6.0",
   "type": "module",
   "engines": {
     "node": "22.23.2",
@@ -10,10 +10,12 @@
   "packageManager": "npm@10.9.8",
   "scripts": {
     "dev": "vite",
-    "build": "npm run verify:release-history && npm run verify:update-policy && npm run verify:itinerary-time && tsc && vite build",
+    "build": "npm run verify:release-history && npm run verify:update-policy && npm run verify:itinerary-time && npm run verify:itinerary-travel && npm run verify:travel-route && tsc && vite build",
     "postbuild": "npm run verify:browser-security",
     "verify:browser-security": "node scripts/verify-browser-security.mjs",
     "verify:itinerary-time": "node --experimental-strip-types --no-warnings scripts/verify-itinerary-time.mjs",
+    "verify:itinerary-travel": "node --experimental-strip-types --no-warnings scripts/verify-itinerary-travel.mjs",
+    "verify:travel-route": "node --experimental-strip-types --no-warnings scripts/verify-travel-route.mjs",
     "verify:update-policy": "node --experimental-strip-types --no-warnings scripts/verify-update-policy.mjs",
     "verify:release-history": "node scripts/verify-release-history.mjs",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",

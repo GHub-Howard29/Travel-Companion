@@ -3,6 +3,7 @@ import type { SidebarItemConfig, TripDetail, TripMeta, TripMode } from "../types
 import type { StoredTripRecord } from "../storage/tripStorage";
 import { ATTACHMENT_BUCKET } from "../constants/appConstants";
 import { isExpenseAttachmentPathForTrip } from "../utils/attachmentUtils";
+import { removeExpiredTravelEstimates } from "../utils/itineraryTravel";
 
 interface CloudTripRow {
   id: string;
@@ -23,7 +24,7 @@ const toCloudTripInsert = (record: StoredTripRecord) => ({
   currency_config: record.meta.currencyConfig,
   sidebar_config: record.detail.sidebarConfig,
   content: {
-    ...record.detail.content,
+    ...removeExpiredTravelEstimates(record.detail.content),
     mode: record.meta.mode ?? "guided",
     participantEmailMap:
       record.meta.participantEmailMap ??
@@ -177,7 +178,7 @@ const toTripRecord = (row: CloudTripRow): StoredTripRecord | null => {
     isPublic: true,
     sidebarConfig: row.sidebar_config,
     content: {
-      ...row.content,
+      ...removeExpiredTravelEstimates(row.content),
       mode,
       participantEmailMap,
     },

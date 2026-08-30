@@ -15,6 +15,7 @@ interface RichTextColorEditorProps {
   placeholder: string;
   minHeightClassName?: string;
   focusClassName?: string;
+  textSizeClassName?: string;
 }
 
 const getInheritedColor = (node: Node, root: HTMLElement): string | undefined => {
@@ -120,6 +121,7 @@ export const RichTextColorEditor = ({
   placeholder,
   minHeightClassName = "min-h-32",
   focusClassName = "focus:border-stone-500",
+  textSizeClassName = "text-sm",
 }: RichTextColorEditorProps) => {
   const editorRef = useRef<HTMLDivElement>(null);
   const paletteRef = useRef<HTMLDetailsElement>(null);
@@ -208,7 +210,7 @@ export const RichTextColorEditor = ({
           contentEditable
           suppressContentEditableWarning
           onInput={emitEditorValue}
-          className={`${minHeightClassName} w-full whitespace-pre-wrap break-words px-3 py-2 text-sm leading-relaxed text-slate-700 outline-none ${focusClassName}`}
+          className={`${minHeightClassName} w-full whitespace-pre-wrap break-words px-3 py-2 leading-relaxed text-slate-700 outline-none ${textSizeClassName} ${focusClassName}`}
           role="textbox"
           aria-multiline="true"
           aria-label={placeholder}

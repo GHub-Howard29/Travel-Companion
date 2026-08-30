@@ -1,9 +1,30 @@
-import { useEffect, useState } from "react";
-import { ExternalLink, MapPin, Settings2, X } from "lucide-react";
+import { Fragment, useEffect, useRef, useState } from "react";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import {
+  BusFront,
+  CarFront,
+  Check,
+  ExternalLink,
+  Footprints,
+  Loader2,
+  MapPin,
+  Search,
+  Settings2,
+  ShipWheel,
+  TrainFront,
+  TriangleAlert,
+  X,
+} from "lucide-react";
 
-import type { ItineraryItem, TripDetail } from "../types";
-import { handleNavigate } from "../utils/navigationUtils";
-import { releaseFocusedControl } from "../utils/viewportUtils";
+import type {
+  ItineraryItem,
+  SavedTravelEstimate,
+  TransitVehicle,
+  TravelMode,
+  TripDetail,
+} from "../types";
+import { handlePlaceBrowse, handleRouteBrowse } from "../utils/navigationUtils";
+import { focusAndRevealControl, releaseFocusedControl } from "../utils/viewportUtils";
 import { trimRichText } from "../utils/richText";
 import {
   getItineraryTimeValue,
@@ -11,10 +32,29 @@ import {
   sortItineraryItemsByTime,
   validateItineraryTime,
 } from "../utils/itineraryTime";
+import {
+  formatTravelDistance,
+  formatTravelDuration,
+  getAdjacentTravelOriginIndexesNeedingEstimate,
+  getPlaceKey,
+  getPreferredTravelMode,
+  getSavedTravelEstimate,
+  getTravelTimeWarning,
+  hasDistinctConfirmedPlaces,
+  isConfirmedPlace,
+  isFlightConnection,
+} from "../utils/itineraryTravel";
+import {
+  getConfirmedPlace,
+  getRouteEstimate,
+  searchPlaceCandidates,
+  type PlaceCandidate,
+} from "../services/travelRouteService";
 import { RichTextColorEditor } from "./RichTextColorEditor";
 import { RichTextDisplay } from "./RichTextDisplay";
 
 interface ItineraryPageProps {
+  supabase: SupabaseClient;
   trip: TripDetail;
   activeDay: number;
   hasEditPermission: boolean;
@@ -32,6 +72,22 @@ const ITINERARY_TYPE_OPTIONS = [
   { type: "其他", typeColor: "bg-slate-50 text-slate-700 border-slate-200" },
 ];
 
+const TravelModeIcon = ({
+  mode,
+  vehicle,
+  size = 16,
+}: {
+  mode: TravelMode;
+  vehicle?: TransitVehicle;
+  size?: number;
+}) => {
+  if (mode === "drive") return <CarFront size={size} />;
+  if (mode === "walk") return <Footprints size={size} />;
+  if (vehicle === "bus") return <BusFront size={size} />;
+  if (vehicle === "ferry") return <ShipWheel size={size} />;
+  return <TrainFront size={size} />;
+};
+
 const createEmptyItineraryDraft = (): ItineraryItem => ({
   time: "",
   departureTime: "",
@@ -43,6 +99,7 @@ const createEmptyItineraryDraft = (): ItineraryItem => ({
 });
 
 export const ItineraryPage = ({
+  supabase,
   trip,
   activeDay,
   hasEditPermission,
@@ -58,15 +115,49 @@ export const ItineraryPage = ({
     arrival?: string;
     departure?: string;
   }>({});
+  const [isPlaceSearchOpen, setIsPlaceSearchOpen] = useState(false);
+  const [placeQuery, setPlaceQuery] = useState("");
+  const [placeCandidates, setPlaceCandidates] = useState<PlaceCandidate[]>([]);
+  const [isPlaceSearching, setIsPlaceSearching] = useState(false);
+  const [placeSearchError, setPlaceSearchError] = useState<string | null>(null);
+  const [isPlaceDecisionPending, setIsPlaceDecisionPending] = useState(false);
+  const [activeTravelSegment, setActiveTravelSegment] = useState<{
+    originIndex: number;
+    destinationIndex: number;
+    origin: ItineraryItem;
+    destination: ItineraryItem;
+  } | null>(null);
+  const [selectedTravelMode, setSelectedTravelMode] = useState<TravelMode>("drive");
+  const [previewEstimate, setPreviewEstimate] = useState<SavedTravelEstimate | null>(null);
+  const [isRouteLoading, setIsRouteLoading] = useState(false);
+  const [routeError, setRouteError] = useState<string | null>(null);
+  const [isItemSaving, setIsItemSaving] = useState(false);
+  const [itemSaveError, setItemSaveError] = useState<string | null>(null);
+  const [autoRouteError, setAutoRouteError] = useState<string | null>(null);
+  const editingCardRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     if (editingIndex === null) return;
 
-    const frameId = requestAnimationFrame(() => {
-      window.scrollTo({ top: 0, behavior: "smooth" });
+    let layoutFrameId = 0;
+    const renderFrameId = requestAnimationFrame(() => {
+      layoutFrameId = requestAnimationFrame(() => {
+        const editingCard = editingCardRef.current;
+        if (!editingCard) return;
+
+        const viewportOffset = window.visualViewport?.offsetTop ?? 0;
+        const cardTop = window.scrollY + editingCard.getBoundingClientRect().top;
+        window.scrollTo({
+          top: Math.max(0, cardTop - viewportOffset - 8),
+          behavior: "auto",
+        });
+      });
     });
 
-    return () => cancelAnimationFrame(frameId);
+    return () => {
+      cancelAnimationFrame(renderFrameId);
+      cancelAnimationFrame(layoutFrameId);
+    };
   }, [editingIndex]);
 
   const currentDayEvents = trip.content.daysData[String(activeDay)] || [];
@@ -82,10 +173,16 @@ export const ItineraryPage = ({
     });
 
   const resetForm = () => {
+    releaseFocusedControl();
     setIsFormOpen(false);
     setEditingIndex(null);
     setDraft(createEmptyItineraryDraft());
     setTimeErrors({});
+    setIsPlaceSearchOpen(false);
+    setPlaceCandidates([]);
+    setPlaceSearchError(null);
+    setIsPlaceDecisionPending(false);
+    setItemSaveError(null);
   };
 
   const closeManageMode = () => {
@@ -130,17 +227,25 @@ export const ItineraryPage = ({
   };
 
   const startCreateItem = () => {
+    releaseFocusedControl();
     setEditingIndex(null);
     setDraft(createEmptyItineraryDraft());
     setTimeErrors({});
     setIsFormOpen(true);
+    setIsPlaceSearchOpen(false);
+    setIsPlaceDecisionPending(false);
+    setItemSaveError(null);
   };
 
   const startEditItem = (event: ItineraryItem, index: number) => {
+    releaseFocusedControl();
     setEditingIndex(index);
     setDraft(event);
     setTimeErrors({});
     setIsFormOpen(true);
+    setIsPlaceSearchOpen(false);
+    setIsPlaceDecisionPending(false);
+    setItemSaveError(null);
   };
 
   const toggleManageMode = () => {
@@ -154,9 +259,151 @@ export const ItineraryPage = ({
 
   const canManageItinerary = hasEditPermission && isOnline;
 
-  const saveItem = async () => {
-    if (!draft.title.trim()) return;
+  const openPlaceSearch = () => {
+    const query = draft.location.trim();
+    setPlaceQuery(query);
+    setPlaceCandidates([]);
+    setPlaceSearchError(null);
+    setIsPlaceSearchOpen(true);
+    setIsPlaceDecisionPending(Boolean(query));
+    void searchPlaces(query);
+  };
 
+  const searchPlaces = async (queryValue = placeQuery) => {
+    const query = queryValue.trim();
+    if (query.length < 2) {
+      setPlaceSearchError("請輸入至少 2 個字的地點名稱。");
+      return;
+    }
+
+    setIsPlaceSearching(true);
+    setPlaceSearchError(null);
+    try {
+      const candidates = await searchPlaceCandidates(
+        supabase,
+        trip.id,
+        query,
+      );
+      setPlaceCandidates(candidates);
+      if (candidates.length === 0) setPlaceSearchError("找不到相符地點，請調整關鍵字。");
+    } catch (error) {
+      setPlaceSearchError(error instanceof Error ? error.message : "地點搜尋暫時無法使用。");
+    } finally {
+      setIsPlaceSearching(false);
+    }
+  };
+
+  const confirmPlaceCandidate = async (candidate: PlaceCandidate) => {
+    setIsPlaceSearching(true);
+    setPlaceSearchError(null);
+    try {
+      const place = getConfirmedPlace(candidate);
+      updateDraft({
+        location: draft.location.trim() || placeQuery.trim(),
+        place,
+        travelToNext: undefined,
+      });
+      setIsPlaceDecisionPending(false);
+      setIsPlaceSearchOpen(false);
+      setPlaceCandidates([]);
+    } catch (error) {
+      setPlaceSearchError(error instanceof Error ? error.message : "無法確認所選地點。");
+    } finally {
+      setIsPlaceSearching(false);
+    }
+  };
+
+  const openTravelPanel = (
+    origin: ItineraryItem,
+    destination: ItineraryItem,
+    originIndex: number,
+    destinationIndex: number,
+  ) => {
+    const savedEstimate = getSavedTravelEstimate(origin, destination);
+    setActiveTravelSegment({ origin, destination, originIndex, destinationIndex });
+    setSelectedTravelMode(getPreferredTravelMode(origin));
+    setPreviewEstimate(savedEstimate);
+    setRouteError(null);
+  };
+
+  const requestTravelEstimate = async (
+    origin: ItineraryItem,
+    destination: ItineraryItem,
+    mode: TravelMode,
+  ): Promise<SavedTravelEstimate> => {
+    const result = await getRouteEstimate(supabase, {
+      tripId: trip.id,
+      origin: origin.place!,
+      destination: destination.place!,
+      mode,
+      departureTime: origin.departureTime || origin.time,
+      tripDepartureDate: trip.departureDate,
+      activeDay,
+    });
+
+    return {
+      mode,
+      durationSeconds: result.durationSeconds,
+      distanceMeters: result.distanceMeters,
+      originKey: getPlaceKey(origin.place!),
+      destinationKey: getPlaceKey(destination.place!),
+      queriedAt: new Date().toISOString(),
+      expiresAt: result.expiresAt,
+      departureTimeBasis:
+        mode === "transit" ? origin.departureTime || origin.time : undefined,
+      transitDaytimeFallback: result.transitDaytimeFallback,
+      transitVehicle: result.transitVehicle,
+    };
+  };
+
+  const queryTravelMode = async (mode: TravelMode) => {
+    setSelectedTravelMode(mode);
+    setRouteError(null);
+    if (!activeTravelSegment ||
+      !isConfirmedPlace(activeTravelSegment.origin.place) ||
+      !isConfirmedPlace(activeTravelSegment.destination.place)) return;
+
+    setIsRouteLoading(true);
+    try {
+      setPreviewEstimate(await requestTravelEstimate(
+        activeTravelSegment.origin,
+        activeTravelSegment.destination,
+        mode,
+      ));
+    } catch (error) {
+      setRouteError(error instanceof Error ? error.message : "路線查詢暫時無法使用。");
+    } finally {
+      setIsRouteLoading(false);
+    }
+  };
+
+  const saveTravelEstimate = async () => {
+    if (!activeTravelSegment || !previewEstimate || previewEstimate.mode !== selectedTravelMode) return;
+    const dayKey = String(activeDay);
+    const currentEvents = trip.content.daysData[dayKey] ?? [];
+    const nextEvents = currentEvents.map((event, index) =>
+      index === activeTravelSegment.originIndex
+        ? {
+            ...event,
+            travelModeToNext: previewEstimate.mode,
+            travelToNext: previewEstimate,
+          }
+        : event,
+    );
+    await onSaveTripDetail({
+      ...trip,
+      content: {
+        ...trip.content,
+        daysData: { ...trip.content.daysData, [dayKey]: nextEvents },
+      },
+    });
+    setActiveTravelSegment(null);
+  };
+
+  const saveItem = async () => {
+    if (!draft.title.trim() || isPlaceDecisionPending || isItemSaving) return;
+
+    setItemSaveError(null);
     const dayKey = String(activeDay);
     const currentEvents = trip.content.daysData[dayKey] ?? [];
     const arrivalResult = validateItineraryTime(draft.time);
@@ -178,6 +425,13 @@ export const ItineraryPage = ({
 
     if (!arrivalResult.isValid || !departureResult.isValid) {
       setTimeErrors(nextTimeErrors);
+      requestAnimationFrame(() => {
+        focusAndRevealControl(
+          !arrivalResult.isValid
+            ? "itinerary-arrival-time-input"
+            : "itinerary-departure-time-input",
+        );
+      });
       return;
     }
 
@@ -191,6 +445,9 @@ export const ItineraryPage = ({
     ) {
       setTimeErrors({
         departure: "同一天內，離開時間不得早於到達時間。",
+      });
+      requestAnimationFrame(() => {
+        focusAndRevealControl("itinerary-departure-time-input");
       });
       return;
     }
@@ -214,17 +471,60 @@ export const ItineraryPage = ({
             index === editingIndex ? nextEvent : event,
           );
 
-    await onSaveTripDetail({
-      ...trip,
-      content: {
-        ...trip.content,
-        daysData: {
-          ...trip.content.daysData,
-          [dayKey]: sortItineraryItemsByTime(nextEvents),
+    let savedEvents = sortItineraryItemsByTime(nextEvents);
+    const changedIndex = savedEvents.indexOf(nextEvent);
+    const routeOriginIndexes = getAdjacentTravelOriginIndexesNeedingEstimate(
+      savedEvents,
+      changedIndex,
+    );
+
+    setIsItemSaving(true);
+    setAutoRouteError(null);
+    try {
+      for (const originIndex of routeOriginIndexes) {
+        const origin = savedEvents[originIndex];
+        const destination = savedEvents[originIndex + 1];
+        const mode = getPreferredTravelMode(origin);
+
+        try {
+          const estimate = await requestTravelEstimate(origin, destination, mode);
+          savedEvents = savedEvents.map((event, index) =>
+            index === originIndex
+              ? { ...event, travelModeToNext: mode, travelToNext: estimate }
+              : event,
+          );
+        } catch (error) {
+          setAutoRouteError(
+            error instanceof Error
+              ? `活動已儲存，但自動路線規劃失敗：${error.message}`
+              : "活動已儲存，但自動路線規劃暫時無法使用。",
+          );
+        }
+      }
+
+      await onSaveTripDetail({
+        ...trip,
+        content: {
+          ...trip.content,
+          daysData: {
+            ...trip.content.daysData,
+            [dayKey]: savedEvents,
+          },
         },
-      },
-    });
-    resetForm();
+      });
+      resetForm();
+    } catch (error) {
+      setItemSaveError(
+        error instanceof Error
+          ? `無法儲存行程：${error.message}`
+          : "無法儲存行程，請檢查網路後再試一次。",
+      );
+      requestAnimationFrame(() => {
+        focusAndRevealControl("itinerary-item-save-error");
+      });
+    } finally {
+      setIsItemSaving(false);
+    }
   };
 
   const deleteItem = async (index: number) => {
@@ -247,6 +547,261 @@ export const ItineraryPage = ({
       },
     });
     resetForm();
+  };
+
+  const renderItemForm = (isInlineEdit: boolean) => {
+    const errorIdPrefix = isInlineEdit ? `edit-${editingIndex}` : "create";
+
+    return (
+      <div
+        className={isInlineEdit ? "space-y-2" : "mt-3 space-y-2"}
+        aria-label={isInlineEdit ? `編輯行程：${draft.title}` : "新增行程"}
+      >
+        {isInlineEdit && (
+          <div className="mb-3 flex items-center justify-between gap-3 border-b border-emerald-100 pb-3">
+            <div>
+              <p className="text-xs font-bold text-emerald-700">卡片原地編輯</p>
+              <h3 className="mt-0.5 text-base font-bold text-slate-800">{draft.title || "未命名活動"}</h3>
+            </div>
+            <button
+              type="button"
+              onClick={resetForm}
+              className="inline-flex min-h-10 items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 text-xs font-bold text-slate-600 hover:bg-slate-50"
+            >
+              <X size={14} /> 取消
+            </button>
+          </div>
+        )}
+
+        {itemSaveError && (
+          <p
+            id="itinerary-item-save-error"
+            tabIndex={-1}
+            className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm leading-relaxed text-rose-700 outline-none focus:ring-2 focus:ring-rose-400"
+            role="alert"
+          >
+            {itemSaveError}
+          </p>
+        )}
+
+        <div className="grid grid-cols-2 gap-2">
+          <label className="space-y-1">
+            <span className="text-xs font-bold text-slate-600">到達時間</span>
+            <input
+              id="itinerary-arrival-time-input"
+              value={draft.time}
+              onChange={(event) => updateArrivalTime(event.target.value)}
+              placeholder="例如 08:00"
+              aria-invalid={Boolean(timeErrors.arrival)}
+              aria-describedby={timeErrors.arrival ? `${errorIdPrefix}-arrival-time-error` : undefined}
+              className={`w-full rounded-lg border px-3 py-2 text-base focus:outline-none focus:ring-2 sm:text-sm ${
+                timeErrors.arrival
+                  ? "border-rose-400 focus:ring-rose-400"
+                  : "border-slate-200 focus:ring-emerald-500"
+              }`}
+            />
+            {timeErrors.arrival && (
+              <span id={`${errorIdPrefix}-arrival-time-error`} className="block text-xs leading-relaxed text-rose-700">
+                {timeErrors.arrival}
+              </span>
+            )}
+          </label>
+          <label className="space-y-1">
+            <span className="text-xs font-bold text-slate-600">離開時間</span>
+            <input
+              id="itinerary-departure-time-input"
+              value={draft.departureTime ?? ""}
+              onChange={(event) => updateDepartureTime(event.target.value)}
+              placeholder="例如 12:20"
+              aria-invalid={Boolean(timeErrors.departure)}
+              aria-describedby={timeErrors.departure ? `${errorIdPrefix}-departure-time-error` : undefined}
+              className={`w-full rounded-lg border px-3 py-2 text-base focus:outline-none focus:ring-2 sm:text-sm ${
+                timeErrors.departure
+                  ? "border-rose-400 focus:ring-rose-400"
+                  : "border-slate-200 focus:ring-emerald-500"
+              }`}
+            />
+            {timeErrors.departure && (
+              <span id={`${errorIdPrefix}-departure-time-error`} className="block text-xs leading-relaxed text-rose-700">
+                {timeErrors.departure}
+              </span>
+            )}
+          </label>
+        </div>
+
+        <select
+          value={draft.type}
+          onChange={(event) => handleTypeChange(event.target.value)}
+          aria-label="活動類型"
+          className="w-full rounded-lg border border-slate-200 px-3 py-2 text-base focus:outline-none focus:ring-2 focus:ring-emerald-500 sm:text-sm"
+        >
+          {ITINERARY_TYPE_OPTIONS.map((option) => (
+            <option key={option.type} value={option.type}>
+              {option.type}
+            </option>
+          ))}
+        </select>
+
+        {draft.type === "交通" && (
+          <label className="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-600">
+            <input
+              type="checkbox"
+              checked={draft.travelKind === "flight"}
+              onChange={(event) =>
+                updateDraft({
+                  travelKind: event.target.checked ? "flight" : undefined,
+                })
+              }
+            />
+            此活動為航班（不建立機場到機場的地面交通區段）
+          </label>
+        )}
+
+        <input
+          value={draft.title}
+          onChange={(event) => updateDraft({ title: event.target.value })}
+          placeholder="活動標題"
+          className="w-full rounded-lg border border-slate-200 px-3 py-2 text-base focus:outline-none focus:ring-2 focus:ring-emerald-500 sm:text-sm"
+        />
+        <RichTextColorEditor
+          value={draft.desc}
+          onChange={(desc) => updateDraft({ desc })}
+          placeholder="說明"
+          minHeightClassName="min-h-24"
+          focusClassName="focus:ring-2 focus:ring-emerald-500"
+          textSizeClassName="text-base sm:text-sm"
+        />
+
+        <div className="flex items-stretch gap-2">
+          <input
+            value={draft.location}
+            onChange={(event) => {
+              const location = event.target.value;
+              updateDraft({
+                location,
+                place: undefined,
+                travelToNext: undefined,
+              });
+              setIsPlaceDecisionPending(Boolean(location.trim()));
+              setIsPlaceSearchOpen(false);
+              setPlaceCandidates([]);
+              setPlaceSearchError(null);
+            }}
+            placeholder="地圖地點"
+            className="min-w-0 flex-1 rounded-lg border border-slate-200 px-3 py-2 text-base focus:outline-none focus:ring-2 focus:ring-emerald-500 sm:text-sm"
+          />
+          <button
+            type="button"
+            onClick={openPlaceSearch}
+            disabled={!isOnline || isPlaceSearching || draft.location.trim().length < 2}
+            className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg bg-emerald-700 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-800 disabled:opacity-50"
+          >
+            {isPlaceSearching ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
+            確認地點
+          </button>
+        </div>
+
+        <p className={`rounded-lg px-3 py-2 text-xs leading-relaxed ${
+          isPlaceDecisionPending
+            ? "bg-amber-50 text-amber-800"
+            : "bg-slate-50 text-slate-500"
+        }`}>
+          {isConfirmedPlace(draft.place)
+            ? "已確認可供路線服務識別的地點。"
+            : isPlaceDecisionPending
+              ? "地點已變更，請確認正確地點，或明確選擇保留原文字。"
+              : draft.location.trim()
+                ? "已選擇保留原文字；可查看地圖，但不會建立交通區段。"
+                : "可輸入地點並確認，讓系統自動建立交通區段。"}
+        </p>
+
+        {isPlaceSearchOpen && (
+          <section className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm" aria-label="確認地點">
+            <div className="flex items-center justify-between gap-2">
+              <h4 className="text-sm font-bold text-slate-800">確認正確地點</h4>
+              <button
+                type="button"
+                onClick={() => setIsPlaceSearchOpen(false)}
+                className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"
+                aria-label="關閉地點搜尋"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <p className="mt-1 text-xs leading-relaxed text-slate-500">
+              已依輸入內容搜尋。請選擇正確地點，以取得穩定的交通估算。
+            </p>
+            {isPlaceSearching && (
+              <p className="mt-3 inline-flex items-center gap-2 text-xs font-bold text-emerald-700" role="status">
+                <Loader2 size={14} className="animate-spin" /> 正在搜尋「{placeQuery}」…
+              </p>
+            )}
+            {placeSearchError && (
+              <p className="mt-2 text-xs text-rose-700" role="alert">{placeSearchError}</p>
+            )}
+            {placeCandidates.length > 0 && (
+              <div className="mt-3 space-y-2">
+                {placeCandidates.map((candidate) => (
+                  <button
+                    key={candidate.placeId}
+                    type="button"
+                    onClick={() => void confirmPlaceCandidate(candidate)}
+                    disabled={isPlaceSearching}
+                    className="flex w-full items-start gap-2 rounded-lg border border-slate-200 px-3 py-2 text-left hover:border-emerald-300 hover:bg-emerald-50 disabled:opacity-60"
+                  >
+                    <MapPin size={16} className="mt-0.5 shrink-0 text-emerald-600" />
+                    <span className="min-w-0">
+                      <strong className="block text-sm text-slate-800">{candidate.displayName}</strong>
+                      {candidate.address && (
+                        <span className="mt-0.5 block text-xs leading-relaxed text-slate-500">{candidate.address}</span>
+                      )}
+                    </span>
+                  </button>
+                ))}
+                <p className="text-right text-xs font-normal text-slate-500" translate="no">Google Maps</p>
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                setIsPlaceDecisionPending(false);
+                setIsPlaceSearchOpen(false);
+                setPlaceCandidates([]);
+                setPlaceSearchError(null);
+              }}
+              className="mt-3 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50"
+            >
+              找不到正確地點，保留原文字
+            </button>
+          </section>
+        )}
+
+        <div className={isInlineEdit ? "flex gap-2 pt-1" : undefined}>
+          {isInlineEdit && (
+            <button
+              type="button"
+              onClick={resetForm}
+              disabled={isItemSaving}
+              className="min-h-11 rounded-lg border border-slate-200 bg-white px-4 text-sm font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-60"
+            >
+              取消
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => void saveItem()}
+            disabled={!draft.title.trim() || isPlaceDecisionPending || isPlaceSearching || isItemSaving}
+            className={`${isInlineEdit ? "min-w-0 flex-1" : "w-full"} min-h-11 rounded-lg bg-emerald-700 px-3 text-sm font-bold text-white hover:bg-emerald-800 disabled:opacity-60`}
+          >
+            {isItemSaving
+              ? "正在儲存並規劃路線…"
+              : editingIndex === null
+                ? "新增行程"
+                : "儲存行程"}
+          </button>
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -289,6 +844,12 @@ export const ItineraryPage = ({
         </div>
       </div>
 
+      {autoRouteError && (
+        <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800" role="alert">
+          {autoRouteError}
+        </p>
+      )}
+
       {canManageItinerary && isManageMode && (
         <div className="mb-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="flex items-center justify-between">
@@ -297,10 +858,15 @@ export const ItineraryPage = ({
             </h3>
             <button
               type="button"
-              onClick={isFormOpen ? resetForm : startCreateItem}
-              className="rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white hover:bg-slate-800"
+              onClick={isFormOpen && editingIndex === null ? resetForm : startCreateItem}
+              disabled={editingIndex !== null}
+              className="rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {isFormOpen ? "取消" : "新增活動"}
+              {editingIndex !== null
+                ? "卡片編輯中"
+                : isFormOpen
+                  ? "取消"
+                  : "新增活動"}
             </button>
           </div>
 
@@ -308,100 +874,43 @@ export const ItineraryPage = ({
             依到達時間排序，未填到達時間的活動會置於最下方；未填離開時間時，儲存後會沿用到達時間。時間可使用半形或全形冒號，但冒號前後不可空格。
           </p>
 
-          {isFormOpen && (
-            <div className="mt-3 space-y-2">
-              <div className="grid grid-cols-2 gap-2">
-                <label className="space-y-1">
-                  <span className="text-xs font-bold text-slate-600">到達時間</span>
-                  <input
-                    value={draft.time}
-                    onChange={(event) => updateArrivalTime(event.target.value)}
-                    placeholder="例如 08:00"
-                    aria-invalid={Boolean(timeErrors.arrival)}
-                    aria-describedby={timeErrors.arrival ? "arrival-time-error" : undefined}
-                    className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 ${
-                      timeErrors.arrival
-                        ? "border-rose-400 focus:ring-rose-400"
-                        : "border-slate-200 focus:ring-emerald-500"
-                    }`}
-                  />
-                  {timeErrors.arrival && (
-                    <span id="arrival-time-error" className="block text-xs leading-relaxed text-rose-700">
-                      {timeErrors.arrival}
-                    </span>
-                  )}
-                </label>
-                <label className="space-y-1">
-                  <span className="text-xs font-bold text-slate-600">離開時間</span>
-                  <input
-                    value={draft.departureTime ?? ""}
-                    onChange={(event) => updateDepartureTime(event.target.value)}
-                    placeholder="例如 12:20"
-                    aria-invalid={Boolean(timeErrors.departure)}
-                    aria-describedby={timeErrors.departure ? "departure-time-error" : undefined}
-                    className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 ${
-                      timeErrors.departure
-                        ? "border-rose-400 focus:ring-rose-400"
-                        : "border-slate-200 focus:ring-emerald-500"
-                    }`}
-                  />
-                  {timeErrors.departure && (
-                    <span id="departure-time-error" className="block text-xs leading-relaxed text-rose-700">
-                      {timeErrors.departure}
-                    </span>
-                  )}
-                </label>
-              </div>
-              <select
-                value={draft.type}
-                onChange={(event) => handleTypeChange(event.target.value)}
-                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-              >
-                {ITINERARY_TYPE_OPTIONS.map((option) => (
-                  <option key={option.type} value={option.type}>
-                    {option.type}
-                  </option>
-                ))}
-              </select>
-              <input
-                value={draft.title}
-                onChange={(event) => updateDraft({ title: event.target.value })}
-                placeholder="活動標題"
-                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-              />
-              <RichTextColorEditor
-                value={draft.desc}
-                onChange={(desc) => updateDraft({ desc })}
-                placeholder="說明"
-                minHeightClassName="min-h-24"
-                focusClassName="focus:ring-2 focus:ring-emerald-500"
-              />
-              <input
-                value={draft.location}
-                onChange={(event) => updateDraft({ location: event.target.value })}
-                placeholder="地圖地點"
-                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-              />
-              <button
-                type="button"
-                onClick={() => void saveItem()}
-                disabled={!draft.title.trim()}
-                className="w-full rounded-lg bg-emerald-700 px-3 py-2 text-sm font-bold text-white hover:bg-emerald-800 disabled:opacity-60"
-              >
-                {editingIndex === null ? "新增行程" : "儲存行程"}
-              </button>
-            </div>
-          )}
+          {isFormOpen && editingIndex === null && renderItemForm(false)}
         </div>
       )}
 
       {sortedDayEvents.length > 0 ? (
-        <div className="space-y-4">
-          {sortedDayEvents.map(({ event, originalIndex }) => (
-            <div
-              key={originalIndex}
-              className="bg-white border border-slate-200/60 rounded-xl p-4 shadow-sm"
+        <div>
+          {sortedDayEvents.map(({ event, originalIndex }, sortedIndex) => {
+            const nextEntry = sortedDayEvents[sortedIndex + 1];
+            const nextEvent = nextEntry?.event;
+            const hasEligiblePlaces = Boolean(
+              nextEvent &&
+                hasDistinctConfirmedPlaces(event, nextEvent) &&
+                !isFlightConnection(event, nextEvent),
+            );
+            const estimate = nextEvent
+              ? getSavedTravelEstimate(event, nextEvent)
+              : null;
+            const preferredMode = getPreferredTravelMode(event);
+            const hasSavedTravelPreference = Boolean(event.travelModeToNext || event.travelToNext);
+            const warning = nextEvent
+              ? getTravelTimeWarning(event, nextEvent, estimate)
+              : null;
+
+            return (
+            <Fragment key={`${originalIndex}-${event.title}`}>
+            <article
+              ref={editingIndex === originalIndex ? editingCardRef : undefined}
+              className={`rounded-xl border bg-white p-4 shadow-sm ${
+                editingIndex === originalIndex
+                  ? "border-emerald-300 ring-2 ring-emerald-100"
+                  : "border-slate-200/60"
+              }`}
             >
+              {isFormOpen && editingIndex === originalIndex ? (
+                renderItemForm(true)
+              ) : (
+                <>
               <div className="flex justify-between items-center gap-3 mb-2">
                 {event.time ? (
                   <div className="flex min-w-0 items-center gap-2 text-sm font-bold text-slate-500">
@@ -427,10 +936,10 @@ export const ItineraryPage = ({
               {event.location && (
                 <div className="flex justify-end pt-2 border-t border-slate-100">
                   <button
-                    onClick={() => handleNavigate(event.location!)}
+                    onClick={() => handlePlaceBrowse(event.location!, event.place)}
                     className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 rounded-lg text-xs font-bold text-slate-600 transition-colors"
                   >
-                    <MapPin size={14} className="text-emerald-600" /> 地圖導航{" "}
+                    <MapPin size={14} className="text-emerald-600" /> 在地圖中查看{" "}
                     <ExternalLink size={10} />
                   </button>
                 </div>
@@ -453,12 +962,184 @@ export const ItineraryPage = ({
                   </button>
                 </div>
               )}
-            </div>
-          ))}
+                </>
+              )}
+            </article>
+            {nextEvent && (hasEligiblePlaces || warning) && (
+              <div className="py-1">
+                {(estimate || hasSavedTravelPreference || canManageItinerary) && hasEligiblePlaces && (
+                  <div className="mr-auto inline-flex min-h-10 items-stretch overflow-hidden rounded-lg border border-emerald-200 bg-emerald-50 text-xs font-bold text-slate-700 shadow-sm">
+                    <button
+                      type="button"
+                      onClick={() =>
+                       handleRouteBrowse(
+                         event.place!,
+                         event.location,
+                         nextEvent.place!,
+                         nextEvent.location,
+                         preferredMode,
+                        )
+                      }
+                      className="flex min-h-10 items-center justify-start gap-2 px-3 transition-colors hover:bg-emerald-100"
+                      aria-label="使用 Google Maps 開啟路線"
+                    >
+                      {estimate ? (
+                        <>
+                          <TravelModeIcon mode={estimate.mode} vehicle={estimate.transitVehicle} />
+                          <span>
+                            約 {formatTravelDuration(estimate.durationSeconds)} · {formatTravelDistance(estimate.distanceMeters)}
+                          </span>
+                        </>
+                      ) : hasSavedTravelPreference ? (
+                        <>
+                          <TravelModeIcon mode={preferredMode} />
+                          <span>路線資訊待更新</span>
+                        </>
+                      ) : (
+                        <>
+                          <CarFront size={16} />
+                          <span>查看預設路線</span>
+                        </>
+                      )}
+                      <span className="inline-flex items-center gap-1 font-normal text-slate-500" translate="no">
+                        Google Maps <ExternalLink size={11} />
+                      </span>
+                    </button>
+                    {canManageItinerary && isManageMode && (
+                      <button
+                        type="button"
+                        onClick={() => openTravelPanel(
+                          event,
+                          nextEvent,
+                          originalIndex,
+                          nextEntry.originalIndex,
+                        )}
+                        className="inline-flex min-h-10 items-center gap-1 border-l border-emerald-200 px-3 text-emerald-700 transition-colors hover:bg-emerald-100"
+                        aria-label="修改交通方式"
+                      >
+                        <Settings2 size={13} /> 修改交通方式
+                      </button>
+                    )}
+                  </div>
+                )}
+                {warning?.type === "conflict" && (
+                  <div className="mx-1 flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700" role="status">
+                    <TriangleAlert size={15} className="mt-0.5 shrink-0" />
+                    <span>行程時間順序衝突：前一站離開時間晚於下一站到達時間</span>
+                  </div>
+                )}
+                {warning?.type === "insufficient" && (
+                  <div className="mx-1 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800" role="status">
+                    <TriangleAlert size={15} className="mt-0.5 shrink-0" />
+                    <span>行程間隔可能不足 {warning.shortfallMinutes} 分鐘</span>
+                  </div>
+                )}
+              </div>
+            )}
+            {!nextEvent ? null : !(hasEligiblePlaces || warning) ? <div className="h-2" /> : null}
+            </Fragment>
+            );
+          })}
         </div>
       ) : (
         <div className="text-center py-12 text-slate-400 bg-white border border-dashed border-slate-200 rounded-xl shadow-sm">
           此行程今日尚無規劃活動景點。
+        </div>
+      )}
+
+      {activeTravelSegment &&
+        isConfirmedPlace(activeTravelSegment.origin.place) &&
+        isConfirmedPlace(activeTravelSegment.destination.place) && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/40 p-3 sm:items-center" role="presentation">
+          <section
+            className="w-full max-w-md rounded-2xl bg-white p-4 shadow-2xl"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="travel-mode-title"
+          >
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h3 id="travel-mode-title" className="text-lg font-bold text-slate-800">交通方式</h3>
+                <p className="mt-1 text-xs text-slate-500">
+                  {activeTravelSegment.origin.location} → {activeTravelSegment.destination.location}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActiveTravelSegment(null)}
+                className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"
+                aria-label="關閉交通方式"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="mt-4 grid grid-cols-3 gap-2">
+              {([
+                { mode: "drive" as const, label: "開車" },
+                { mode: "walk" as const, label: "步行" },
+                { mode: "transit" as const, label: "大眾運輸" },
+              ]).map((option) => (
+                <button
+                  key={option.mode}
+                  type="button"
+                  onClick={() => void queryTravelMode(option.mode)}
+                  disabled={isRouteLoading}
+                  aria-pressed={selectedTravelMode === option.mode}
+                  className={`flex min-h-16 flex-col items-center justify-center gap-1 rounded-xl border px-2 py-2 text-xs font-bold transition-colors disabled:opacity-60 ${
+                    selectedTravelMode === option.mode
+                      ? "border-emerald-700 bg-emerald-50 text-emerald-800"
+                      : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                  }`}
+                >
+                  <TravelModeIcon mode={option.mode} size={18} />
+                  {option.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="mt-4 flex min-h-16 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-bold text-slate-700" aria-live="polite">
+              {isRouteLoading ? (
+                <><Loader2 size={18} className="animate-spin" /> 正在查詢預估路線…</>
+              ) : previewEstimate && previewEstimate.mode === selectedTravelMode ? (
+                <>
+                  <TravelModeIcon mode={previewEstimate.mode} vehicle={previewEstimate.transitVehicle} size={20} />
+                  約 {formatTravelDuration(previewEstimate.durationSeconds)} · {formatTravelDistance(previewEstimate.distanceMeters)}
+                </>
+              ) : (
+                <span className="text-xs font-normal text-slate-500">點選交通方式取得預估結果</span>
+              )}
+            </div>
+            {previewEstimate?.transitDaytimeFallback && previewEstimate.mode === selectedTravelMode && (
+              <p className="mt-2 text-xs text-amber-700">此結果為日間班次估算</p>
+            )}
+            {routeError && <p className="mt-2 text-xs text-rose-700" role="alert">{routeError}</p>}
+
+            <button
+              type="button"
+              onClick={() => void saveTravelEstimate()}
+              disabled={!previewEstimate || previewEstimate.mode !== selectedTravelMode || isRouteLoading}
+              className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-700 px-4 py-3 text-sm font-bold text-white hover:bg-emerald-800 disabled:opacity-50"
+            >
+              <Check size={16} /> 儲存這個交通方式
+            </button>
+            <div className="mt-3 flex justify-end">
+              <button
+                type="button"
+                onClick={() => handleRouteBrowse(
+                  activeTravelSegment.origin.place!,
+                  activeTravelSegment.origin.location,
+                  activeTravelSegment.destination.place!,
+                  activeTravelSegment.destination.location,
+                  selectedTravelMode,
+                )}
+                className="flex items-center gap-1.5 rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600 transition-colors hover:bg-emerald-50 hover:text-emerald-700"
+              >
+                <MapPin size={14} className="text-emerald-600" /> 使用 Google Maps 查看路線 <ExternalLink size={10} />
+              </button>
+            </div>
+            <p className="mt-3 text-right text-xs font-normal text-slate-500" translate="no">Google Maps</p>
+          </section>
         </div>
       )}
     </>
