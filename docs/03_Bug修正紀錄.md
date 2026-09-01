@@ -696,7 +696,7 @@ V3.6.0 更新提醒在手機與桌面第一次按下「馬上更新」後，提�
 
 狀態：
 
-🟡 程式修正、ESLint 與 production build 已通過；待以 V3.6.0 舊 App shell 覆驗手機與桌面瀏覽器／PWA 的單次更新、接管及重載流程。
+🟡 程式修正、ESLint 與 production build 已通過；Product Owner 已於 2026-09-01 進入手動發布程序。待以 V3.6.0 舊 App shell 覆驗手機與桌面瀏覽器／PWA 的單次更新、接管及重載流程，發布完成回報後再更新版本現況。
 
 ---
 
