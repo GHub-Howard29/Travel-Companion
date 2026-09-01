@@ -45,6 +45,7 @@ export const useChecklistState = (
   tripId: string,
   seedItems: ChecklistItem[],
   supabase: SupabaseClient,
+  canReadCloudSharedChecklist: boolean,
   canSyncSharedChecklist: boolean,
   isOnline: boolean,
   userEmail: string | null,
@@ -73,6 +74,7 @@ export const useChecklistState = (
       ? realtimeChecklistScope.checklistId
       : null;
   const canSyncToCloud = canSyncSharedChecklist && isOnline;
+  const canReadCloud = canReadCloudSharedChecklist && isOnline;
 
   const checkedItemIds = useMemo(
     () =>
@@ -81,7 +83,7 @@ export const useChecklistState = (
     [checkedItemIdsByTripId, tripId],
   );
   const items = useMemo(() => {
-    if (!canSyncSharedChecklist) {
+    if (!canReadCloudSharedChecklist) {
       return mapSeedItemsToSharedItems(tripId, seedItems, checkedItemIds);
     }
 
@@ -90,7 +92,7 @@ export const useChecklistState = (
       mapSeedItemsToSharedItems(tripId, seedItems, checkedItemIds)
     );
   }, [
-    canSyncSharedChecklist,
+    canReadCloudSharedChecklist,
     checkedItemIds,
     cloudItemsByTripId,
     seedItems,
@@ -98,7 +100,7 @@ export const useChecklistState = (
   ]);
 
   useEffect(() => {
-    if (!canSyncToCloud) {
+    if (!canReadCloud) {
       return;
     }
 
@@ -111,14 +113,14 @@ export const useChecklistState = (
 
       try {
         const localProgress = getChecklistProgress(tripId);
-        const pendingOrder = userEmail
+        const pendingOrder = canSyncSharedChecklist && userEmail
           ? readPendingSharedChecklistOrder(tripId, userEmail)
           : null;
         if (pendingOrder) {
           setSyncStatus("local");
           return;
         }
-        const pendingProgress = userEmail
+        const pendingProgress = canSyncSharedChecklist && userEmail
           ? readPendingSharedChecklistProgress(tripId, userEmail)
           : null;
         const cloudChecklist = await getCloudSharedChecklist(
@@ -132,13 +134,15 @@ export const useChecklistState = (
         }
 
         if (cloudChecklist) {
-          const syncedCloudChecklist = await syncCloudSharedChecklistSeedItems(
-            supabase,
-            tripId,
-            seedItems,
-            pendingProgress?.checkedItemIds ?? localProgress.checkedItemIds,
-            Boolean(pendingProgress),
-          );
+          const syncedCloudChecklist = canSyncToCloud
+            ? await syncCloudSharedChecklistSeedItems(
+                supabase,
+                tripId,
+                seedItems,
+                pendingProgress?.checkedItemIds ?? localProgress.checkedItemIds,
+                Boolean(pendingProgress),
+              )
+            : null;
 
           if (!isActive) {
             return;
@@ -157,7 +161,7 @@ export const useChecklistState = (
             .filter((item) => item.isChecked)
             .map((item) => item.id);
 
-          if (pendingProgress && userEmail) {
+          if (canSyncToCloud && pendingProgress && userEmail) {
             clearPendingSharedChecklistProgress(
               tripId,
               userEmail,
@@ -231,12 +235,20 @@ export const useChecklistState = (
     return () => {
       isActive = false;
     };
-  }, [canSyncToCloud, seedItems, supabase, tripId, userEmail]);
+  }, [
+    canReadCloud,
+    canSyncSharedChecklist,
+    canSyncToCloud,
+    seedItems,
+    supabase,
+    tripId,
+    userEmail,
+  ]);
 
   const reloadSharedChecklistFromCloud = useCallback(async () => {
-    if (!canSyncToCloud || isCloudWritePendingRef.current) return;
+    if (!canReadCloud || isCloudWritePendingRef.current) return;
     if (
-      userEmail &&
+      canSyncSharedChecklist && userEmail &&
       (readPendingSharedChecklistOrder(tripId, userEmail) ||
         readPendingSharedChecklistProgress(tripId, userEmail))
     ) {
@@ -249,7 +261,7 @@ export const useChecklistState = (
       !cloudChecklist ||
       isCloudWritePendingRef.current ||
       localMutationRevisionRef.current !== mutationRevision ||
-      (userEmail &&
+      (canSyncSharedChecklist && userEmail &&
         (readPendingSharedChecklistOrder(tripId, userEmail) ||
           readPendingSharedChecklistProgress(tripId, userEmail)))
     ) {
@@ -273,7 +285,14 @@ export const useChecklistState = (
       [tripId]: cloudChecklist.items,
     }));
     setSyncStatus("synced");
-  }, [canSyncToCloud, seedItems, supabase, tripId, userEmail]);
+  }, [
+    canReadCloud,
+    canSyncSharedChecklist,
+    seedItems,
+    supabase,
+    tripId,
+    userEmail,
+  ]);
 
   const scheduleRealtimeRefresh = useCallback(() => {
     if (realtimeRefreshTimerRef.current !== null) {
@@ -286,7 +305,7 @@ export const useChecklistState = (
   }, [reloadSharedChecklistFromCloud]);
 
   useEffect(() => {
-    if (!canSyncToCloud) return;
+    if (!canReadCloud) return;
 
     let isActive = true;
     const resolveChecklistId = async () => {
@@ -322,10 +341,10 @@ export const useChecklistState = (
       isActive = false;
       void supabase.removeChannel(channel);
     };
-  }, [canSyncToCloud, scheduleRealtimeRefresh, supabase, tripId]);
+  }, [canReadCloud, scheduleRealtimeRefresh, supabase, tripId]);
 
   useEffect(() => {
-    if (!canSyncToCloud || !realtimeChecklistId) return;
+    if (!canReadCloud || !realtimeChecklistId) return;
 
     const channel = supabase
       .channel(`travel-companion-shared-checklist-items-${realtimeChecklistId}`)
@@ -345,7 +364,7 @@ export const useChecklistState = (
       void supabase.removeChannel(channel);
     };
   }, [
-    canSyncToCloud,
+    canReadCloud,
     realtimeChecklistId,
     scheduleRealtimeRefresh,
     supabase,
@@ -358,6 +377,7 @@ export const useChecklistState = (
   }, []);
 
   const toggleChecklistItem = useCallback((itemId: string) => {
+    if (!canSyncSharedChecklist) return;
     const mutationRevision = localMutationRevisionRef.current + 1;
     localMutationRevisionRef.current = mutationRevision;
 
@@ -478,6 +498,7 @@ export const useChecklistState = (
       };
     });
   }, [
+    canSyncSharedChecklist,
     canSyncToCloud,
     checkedItemIds,
     seedItems,
@@ -515,8 +536,8 @@ export const useChecklistState = (
   return {
     items,
     checkedItemIds,
-    syncStatus: canSyncToCloud ? syncStatus : "local",
-    syncError: canSyncToCloud ? syncError : null,
+    syncStatus: canReadCloud ? syncStatus : "local",
+    syncError: canReadCloud ? syncError : null,
     toggleChecklistItem,
     reorderChecklistItems,
   };

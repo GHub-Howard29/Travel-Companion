@@ -18,7 +18,7 @@ import type { EditExpenseDraft, ExpenseItem } from "../../types";
 
 interface ExpenseScreenProps {
   canUseExpense: boolean;
-  isHistoricalOfflineReadOnly: boolean;
+  isSharedTripReadOnly: boolean;
   isUsingSharedExpenseBook: boolean;
   exportsAllSharedExpenses: boolean;
   userEmail: string | null;
@@ -84,7 +84,7 @@ interface ExpenseScreenProps {
 
 export default function ExpenseScreen({
   canUseExpense,
-  isHistoricalOfflineReadOnly,
+  isSharedTripReadOnly,
   isUsingSharedExpenseBook,
   exportsAllSharedExpenses,
   userEmail,
@@ -487,13 +487,13 @@ export default function ExpenseScreen({
             </button>
           </div>
         </form>
-      ) : isHistoricalOfflineReadOnly ? (
+      ) : isSharedTripReadOnly ? (
         <div className="flex gap-3 rounded-xl border border-sky-200 bg-sky-50 p-4 text-xs text-sky-900">
           <ShieldAlert size={18} className="shrink-0 text-sky-600" />
           <div>
-            <p className="mb-0.5 font-bold">歷史行程目前為離線唯讀</p>
+            <p className="mb-0.5 font-bold">歷史行程目前為唯讀</p>
             <p className="leading-relaxed text-sky-700/90">
-              可查看既有帳目與匯出資料；恢復連線後，將依你的權限提供新增、編輯與刪除功能。
+              可查看既有帳目與匯出資料；共用帳本依目前歷史行程與角色規則，不提供新增、編輯與刪除。
             </p>
           </div>
         </div>

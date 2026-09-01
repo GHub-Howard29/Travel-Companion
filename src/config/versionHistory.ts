@@ -14,6 +14,15 @@ export type VersionHistoryItem = {
 
 export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
+    version: "3.6.1",
+    date: "2026-09-01",
+    forceUpdate: false,
+    notes: [
+      "修正 Android Chrome 與 PWA 記帳金額欄位超出卡片右側的問題。",
+      "修正 PWA 第一次點擊馬上更新時未等待新版下載完成，必須再次點擊的問題。",
+    ],
+  },
+  {
     version: "3.6.0",
     date: "2026-08-30",
     forceUpdate: true,
