@@ -1,12 +1,10 @@
 {
-  "version": "3.6.0",
+  "version": "3.6.1",
   "minimumSupportedVersion": "3.5.6",
-  "releaseDate": "2026-08-30",
+  "releaseDate": "2026-09-01",
   "releaseNotes": [
-    "新增相鄰地點交通資訊，依預設交通方式自動顯示預估時間與距離。",
-    "輸入地點後可直接確認正確位置，讓路線估算更穩定。",
-    "管理模式支援直接在行程卡片內編輯，儲存失敗時會自動定位需要修正的欄位。",
-    "分開 Google Maps 路線與修改交通方式操作，使用流程更清楚。"
+    "修正 Android Chrome 與 PWA 記帳金額欄位超出卡片右側的問題。",
+    "修正 PWA 第一次點擊馬上更新時未等待新版下載完成，必須再次點擊的問題。"
   ],
-  "forceUpdate": true
+  "forceUpdate": false
 }

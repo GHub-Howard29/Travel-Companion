@@ -132,7 +132,8 @@
   - [ ] 完成 Android Chrome／PWA、iOS Safari／standalone PWA、桌面瀏覽器／PWA 版面與功能矩陣。
   - [x] `npm run lint`、`npm run build`、PWA build 與瀏覽器安全驗證通過。
   - [x] Product Owner 已於 2026-09-01 進入手動發布程序。
-  - [ ] 等待 Product Owner 回報發布完成；收到回報後才更新 App 程式版本現況與已發布文件，並另建獨立 commit。
+  - [x] 發布候選 App build、公開 metadata、package 與版本歷史已更新為 V3.6.1；正式發布帳冊仍維持 V3.6.0。
+  - [ ] 等待 Product Owner 回報發布完成；收到回報後才更新正式版本現況與已發布文件，並另建獨立 commit。
 - [ ] V3.6.2：行程天數縮短刪除與歷史行程鎖定（畫面與範圍已確認，待開發）。
   - [x] 確認縮短天數採直接永久刪除，不封存、不建立復原區。
   - [x] 確認支援一次縮短任意 N 天，二次確認須逐 Day 顯示將刪除的行程卡片與路線資訊數量。

@@ -21,11 +21,40 @@ const getExportedString = (name) => {
   return match[1];
 };
 
+const getExportedBoolean = (name) => {
+  const match = appVersionSource.match(
+    new RegExp(`export const ${name} = (true|false)`),
+  );
+
+  if (!match) {
+    throw new Error(`src/config/appVersion.ts 缺少 ${name}。`);
+  }
+
+  return match[1] === "true";
+};
+
+const getExportedStringArray = (name) => {
+  const match = appVersionSource.match(
+    new RegExp(`export const ${name} = \\[([\\s\\S]*?)\\];`),
+  );
+
+  if (!match) {
+    throw new Error(`src/config/appVersion.ts 缺少 ${name}。`);
+  }
+
+  return [...match[1].matchAll(/"((?:\\\\.|[^"\\\\])*)"/g)].map((item) =>
+    JSON.parse(`"${item[1]}"`),
+  );
+};
+
 const appVersion = getExportedString("APP_VERSION");
 const previousReleaseVersion = getExportedString("PREVIOUS_RELEASE_VERSION");
 const minimumSupportedVersion = getExportedString("MINIMUM_SUPPORTED_VERSION");
 const releaseDate = getExportedString("RELEASE_DATE");
+const releaseNotes = getExportedStringArray("RELEASE_NOTES");
+const forceUpdate = getExportedBoolean("FORCE_UPDATE");
 const packageMetadata = JSON.parse(readProjectFile("package.json"));
+const packageLockMetadata = JSON.parse(readProjectFile("package-lock.json"));
 const historyVersions = [
   ...versionHistorySource.matchAll(/version:\s*"([^"]+)"/g),
 ].map((match) => match[1]);
@@ -44,12 +73,23 @@ if (packageMetadata.version !== appVersion) {
   throw new Error(`package.json 版本 ${packageMetadata.version} 與 APP_VERSION ${appVersion} 不一致。`);
 }
 
+if (
+  packageLockMetadata.version !== appVersion ||
+  packageLockMetadata.packages?.[""]?.version !== appVersion
+) {
+  throw new Error("package-lock.json 版本與 APP_VERSION 不一致。");
+}
+
 if (publicVersionMetadata.minimumSupportedVersion !== minimumSupportedVersion) {
   throw new Error("公開 metadata 與 App 的 minimumSupportedVersion 不一致。");
 }
 
 if (publicVersionMetadata.releaseDate !== releaseDate) {
   throw new Error("公開 metadata 與 App 的發布日期不一致。");
+}
+
+if (JSON.stringify(publicVersionMetadata.releaseNotes) !== JSON.stringify(releaseNotes)) {
+  throw new Error("公開 metadata 與 App 的 RELEASE_NOTES 不一致。");
 }
 
 const parseVersion = (value) => {
@@ -70,8 +110,8 @@ if (compareVersions(minimumSupportedVersion, appVersion) > 0) {
   throw new Error("minimumSupportedVersion 不可高於目前發布版本。");
 }
 
-if (publicVersionMetadata.forceUpdate !== true) {
-  throw new Error("版本政策橋接期間 public/app-version.json 的 forceUpdate 必須維持 true。");
+if (publicVersionMetadata.forceUpdate !== forceUpdate) {
+  throw new Error("公開 metadata 與 App 的 forceUpdate 不一致。");
 }
 
 if (!historyVersions.includes(previousReleaseVersion)) {

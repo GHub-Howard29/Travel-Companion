@@ -5,7 +5,7 @@
 - 已發布版本：V3.6.0。
 - V3.5.2「Supabase 資料庫權限函式硬化」已完成；正式 migration、advisors 與角色回歸通過，Product Owner 確認不建立獨立 App build／tag，App 顯示版本維持 V3.5.1。
 - V3.6.0「地點間預估移動資訊」已於 2026-08-30 合併、建立 `v3.6.0` tag 並部署；正式 Supabase、Google Cloud 與 GitHub Pages 已驗證。完整角色矩陣、正式站 OAuth 自動化登入及 Android／iOS 實機仍保留發布後補驗證。
-- V3.6.1「Android 記帳金額欄位與 PWA 更新流程修正」程式已完成，commit 為 `08ef857`；Product Owner 已於 2026-09-01 進入手動發布程序。正式發布完成前，App 程式版本現況與已發布版本帳冊仍維持 V3.6.0；收到 Product Owner 發布完成回報後，才另行更新版本現況並建立獨立 commit。
+- V3.6.1「Android 記帳金額欄位與 PWA 更新流程修正」程式已完成，commit 為 `08ef857`；Product Owner 已於 2026-09-01 進入手動發布程序。發布候選 App build 與公開 metadata 已設定為 V3.6.1；正式發布完成前，已發布版本帳冊仍維持 V3.6.0。收到 Product Owner 發布完成回報後，才另行更新正式版本現況並建立獨立 commit。
 - 版本順序與範圍唯一以 `docs/02_產品開發路線圖.md` 為準；未完成工作以 `docs/09_待辦事項_TODO.md` 為準；目前有效狀態以 `docs/14_專案現況總覽.md` 為準。
 
 ## 開發與安全規則

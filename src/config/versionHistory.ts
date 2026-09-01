@@ -14,6 +14,17 @@ export type VersionHistoryItem = {
 
 export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
+    version: "3.6.0",
+    date: "2026-08-30",
+    forceUpdate: true,
+    notes: [
+      "新增相鄰地點交通資訊，依預設交通方式自動顯示預估時間與距離。",
+      "輸入地點後可直接確認正確位置，讓路線估算更穩定。",
+      "管理模式支援直接在行程卡片內編輯，儲存失敗時會自動定位需要修正的欄位。",
+      "分開 Google Maps 路線與修改交通方式操作，使用流程更清楚。",
+    ],
+  },
+  {
     version: "3.5.6",
     date: "2026-08-28",
     forceUpdate: true,
