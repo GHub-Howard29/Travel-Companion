@@ -372,11 +372,11 @@ export default function ExpenseScreen({
               />
             </label>
 
-            <div className="flex gap-2">
+            <div className="grid grid-cols-[minmax(0,6.5rem)_minmax(0,1fr)] gap-2">
               <select
                 value={formCurrency}
                 onChange={(e) => setFormCurrency(e.target.value)}
-                className="px-2 py-2 border border-slate-200 rounded-lg text-sm bg-amber-50 font-bold text-amber-900 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                className="w-full min-w-0 max-w-full truncate rounded-lg border border-slate-200 bg-amber-50 px-2 py-2 text-sm font-bold text-amber-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
               >
                 {SUPPORTED_CURRENCIES.map((c) => (
                   <option key={c.code} value={c.code}>
@@ -389,7 +389,7 @@ export default function ExpenseScreen({
                 placeholder="金額"
                 value={newAmount}
                 onChange={(e) => setNewAmount(e.target.value)}
-                className="flex-1 px-3 py-2 border border-slate-200 rounded-lg text-sm bg-slate-50"
+                className="box-border w-full min-w-0 max-w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
                 required
               />
             </div>
@@ -570,7 +570,7 @@ export default function ExpenseScreen({
                           className="w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
                         />
                       </label>
-                      <div className="grid grid-cols-[6.5rem_minmax(0,1fr)] gap-2">
+                      <div className="grid grid-cols-[minmax(0,6.5rem)_minmax(0,1fr)] gap-2">
                         <select
                           value={editDraft.currency}
                           onChange={(e) =>
@@ -579,7 +579,7 @@ export default function ExpenseScreen({
                               currency: e.target.value,
                             }))
                           }
-                          className="rounded-lg border border-amber-200 bg-white px-2 py-2 text-sm font-bold text-amber-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                          className="w-full min-w-0 max-w-full truncate rounded-lg border border-amber-200 bg-white px-2 py-2 text-sm font-bold text-amber-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
                         >
                           {SUPPORTED_CURRENCIES.map((c) => (
                             <option key={c.code} value={c.code}>
@@ -596,7 +596,7 @@ export default function ExpenseScreen({
                               amount: e.target.value,
                             }))
                           }
-                          className="min-w-0 rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                          className="box-border w-full min-w-0 max-w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
                           placeholder="金額"
                         />
                       </div>

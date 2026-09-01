@@ -676,6 +676,30 @@ V3.4.10 的 Android 原生 Splash 與 HTML 等待畫面使用亮藍色，但 App
 
 ---
 
+### BUG028
+
+問題：
+
+V3.6.0 更新提醒在手機與桌面第一次按下「馬上更新」後，提示仍停留且不會自動重新載入，必須第二次點擊才會執行更新。
+
+原因：
+
+- V3.5.6 補強版本政策後，按鈕流程會先呼叫 `registration.update()`，接著立即檢查新版 Service Worker 是否已透過 `onNeedRefresh` 標記為可接管。
+- `registration.update()` 完成不代表新版 Worker 已完成下載；第一次點擊時 `workerReadyRef` 仍可能是 `false`，流程因而提前返回。
+- Worker 稍後在背景完成下載並設為可接管，第二次點擊才會進入既有的 `SKIP_WAITING`、`controllerchange` 與 reload 流程。
+
+修正方式（V3.6.1）：
+
+- 單次點擊內等待新版 Service Worker 進入可接管狀態，再自動完成接管與單次重新載入。
+- 只有離線、逾時或實際失敗時才顯示重試；成功前保留必要更新提示，不提前記錄已更新版本。
+- 覆驗 Android／iOS 手機與桌面瀏覽器／PWA，確認不需第二次點擊，且沒有重複重載、空白頁或純色停滯。
+
+狀態：
+
+🟡 程式修正、ESLint 與 production build 已通過；待以 V3.6.0 舊 App shell 覆驗手機與桌面瀏覽器／PWA 的單次更新、接管及重載流程。
+
+---
+
 ## Bug 管理原則
 
 每個 Bug 皆記錄：

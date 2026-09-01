@@ -104,6 +104,55 @@ const waitForServiceWorkerControl = (
   });
 };
 
+const waitForUpdateWorkerReady = (
+  registration: ServiceWorkerRegistration,
+  isWorkerReady: () => boolean,
+  timeoutMs = 30000,
+) => {
+  if (isWorkerReady() || registration.waiting) return Promise.resolve(true);
+
+  return new Promise<boolean>((resolve) => {
+    let settled = false;
+    let timeoutId: number | null = null;
+    let readinessCheckId: number | null = null;
+    let installingWorker: ServiceWorker | null = null;
+
+    const finish = (ready: boolean) => {
+      if (settled) return;
+      settled = true;
+      if (timeoutId !== null) window.clearTimeout(timeoutId);
+      if (readinessCheckId !== null) window.clearInterval(readinessCheckId);
+      registration.removeEventListener("updatefound", handleUpdateFound);
+      installingWorker?.removeEventListener("statechange", handleStateChange);
+      resolve(ready);
+    };
+    const checkReady = () => {
+      if (isWorkerReady() || registration.waiting) finish(true);
+    };
+    const handleStateChange = () => {
+      checkReady();
+      if (installingWorker?.state === "redundant") finish(false);
+    };
+    const watchInstallingWorker = () => {
+      const nextWorker = registration.installing;
+      if (!nextWorker || nextWorker === installingWorker) return;
+      installingWorker?.removeEventListener("statechange", handleStateChange);
+      installingWorker = nextWorker;
+      installingWorker.addEventListener("statechange", handleStateChange);
+      checkReady();
+    };
+    const handleUpdateFound = () => watchInstallingWorker();
+
+    registration.addEventListener("updatefound", handleUpdateFound);
+    watchInstallingWorker();
+    readinessCheckId = window.setInterval(checkReady, 100);
+    timeoutId = window.setTimeout(() => {
+      checkReady();
+      if (!settled) finish(false);
+    }, timeoutMs);
+  });
+};
+
 const INITIAL_METADATA: AppVersionMetadata = {
   version: APP_VERSION,
   releaseDate: RELEASE_DATE,
@@ -237,24 +286,32 @@ export const useAppUpdate = () => {
       setReleaseNoticeVisible(false);
       return;
     }
+    updateInProgressRef.current = true;
     setUpdateError(null);
     setIsChecking(true);
     if (!navigator.onLine) {
       setUpdateError("需要網路才能完成更新，請連線後重試。");
+      updateInProgressRef.current = false;
       setIsChecking(false);
       return;
     }
     try {
       const refreshedPolicy = await checkVersionPolicy();
       if (refreshedPolicy && !refreshedPolicy.hasUpdate) return;
-      await registrationRef.current?.update();
-      if (!workerReadyRef.current) {
+      const registration =
+        registrationRef.current ?? (await navigator.serviceWorker.ready);
+      registrationRef.current = registration;
+      await registration.update();
+      const workerReady = await waitForUpdateWorkerReady(
+        registration,
+        () => workerReadyRef.current,
+      );
+      if (!workerReady) {
         setUpdateError("新版尚未下載完成，請確認網路連線後再重試。");
         return;
       }
       const updateServiceWorker = updateServiceWorkerRef.current;
       if (!updateServiceWorker) throw new Error("Service Worker update handler is not ready.");
-      updateInProgressRef.current = true;
       const previousController = navigator.serviceWorker?.controller ?? null;
       let controlPromise = waitForServiceWorkerControl(previousController);
       await updateServiceWorker(true);
