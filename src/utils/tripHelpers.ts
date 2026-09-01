@@ -1,4 +1,34 @@
-import type { TripMeta } from "../types/trip";
+import type { ItineraryItem, TripDetail, TripMeta } from "../types/trip";
+
+const TAIPEI_TIME_ZONE = "Asia/Taipei";
+const DAY_IN_MILLISECONDS = 24 * 60 * 60 * 1000;
+
+const taipeiDateFormatter = new Intl.DateTimeFormat("en-CA", {
+  timeZone: TAIPEI_TIME_ZONE,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+
+const toTaipeiDateString = (date: Date): string => {
+  const parts = Object.fromEntries(
+    taipeiDateFormatter
+      .formatToParts(date)
+      .filter((part) => part.type !== "literal")
+      .map((part) => [part.type, part.value]),
+  );
+
+  return `${parts.year}-${parts.month}-${parts.day}`;
+};
+
+const addCalendarDays = (dateValue: string, days: number): string => {
+  const [year, month, day] = dateValue.split("-").map(Number);
+  if (!year || !month || !day) return dateValue;
+
+  return new Date(Date.UTC(year, month - 1, day + days))
+    .toISOString()
+    .slice(0, 10);
+};
 
 /**
  * 邏輯 1：左側選單排序（由新到舊 / 由近到遠）
@@ -12,21 +42,67 @@ export const sortTripsByDateDesc = (trips: TripMeta[]): TripMeta[] => {
   });
 };
 
-const toDateOnlyTime = (dateValue: string): number => {
-  const date = new Date(dateValue);
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
-};
+const toDateOnlyTime = (dateValue: string): number =>
+  Date.parse(`${dateValue.slice(0, 10)}T00:00:00Z`);
 
 const getTripEndTime = (trip: TripMeta): number => {
   const departureTime = toDateOnlyTime(trip.departureDate);
   const safeDayCount = Math.max(1, trip.dayCount ?? 1);
-  return departureTime + (safeDayCount - 1) * 24 * 60 * 60 * 1000;
+  return departureTime + (safeDayCount - 1) * DAY_IN_MILLISECONDS;
 };
 
-/** 行程最後一天早於今天時，視為歷史行程。 */
+export const getTripEndDate = (trip: TripMeta): string =>
+  addCalendarDays(trip.departureDate.slice(0, 10), Math.max(1, trip.dayCount ?? 1) - 1);
+
+export const getTripLockDate = (trip: TripMeta): string =>
+  addCalendarDays(getTripEndDate(trip), 1);
+
+/** 台灣日期進入行程結束翌日時，視為歷史行程。 */
 export const isHistoricalTrip = (trip: TripMeta, now = new Date()): boolean => {
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-  return getTripEndTime(trip) < today;
+  return getTripEndDate(trip) < toTaipeiDateString(now);
+};
+
+/** 距離下一個台灣曆日 00:00 的毫秒數。台灣時區固定為 UTC+8，無日光節約時間。 */
+export const getMillisecondsUntilNextTaipeiDay = (
+  now = new Date(),
+): number => {
+  const [year, month, day] = toTaipeiDateString(now).split("-").map(Number);
+  const nextTaipeiMidnight = Date.UTC(year, month - 1, day + 1) - 8 * 60 * 60 * 1000;
+  return Math.max(0, nextTaipeiMidnight - now.getTime());
+};
+
+export const formatTripDate = (dateValue: string): string => {
+  const [year, month, day] = dateValue.split("-").map(Number);
+  return year && month && day ? `${year}/${month}/${day}` : dateValue;
+};
+
+export interface RemovedDayImpact {
+  day: number;
+  cardCount: number;
+  routeCount: number;
+}
+
+const hasRouteInformation = (item: ItineraryItem): boolean =>
+  Boolean(item.travelModeToNext || item.travelToNext);
+
+export const getRemovedDayImpacts = (
+  detail: TripDetail,
+  nextDayCount: number,
+): RemovedDayImpact[] => {
+  const currentDayCount = detail.content.days.length;
+  if (nextDayCount >= currentDayCount) return [];
+
+  return Array.from(
+    { length: currentDayCount - nextDayCount },
+    (_, index) => nextDayCount + index + 1,
+  ).map((day) => {
+    const items = detail.content.daysData[String(day)] ?? [];
+    return {
+      day,
+      cardCount: items.length,
+      routeCount: items.filter(hasRouteInformation).length,
+    };
+  });
 };
 
 /** 回傳旅程今天所對應的 Day；不在旅程期間時維持 Day 1。 */
@@ -36,8 +112,8 @@ export const getDefaultActiveDay = (
   now = new Date(),
 ): number => {
   const departureTime = toDateOnlyTime(departureDate);
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-  const day = Math.floor((today - departureTime) / (24 * 60 * 60 * 1000)) + 1;
+  const today = toDateOnlyTime(toTaipeiDateString(now));
+  const day = Math.floor((today - departureTime) / DAY_IN_MILLISECONDS) + 1;
 
   return days.includes(day) ? day : days[0] ?? 1;
 };
@@ -51,8 +127,7 @@ export const getDefaultActiveDay = (
 export const findDefaultTrip = (trips: TripMeta[]): TripMeta | null => {
   if (trips.length === 0) return null;
 
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const today = toDateOnlyTime(toTaipeiDateString(new Date()));
 
   const activeTrips = trips.filter((trip) => {
     const departureTime = toDateOnlyTime(trip.departureDate);

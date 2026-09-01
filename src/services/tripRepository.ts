@@ -511,6 +511,13 @@ export class TripCreationOfflineError extends Error {
   }
 }
 
+export class HistoricalTripLockedError extends Error {
+  constructor() {
+    super("歷史行程已鎖定，僅管理者可修改共用資料");
+    this.name = "HistoricalTripLockedError";
+  }
+}
+
 const isUniqueViolation = (error: unknown): boolean => {
   return (
     Boolean(error) &&

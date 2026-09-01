@@ -67,8 +67,9 @@ interface ExchangeRatePageProps {
   tripId: string;
   defaultForeignCurrency: string;
   supabase: SupabaseClient;
+  canViewCloudHistory: boolean;
   canSyncCloudHistory: boolean;
-  /** 歷史行程離線時僅供查閱與換算。 */
+  /** 歷史行程共用資料鎖定時僅供查閱與換算。 */
   isReadOnly?: boolean;
 }
 
@@ -76,10 +77,11 @@ export const ExchangeRatePage = ({
   tripId,
   defaultForeignCurrency,
   supabase,
+  canViewCloudHistory,
   canSyncCloudHistory,
   isReadOnly = false,
 }: ExchangeRatePageProps) => {
-  const storageScope: ExchangePurchaseStorageScope = canSyncCloudHistory
+  const storageScope: ExchangePurchaseStorageScope = canViewCloudHistory
     ? "cloud"
     : "local";
   const initialCurrency = CURRENCIES.includes(defaultForeignCurrency)
@@ -126,7 +128,7 @@ export const ExchangeRatePage = ({
   const canCalculate = Boolean(summary || referenceRate);
 
   const refreshCloudPurchases = useCallback(async (): Promise<boolean> => {
-    if (!canSyncCloudHistory) return false;
+    if (!canViewCloudHistory) return false;
 
     setCloudStatus("syncing");
     const cloudPurchases = await getCloudExchangePurchases(supabase, tripId);
@@ -140,10 +142,10 @@ export const ExchangeRatePage = ({
     markCloudExchangeHistoryInitialized(tripId);
     setCloudStatus("synced");
     return true;
-  }, [canSyncCloudHistory, storageScope, supabase, tripId]);
+  }, [canViewCloudHistory, storageScope, supabase, tripId]);
 
   useEffect(() => {
-    if (!canSyncCloudHistory) return;
+    if (!canViewCloudHistory) return;
 
     let active = true;
     void (async () => {
@@ -161,7 +163,7 @@ export const ExchangeRatePage = ({
       // Once this trip has a cloud history, the server is authoritative. This
       // prevents an older browser cache from recreating a record deleted on
       // another device.
-      if (cloudPurchases.length > 0 || cloudWasInitialized) {
+      if (cloudPurchases.length > 0 || cloudWasInitialized || !canSyncCloudHistory) {
         writeExchangePurchases(tripId, cloudPurchases, storageScope);
         setPurchases(cloudPurchases);
         markCloudExchangeHistoryInitialized(tripId);
@@ -187,10 +189,16 @@ export const ExchangeRatePage = ({
     return () => {
       active = false;
     };
-  }, [canSyncCloudHistory, storageScope, supabase, tripId]);
+  }, [
+    canSyncCloudHistory,
+    canViewCloudHistory,
+    storageScope,
+    supabase,
+    tripId,
+  ]);
 
   useEffect(() => {
-    if (!canSyncCloudHistory) return;
+    if (!canViewCloudHistory) return;
 
     const refreshOnFocus = () => {
       void refreshCloudPurchases();
@@ -214,7 +222,7 @@ export const ExchangeRatePage = ({
       window.removeEventListener("focus", refreshOnFocus);
       void supabase.removeChannel(channel);
     };
-  }, [canSyncCloudHistory, refreshCloudPurchases, supabase, tripId]);
+  }, [canViewCloudHistory, refreshCloudPurchases, supabase, tripId]);
 
   const persist = (next: TripExchangePurchase[]) => {
     setPurchases(next);
@@ -335,7 +343,7 @@ export const ExchangeRatePage = ({
         </p>
       </div>
 
-      {canSyncCloudHistory ? (
+      {canViewCloudHistory ? (
         <p className="text-xs font-semibold text-sky-700" aria-live="polite">
           雲端換匯歷史：
           {cloudStatus === "syncing"

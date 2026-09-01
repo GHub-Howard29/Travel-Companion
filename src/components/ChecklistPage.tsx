@@ -23,9 +23,10 @@ interface ChecklistPageProps {
   supabase: SupabaseClient;
   canViewSharedChecklist: boolean;
   canToggleSharedChecklist: boolean;
+  canReadCloudSharedChecklist: boolean;
   canSyncSharedChecklist: boolean;
   isOnline: boolean;
-  isHistoricalOfflineReadOnly: boolean;
+  isSharedTripReadOnly: boolean;
   canManageSharedChecklist: boolean;
   copySources: Array<{
     tripId: string;
@@ -46,9 +47,10 @@ export const ChecklistPage = ({
   supabase,
   canViewSharedChecklist,
   canToggleSharedChecklist,
+  canReadCloudSharedChecklist,
   canSyncSharedChecklist,
   isOnline,
-  isHistoricalOfflineReadOnly,
+  isSharedTripReadOnly,
   canManageSharedChecklist,
   copySources,
   onSaveChecklistData,
@@ -66,7 +68,7 @@ export const ChecklistPage = ({
   const deleteUnlockTimerRef = useRef<number | null>(null);
   const inlineEditSavingRef = useRef(false);
   const inlineEditCancelledRef = useRef(false);
-  const isLocalUserChecklist = Boolean(userEmail && !canSyncSharedChecklist);
+  const isLocalUserChecklist = Boolean(userEmail && !canReadCloudSharedChecklist);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
   const initialPendingCloudOrder =
     canSyncSharedChecklist && userEmail
@@ -109,13 +111,14 @@ export const ChecklistPage = ({
       tripId,
       checklistSeedData,
       supabase,
+      canReadCloudSharedChecklist,
       canSyncSharedChecklist,
       isOnline,
       userEmail,
     );
 
   const flushPendingCloudOrder = useCallback(async () => {
-    if (!isOnline || isCloudOrderSyncingRef.current) return;
+    if (!canSyncSharedChecklist || !isOnline || isCloudOrderSyncingRef.current) return;
 
     if (cloudOrderTimerRef.current !== null) {
       window.clearTimeout(cloudOrderTimerRef.current);
@@ -176,6 +179,7 @@ export const ChecklistPage = ({
     }
   }, [
     isOnline,
+    canSyncSharedChecklist,
     onReloadChecklistData,
     onSaveChecklistData,
     reorderChecklistItems,
@@ -192,7 +196,7 @@ export const ChecklistPage = ({
   const reloadCloudChecklist = useCallback(async () => {
     if (
       !isOnline ||
-      !canSyncSharedChecklist ||
+      !canReadCloudSharedChecklist ||
       pendingCloudOrderRef.current ||
       isCloudOrderSyncingRef.current
     ) {
@@ -204,7 +208,7 @@ export const ChecklistPage = ({
     } catch (error) {
       console.warn(error);
     }
-  }, [canSyncSharedChecklist, isOnline, onReloadChecklistData]);
+  }, [canReadCloudSharedChecklist, isOnline, onReloadChecklistData]);
 
   useEffect(() => {
     const reloadWhenVisible = () => {
@@ -542,17 +546,17 @@ export const ChecklistPage = ({
             style={{ width: `${progressPercent}%` }}
           />
         </div>
-        {isHistoricalOfflineReadOnly && (
+        {isSharedTripReadOnly && (
           <p className="mt-3 text-xs font-medium text-slate-500">
-            目前屬於離線狀態，無法更新及管理清單，請在網路連線後嘗試同步更新索取最新狀態
+            歷史行程目前為唯讀；仍可查看共同清單，但無法勾選或管理。
           </p>
         )}
-        {!isHistoricalOfflineReadOnly && !canToggleSharedChecklist && (
+        {!isSharedTripReadOnly && !canToggleSharedChecklist && (
           <p className="mt-3 text-xs font-medium text-slate-500">
             目前角色可查看共同檢查清單，但不可勾選。
           </p>
         )}
-        {!isHistoricalOfflineReadOnly && canSyncSharedChecklist && (
+        {!isSharedTripReadOnly && canSyncSharedChecklist && (
           <p className="mt-3 text-xs font-medium text-slate-500">
             {!isOnline &&
               "目前為離線狀態，資料先保存於本機；恢復連線後才會完整同步更新。"}
@@ -562,7 +566,7 @@ export const ChecklistPage = ({
             {isOnline && syncStatus === "local" && "目前資料先保存於本機。"}
           </p>
         )}
-        {!isHistoricalOfflineReadOnly && !canSyncSharedChecklist && userEmail && (
+        {!isSharedTripReadOnly && !canSyncSharedChecklist && userEmail && (
           <p className="mt-3 text-xs font-medium text-slate-500">
             已從雲端下載原始清單，編輯後只儲存在本地設備上。
           </p>

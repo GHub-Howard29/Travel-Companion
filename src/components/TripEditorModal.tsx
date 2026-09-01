@@ -1,5 +1,5 @@
 import { FormEvent, useState } from "react";
-import { Save, X } from "lucide-react";
+import { AlertTriangle, Save, X } from "lucide-react";
 import type {
   AdminProfile,
   TripDetail,
@@ -8,6 +8,10 @@ import type {
   TripMode,
 } from "../types";
 import { releaseFocusedControl } from "../utils/viewportUtils";
+import {
+  getRemovedDayImpacts,
+  type RemovedDayImpact,
+} from "../utils/tripHelpers";
 
 interface TripEditorModalProps {
   mode: "create" | "edit";
@@ -147,6 +151,10 @@ export const TripEditorModal = ({
   const [formError, setFormError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [pendingShrink, setPendingShrink] = useState<{
+    input: TripEditorInput;
+    impacts: RemovedDayImpact[];
+  } | null>(null);
 
   if (!isOpen) return null;
 
@@ -225,10 +233,7 @@ export const TripEditorModal = ({
       return;
     }
 
-    setFormError("");
-    setIsSaving(true);
-    releaseFocusedControl();
-    await onSubmit({
+    const input: TripEditorInput = {
       title,
       departureDate,
       dayCount,
@@ -238,7 +243,29 @@ export const TripEditorModal = ({
       editorEmails: nextEditorEmails,
       currencyCode,
       currencySymbol,
-    });
+    };
+    const impacts =
+      mode === "edit" && tripDetail
+        ? getRemovedDayImpacts(tripDetail, dayCount)
+        : [];
+
+    setFormError("");
+    releaseFocusedControl();
+    if (impacts.length > 0) {
+      setPendingShrink({ input, impacts });
+      return;
+    }
+
+    setIsSaving(true);
+    await onSubmit(input);
+    setIsSaving(false);
+  };
+
+  const confirmShrink = async () => {
+    if (!pendingShrink) return;
+
+    setIsSaving(true);
+    await onSubmit(pendingShrink.input);
     setIsSaving(false);
   };
 
@@ -258,6 +285,80 @@ export const TripEditorModal = ({
     await onDelete();
     setIsDeleting(false);
   };
+
+  if (pendingShrink) {
+    const originalDayCount = tripDetail?.content.days.length ?? dayCount;
+    const firstDay = pendingShrink.impacts[0].day;
+    const lastDay = pendingShrink.impacts[pendingShrink.impacts.length - 1].day;
+    const dayRange = firstDay === lastDay
+      ? `第 ${firstDay} 天`
+      : `第 ${firstDay} 天至第 ${lastDay} 天`;
+    const dangerLabel = firstDay === lastDay
+      ? `刪除第 ${firstDay} 天並儲存`
+      : `刪除第 ${firstDay} 天至第 ${lastDay} 天並儲存`;
+
+    return (
+      <div className="fixed inset-0 z-[80] bg-black/50 flex items-end sm:items-center justify-center">
+        <section
+          role="alertdialog"
+          aria-modal="true"
+          aria-labelledby="shrink-trip-title"
+          className="w-full max-w-md bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl p-4 flex max-h-[92vh] flex-col gap-4"
+        >
+          <div className="flex items-start gap-3">
+            <span className="rounded-full bg-rose-100 p-2 text-rose-700">
+              <AlertTriangle size={20} />
+            </span>
+            <div>
+              <h2 id="shrink-trip-title" className="text-lg font-bold text-slate-900">
+                再次確認縮短行程
+              </h2>
+              <p className="mt-1 text-sm leading-6 text-slate-600">
+                你正將行程從 {originalDayCount} 天改為 {pendingShrink.input.dayCount} 天。
+                儲存後，{dayRange}的每日行程資料會永久刪除。
+              </p>
+            </div>
+          </div>
+
+          <div className="min-h-0 overflow-y-auto rounded-xl border border-slate-200 bg-slate-50 p-3">
+            <ul className="space-y-2 text-sm text-slate-700">
+              {pendingShrink.impacts.map((impact) => (
+                <li key={impact.day} className="rounded-lg bg-white px-3 py-2 shadow-sm">
+                  <span className="font-bold">第 {impact.day} 天：</span>
+                  {impact.cardCount === 0 && impact.routeCount === 0
+                    ? "沒有行程卡片或路線資訊"
+                    : `${impact.cardCount > 0 ? `${impact.cardCount} 張行程卡片` : "沒有行程卡片"}、${impact.routeCount > 0 ? `${impact.routeCount} 段路線資訊` : "沒有路線資訊"}`}
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold leading-6 text-rose-800">
+            這項操作無法復原。共同準備清單、共同帳本及其他資訊不受影響。
+          </p>
+
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <button
+              type="button"
+              onClick={() => setPendingShrink(null)}
+              disabled={isSaving}
+              className="rounded-lg border border-slate-300 px-4 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+            >
+              返回修改
+            </button>
+            <button
+              type="button"
+              onClick={() => void confirmShrink()}
+              disabled={isSaving}
+              className="rounded-lg bg-rose-700 px-4 py-3 text-sm font-bold text-white hover:bg-rose-800 disabled:opacity-60"
+            >
+              {isSaving ? "儲存中..." : dangerLabel}
+            </button>
+          </div>
+        </section>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-[70] bg-black/40 flex items-end sm:items-center justify-center">

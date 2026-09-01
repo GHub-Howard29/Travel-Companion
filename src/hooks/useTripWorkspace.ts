@@ -7,7 +7,11 @@ import type {
   TripEditorInput,
   TripMeta,
 } from "../types";
-import { findDefaultTrip, getDefaultActiveDay } from "../utils/tripHelpers";
+import {
+  findDefaultTrip,
+  getDefaultActiveDay,
+  isHistoricalTrip,
+} from "../utils/tripHelpers";
 import { getParticipantAliasByEmail } from "../utils/participantUtils";
 import { toPersonalBookTripId } from "../storage/expenseStorage";
 import { createPermission } from "../permissions/permission";
@@ -23,6 +27,7 @@ import {
   getTripEditorEmails,
   getTripMetas,
   getSuperAdminEmails,
+  HistoricalTripLockedError,
   saveTripRecord,
   saveTripRecordWithCloudSync,
   syncTripEditorEmails,
@@ -104,6 +109,17 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
         isAssignedTrip,
       }),
     [isAssignedTrip, isSignedIn, role],
+  );
+  const canWriteSelectedTripNow = useCallback(
+    () =>
+      Boolean(
+        adminProfile?.role === ROLE.SUPER_ADMIN ||
+          (hasEditPermission &&
+            role === ROLE.TRIP_EDITOR &&
+            selectedTripMeta &&
+            !isHistoricalTrip(selectedTripMeta)),
+      ),
+    [adminProfile?.role, hasEditPermission, role, selectedTripMeta],
   );
 
   const getBasePath = useCallback(() => {
@@ -361,6 +377,7 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
   const updateTrip = useCallback(
     async (input: TripEditorInput, syncEditors = true) => {
       if (!selectedTripId || !selectedTripMeta || !currentTrip) return;
+      if (!canWriteSelectedTripNow()) throw new HistoricalTripLockedError();
 
       const record =
         updateTripRecord(selectedTripId, input) ??
@@ -378,7 +395,14 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
       setActiveDay(getDefaultActiveDay(record.detail.departureDate, record.detail.content.days));
       setIsLoading(false);
     },
-    [currentTrip, getBasePath, selectedTripId, selectedTripMeta, supabase],
+    [
+      canWriteSelectedTripNow,
+      currentTrip,
+      getBasePath,
+      selectedTripId,
+      selectedTripMeta,
+      supabase,
+    ],
   );
 
   const refreshTripOptionsAndSelect = useCallback(
@@ -433,6 +457,7 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
   const saveCurrentTripDetail = useCallback(
     async (nextTrip: TripDetail): Promise<boolean> => {
       if (!selectedTripMeta) return false;
+      if (!canWriteSelectedTripNow()) return false;
 
       tripLoadRevisionRef.current += 1;
 
@@ -449,6 +474,7 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
     },
     [
       currentTripEditorEmails,
+      canWriteSelectedTripNow,
       selectedTripMeta,
       supabase,
     ],
@@ -457,6 +483,7 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
   const saveCurrentTripDetailLocally = useCallback(
     (nextTrip: TripDetail) => {
       if (!selectedTripMeta) return null;
+      if (!canWriteSelectedTripNow()) return null;
 
       tripLoadRevisionRef.current += 1;
 
@@ -470,7 +497,7 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
       setIsLoading(false);
       return record;
     },
-    [currentTripEditorEmails, selectedTripMeta],
+    [canWriteSelectedTripNow, currentTripEditorEmails, selectedTripMeta],
   );
 
   const reloadCurrentTrip = useCallback(async () => {

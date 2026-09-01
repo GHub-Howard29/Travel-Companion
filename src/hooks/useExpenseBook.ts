@@ -42,6 +42,7 @@ interface UseExpenseBookOptions {
   selectedTripId: string;
   expenseBookTripId: string;
   isUsingSharedExpenseBook: boolean;
+  canWriteSharedExpense: boolean;
   canExportAllSharedExpenses: boolean;
   currentCurrencyCode: string;
   currentCurrencySymbol: string;
@@ -117,6 +118,7 @@ export default function useExpenseBook({
   selectedTripId,
   expenseBookTripId,
   isUsingSharedExpenseBook,
+  canWriteSharedExpense,
   canExportAllSharedExpenses,
   currentCurrencyCode,
   currentCurrencySymbol,
@@ -397,7 +399,8 @@ useEffect(() => {
         !userEmail ||
         !userId ||
         !expenseBookTripId ||
-        !isUsingSharedExpenseBook
+        !isUsingSharedExpenseBook ||
+        !canWriteSharedExpense
       )
         return;
 
@@ -510,6 +513,7 @@ useEffect(() => {
     };
   }, [
     expenseBookTripId,
+    canWriteSharedExpense,
     isUsingSharedExpenseBook,
     reloadExpenses,
     selectedTripId,

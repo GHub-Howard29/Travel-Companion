@@ -32,6 +32,7 @@ import { getCloudTripRecords } from "./services/tripCloudService";
 import {
   DuplicateTripIdError,
   getTripDetail,
+  HistoricalTripLockedError,
   TripCreationOfflineError,
 } from "./services/tripRepository";
 import { syncCloudOtherInfoItems } from "./services/otherInfoCloudService";
@@ -55,7 +56,13 @@ import {
   resolveTravelToolType,
 } from "./utils/travelToolRegistry";
 import { mergeSharedChecklistItems } from "./utils/checklistMerge";
-import { isHistoricalTrip } from "./utils/tripHelpers";
+import {
+  formatTripDate,
+  getMillisecondsUntilNextTaipeiDay,
+  getTripEndDate,
+  getTripLockDate,
+  isHistoricalTrip,
+} from "./utils/tripHelpers";
 import {
   getTrustedHttpUrl,
   openPendingWindow,
@@ -225,6 +232,21 @@ function ConfiguredApp({
     defaultParticipantProfiles,
     refreshDefaultParticipantProfiles,
   } = useTripWorkspace({ supabase });
+  const [historicalEvaluationTime, setHistoricalEvaluationTime] = useState(
+    () => new Date(),
+  );
+  const isCurrentTripHistorical = Boolean(
+    selectedTripMeta && isHistoricalTrip(selectedTripMeta, historicalEvaluationTime),
+  );
+  const isHistoricalOfflineReadOnly = Boolean(
+    isCurrentTripHistorical && !isOnline,
+  );
+  const isHistoricalTripEditorReadOnly = Boolean(
+    isCurrentTripHistorical && role === ROLE.TRIP_EDITOR,
+  );
+  const isSharedTripReadOnly =
+    isHistoricalOfflineReadOnly || isHistoricalTripEditorReadOnly;
+  const canEditSharedTrip = hasEditPermission && !isSharedTripReadOnly;
   const [tripEditorMode, setTripEditorMode] = useState<"create" | "edit">("create");
   const [isTripEditorOpen, setIsTripEditorOpen] = useState(false);
   const [isVersionInfoOpen, setIsVersionInfoOpen] = useState(false);
@@ -236,6 +258,30 @@ function ConfiguredApp({
   const [checklistCopySources, setChecklistCopySources] = useState<
     Array<{ tripId: string; title: string; items: ChecklistItem[] }>
   >([]);
+
+  useEffect(() => {
+    let timer = 0;
+    const scheduleNextTaipeiDay = () => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        setHistoricalEvaluationTime(new Date());
+        scheduleNextTaipeiDay();
+      }, getMillisecondsUntilNextTaipeiDay() + 50);
+    };
+    const refreshHistoricalState = () => {
+      setHistoricalEvaluationTime(new Date());
+      scheduleNextTaipeiDay();
+    };
+
+    scheduleNextTaipeiDay();
+    document.addEventListener("visibilitychange", refreshHistoricalState);
+    window.addEventListener("focus", refreshHistoricalState);
+    return () => {
+      window.clearTimeout(timer);
+      document.removeEventListener("visibilitychange", refreshHistoricalState);
+      window.removeEventListener("focus", refreshHistoricalState);
+    };
+  }, []);
 
   const {
     newTitle,
@@ -296,6 +342,7 @@ function ConfiguredApp({
     selectedTripId,
     expenseBookTripId,
     isUsingSharedExpenseBook,
+    canWriteSharedExpense: canEditSharedTrip,
     canExportAllSharedExpenses: role === ROLE.SUPER_ADMIN,
     currentCurrencyCode,
     currentCurrencySymbol,
@@ -447,9 +494,6 @@ function ConfiguredApp({
       currentScreen,
       currentTrip?.sidebarConfig.find((s) => s.id === currentScreen),
     );
-  const isHistoricalOfflineReadOnly = Boolean(
-    selectedTripMeta && !isOnline && isHistoricalTrip(selectedTripMeta),
-  );
   const openCreateTrip = async () => {
     if (isHistoricalOfflineReadOnly) return;
     if (!isOnline || !navigator.onLine) {
@@ -466,12 +510,12 @@ function ConfiguredApp({
     }
   };
   const openEditTrip = () => {
-    if (isHistoricalOfflineReadOnly) return;
+    if (isSharedTripReadOnly) return;
     setTripEditorMode("edit");
     setIsTripEditorOpen(true);
   };
   const handleTripEditorSubmit = async (input: TripEditorInput) => {
-    if (isHistoricalOfflineReadOnly) return;
+    if (isSharedTripReadOnly) return;
     setIsLoading(true);
     const canManageEditors = adminProfile?.role === "super_admin";
     const nextInput = canManageEditors
@@ -502,6 +546,8 @@ function ConfiguredApp({
         );
       } else if (error instanceof TripCreationOfflineError) {
         alert("新增旅程需要網路連線");
+      } else if (error instanceof HistoricalTripLockedError) {
+        alert("歷史行程已鎖定，僅管理者可修改共用資料。");
       } else {
         alert("無法儲存旅程，請確認網路連線後再試一次。");
       }
@@ -509,7 +555,7 @@ function ConfiguredApp({
     }
   };
   const handleTripDelete = async () => {
-    if (!selectedTripId || isHistoricalOfflineReadOnly) return;
+    if (!selectedTripId || isSharedTripReadOnly) return;
 
     setIsLoading(true);
     try {
@@ -527,7 +573,7 @@ function ConfiguredApp({
     items: ChecklistItem[],
     baseItems: ChecklistItem[] = checklistData,
   ): Promise<ChecklistItem[]> => {
-    if (!currentTrip || isHistoricalOfflineReadOnly) return items;
+    if (!currentTrip || isSharedTripReadOnly) return items;
 
     const cloudTrip = navigator.onLine
       ? (await getCloudTripRecords(supabase)).find(
@@ -572,6 +618,7 @@ function ConfiguredApp({
       !navigator.onLine ||
       !userId ||
       !permission.canEditReference ||
+      isSharedTripReadOnly ||
       otherInfoSyncingTripsRef.current.has(tripId)
     ) {
       return;
@@ -627,7 +674,7 @@ function ConfiguredApp({
     } finally {
       otherInfoSyncingTripsRef.current.delete(tripId);
     }
-  }, [permission.canEditReference, selectedTripId, supabase, userId]);
+  }, [isSharedTripReadOnly, permission.canEditReference, selectedTripId, supabase, userId]);
 
   const retryOtherInfoSync = useCallback(() => {
     setOtherInfoSyncStatus("syncing");
@@ -678,7 +725,7 @@ function ConfiguredApp({
   }, [isOnline, reloadCurrentTrip, selectedTripId, supabase]);
 
   const handleSaveOtherInfoItems = async (items: OtherInfoItem[]) => {
-    if (!currentTrip || isHistoricalOfflineReadOnly) return;
+    if (!currentTrip || isSharedTripReadOnly) return;
 
     const nextTrip = {
       ...currentTrip,
@@ -897,7 +944,7 @@ function ConfiguredApp({
         adminProfile={adminProfile}
         currentScreen={currentScreen}
         canCreateTrip={adminProfile?.role === "super_admin" && !isHistoricalOfflineReadOnly}
-        canEditCurrentTrip={hasEditPermission && !isHistoricalOfflineReadOnly}
+        canEditCurrentTrip={canEditSharedTrip}
         onCreateTrip={openCreateTrip}
         onEditTrip={openEditTrip}
         onTripSelect={(tripId) => {
@@ -936,7 +983,7 @@ function ConfiguredApp({
         onOpenVersionInfo={() => setIsVersionInfoOpen(true)}
       />
 
-      {isTripEditorOpen && !isHistoricalOfflineReadOnly && (
+      {isTripEditorOpen && !isSharedTripReadOnly && (
         <Suspense fallback={null}>
         <TripEditorModal
           key={`${tripEditorMode}-${selectedTripId || "new"}`}
@@ -970,6 +1017,22 @@ function ConfiguredApp({
 
       {/* 主內容呈現區 */}
       <main className="max-w-md mx-auto p-4 pb-24">
+        {isCurrentTripHistorical && selectedTripMeta && role === ROLE.TRIP_EDITOR && (
+          <section className="mb-4 rounded-xl border border-sky-200 bg-sky-50 p-4 text-sm text-sky-950">
+            <p className="font-bold">歷史行程已鎖定</p>
+            <p className="mt-1 leading-6 text-sky-800">
+              本行程已於 {formatTripDate(getTripEndDate(selectedTripMeta))} 結束。自 {formatTripDate(getTripLockDate(selectedTripMeta))} 起，僅管理者可修改；你仍可查看完整資料。
+            </p>
+          </section>
+        )}
+        {isCurrentTripHistorical && selectedTripMeta && role === ROLE.SUPER_ADMIN && (
+          <section className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
+            <p className="font-bold">正在編輯歷史行程</p>
+            <p className="mt-1 leading-6 text-amber-800">
+              本行程已於 {formatTripDate(getTripEndDate(selectedTripMeta))} 結束。你以管理者身分編輯；儲存後會直接更新歷史資料，請確認內容正確。
+            </p>
+          </section>
+        )}
         {isLoading ? (
           <div className="text-center py-24 text-slate-400">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-slate-600 mx-auto mb-4"></div>
@@ -986,11 +1049,11 @@ function ConfiguredApp({
                 supabase={supabase}
                 trip={currentTrip}
                 activeDay={activeDay}
-                hasEditPermission={hasEditPermission}
+                hasEditPermission={canEditSharedTrip}
                 isOnline={isOnline}
                 onActiveDayChange={setActiveDay}
                 onSaveTripDetail={async (trip) => {
-                  await saveCurrentTripDetail(trip);
+                  if (canEditSharedTrip) await saveCurrentTripDetail(trip);
                 }}
               />
             )}
@@ -1006,13 +1069,14 @@ function ConfiguredApp({
                 canViewSharedChecklist={permission.canViewSharedChecklist}
                 canToggleSharedChecklist={
                   (permission.canToggleSharedChecklist || Boolean(userEmail)) &&
-                  !isHistoricalOfflineReadOnly
+                  !isSharedTripReadOnly
                 }
-                canSyncSharedChecklist={hasEditPermission}
+                canReadCloudSharedChecklist={hasEditPermission}
+                canSyncSharedChecklist={canEditSharedTrip}
                 isOnline={isOnline}
-                isHistoricalOfflineReadOnly={isHistoricalOfflineReadOnly}
+                isSharedTripReadOnly={isSharedTripReadOnly}
                 canManageSharedChecklist={
-                  (hasEditPermission || Boolean(userEmail)) && !isHistoricalOfflineReadOnly
+                  (canEditSharedTrip || Boolean(userEmail)) && !isSharedTripReadOnly
                 }
                 copySources={checklistCopySources}
                 onSaveChecklistData={handleSaveChecklistData}
@@ -1050,7 +1114,7 @@ function ConfiguredApp({
               <OtherInfoPage
                 key={`${selectedTripId}-${currentScreen}`}
                 tripId={selectedTripId}
-                canEdit={permission.canEditReference && !isHistoricalOfflineReadOnly}
+                canEdit={permission.canEditReference && !isSharedTripReadOnly}
                 currentRole={role}
                 items={currentTrip.content.otherInfoItems}
                 onSaveItems={handleSaveOtherInfoItems}
@@ -1065,13 +1129,13 @@ function ConfiguredApp({
             {/* 5. 智慧多幣別記帳模組 */}
             {currentScreenType === "expense" && (
               <ExpenseScreen
-                canUseExpense={canUseExpense && !isHistoricalOfflineReadOnly}
-                isHistoricalOfflineReadOnly={isHistoricalOfflineReadOnly}
+                canUseExpense={canUseExpense && !isSharedTripReadOnly}
+                isSharedTripReadOnly={isSharedTripReadOnly}
                 isUsingSharedExpenseBook={isUsingSharedExpenseBook}
                 exportsAllSharedExpenses={exportsAllSharedExpenses}
                 userEmail={userEmail}
                 canManageExpense={(item) =>
-                  !isHistoricalOfflineReadOnly && canManageExpense(item)
+                  !isSharedTripReadOnly && canManageExpense(item)
                 }
                 safeExpenses={safeExpenses}
                 filteredExpenses={filteredExpenses}
@@ -1116,22 +1180,22 @@ function ConfiguredApp({
                 setEditDraft={setEditDraft}
                 pendingDeleteId={pendingDeleteId}
                 handleAddExpense={(event) =>
-                  isHistoricalOfflineReadOnly ? Promise.resolve() : handleAddExpense(event)
+                  isSharedTripReadOnly ? Promise.resolve() : handleAddExpense(event)
                 }
                 handleSaveEditExpense={(id) =>
-                  isHistoricalOfflineReadOnly
+                  isSharedTripReadOnly
                     ? Promise.resolve()
                     : handleSaveEditExpense(id)
                 }
                 handleDeleteExpense={(id) => {
-                  if (!isHistoricalOfflineReadOnly) handleDeleteExpense(id);
+                  if (!isSharedTripReadOnly) handleDeleteExpense(id);
                 }}
                 handleOpenAttachment={handleOpenAttachment}
                 handleSyncAttachments={handleSyncAttachments}
                 handleExportXlsx={handleExportXlsx}
                 handleAttachmentSelection={handleAttachmentSelection}
                 onStartEditExpense={(item) => {
-                  if (!isHistoricalOfflineReadOnly) startEditExpenseHandler(item);
+                  if (!isSharedTripReadOnly) startEditExpenseHandler(item);
                 }}
                 onCancelEditExpense={cancelEditExpenseHandler}
                 onCancelPendingDelete={cancelPendingDelete}
@@ -1146,8 +1210,11 @@ function ConfiguredApp({
                 tripId={selectedTripId}
                 defaultForeignCurrency={currentCurrencyCode}
                 supabase={supabase}
-                canSyncCloudHistory={permission.canSyncCloudExchangeHistory}
-                isReadOnly={isHistoricalOfflineReadOnly}
+                canViewCloudHistory={permission.canViewCloudExchangeHistory}
+                canSyncCloudHistory={
+                  permission.canSyncCloudExchangeHistory && !isSharedTripReadOnly
+                }
+                isReadOnly={isSharedTripReadOnly}
               />
             )}
           </>
