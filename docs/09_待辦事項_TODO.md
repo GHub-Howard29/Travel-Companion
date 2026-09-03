@@ -134,7 +134,7 @@
   - [ ] 完成 Android Chrome／PWA、iOS Safari／standalone PWA、桌面瀏覽器／PWA 版面與功能矩陣。
   - [x] `npm run lint`、`npm run build`、PWA build 與瀏覽器安全驗證通過。
   - [x] 2026-09-01 已完成合併、建立 Git 版本標籤 `v3.6.1`、部署與正式版本文件更新。
-  - [ ] 量測有更新時的新版下載、Service Worker 接管、reload 與 App 初始化耗時，定位使用者介面重新顯示體感偏慢的階段後再決定是否修正。
+  - [x] 已以可移除量測拆分新版 Worker 接管、reload navigation、Trip 初始化與啟動畫面移除；改善項目經 Product Owner 核准並轉列 V3.6.5。
 - [x] V3.6.2：行程天數縮短刪除與歷史行程鎖定（開發、migration、驗證、Git 版本標籤與手動部署已完成；發布狀態為「已發布」）。
   - [x] 確認縮短天數採直接永久刪除，不封存、不建立復原區。
   - [x] 確認支援一次縮短任意 N 天，二次確認須逐 Day 顯示將刪除的行程卡片與路線資訊數量。
@@ -172,6 +172,13 @@
   - [ ] 再次評估 Postgres Changes、私有 Broadcast 或其他最小化通知方案，以及 publication、migration、RLS 與隱私風險；未核准前不得實作或套用 migration。
   - [ ] 確認資料庫與前端發布順序、舊版相容、回滾方案及 V3.6.4 是否採必要更新。
   - [ ] 完成雙裝置、多帳號、桌面／Android／iOS、線上／離線、跨午夜及編輯中資料回歸。
+- [ ] V3.6.5：PWA 更新後介面顯示效能改善（兩項方向已於 2026-09-03 核准，尚未實作）。
+  - [x] 加入預設關閉、以 `?app-perf=1` 啟用且可集中移除的更新與初始化效能量測。
+  - [x] 完成本機桌面基準分析：按鈕至 Worker 接管約 38 ms；主要等待為更新後首次 Service Worker navigation、重複 Trip 雲端讀取及資料 ready 後約 0.31 秒的 lazy chunk 等待。
+  - [ ] 將啟動畫面移除與功能頁 `Suspense` 解耦，在 Session 與資料 ready 後立即顯示 App，未完成的 lazy 頁面沿用既有 fallback。
+  - [ ] 讓同一次初始化共用 Trip 雲端快照，移除 `getTripMetas()` 與 `getTripDetail()` 的重複完整雲端 Trip 讀取，不建立長效快取。
+  - [ ] 改善前後在相同環境各量測至少 5 次，完成桌面 Chrome／PWA、Android Chrome／PWA、角色、登入、離線、pending、跨裝置與單次更新回歸。
+  - [ ] 驗證完成後移除暫時效能量測；V3.6.5 是否採必要更新再由 Product Owner 決定。
 - [ ] V3.7.0：當日後續行程時間連動調整（2026-08-31 開發內容與細節已定案，可進入實作）。
   - [x] 完成版本範圍、互動流程、權限、文案、計算規則、警告層級、批次儲存與非本版範圍定案。
   - [x] 採 Day 管理中的單次「調整時間」模式；一般卡片儲存不自動觸發連動。

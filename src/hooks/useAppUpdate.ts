@@ -16,6 +16,10 @@ import {
   type AppUpdatePolicy,
   type AppVersionMetadata,
 } from "../utils/appVersionPolicy";
+import {
+  prepareAppPerformanceReload,
+  recordAppPerformance,
+} from "../utils/appPerformance";
 
 type UpdateServiceWorker = (reloadPage?: boolean) => Promise<void>;
 export type AppUpdatePromptMode = "update" | "releaseNotice";
@@ -89,6 +93,9 @@ const waitForServiceWorkerControl = (
     };
     const handleControllerChange = () => {
       const nextController = navigator.serviceWorker.controller;
+      recordAppPerformance("update:controller-change", {
+        changed: Boolean(nextController && nextController !== previousController),
+      });
       finish(Boolean(nextController && nextController !== previousController));
     };
     navigator.serviceWorker.addEventListener("controllerchange", handleControllerChange);
@@ -264,8 +271,13 @@ export const useAppUpdate = () => {
       immediate: true,
       onRegisteredSW(_serviceWorkerUrl, registration) {
         registrationRef.current = registration ?? null;
+        recordAppPerformance("service-worker:registered", {
+          hasWaitingWorker: Boolean(registration?.waiting),
+          hasController: Boolean(navigator.serviceWorker.controller),
+        });
       },
       async onNeedRefresh() {
+        recordAppPerformance("service-worker:update-ready");
         workerReadyRef.current = true;
         setUpdateError(null);
         await checkVersionPolicy();
@@ -287,6 +299,7 @@ export const useAppUpdate = () => {
       return;
     }
     updateInProgressRef.current = true;
+    recordAppPerformance("update:click", { latestVersion: latestMetadata.version });
     setUpdateError(null);
     setIsChecking(true);
     if (!navigator.onLine) {
@@ -297,11 +310,20 @@ export const useAppUpdate = () => {
     }
     try {
       const refreshedPolicy = await checkVersionPolicy();
+      recordAppPerformance("update:policy-checked", {
+        hasUpdate: refreshedPolicy?.hasUpdate ?? null,
+      });
       if (refreshedPolicy && !refreshedPolicy.hasUpdate) return;
       const registration =
         registrationRef.current ?? (await navigator.serviceWorker.ready);
       registrationRef.current = registration;
+      recordAppPerformance("update:registration-ready", {
+        hasWaitingWorker: Boolean(registration.waiting),
+      });
       await registration.update();
+      recordAppPerformance("update:registration-check-complete", {
+        hasWaitingWorker: Boolean(registration.waiting),
+      });
       const workerReady = await waitForUpdateWorkerReady(
         registration,
         () => workerReadyRef.current,
@@ -310,11 +332,14 @@ export const useAppUpdate = () => {
         setUpdateError("新版尚未下載完成，請確認網路連線後再重試。");
         return;
       }
+      recordAppPerformance("update:worker-ready");
       const updateServiceWorker = updateServiceWorkerRef.current;
       if (!updateServiceWorker) throw new Error("Service Worker update handler is not ready.");
       const previousController = navigator.serviceWorker?.controller ?? null;
       let controlPromise = waitForServiceWorkerControl(previousController);
+      recordAppPerformance("update:skip-waiting-start");
       await updateServiceWorker(true);
+      recordAppPerformance("update:skip-waiting-sent");
       let controlled = await controlPromise;
       if (!controlled) {
         controlPromise = waitForServiceWorkerControl(navigator.serviceWorker?.controller ?? null);
@@ -322,7 +347,10 @@ export const useAppUpdate = () => {
         controlled = await controlPromise;
       }
       if (!controlled) throw new Error("新版 Service Worker 尚未接管目前頁面。");
+      recordAppPerformance("update:controlled");
       setStoredAppVersion(latestMetadata.version);
+      recordAppPerformance("update:reload-requested");
+      prepareAppPerformanceReload();
       reloadOnce();
     } catch (error) {
       console.warn("PWA Service Worker update failed.", error);

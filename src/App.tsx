@@ -67,6 +67,7 @@ import {
   getTrustedHttpUrl,
   openPendingWindow,
 } from "./utils/browserSecurity";
+import { markAppPerformance } from "./utils/appPerformance";
 
 const ExpenseScreen = lazy(() => import("./components/expense/ExpenseScreen"));
 const ItineraryPage = lazy(() =>
@@ -130,6 +131,7 @@ const finishAppLaunch = () => {
 
 const AppLaunchReady = () => {
   useEffect(() => {
+    markAppPerformance("app:launch-screen-remove");
     finishAppLaunch();
   }, []);
 
@@ -258,6 +260,23 @@ function ConfiguredApp({
   const [checklistCopySources, setChecklistCopySources] = useState<
     Array<{ tripId: string; title: string; items: ChecklistItem[] }>
   >([]);
+
+  useEffect(() => {
+    markAppPerformance("app:configured-mounted");
+  }, []);
+
+  useEffect(() => {
+    if (isSessionReady) markAppPerformance("app:session-ready");
+  }, [isSessionReady]);
+
+  useEffect(() => {
+    if (!isLoading) {
+      markAppPerformance("app:data-ready", {
+        hasTrip: Boolean(currentTrip),
+        selectedTripId,
+      });
+    }
+  }, [currentTrip, isLoading, selectedTripId]);
 
   useEffect(() => {
     let timer = 0;
