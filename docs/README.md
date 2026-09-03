@@ -10,6 +10,8 @@ Travel Companion 是以 Trip 為核心的 Offline First 旅行管理 PWA，使�
 >
 > V3.6.2 發布狀態為「已發布」；Git 版本標籤為 `v3.6.2`。發布後功能與桌面／Android 驗證已通過，iOS 尚未測試；V3.6.3 處理前端修正，V3.6.4 處理歷史唯讀參與者與跨裝置提醒，V3.6.5 處理 PWA 更新後介面顯示效能，其後進入 V3.7.0。
 >
+> V3.6.3 已完成一般更新發布候選設定：`minimumSupportedVersion: 3.6.2`、`forceUpdate: false`；尚未合併、建立標籤或部署。
+>
 > 最後更新：2026-09-03
 
 ## 優先閱讀

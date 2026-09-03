@@ -57,6 +57,7 @@ interface OtherInfoPageProps {
   specialFolderId?: string;
   syncStatus?: OtherInfoSyncStatus | "syncing" | null;
   onRetrySync?: () => void;
+  onManageModeChange?: (isManaging: boolean) => void;
 }
 
 const renderContentWithLinks = (content: string) => {
@@ -122,6 +123,7 @@ export const OtherInfoPage = ({
   specialFolderId,
   syncStatus,
   onRetrySync,
+  onManageModeChange,
 }: OtherInfoPageProps) => {
   const folders = useMemo<Folder[]>(() => getFolders(tripId), [tripId]);
   const initialFolderId =
@@ -142,6 +144,11 @@ export const OtherInfoPage = ({
   );
   const [activeFolderId, setActiveFolderId] = useState(initialFolderId);
   const [isManageMode, setIsManageMode] = useState(false);
+
+  useEffect(() => {
+    onManageModeChange?.(isManageMode);
+    return () => onManageModeChange?.(false);
+  }, [isManageMode, onManageModeChange]);
   const [isSaving, setIsSaving] = useState(false);
   const [isSensitiveSaveConfirmationOpen, setIsSensitiveSaveConfirmationOpen] = useState(false);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));

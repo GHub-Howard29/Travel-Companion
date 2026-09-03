@@ -14,7 +14,7 @@ type VersionInfoModalProps = {
   currentVersion: string;
   releaseDate: string;
   releaseNotes: string[];
-  isMandatoryUpdate: boolean;
+  isMandatoryRelease: boolean;
   onClose: () => void;
 };
 
@@ -23,7 +23,7 @@ export function VersionInfoModal({
   currentVersion,
   releaseDate,
   releaseNotes,
-  isMandatoryUpdate,
+  isMandatoryRelease,
   onClose,
 }: VersionInfoModalProps) {
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
@@ -94,7 +94,7 @@ export function VersionInfoModal({
                   <span className="font-bold text-slate-900">{releaseDate}</span>
                   <span className="font-semibold text-emerald-700">更新方式：</span>
                   <span className="font-bold text-slate-900">
-                    {isMandatoryUpdate ? "必要更新" : "一般更新"}
+                    {isMandatoryRelease ? "必要更新" : "一般更新"}
                   </span>
                 </div>
               </div>
@@ -129,7 +129,7 @@ export function VersionInfoModal({
                       <p className="text-xs text-slate-400">{item.date}</p>
                     </div>
                     <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-600">
-                      {item.forceUpdate ? "重大更新" : "一般更新"}
+                      {item.isMandatoryRelease ? "必要更新" : "一般更新"}
                     </span>
                   </div>
                   <ul className="space-y-1 text-xs leading-relaxed text-slate-600">

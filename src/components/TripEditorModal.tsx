@@ -25,6 +25,7 @@ interface TripEditorModalProps {
   onClose: () => void;
   onSubmit: (input: TripEditorInput) => Promise<void>;
   onDelete?: () => Promise<void>;
+  historicalTripEndDate?: string;
 }
 
 const CURRENCY_OPTIONS = [
@@ -123,6 +124,7 @@ export const TripEditorModal = ({
   onClose,
   onSubmit,
   onDelete,
+  historicalTripEndDate,
 }: TripEditorModalProps) => {
   const [title, setTitle] = useState(trip?.title ?? "");
   const [departureDate, setDepartureDate] = useState(
@@ -155,6 +157,7 @@ export const TripEditorModal = ({
     input: TripEditorInput;
     impacts: RemovedDayImpact[];
   } | null>(null);
+  const [shrinkConfirmationStep, setShrinkConfirmationStep] = useState<1 | 2>(1);
 
   if (!isOpen) return null;
 
@@ -252,6 +255,7 @@ export const TripEditorModal = ({
     setFormError("");
     releaseFocusedControl();
     if (impacts.length > 0) {
+      setShrinkConfirmationStep(1);
       setPendingShrink({ input, impacts });
       return;
     }
@@ -311,48 +315,75 @@ export const TripEditorModal = ({
             </span>
             <div>
               <h2 id="shrink-trip-title" className="text-lg font-bold text-slate-900">
-                再次確認縮短行程
+                {shrinkConfirmationStep === 1
+                  ? "確認縮短行程影響"
+                  : "最後確認永久刪除"}
               </h2>
               <p className="mt-1 text-sm leading-6 text-slate-600">
-                你正將行程從 {originalDayCount} 天改為 {pendingShrink.input.dayCount} 天。
-                儲存後，{dayRange}的每日行程資料會永久刪除。
+                {shrinkConfirmationStep === 1 ? (
+                  <>
+                    你正將行程從 {originalDayCount} 天改為 {pendingShrink.input.dayCount} 天。
+                    請先確認下列受影響的每日行程資料。
+                  </>
+                ) : (
+                  <>
+                    儲存後，{dayRange}的行程卡片與路線資訊會永久刪除，且無法復原。
+                  </>
+                )}
               </p>
             </div>
           </div>
 
-          <div className="min-h-0 overflow-y-auto rounded-xl border border-slate-200 bg-slate-50 p-3">
-            <ul className="space-y-2 text-sm text-slate-700">
-              {pendingShrink.impacts.map((impact) => (
-                <li key={impact.day} className="rounded-lg bg-white px-3 py-2 shadow-sm">
-                  <span className="font-bold">第 {impact.day} 天：</span>
-                  {impact.cardCount === 0 && impact.routeCount === 0
-                    ? "沒有行程卡片或路線資訊"
-                    : `${impact.cardCount > 0 ? `${impact.cardCount} 張行程卡片` : "沒有行程卡片"}、${impact.routeCount > 0 ? `${impact.routeCount} 段路線資訊` : "沒有路線資訊"}`}
-                </li>
-              ))}
-            </ul>
-          </div>
+          {shrinkConfirmationStep === 1 && (
+            <div className="min-h-0 overflow-y-auto rounded-xl border border-slate-200 bg-slate-50 p-3">
+              <ul className="space-y-2 text-sm text-slate-700">
+                {pendingShrink.impacts.map((impact) => (
+                  <li key={impact.day} className="rounded-lg bg-white px-3 py-2 shadow-sm">
+                    <span className="font-bold">第 {impact.day} 天：</span>
+                    {impact.cardCount === 0 && impact.routeCount === 0
+                      ? "沒有行程卡片或路線資訊"
+                      : `${impact.cardCount > 0 ? `${impact.cardCount} 張行程卡片` : "沒有行程卡片"}、${impact.routeCount > 0 ? `${impact.routeCount} 段路線資訊` : "沒有路線資訊"}`}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold leading-6 text-rose-800">
-            這項操作無法復原。共同準備清單、共同帳本及其他資訊不受影響。
+            {shrinkConfirmationStep === 1
+              ? "共同準備清單、共同帳本及其他資訊不受影響。"
+              : `這是最後確認。${dayRange}的每日行程資料刪除後無法復原。`}
           </p>
 
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             <button
               type="button"
-              onClick={() => setPendingShrink(null)}
+              onClick={() => {
+                setPendingShrink(null);
+                setShrinkConfirmationStep(1);
+              }}
               disabled={isSaving}
               className="rounded-lg border border-slate-300 px-4 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
             >
-              返回修改
+              {shrinkConfirmationStep === 1 ? "返回修改" : "取消"}
             </button>
             <button
               type="button"
-              onClick={() => void confirmShrink()}
+              onClick={() => {
+                if (shrinkConfirmationStep === 1) {
+                  setShrinkConfirmationStep(2);
+                  return;
+                }
+                void confirmShrink();
+              }}
               disabled={isSaving}
               className="rounded-lg bg-rose-700 px-4 py-3 text-sm font-bold text-white hover:bg-rose-800 disabled:opacity-60"
             >
-              {isSaving ? "儲存中..." : dangerLabel}
+              {isSaving
+                ? "儲存中..."
+                : shrinkConfirmationStep === 1
+                  ? "繼續確認"
+                  : dangerLabel}
             </button>
           </div>
         </section>
@@ -383,6 +414,15 @@ export const TripEditorModal = ({
             <X size={18} />
           </button>
         </div>
+
+        {historicalTripEndDate && (
+          <section className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">
+            <p className="font-bold">正在編輯歷史行程</p>
+            <p className="mt-1 leading-6 text-amber-800">
+              本行程已於 {historicalTripEndDate} 結束。你以管理者身分編輯；儲存後會直接更新歷史資料，請確認內容正確。
+            </p>
+          </section>
+        )}
 
         {formError && (
           <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700">
