@@ -162,7 +162,8 @@
   - [x] 將交通方式替換為自託管 Material Symbols，保留文字、可存取名稱與既有版面；V3.7.0 直接沿用。
   - [x] 將管理者「正在編輯歷史行程」提醒移出一般首頁，只在進入共用資料管理或開啟編輯旅程時顯示。
   - [x] 將縮短天數改為兩個文案不同、需分別操作的確認階段。
-  - [ ] 補驗 iOS Safari／standalone PWA，並回歸桌面與 Android 操作。
+- [x] 桌面、Android 與登入後管理者流程驗證通過。
+- [ ] 補驗 iOS Safari 與 iOS standalone PWA：更新提示、版本資訊、交通圖示及縮短天數雙階段確認。
   - [x] Product Owner 確認 V3.6.3 採一般更新；`minimumSupportedVersion` 維持 `3.6.2`，`forceUpdate: false`。
   - [x] 同步 App、package、版本歷史與公開 metadata 為 V3.6.3 發布候選。
   - [x] 完成本機桌面與 390×844 手機寬度的版本政策、版本資訊、交通圖示及瀏覽器錯誤檢查。
