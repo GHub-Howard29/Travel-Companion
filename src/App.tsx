@@ -67,6 +67,8 @@ import {
   getTrustedHttpUrl,
   openPendingWindow,
 } from "./utils/browserSecurity";
+import { markAppPerformance } from "./utils/appPerformance";
+import { IS_MANDATORY_RELEASE } from "./config/appVersion";
 
 const ExpenseScreen = lazy(() => import("./components/expense/ExpenseScreen"));
 const ItineraryPage = lazy(() =>
@@ -130,6 +132,7 @@ const finishAppLaunch = () => {
 
 const AppLaunchReady = () => {
   useEffect(() => {
+    markAppPerformance("app:launch-screen-remove");
     finishAppLaunch();
   }, []);
 
@@ -249,6 +252,7 @@ function ConfiguredApp({
   const canEditSharedTrip = hasEditPermission && !isSharedTripReadOnly;
   const [tripEditorMode, setTripEditorMode] = useState<"create" | "edit">("create");
   const [isTripEditorOpen, setIsTripEditorOpen] = useState(false);
+  const [isSharedDataManageMode, setIsSharedDataManageMode] = useState(false);
   const [isVersionInfoOpen, setIsVersionInfoOpen] = useState(false);
   const [isLoginSafetyOpen, setIsLoginSafetyOpen] = useState(false);
   const [otherInfoSyncStatus, setOtherInfoSyncStatus] = useState<
@@ -258,6 +262,27 @@ function ConfiguredApp({
   const [checklistCopySources, setChecklistCopySources] = useState<
     Array<{ tripId: string; title: string; items: ChecklistItem[] }>
   >([]);
+  const handleSharedDataManageModeChange = useCallback(
+    (isManaging: boolean) => setIsSharedDataManageMode(isManaging),
+    [],
+  );
+
+  useEffect(() => {
+    markAppPerformance("app:configured-mounted");
+  }, []);
+
+  useEffect(() => {
+    if (isSessionReady) markAppPerformance("app:session-ready");
+  }, [isSessionReady]);
+
+  useEffect(() => {
+    if (!isLoading) {
+      markAppPerformance("app:data-ready", {
+        hasTrip: Boolean(currentTrip),
+        selectedTripId,
+      });
+    }
+  }, [currentTrip, isLoading, selectedTripId]);
 
   useEffect(() => {
     let timer = 0;
@@ -926,7 +951,7 @@ function ConfiguredApp({
       currentVersion={currentVersion}
       releaseDate={currentReleaseDate}
       releaseNotes={currentReleaseNotes}
-      isMandatoryUpdate={isMandatoryForCurrentClient}
+      isMandatoryRelease={IS_MANDATORY_RELEASE}
       onClose={() => setIsVersionInfoOpen(false)}
     />
     <div className="min-h-screen bg-slate-50 text-slate-800 font-sans antialiased overflow-x-hidden">
@@ -1002,6 +1027,14 @@ function ConfiguredApp({
               ? handleTripDelete
               : undefined
           }
+          historicalTripEndDate={
+            tripEditorMode === "edit" &&
+            isCurrentTripHistorical &&
+            selectedTripMeta &&
+            role === ROLE.SUPER_ADMIN
+              ? formatTripDate(getTripEndDate(selectedTripMeta))
+              : undefined
+          }
         />
         </Suspense>
       )}
@@ -1025,7 +1058,10 @@ function ConfiguredApp({
             </p>
           </section>
         )}
-        {isCurrentTripHistorical && selectedTripMeta && role === ROLE.SUPER_ADMIN && (
+        {isCurrentTripHistorical &&
+          selectedTripMeta &&
+          role === ROLE.SUPER_ADMIN &&
+          isSharedDataManageMode && (
           <section className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
             <p className="font-bold">正在編輯歷史行程</p>
             <p className="mt-1 leading-6 text-amber-800">
@@ -1055,6 +1091,7 @@ function ConfiguredApp({
                 onSaveTripDetail={async (trip) => {
                   if (canEditSharedTrip) await saveCurrentTripDetail(trip);
                 }}
+                onManageModeChange={handleSharedDataManageModeChange}
               />
             )}
 
@@ -1081,6 +1118,7 @@ function ConfiguredApp({
                 copySources={checklistCopySources}
                 onSaveChecklistData={handleSaveChecklistData}
                 onReloadChecklistData={reloadCurrentTrip}
+                onManageModeChange={handleSharedDataManageModeChange}
               />
             )}
 
@@ -1123,6 +1161,7 @@ function ConfiguredApp({
                 specialFolderId={specialInfoFolderId}
                 syncStatus={otherInfoSyncStatus}
                 onRetrySync={retryOtherInfoSync}
+                onManageModeChange={handleSharedDataManageModeChange}
               />
             )}
 

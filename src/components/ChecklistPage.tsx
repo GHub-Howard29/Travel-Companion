@@ -38,6 +38,7 @@ interface ChecklistPageProps {
     baseItems?: ChecklistItem[],
   ) => Promise<ChecklistItem[]>;
   onReloadChecklistData: () => Promise<void>;
+  onManageModeChange?: (isManaging: boolean) => void;
 }
 
 export const ChecklistPage = ({
@@ -55,8 +56,14 @@ export const ChecklistPage = ({
   copySources,
   onSaveChecklistData,
   onReloadChecklistData,
+  onManageModeChange,
 }: ChecklistPageProps) => {
   const [isManageMode, setIsManageMode] = useState(false);
+
+  useEffect(() => {
+    onManageModeChange?.(isManageMode);
+    return () => onManageModeChange?.(false);
+  }, [isManageMode, onManageModeChange]);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isCopyOpen, setIsCopyOpen] = useState(false);
   const [copySourceTripId, setCopySourceTripId] = useState("");

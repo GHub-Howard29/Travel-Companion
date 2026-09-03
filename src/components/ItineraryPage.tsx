@@ -1,28 +1,17 @@
 import { Fragment, useEffect, useRef, useState } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
-  BusFront,
-  CarFront,
   Check,
   ExternalLink,
-  Footprints,
   Loader2,
   MapPin,
   Search,
   Settings2,
-  ShipWheel,
-  TrainFront,
   TriangleAlert,
   X,
 } from "lucide-react";
 
-import type {
-  ItineraryItem,
-  SavedTravelEstimate,
-  TransitVehicle,
-  TravelMode,
-  TripDetail,
-} from "../types";
+import type { ItineraryItem, SavedTravelEstimate, TravelMode, TripDetail } from "../types";
 import { handlePlaceBrowse, handleRouteBrowse } from "../utils/navigationUtils";
 import { focusAndRevealControl, releaseFocusedControl } from "../utils/viewportUtils";
 import { trimRichText } from "../utils/richText";
@@ -52,6 +41,7 @@ import {
 } from "../services/travelRouteService";
 import { RichTextColorEditor } from "./RichTextColorEditor";
 import { RichTextDisplay } from "./RichTextDisplay";
+import { MaterialTravelModeIcon } from "./MaterialTravelModeIcon";
 
 interface ItineraryPageProps {
   supabase: SupabaseClient;
@@ -61,6 +51,7 @@ interface ItineraryPageProps {
   isOnline: boolean;
   onActiveDayChange: (day: number) => void;
   onSaveTripDetail: (trip: TripDetail) => Promise<void>;
+  onManageModeChange?: (isManaging: boolean) => void;
 }
 
 const ITINERARY_TYPE_OPTIONS = [
@@ -71,22 +62,6 @@ const ITINERARY_TYPE_OPTIONS = [
   { type: "自駕", typeColor: "bg-orange-50 text-orange-700 border-orange-200" },
   { type: "其他", typeColor: "bg-slate-50 text-slate-700 border-slate-200" },
 ];
-
-const TravelModeIcon = ({
-  mode,
-  vehicle,
-  size = 16,
-}: {
-  mode: TravelMode;
-  vehicle?: TransitVehicle;
-  size?: number;
-}) => {
-  if (mode === "drive") return <CarFront size={size} />;
-  if (mode === "walk") return <Footprints size={size} />;
-  if (vehicle === "bus") return <BusFront size={size} />;
-  if (vehicle === "ferry") return <ShipWheel size={size} />;
-  return <TrainFront size={size} />;
-};
 
 const createEmptyItineraryDraft = (): ItineraryItem => ({
   time: "",
@@ -106,8 +81,14 @@ export const ItineraryPage = ({
   isOnline,
   onActiveDayChange,
   onSaveTripDetail,
+  onManageModeChange,
 }: ItineraryPageProps) => {
   const [isManageMode, setIsManageMode] = useState(false);
+
+  useEffect(() => {
+    onManageModeChange?.(isManageMode);
+    return () => onManageModeChange?.(false);
+  }, [isManageMode, onManageModeChange]);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [draft, setDraft] = useState<ItineraryItem>(createEmptyItineraryDraft);
@@ -985,19 +966,19 @@ export const ItineraryPage = ({
                     >
                       {estimate ? (
                         <>
-                          <TravelModeIcon mode={estimate.mode} vehicle={estimate.transitVehicle} />
+                          <MaterialTravelModeIcon mode={estimate.mode} />
                           <span>
                             約 {formatTravelDuration(estimate.durationSeconds)} · {formatTravelDistance(estimate.distanceMeters)}
                           </span>
                         </>
                       ) : hasSavedTravelPreference ? (
                         <>
-                          <TravelModeIcon mode={preferredMode} />
+                          <MaterialTravelModeIcon mode={preferredMode} />
                           <span>路線資訊待更新</span>
                         </>
                       ) : (
                         <>
-                          <CarFront size={16} />
+                          <MaterialTravelModeIcon mode="drive" />
                           <span>查看預設路線</span>
                         </>
                       )}
@@ -1092,7 +1073,7 @@ export const ItineraryPage = ({
                       : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
                   }`}
                 >
-                  <TravelModeIcon mode={option.mode} size={18} />
+                  <MaterialTravelModeIcon mode={option.mode} size={18} />
                   {option.label}
                 </button>
               ))}
@@ -1103,7 +1084,7 @@ export const ItineraryPage = ({
                 <><Loader2 size={18} className="animate-spin" /> 正在查詢預估路線…</>
               ) : previewEstimate && previewEstimate.mode === selectedTravelMode ? (
                 <>
-                  <TravelModeIcon mode={previewEstimate.mode} vehicle={previewEstimate.transitVehicle} size={20} />
+                  <MaterialTravelModeIcon mode={previewEstimate.mode} size={20} />
                   約 {formatTravelDuration(previewEstimate.durationSeconds)} · {formatTravelDistance(previewEstimate.distanceMeters)}
                 </>
               ) : (

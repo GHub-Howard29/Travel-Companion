@@ -36,6 +36,7 @@ import {
 import { ROLE, type Role } from "../permissions/roles";
 import { removeRestrictedOtherInfoFromStoredTrip } from "../storage/tripStorage";
 import { removeRestrictedStoredOtherInfoItems } from "../storage/otherInfoStorage";
+import { recordAppPerformance } from "../utils/appPerformance";
 
 interface UseTripWorkspaceOptions {
   supabase: SupabaseClient;
@@ -135,13 +136,16 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
   }, [supabase]);
 
   useEffect(() => {
+    recordAppPerformance("init:session-start");
     void supabase.auth.getSession().then(({ data: { session } }) => {
       setUserId(session?.user?.id || null);
       setUserEmail(session?.user?.email || null);
       setIsSessionReady(true);
+      recordAppPerformance("init:session-end", { authenticated: Boolean(session) });
     }).catch((error) => {
       console.warn("Failed to restore Supabase session", error);
       setIsSessionReady(true);
+      recordAppPerformance("init:session-end", { failed: true });
     });
 
     const {
@@ -167,8 +171,10 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
   }, []);
 
   useEffect(() => {
+    recordAppPerformance("init:trip-metadata-start");
     getTripMetas(supabase, getBasePath())
       .then((sortedTrips) => {
+        recordAppPerformance("init:trip-metadata-end", { tripCount: sortedTrips.length });
         setTripOptions(sortedTrips);
 
         if (sortedTrips.length > 0) {
@@ -178,6 +184,7 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
         }
       })
       .catch((error) => {
+        recordAppPerformance("init:trip-metadata-end", { failed: true });
         console.error(error);
         setIsLoading(false);
       });
@@ -188,6 +195,7 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
 
     const loadTripAndAuthData = async () => {
       const loadRevision = ++tripLoadRevisionRef.current;
+      recordAppPerformance("init:trip-detail-start", { selectedTripId, loadRevision });
       try {
         const tripData = await getTripDetail(
           supabase,
@@ -195,6 +203,12 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
           selectedTripId,
           selectedTripMeta,
         );
+        recordAppPerformance("init:trip-detail-end", {
+          selectedTripId,
+          loadRevision,
+          found: Boolean(tripData),
+          applied: Boolean(tripData && tripLoadRevisionRef.current === loadRevision),
+        });
         if (tripData && tripLoadRevisionRef.current === loadRevision) {
           setCurrentTrip(tripData);
           setActiveDay(getDefaultActiveDay(tripData.departureDate, tripData.content.days));
@@ -212,6 +226,11 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
           }
         }
       } catch (error) {
+        recordAppPerformance("init:trip-detail-end", {
+          selectedTripId,
+          loadRevision,
+          failed: true,
+        });
         console.error(error);
       }
 
@@ -230,6 +249,7 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
       const cachedProfile = localStorage.getItem(`admin_profile_${selectedTripId}`);
 
       if (userEmail && isOnline) {
+        recordAppPerformance("init:authorization-start", { selectedTripId });
         try {
           const { data, error } = await supabase
             .from("admin_users")
@@ -253,7 +273,15 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
               );
             }
           }
+          recordAppPerformance("init:authorization-end", {
+            selectedTripId,
+            found: Boolean(profile),
+          });
         } catch (error) {
+          recordAppPerformance("init:authorization-end", {
+            selectedTripId,
+            failed: true,
+          });
           console.warn(error);
         }
       }

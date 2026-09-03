@@ -8,15 +8,25 @@
 export type VersionHistoryItem = {
   version: string;
   date: string;
-  forceUpdate: boolean;
+  isMandatoryRelease: boolean;
   notes: string[];
 };
 
 export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
+    version: "3.6.2",
+    date: "2026-09-01",
+    isMandatoryRelease: true,
+    notes: [
+      "編輯行程並縮短天數時，先逐日列出會永久刪除的行程卡片與路線資訊，確認後才儲存。",
+      "依台灣時間在行程結束翌日鎖定歷史共用資料；行程編輯者維持完整查看，僅管理者可繼續修改。",
+      "保留歷史行程既有離線唯讀、私人清單與個人資料規則。",
+    ],
+  },
+  {
     version: "3.6.1",
     date: "2026-09-01",
-    forceUpdate: false,
+    isMandatoryRelease: false,
     notes: [
       "修正 Android Chrome 與 PWA 記帳金額欄位超出卡片右側的問題。",
       "修正 PWA 第一次點擊馬上更新時未等待新版下載完成，必須再次點擊的問題。",
@@ -25,7 +35,7 @@ export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
     version: "3.6.0",
     date: "2026-08-30",
-    forceUpdate: true,
+    isMandatoryRelease: true,
     notes: [
       "新增相鄰地點交通資訊，依預設交通方式自動顯示預估時間與距離。",
       "輸入地點後可直接確認正確位置，讓路線估算更穩定。",
@@ -36,7 +46,7 @@ export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
     version: "3.5.6",
     date: "2026-08-28",
-    forceUpdate: true,
+    isMandatoryRelease: true,
     notes: [
       "新增最低支援版本政策，必要更新不再受裝置模式或稍後更新狀態影響。",
       "將資訊卡片內容與行程說明的文字選色工具列移到輸入框下方。",
@@ -46,7 +56,7 @@ export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
     version: "3.5.5",
     date: "2026-08-27",
-    forceUpdate: false,
+    isMandatoryRelease: false,
     notes: [
       "修正刪除目前行程後的預設行程選取，與進入 App 時的規則保持一致。",
       "資訊卡片連結改由系統外部處理，Google Maps 連結優先交由專用 App 開啟。",
@@ -56,7 +66,7 @@ export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
     version: "3.5.4",
     date: "2026-08-26",
-    forceUpdate: false,
+    isMandatoryRelease: false,
     notes: [
       "新增 Super Admin 固定顯示名稱，建立旅程時只預帶 Howard 與 Carol。",
       "統一新 Trip ID 規則，阻擋本機、雲端及併發造成的重複 Trip。",
@@ -66,7 +76,7 @@ export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
     version: "3.5.3",
     date: "2026-08-26",
-    forceUpdate: false,
+    isMandatoryRelease: false,
     notes: [
       "加入內容安全政策與 no-referrer，限制瀏覽器載入與連線來源。",
       "強化 Google OAuth 等待畫面、外部網址與新視窗的安全處理。",
@@ -76,7 +86,7 @@ export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
     version: "3.5.1",
     date: "2026-08-26",
-    forceUpdate: true,
+    isMandatoryRelease: true,
     notes: [
       "強化帳本附件的私有儲存空間、Trip 權限與短期連結保護。",
       "新增 App 首頁分享入口與系統原生分享功能。",
@@ -87,7 +97,7 @@ export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
     version: "3.5.0",
     date: "2026-08-25",
-    forceUpdate: true,
+    isMandatoryRelease: true,
     notes: [
       "完成其他資訊敏感資料卡片的角色限制與 Supabase RLS 保護。",
       "修正其他資訊同步失敗並提供手動重試，收斂行程編輯權限。",
@@ -97,7 +107,7 @@ export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
     version: "3.4.11",
     date: "2026-08-24",
-    forceUpdate: false,
+    isMandatoryRelease: false,
     notes: [
       "統一 Android 原生啟動畫面、等待畫面與 App 系統資訊列為暖米白色。",
       "保留單次原生圖示並降低啟動階段系統列與底圖的色差。",
@@ -106,7 +116,7 @@ export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
     version: "3.4.10",
     date: "2026-08-24",
-    forceUpdate: false,
+    isMandatoryRelease: false,
     notes: [
       "移除 Android 原生啟動畫面後重複出現的網頁層 App 圖示。",
       "載入期間保留一致底圖，完成後一次切換至操作介面。",
@@ -115,7 +125,7 @@ export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
     version: "3.4.9",
     date: "2026-08-24",
-    forceUpdate: false,
+    isMandatoryRelease: false,
     notes: [
       "修正共同清單首次同步期間勾選狀態可能回彈的問題。",
       "歷史行程離線時改用明確的清單唯讀提示。",
@@ -125,7 +135,7 @@ export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
     version: "3.4.8",
     date: "2026-08-24",
-    forceUpdate: false,
+    isMandatoryRelease: false,
     notes: [
       "修正 PWA 更新時的過早與重複重載。",
       "降低 Android PWA 更新後停留在純色啟動畫面的機率。",
@@ -134,7 +144,7 @@ export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
     version: "3.4.7",
     date: "2026-08-23",
-    forceUpdate: false,
+    isMandatoryRelease: false,
     notes: [
       "修正 V3.4.6 發布後 App 與網頁仍顯示 V3.4.5 的問題。",
     ],
@@ -142,7 +152,7 @@ export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
     version: "3.4.6",
     date: "2026-08-23",
-    forceUpdate: false,
+    isMandatoryRelease: false,
     notes: [
       "改善 PWA 啟動畫面與手機系統列的顯示銜接。",
       "版本資訊主畫面保留最近兩版，並可查看完整版本歷史。",
@@ -151,7 +161,7 @@ export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
     version: "3.4.5",
     date: "2026-08-23",
-    forceUpdate: false,
+    isMandatoryRelease: false,
     notes: [
       "修正 PWA 載入銜接，移除重複的網頁 Splash 圖示與動畫。",
       "補強版本歷史防漏驗證，避免遺漏上一個已發布版本。",
@@ -160,7 +170,7 @@ export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
     version: "3.4.4",
     date: "2026-08-23",
-    forceUpdate: false,
+    isMandatoryRelease: false,
     notes: [
       "調整 PWA 預設載入畫面，統一使用明亮天空藍背景並移除載入動畫。",
       "保留既有 PWA 桌面圖示、網站 favicon 與 manifest 圖示設定。",
@@ -169,7 +179,7 @@ export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
     version: "3.4.3",
     date: "2026-08-23",
-    forceUpdate: false,
+    isMandatoryRelease: false,
     notes: [
       "優化 PWA 啟動畫面，讓系統 Splash、HTML 預載與 App 載入流程更連續。",
       "保留既有 PWA 桌面圖示、網站 favicon 與 manifest 圖示設定。",
@@ -178,7 +188,7 @@ export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
     version: "3.4.2",
     date: "2026-08-20",
-    forceUpdate: false,
+    isMandatoryRelease: false,
     notes: [
       "改善離線後恢復連線時的共同清單同步穩定性。",
       "歷史行程在離線狀態下改為完整唯讀，避免誤操作。",
@@ -189,7 +199,7 @@ export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
     version: "3.4.1",
     date: "2026-08-20",
-    forceUpdate: false,
+    isMandatoryRelease: false,
     notes: [
       "改善離線刷新、旅行工具載入與恢復連線提示。",
       "共同與私人清單加強離線同步及多人修改合併。",
@@ -202,7 +212,7 @@ export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
     version: "3.4.0",
     date: "2026-08-05",
-    forceUpdate: false,
+    isMandatoryRelease: false,
     notes: [
       "非首屏旅行工具與 Excel 匯出改為按需載入。",
       "降低 App 首次開啟的 JavaScript 下載量。",
@@ -211,7 +221,7 @@ export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
     version: "3.3.3",
     date: "2026-07-30",
-    forceUpdate: false,
+    isMandatoryRelease: false,
     notes: [
       "修正私人確認清單跨裝置同步邏輯。",
       "共同確認清單分類（根目錄）新增排序功能。",
@@ -220,7 +230,7 @@ export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
     version: "3.3.2",
     date: "2026-07-27",
-    forceUpdate: false,
+    isMandatoryRelease: false,
     notes: [
       "修正版本資訊顯示與帳本總覽、匯出操作體驗。",
       "帳本匯出補上支出人幣別合計與完整記帳日期。",
@@ -230,7 +240,7 @@ export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
     version: "3.3.1",
     date: "2026-07-27",
-    forceUpdate: false,
+    isMandatoryRelease: false,
     notes: [
       "行程首頁依出發日期自動開啟對應 Day，行程活動依時間排序。",
       "共同清單、私人清單與資訊卡片支援拖拉排序與延後同步。",
@@ -240,7 +250,7 @@ export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
     version: "3.3.0",
     date: "2026-07-20",
-    forceUpdate: false,
+    isMandatoryRelease: false,
     notes: [
       "新增外幣換算，支援換匯紀錄、加權平均與臺銀參考匯率雙估算。",
       "換匯紀錄支援 Trip 雲端同步、跨瀏覽器即時更新與離線參考匯率。",
@@ -250,7 +260,7 @@ export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
     version: "3.2.0",
     date: "2026-07-13",
-    forceUpdate: false,
+    isMandatoryRelease: false,
     notes: [
       "帳本新增記帳日期，支援依日期排序與 Excel 匯出",
       "行程管理編輯流程與每日行程操作體驗優化",
@@ -259,7 +269,7 @@ export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
     version: "3.1.5",
     date: "2026-07-13",
-    forceUpdate: false,
+    isMandatoryRelease: false,
     notes: [
       "Android PWA 馬上更新加入重新載入備援，降低點擊後未自動更新的情況",
       "iOS Safari 網頁模式也會顯示版本更新提示，方便未安裝 App 時更新",
@@ -269,7 +279,7 @@ export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
     version: "3.1.4",
     date: "2026-07-13",
-    forceUpdate: false,
+    isMandatoryRelease: false,
     notes: [
       "非強制更新恢復顯示更新提示，提供馬上更新與稍後更新選項",
       "選擇馬上更新時會先清除 App 暫存，再重新載入最新版本",
@@ -283,7 +293,7 @@ export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
     version: "3.1.3",
     date: "2026-07-12",
-    forceUpdate: false,
+    isMandatoryRelease: false,
     notes: [
       "iOS 安裝版 App 的 Google 登入改用專用開啟流程，降低兩步驗證後無法接回 App 的機率",
       "登入提示補上 iOS 兩步驗證建議，遇到 YouTube / Google App 確認時可改用其他驗證方式或 Safari 網頁模式",
@@ -294,7 +304,7 @@ export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
     version: "3.1.2",
     date: "2026-07-12",
-    forceUpdate: false,
+    isMandatoryRelease: false,
     notes: [
       "改善 iOS PWA Google 登入流程，降低安裝版 App 重新驗證失敗的機率",
       "改善 iOS 照片附件處理與照片連結開啟，支援空 MIME 與 HEIC / HEIF 轉存",
@@ -306,7 +316,7 @@ export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
     version: "3.1.1",
     date: "2026-07-12",
-    forceUpdate: false,
+    isMandatoryRelease: false,
     notes: [
       "其他資訊開始接上雲端同步基礎",
       "開啟旅程時會合併雲端其他資訊與既有 Trip 內容",
@@ -317,7 +327,7 @@ export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
     version: "3.1.0",
     date: "2026-07-11",
-    forceUpdate: false,
+    isMandatoryRelease: false,
     notes: [
       "修正版本更新提示，同版本或第一次開啟不再誤跳更新視窗",
       "其他資訊與自駕 / 領隊資訊改為先瀏覽、需要時再進入管理",
@@ -329,7 +339,7 @@ export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
     version: "3.0.0",
     date: "2026-07-11",
-    forceUpdate: true,
+    isMandatoryRelease: true,
     notes: [
       "可以在 App 裡新增、編輯旅程與每日行程",
       "新增共同檢查清單與私人確認清單，方便旅行前分工準備",
@@ -339,7 +349,7 @@ export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
     version: "2.0.0",
     date: "2026-07",
-    forceUpdate: false,
+    isMandatoryRelease: false,
     notes: [
       "讓 App 在網路不穩時也能更安心使用",
       "改善附件與記帳資料的保存穩定度",
@@ -349,7 +359,7 @@ export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
     version: "1.0.0",
     date: "2026",
-    forceUpdate: false,
+    isMandatoryRelease: false,
     notes: [
       "推出第一版旅行記帳功能",
       "支援登入、建立帳目、上傳附件與匯出 Excel",
