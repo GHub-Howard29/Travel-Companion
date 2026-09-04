@@ -55,6 +55,7 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
   const [activeDay, setActiveDay] = useState(1);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [adminProfile, setAdminProfile] = useState<AdminUser | null>(null);
+  const [hasAnyManagementRole, setHasAnyManagementRole] = useState(false);
   const [hasEditPermission, setHasEditPermission] = useState<boolean>(false);
   const [expenseBookTripId, setExpenseBookTripId] = useState<string>("");
   const [currentTripEditorEmails, setCurrentTripEditorEmails] = useState<string[]>([]);
@@ -258,6 +259,12 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
 
           if (!error && data) {
             const profiles = data as AdminUser[];
+            setHasAnyManagementRole(
+              profiles.some(
+                (item) =>
+                  item.role === ROLE.SUPER_ADMIN || item.role === ROLE.TRIP_EDITOR,
+              ),
+            );
             profile =
               profiles.find((item) => item.role === "super_admin") ||
               profiles.find(
@@ -293,6 +300,12 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
         } catch {
           profile = null;
         }
+      }
+
+      if (!userEmail) {
+        setHasAnyManagementRole(false);
+      } else if (profile) {
+        setHasAnyManagementRole(true);
       }
 
       setAdminProfile(profile);
@@ -483,7 +496,10 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
   }, [getBasePath, supabase]);
 
   const saveCurrentTripDetail = useCallback(
-    async (nextTrip: TripDetail): Promise<boolean> => {
+    async (
+      nextTrip: TripDetail,
+      enforceVersion = true,
+    ): Promise<boolean> => {
       if (!selectedTripMeta) return false;
       if (!canWriteSelectedTripNow()) return false;
 
@@ -495,7 +511,12 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
         currentTripEditorEmails,
       );
 
-      const didSync = await saveTripRecordWithCloudSync(supabase, record);
+      const didSync = await saveTripRecordWithCloudSync(
+        supabase,
+        record,
+        undefined,
+        enforceVersion,
+      );
       setCurrentTrip(record.detail);
       setIsLoading(false);
       return didSync;
@@ -555,6 +576,7 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
     selectedTripId,
     setSelectedTripId,
     currentTrip,
+    setCurrentTrip,
     isLoading,
     setIsLoading,
     currentScreen,
@@ -564,6 +586,7 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
     isMenuOpen,
     setIsMenuOpen,
     adminProfile,
+    hasAnyManagementRole,
     setAdminProfile,
     hasEditPermission,
     setHasEditPermission,

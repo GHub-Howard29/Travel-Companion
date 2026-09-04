@@ -171,3 +171,26 @@ export const deleteLocalAttachment = async (id?: string | null) => {
   });
   db.close();
 };
+
+/** 清除指定共用 Trip 尚留在本機的附件；個人帳本使用不同 tripId，不受影響。 */
+export const deleteLocalAttachmentsForTrip = async (
+  tripId: string,
+): Promise<void> => {
+  const db = await openAttachmentDb();
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction(ATTACHMENT_STORE_NAME, "readwrite");
+    const index = tx.objectStore(ATTACHMENT_STORE_NAME).index("tripId");
+    const request = index.openKeyCursor(IDBKeyRange.only(tripId));
+    request.onsuccess = () => {
+      const cursor = request.result;
+      if (!cursor) return;
+      tx.objectStore(ATTACHMENT_STORE_NAME).delete(cursor.primaryKey);
+      cursor.continue();
+    };
+    request.onerror = () => reject(request.error);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error);
+  });
+  db.close();
+};

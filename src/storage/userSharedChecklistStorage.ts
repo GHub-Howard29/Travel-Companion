@@ -13,3 +13,10 @@ export const readUserSharedChecklist = (tripId: string, userEmail: string, fallb
 export const writeUserSharedChecklist = (tripId: string, userEmail: string, items: ChecklistItem[]): void => {
   localStorage.setItem(storageKey(tripId, userEmail), JSON.stringify(items));
 };
+
+export const clearUserSharedChecklist = (
+  tripId: string,
+  userEmail: string,
+): void => {
+  localStorage.removeItem(storageKey(tripId, userEmail));
+};

@@ -17,6 +17,7 @@ import type {
 import AppSidebar from "./components/layout/AppSidebar";
 import AppHeader from "./components/layout/AppHeader";
 import { TextInfoPage } from "./components/TextInfoPage";
+import { TripDataRevisionNotice } from "./components/TripDataRevisionNotice";
 import { clearExchangePurchases } from "./storage/exchangeRateStorage";
 import { getDefaultHomeScreen, setDefaultHomeScreen } from "./storage/defaultHomeStorage";
 import { UpdatePrompt } from "./components/UpdatePrompt";
@@ -26,6 +27,7 @@ import { LoginSafetyModal } from "./components/LoginSafetyModal";
 import useExpenseBook from "./hooks/useExpenseBook";
 import { useAppUpdate } from "./hooks/useAppUpdate";
 import useTripWorkspace from "./hooks/useTripWorkspace";
+import { useTripDataRevision } from "./hooks/useTripDataRevision";
 import { AppContext } from "./app/context/AppContext";
 import { ROLE } from "./permissions/roles";
 import { getCloudTripRecords } from "./services/tripCloudService";
@@ -34,13 +36,14 @@ import {
   getTripDetail,
   HistoricalTripLockedError,
   TripCreationOfflineError,
+  TripVersionConflictError,
 } from "./services/tripRepository";
 import { syncCloudOtherInfoItems } from "./services/otherInfoCloudService";
 import { syncPrivateChecklistWithCloud } from "./services/privateChecklistCloudService";
 import { syncCloudSharedChecklistSeedItems } from "./services/sharedChecklistCloudService";
 import { upsertCloudTripRecord } from "./services/tripCloudService";
-import { readStoredTripRecords } from "./storage/tripStorage";
 import { writeStoredOtherInfoItems } from "./storage/otherInfoStorage";
+import { readStoredTripRecords } from "./storage/tripStorage";
 import {
   clearOtherInfoSyncState,
   markOtherInfoSyncFailed,
@@ -69,6 +72,10 @@ import {
 } from "./utils/browserSecurity";
 import { markAppPerformance } from "./utils/appPerformance";
 import { IS_MANDATORY_RELEASE } from "./config/appVersion";
+import {
+  APP_SOURCE_CLIENT_HEADER,
+  APP_SOURCE_CLIENT_ID,
+} from "./services/tripDataRevisionService";
 
 const ExpenseScreen = lazy(() => import("./components/expense/ExpenseScreen"));
 const ItineraryPage = lazy(() =>
@@ -102,7 +109,13 @@ const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const supabase =
   supabaseUrl?.trim() && supabaseAnonKey?.trim()
-    ? createClient(supabaseUrl, supabaseAnonKey)
+    ? createClient(supabaseUrl, supabaseAnonKey, {
+        global: {
+          headers: {
+            [APP_SOURCE_CLIENT_HEADER]: APP_SOURCE_CLIENT_ID,
+          },
+        },
+      })
     : null;
 
 const isIosStandalonePwa = () => {
@@ -207,6 +220,7 @@ function ConfiguredApp({
     isMenuOpen,
     setIsMenuOpen,
     adminProfile,
+    hasAnyManagementRole,
     setAdminProfile,
     hasEditPermission,
     setHasEditPermission,
@@ -250,6 +264,28 @@ function ConfiguredApp({
   const isSharedTripReadOnly =
     isHistoricalOfflineReadOnly || isHistoricalTripEditorReadOnly;
   const canEditSharedTrip = hasEditPermission && !isSharedTripReadOnly;
+  const isHistoricalReadOnlyParticipant = Boolean(
+    isCurrentTripHistorical &&
+      role === ROLE.TRIP_EDITOR &&
+      currentUserParticipantName,
+  );
+  const {
+    noticeKind: tripDataNoticeKind,
+    isTripMasterLocked,
+    checkForRemoteTripChange,
+    showConflict: showTripVersionConflict,
+    snooze: snoozeTripDataNotice,
+    reload: reloadForTripDataChange,
+  } = useTripDataRevision({
+    supabase,
+    userId,
+    userEmail,
+    selectedTripId,
+    role,
+    hasAnyManagementRole,
+    isOnline,
+  });
+  const canEditTripMaster = canEditSharedTrip && !isTripMasterLocked;
   const [tripEditorMode, setTripEditorMode] = useState<"create" | "edit">("create");
   const [isTripEditorOpen, setIsTripEditorOpen] = useState(false);
   const [isSharedDataManageMode, setIsSharedDataManageMode] = useState(false);
@@ -520,7 +556,7 @@ function ConfiguredApp({
       currentTrip?.sidebarConfig.find((s) => s.id === currentScreen),
     );
   const openCreateTrip = async () => {
-    if (isHistoricalOfflineReadOnly) return;
+    if (isHistoricalOfflineReadOnly || isTripMasterLocked) return;
     if (!isOnline || !navigator.onLine) {
       alert("新增旅程需要網路連線");
       return;
@@ -535,12 +571,16 @@ function ConfiguredApp({
     }
   };
   const openEditTrip = () => {
-    if (isSharedTripReadOnly) return;
+    if (!canEditTripMaster) return;
     setTripEditorMode("edit");
     setIsTripEditorOpen(true);
   };
   const handleTripEditorSubmit = async (input: TripEditorInput) => {
-    if (isSharedTripReadOnly) return;
+    if (!canEditTripMaster) return;
+    if (await checkForRemoteTripChange()) {
+      setIsTripEditorOpen(false);
+      return;
+    }
     setIsLoading(true);
     const canManageEditors = adminProfile?.role === "super_admin";
     const nextInput = canManageEditors
@@ -573,6 +613,9 @@ function ConfiguredApp({
         alert("新增旅程需要網路連線");
       } else if (error instanceof HistoricalTripLockedError) {
         alert("歷史行程已鎖定，僅管理者可修改共用資料。");
+      } else if (error instanceof TripVersionConflictError) {
+        setIsTripEditorOpen(false);
+        showTripVersionConflict();
       } else {
         alert("無法儲存旅程，請確認網路連線後再試一次。");
       }
@@ -580,7 +623,12 @@ function ConfiguredApp({
     }
   };
   const handleTripDelete = async () => {
-    if (!selectedTripId || isSharedTripReadOnly) return;
+    if (!selectedTripId || !canEditTripMaster) return;
+
+    if (await checkForRemoteTripChange()) {
+      setIsTripEditorOpen(false);
+      return;
+    }
 
     setIsLoading(true);
     try {
@@ -613,13 +661,16 @@ function ConfiguredApp({
         )
       : items;
 
-    const didSaveTrip = await saveCurrentTripDetail({
-      ...currentTrip,
-      content: {
-        ...currentTrip.content,
-        checklistData: mergedItems,
+    const didSaveTrip = await saveCurrentTripDetail(
+      {
+        ...currentTrip,
+        content: {
+          ...currentTrip.content,
+          checklistData: mergedItems,
+        },
       },
-    });
+      false,
+    );
     if (!didSaveTrip) {
       throw new Error("共同清單旅程資料尚未成功寫入雲端");
     }
@@ -968,8 +1019,12 @@ function ConfiguredApp({
         hasEditPermission={hasEditPermission}
         adminProfile={adminProfile}
         currentScreen={currentScreen}
-        canCreateTrip={adminProfile?.role === "super_admin" && !isHistoricalOfflineReadOnly}
-        canEditCurrentTrip={canEditSharedTrip}
+        canCreateTrip={
+          adminProfile?.role === "super_admin" &&
+          !isHistoricalOfflineReadOnly &&
+          !isTripMasterLocked
+        }
+        canEditCurrentTrip={canEditTripMaster}
         onCreateTrip={openCreateTrip}
         onEditTrip={openEditTrip}
         onTripSelect={(tripId) => {
@@ -1008,7 +1063,7 @@ function ConfiguredApp({
         onOpenVersionInfo={() => setIsVersionInfoOpen(true)}
       />
 
-      {isTripEditorOpen && !isSharedTripReadOnly && (
+      {isTripEditorOpen && canEditTripMaster && (
         <Suspense fallback={null}>
         <TripEditorModal
           key={`${tripEditorMode}-${selectedTripId || "new"}`}
@@ -1048,9 +1103,19 @@ function ConfiguredApp({
         headerBgClassName={getTravelToolHeaderBgClassName(currentScreenType)}
       />
 
+      <TripDataRevisionNotice
+        kind={tripDataNoticeKind}
+        isOnline={isOnline}
+        onSnooze={snoozeTripDataNotice}
+        onReload={reloadForTripDataChange}
+      />
+
       {/* 主內容呈現區 */}
       <main className="max-w-md mx-auto p-4 pb-24">
-        {isCurrentTripHistorical && selectedTripMeta && role === ROLE.TRIP_EDITOR && (
+        {isCurrentTripHistorical &&
+          selectedTripMeta &&
+          role === ROLE.TRIP_EDITOR &&
+          !isHistoricalReadOnlyParticipant && (
           <section className="mb-4 rounded-xl border border-sky-200 bg-sky-50 p-4 text-sm text-sky-950">
             <p className="font-bold">歷史行程已鎖定</p>
             <p className="mt-1 leading-6 text-sky-800">
@@ -1085,11 +1150,21 @@ function ConfiguredApp({
                 supabase={supabase}
                 trip={currentTrip}
                 activeDay={activeDay}
-                hasEditPermission={canEditSharedTrip}
+                hasEditPermission={canEditTripMaster}
                 isOnline={isOnline}
                 onActiveDayChange={setActiveDay}
                 onSaveTripDetail={async (trip) => {
-                  if (canEditSharedTrip) await saveCurrentTripDetail(trip);
+                  if (!canEditTripMaster) return;
+                  if (await checkForRemoteTripChange()) return;
+                  try {
+                    await saveCurrentTripDetail(trip);
+                  } catch (error) {
+                    if (error instanceof TripVersionConflictError) {
+                      showTripVersionConflict();
+                      return;
+                    }
+                    throw error;
+                  }
                 }}
                 onManageModeChange={handleSharedDataManageModeChange}
               />

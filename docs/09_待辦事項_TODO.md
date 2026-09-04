@@ -168,7 +168,7 @@
   - [x] 同步 App、package、版本歷史與公開 metadata 為 V3.6.3 發布候選。
   - [x] 完成本機桌面與 390×844 手機寬度的版本政策、版本資訊、交通圖示及瀏覽器錯誤檢查。
   - [x] 合併至 `main`（`2b7a764`）、建立並推送 `v3.6.3`，完成 GitHub Pages 部署及正式 metadata／資產驗證。
-- [ ] V3.6.4：歷史唯讀參與者與跨裝置資料變動提醒（十項開發前議題已核准，待實作與驗證）。
+- [ ] V3.6.4：歷史唯讀參與者與跨裝置資料變動提醒（發布候選已實作；待資料庫整合、正式部署與實體裝置驗證）。
   - [x] 確認採「歷史唯讀參與者」名稱，不稱為 User；此為目前 Trip 的有效狀態，不變更全域角色。
   - [x] 確認保留完整歷史共用資料讀取能力、取消編輯者專用鎖定提醒，並禁止參與任何歷史共用資料編輯。
   - [x] 定義參與者判定、角色解析、敏感資料、共用帳本、雲端換匯、私人資料與本機快取的一致行為。
@@ -177,6 +177,9 @@
   - [x] 確認採單一持久修訂列＋帳號專屬私有 Broadcast；不發布原始資料、不新增 Postgres Changes publication，並以 RLS、最小 GRANT 及非公開 trigger function 保護。
   - [x] 確認先部署資料庫、再部署 App、最後公開 metadata；V3.6.4 採必要更新，並預先準備可驗證的前端與資料庫回滾流程。
   - [x] 確認驗證分工與紀錄格式：Codex 負責所有可自動化、資料庫、桌面瀏覽器與模擬案例並留下完整證據；Product Owner 只負責 iOS／Android 與兩台實體裝置流程。
+  - [x] 完成前端、條件式 Trip 儲存、修訂訂閱、共用快取清理、migration、驗證／回滾 SQL、V3.6.4 專項測試及必要更新 metadata 候選。
+  - [x] 完成 lint、TypeScript、production build、既有專項、V3.6.4 專項、瀏覽器安全、Guest 桌面與 390×844 手機寬度／console 重測。
+  - [x] Supabase production dry-run 確認只待套用 V3.6.4 migration，且未變更正式資料庫；既有 `realtime.apply_rls` lint error 已獨立記錄。
   - [ ] Codex 完成自動化、Supabase／RLS、競態、資料保護、桌面瀏覽器、相容、必要更新與回滾驗證，並建立完整驗證報告。
   - [ ] Product Owner 完成 iOS Safari／standalone PWA、Android Chrome／PWA 及兩台實體裝置的指定高風險流程，由 Codex 整理結果與證據。
 - [ ] V3.6.5：PWA 更新後介面顯示效能改善（兩項方向已於 2026-09-03 核准，尚未實作）。

@@ -14,9 +14,6 @@ const tripEditor = readSource("src/components/TripEditorModal.tsx");
 const itinerary = readSource("src/components/ItineraryPage.tsx");
 const materialIcons = readSource("src/components/MaterialTravelModeIcon.tsx");
 
-assert.match(appVersion, /export const IS_MANDATORY_RELEASE = false/);
-assert.match(appVersion, /export const MINIMUM_SUPPORTED_VERSION = "3\.6\.2"/);
-assert.match(appVersion, /export const FORCE_UPDATE = false/);
 assert.match(app, /isMandatoryRelease=\{IS_MANDATORY_RELEASE\}/);
 assert.match(app, /isMandatoryUpdate=\{isMandatoryForCurrentClient\}/);
 assert.match(versionInfoModal, /isMandatoryRelease \? "必要更新" : "一般更新"/);
@@ -25,6 +22,10 @@ assert.doesNotMatch(versionHistory, /forceUpdate:/);
 assert.match(
   versionHistory,
   /version: "3\.6\.2",[\s\S]*?isMandatoryRelease: true/,
+);
+assert.match(
+  versionHistory,
+  /version: "3\.6\.3",[\s\S]*?isMandatoryRelease: false/,
 );
 
 const v363Metadata = {

@@ -33,6 +33,13 @@ const toCloudTripInsert = (record: StoredTripRecord) => ({
   },
 });
 
+export class TripVersionConflictError extends Error {
+  constructor() {
+    super("Trip row changed after the current client loaded it");
+    this.name = "TripVersionConflictError";
+  }
+}
+
 const STORAGE_REMOVE_BATCH_SIZE = 1_000;
 
 const getCloudAttachmentPaths = async (
@@ -189,6 +196,7 @@ const toTripRecord = (row: CloudTripRow): StoredTripRecord | null => {
     detail,
     editorEmails: [],
     updatedAt: row.updated_at,
+    cloudUpdatedAt: row.updated_at,
   };
 };
 
@@ -234,6 +242,31 @@ export const upsertCloudTripRecord = async (
   }
 
   return toTripRecord(data as CloudTripRow);
+};
+
+export const updateCloudTripRecord = async (
+  supabase: SupabaseClient,
+  record: StoredTripRecord,
+  expectedUpdatedAt: string,
+): Promise<StoredTripRecord> => {
+  const { data, error } = await supabase
+    .from("trips")
+    .update(toCloudTripInsert(record))
+    .eq("id", record.meta.id)
+    .eq("updated_at", expectedUpdatedAt)
+    .select(
+      "id, title, departure_date, participants, currency_config, sidebar_config, content, updated_at",
+    )
+    .maybeSingle();
+
+  if (error) throw error;
+  if (!data) throw new TripVersionConflictError();
+
+  const updatedRecord = toTripRecord(data as CloudTripRow);
+  if (!updatedRecord) {
+    throw new Error("雲端回傳的旅程資料格式不正確");
+  }
+  return updatedRecord;
 };
 
 export const cloudTripExists = async (

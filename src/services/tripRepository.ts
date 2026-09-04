@@ -20,8 +20,10 @@ import {
   deleteCloudTripRecord,
   getCloudTripRecords,
   insertCloudTripRecord,
+  updateCloudTripRecord,
   upsertCloudTripRecord,
 } from "./tripCloudService";
+export { TripVersionConflictError } from "./tripCloudService";
 import { getCloudOtherInfoItems } from "./otherInfoCloudService";
 import { sortTripsByDateDesc } from "../utils/tripHelpers";
 import { readOtherInfoSyncState } from "../storage/otherInfoSyncStorage";
@@ -698,18 +700,50 @@ export const saveTripRecord = (record: StoredTripRecord): TripMeta[] => {
 export const saveTripRecordWithCloudSync = async (
   supabase: SupabaseClient,
   record: StoredTripRecord,
+  expectedUpdatedAt?: string,
+  enforceVersion = true,
 ): Promise<boolean> => {
-  saveTripRecord(record);
-  const syncedRecord = await upsertCloudTripRecord(supabase, record);
-  if (syncedRecord) {
+  const currentStoredRecord = readStoredTripRecords().find(
+    (item) => item.meta.id === record.meta.id,
+  );
+  if (!navigator.onLine) {
+    saveTripRecord({
+      ...record,
+      cloudUpdatedAt:
+        currentStoredRecord?.cloudUpdatedAt ?? currentStoredRecord?.updatedAt,
+    });
+    return false;
+  }
+
+  if (!enforceVersion) {
+    saveTripRecord(record);
+    const syncedRecord = await upsertCloudTripRecord(supabase, record);
+    if (!syncedRecord) return false;
     upsertStoredTripRecord({
       ...syncedRecord,
       editorEmails: record.editorEmails,
+      cloudUpdatedAt: syncedRecord.updatedAt,
     });
     return true;
   }
 
-  return false;
+  const currentUpdatedAt = expectedUpdatedAt ??
+    currentStoredRecord?.cloudUpdatedAt ?? currentStoredRecord?.updatedAt;
+  if (!currentUpdatedAt) {
+    throw new Error("找不到行程版本，無法安全儲存");
+  }
+
+  const syncedRecord = await updateCloudTripRecord(
+    supabase,
+    record,
+    currentUpdatedAt,
+  );
+  upsertStoredTripRecord({
+    ...syncedRecord,
+    editorEmails: record.editorEmails,
+    cloudUpdatedAt: syncedRecord.updatedAt,
+  });
+  return true;
 };
 
 export const deleteTripRecordWithCloudSync = async (

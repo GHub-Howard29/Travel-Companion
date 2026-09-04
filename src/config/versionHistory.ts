@@ -14,6 +14,15 @@ export type VersionHistoryItem = {
 
 export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
+    version: "3.6.3",
+    date: "2026-09-03",
+    isMandatoryRelease: false,
+    notes: [
+      "修正版本資訊政策顯示，更新三種交通方式圖示。",
+      "調整管理者歷史行程提醒時機，並將縮短天數提升為兩階段確認。",
+    ],
+  },
+  {
     version: "3.6.2",
     date: "2026-09-01",
     isMandatoryRelease: true,

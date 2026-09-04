@@ -838,7 +838,11 @@ export const ChecklistPage = ({
                 const isChecked = item.isChecked;
 
                 return (
-                  <SortableCard id={item.id} disabled={!canManageSharedChecklist || !isManageMode}>
+                  <SortableCard
+                    key={item.id}
+                    id={item.id}
+                    disabled={!canManageSharedChecklist || !isManageMode}
+                  >
                   {(dragHandle) => <div
                     className={`flex w-full items-start gap-3 p-4 text-left transition-colors select-none ${
                       canToggleSharedChecklist

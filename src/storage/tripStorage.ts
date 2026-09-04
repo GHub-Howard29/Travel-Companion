@@ -6,6 +6,8 @@ export interface StoredTripRecord {
   detail: TripDetail;
   editorEmails: string[];
   updatedAt: string;
+  /** 最後一次確認成功的雲端版本；離線修改時維持不變。 */
+  cloudUpdatedAt?: string;
 }
 
 const TRIP_STORAGE_KEY = "travel_companion_custom_trips";
