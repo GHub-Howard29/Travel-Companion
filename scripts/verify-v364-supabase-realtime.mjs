@@ -55,7 +55,7 @@ const signIn = async (email) => {
 
 const subscribe = (client, topic, events) => new Promise((resolve, reject) => {
   const channel = client
-    .channel(topic, { config: { private: true } })
+    .channel(topic, { config: { private: true, broadcast: { ack: true } } })
     .on("broadcast", { event: "revision_changed" }, ({ payload }) => events.push(payload));
   const timer = setTimeout(() => reject(new Error(`Timed out subscribing to ${topic}`)), 10_000);
   channel.subscribe((status, error) => {
