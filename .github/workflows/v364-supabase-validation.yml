@@ -2,19 +2,6 @@ name: V3.6.4 Supabase validation
 
 on:
   workflow_dispatch:
-  # Bootstrap only: remove after the first validated run from develop. GitHub
-  # discovers a new workflow_dispatch workflow from the default branch only.
-  push:
-    branches:
-      - develop
-    paths:
-      - .github/workflows/v364-supabase-validation.yml
-      - supabase/tests/v364_ci_base_schema.sql
-      - supabase/migrations/20260904105703_v364_trip_data_revision.sql
-      - docs/sql/022_v364_trip_data_revision_validation.sql
-      - docs/sql/023_v364_trip_data_revision_rollback.sql
-      - docs/sql/024_v364_trip_data_revision_rollback_validation.sql
-      - scripts/verify-v364-supabase-realtime.mjs
 
 permissions:
   contents: read
