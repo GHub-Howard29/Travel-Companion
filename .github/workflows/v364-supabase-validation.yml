@@ -76,26 +76,27 @@ jobs:
             echo "V364_SUPABASE_URL=${API_URL}"
             echo "V364_SUPABASE_ANON_KEY=${ANON_KEY}"
             echo "V364_SUPABASE_SERVICE_ROLE_KEY=${SERVICE_ROLE_KEY}"
+            echo "V364_DB_URL=${DB_URL}"
           } >> "${GITHUB_ENV}"
 
       - name: Verify private Realtime and concurrent sessions
         run: node scripts/verify-v364-supabase-realtime.mjs
 
       - name: Run transaction-safe SQL validation
-        run: supabase db query --local --file docs/sql/022_v364_trip_data_revision_validation.sql
+        run: psql "${V364_DB_URL}" -v ON_ERROR_STOP=1 -f docs/sql/022_v364_trip_data_revision_validation.sql
 
       - name: Run security and performance advisors
         run: supabase db advisors --local --type all --level warn --fail-on none
 
       - name: Rehearse rollback
         run: |
-          supabase db query --local --file docs/sql/023_v364_trip_data_revision_rollback.sql
-          supabase db query --local --file docs/sql/024_v364_trip_data_revision_rollback_validation.sql
+          psql "${V364_DB_URL}" -v ON_ERROR_STOP=1 -f docs/sql/023_v364_trip_data_revision_rollback.sql
+          psql "${V364_DB_URL}" -v ON_ERROR_STOP=1 -f docs/sql/024_v364_trip_data_revision_rollback_validation.sql
 
       - name: Reapply migration and validate again
         run: |
-          supabase db query --local --file supabase/migrations/20260904105703_v364_trip_data_revision.sql
-          supabase db query --local --file docs/sql/022_v364_trip_data_revision_validation.sql
+          psql "${V364_DB_URL}" -v ON_ERROR_STOP=1 -f supabase/migrations/20260904105703_v364_trip_data_revision.sql
+          psql "${V364_DB_URL}" -v ON_ERROR_STOP=1 -f docs/sql/022_v364_trip_data_revision_validation.sql
 
       - name: Stop and erase isolated Supabase data
         if: always()
