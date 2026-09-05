@@ -109,7 +109,9 @@ try {
   const superUser = await createUser(emails.superAdmin);
   const editorUser = await createUser(emails.editor);
   const ordinaryUser = await createUser(emails.ordinary);
-  userIds.push(superUser.id, editorUser.id, ordinaryUser.id);
+  // Keep the no-role user for the transaction-safe SQL validation that runs
+  // next. The ephemeral database volume is erased by the workflow teardown.
+  userIds.push(superUser.id, editorUser.id);
 
   const { error: roleError } = await admin.from("admin_users").insert([
     { email: emails.superAdmin, role: "super_admin", trip_id: "" },
