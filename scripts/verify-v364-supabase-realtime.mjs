@@ -154,7 +154,7 @@ try {
   await waitForEvent(superEvents, superBeforeInsert, "super admin Trip insert event");
   assert(editorInsertEvent.source_client_id === sourceClientId, "Broadcast source_client_id mismatch");
   assert(
-    Object.keys(editorInsertEvent).sort().join(",") === "revision,source_client_id,updated_at",
+    Object.keys(editorInsertEvent).sort().join(",") === "id,revision,source_client_id,updated_at",
     `Broadcast payload exposed unexpected fields: ${Object.keys(editorInsertEvent).sort().join(",")}`,
   );
 
