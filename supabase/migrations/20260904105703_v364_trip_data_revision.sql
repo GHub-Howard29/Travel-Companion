@@ -81,9 +81,10 @@ begin
   if tg_table_schema = 'public'
     and tg_table_name = 'admin_users'
     and tg_op in ('UPDATE', 'DELETE')
-    and old.role = 'trip_editor'
   then
-    removed_editor_email := old.email;
+    if (to_jsonb(old) ->> 'role') = 'trip_editor' then
+      removed_editor_email := lower(to_jsonb(old) ->> 'email');
+    end if;
   end if;
 
   for recipient in
