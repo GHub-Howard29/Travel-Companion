@@ -35,6 +35,13 @@ const assert = (condition, message) => {
 
 const delay = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 
+const withTimeout = (promise, milliseconds, label) => Promise.race([
+  promise,
+  delay(milliseconds).then(() => {
+    throw new Error(`${label} timed out after ${milliseconds}ms`);
+  }),
+]);
+
 const createUser = async (email) => {
   const { data, error } = await admin.auth.admin.createUser({
     email,
@@ -96,6 +103,7 @@ const waitForEvent = async (events, previousCount, label) => {
 
 const userIds = [];
 const channels = [];
+const signedInClients = [];
 
 try {
   const superUser = await createUser(emails.superAdmin);
@@ -112,6 +120,7 @@ try {
   const superClient = await signIn(emails.superAdmin);
   const editorClient = await signIn(emails.editor);
   const ordinaryClient = await signIn(emails.ordinary);
+  signedInClients.push(superClient, editorClient, ordinaryClient);
   const superEvents = [];
   const editorEvents = [];
 
@@ -135,6 +144,7 @@ try {
     ordinaryClient,
     `travel-companion:data-revision:${ordinaryUser.id}`,
   );
+  console.log("Realtime topic authorization checks passed");
 
   const editorBeforeInsert = editorEvents.length;
   const superBeforeInsert = superEvents.length;
@@ -157,6 +167,7 @@ try {
     Object.keys(editorInsertEvent).sort().join(",") === "id,revision,source_client_id,updated_at",
     `Broadcast payload exposed unexpected fields: ${Object.keys(editorInsertEvent).sort().join(",")}`,
   );
+  console.log("Realtime payload and source checks passed");
 
   const editorBeforeUpdate = editorEvents.length;
   const { error: updateError } = await writer
@@ -174,6 +185,7 @@ try {
     .select("id");
   if (staleError) throw staleError;
   assert(staleRows.length === 0, "Stale updated_at write unexpectedly succeeded");
+  console.log("Concurrent updated_at check passed");
 
   const sendChannel = await subscribe(
     editorClient,
@@ -182,12 +194,17 @@ try {
   ).catch(() => null);
   assert(sendChannel === null, "Unexpectedly subscribed to an unapproved derived topic");
 
-  const sendResult = await editorChannel.send({
-    type: "broadcast",
-    event: "revision_changed",
-    payload: { revision: 999999 },
-  });
+  const sendResult = await withTimeout(
+    editorChannel.send({
+      type: "broadcast",
+      event: "revision_changed",
+      payload: { revision: 999999 },
+    }),
+    10_000,
+    "private Broadcast send acknowledgement",
+  );
   assert(sendResult !== "ok", "Browser client was able to publish a private Broadcast");
+  console.log("Browser Broadcast send rejection passed");
 
   const editorBeforeRevoke = editorEvents.length;
   const { error: revokeError } = await writer
@@ -198,6 +215,7 @@ try {
     .eq("trip_id", tripId);
   if (revokeError) throw revokeError;
   await waitForEvent(editorEvents, editorBeforeRevoke, "last revocation event");
+  console.log("Last revocation event check passed");
 
   const editorAfterRevoke = editorEvents.length;
   const superBeforePostRevoke = superEvents.length;
@@ -215,6 +233,7 @@ try {
     .select("revision");
   if (hiddenRevisionError) throw hiddenRevisionError;
   assert(hiddenRevision.length === 0, "Revoked editor can still read app_data_revision");
+  console.log("Post-revocation access and delivery checks passed");
 
   const superBeforeDelete = superEvents.length;
   const { error: deleteError } = await writer.from("trips").delete().eq("id", tripId);
@@ -224,5 +243,8 @@ try {
   console.log("V3.6.4 local Supabase Realtime validation passed");
 } finally {
   await Promise.allSettled(channels.map(([client, channel]) => client.removeChannel(channel)));
+  await Promise.allSettled(signedInClients.map((client) => client.removeAllChannels()));
   await Promise.allSettled(userIds.map((id) => admin.auth.admin.deleteUser(id)));
 }
+
+process.exit(0);
