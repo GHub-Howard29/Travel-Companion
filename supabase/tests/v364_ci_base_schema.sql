@@ -121,11 +121,14 @@ using (public.tc_is_super_admin());
 
 revoke all on public.admin_users from public, anon, authenticated;
 grant select, insert, update, delete on public.admin_users to authenticated;
+grant select, insert, update, delete on public.admin_users to service_role;
 grant usage, select on sequence public.admin_users_id_seq to authenticated;
+grant usage, select on sequence public.admin_users_id_seq to service_role;
 
 revoke all on public.trips from public, anon, authenticated;
 grant select on public.trips to anon, authenticated;
 grant insert, update, delete on public.trips to authenticated;
+grant select, insert, update, delete on public.trips to service_role;
 
 revoke all on function public.tc_current_email() from public;
 revoke all on function public.tc_is_super_admin() from public;
@@ -133,4 +136,3 @@ revoke all on function public.tc_is_trip_editor(text) from public;
 grant execute on function public.tc_current_email() to authenticated;
 grant execute on function public.tc_is_super_admin() to authenticated;
 grant execute on function public.tc_is_trip_editor(text) to authenticated;
-
