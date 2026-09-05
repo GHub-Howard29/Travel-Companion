@@ -1,0 +1,101 @@
+name: V3.6.4 Supabase validation
+
+on:
+  workflow_dispatch:
+  # Bootstrap only: remove after the first validated run from develop. GitHub
+  # discovers a new workflow_dispatch workflow from the default branch only.
+  push:
+    branches:
+      - develop
+    paths:
+      - .github/workflows/v364-supabase-validation.yml
+      - supabase/tests/v364_ci_base_schema.sql
+      - docs/sql/022_v364_trip_data_revision_validation.sql
+      - docs/sql/023_v364_trip_data_revision_rollback.sql
+      - docs/sql/024_v364_trip_data_revision_rollback_validation.sql
+      - scripts/verify-v364-supabase-realtime.mjs
+
+permissions:
+  contents: read
+
+concurrency:
+  group: v364-supabase-validation
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Migration, RLS, Realtime, advisors, rollback
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22.23.2
+          cache: npm
+
+      - name: Set up pinned Supabase CLI
+        uses: supabase/setup-cli@ab058987d8d6c725971f6cf9d0b5c98467e30bd1
+        with:
+          version: 2.115.0
+
+      - name: Verify runner CPU support
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -qm1 -E '(^| )avx( |$)' /proc/cpuinfo
+          docker version
+          supabase --version
+
+      - name: Install pinned application dependencies
+        run: npm ci
+
+      - name: Prepare isolated V3.6.4 migration fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          find supabase/migrations -maxdepth 1 -type f \
+            ! -name '20260904105703_v364_trip_data_revision.sql' -delete
+          cp supabase/tests/v364_ci_base_schema.sql \
+            supabase/migrations/20260904000000_v364_ci_base_schema.sql
+
+      - name: Start isolated Supabase stack
+        run: supabase start --yes
+
+      - name: Export local-only API credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          eval "$(supabase status -o env)"
+          {
+            echo "V364_SUPABASE_URL=${API_URL}"
+            echo "V364_SUPABASE_ANON_KEY=${ANON_KEY}"
+            echo "V364_SUPABASE_SERVICE_ROLE_KEY=${SERVICE_ROLE_KEY}"
+          } >> "${GITHUB_ENV}"
+
+      - name: Verify private Realtime and concurrent sessions
+        run: node scripts/verify-v364-supabase-realtime.mjs
+
+      - name: Run transaction-safe SQL validation
+        run: supabase db query --local --file docs/sql/022_v364_trip_data_revision_validation.sql
+
+      - name: Run security and performance advisors
+        run: supabase db advisors --local --type all --level warn --fail-on none
+
+      - name: Rehearse rollback
+        run: |
+          supabase db query --local --file docs/sql/023_v364_trip_data_revision_rollback.sql
+          supabase db query --local --file docs/sql/024_v364_trip_data_revision_rollback_validation.sql
+
+      - name: Reapply migration and validate again
+        run: |
+          supabase db query --local --file supabase/migrations/20260904105703_v364_trip_data_revision.sql
+          supabase db query --local --file docs/sql/022_v364_trip_data_revision_validation.sql
+
+      - name: Stop and erase isolated Supabase data
+        if: always()
+        run: supabase stop --no-backup
