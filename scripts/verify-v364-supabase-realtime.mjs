@@ -155,7 +155,7 @@ try {
   assert(editorInsertEvent.source_client_id === sourceClientId, "Broadcast source_client_id mismatch");
   assert(
     Object.keys(editorInsertEvent).sort().join(",") === "revision,source_client_id,updated_at",
-    "Broadcast payload exposed unexpected fields",
+    `Broadcast payload exposed unexpected fields: ${Object.keys(editorInsertEvent).sort().join(",")}`,
   );
 
   const editorBeforeUpdate = editorEvents.length;
@@ -226,4 +226,3 @@ try {
   await Promise.allSettled(channels.map(([client, channel]) => client.removeChannel(channel)));
   await Promise.allSettled(userIds.map((id) => admin.auth.admin.deleteUser(id)));
 }
-
