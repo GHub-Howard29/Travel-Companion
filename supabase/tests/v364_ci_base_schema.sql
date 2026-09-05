@@ -95,10 +95,18 @@ using (
   or public.tc_is_trip_editor(trip_id)
 );
 
-create policy admin_users_write_policy
-on public.admin_users for all to authenticated
+create policy admin_users_insert_policy
+on public.admin_users for insert to authenticated
+with check (public.tc_is_super_admin());
+
+create policy admin_users_update_policy
+on public.admin_users for update to authenticated
 using (public.tc_is_super_admin())
 with check (public.tc_is_super_admin());
+
+create policy admin_users_delete_policy
+on public.admin_users for delete to authenticated
+using (public.tc_is_super_admin());
 
 create policy trips_select_policy
 on public.trips for select to anon, authenticated using (true);
