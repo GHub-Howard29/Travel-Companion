@@ -38,6 +38,7 @@ import {
   calculateTimeAdjustment,
   type TimeAdjustmentResult,
 } from "../utils/itineraryTimeAdjustment";
+import { getItineraryDayDate } from "../utils/itineraryDate";
 import {
   getConfirmedPlace,
   getRouteEstimate,
@@ -263,21 +264,7 @@ export const ItineraryPage = ({
   const canManageItinerary = hasEditPermission && isOnline;
   const canAdjustItineraryTime = hasEditPermission;
 
-  const getActiveDayDate = (): string | null => {
-    const match = trip.departureDate.trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
-    if (!match) return null;
-    const year = Number(match[1]);
-    const month = Number(match[2]);
-    const date = Number(match[3]);
-    const localDate = new Date(year, month - 1, date + activeDay - 1);
-    if (
-      !Number.isFinite(localDate.getTime()) ||
-      localDate.getFullYear() !== year ||
-      localDate.getMonth() !== month - 1 ||
-      localDate.getDate() !== date
-    ) return null;
-    return `${localDate.getFullYear()}-${String(localDate.getMonth() + 1).padStart(2, "0")}-${String(localDate.getDate()).padStart(2, "0")}`;
-  };
+  const activeDayDate = getItineraryDayDate(trip.departureDate, activeDay);
 
   const startTimeAdjustment = () => {
     resetForm();
@@ -920,7 +907,7 @@ export const ItineraryPage = ({
       <div className="mb-4 border-b border-slate-200 pb-3">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
-            <h2 className="truncate">Day {activeDay} 行程探索 {getActiveDayDate() && <span className="text-sm font-medium text-slate-500">{getActiveDayDate()}</span>}</h2>
+            <h2 className="truncate">Day {activeDay} 行程探索 {activeDayDate && <span className="text-sm font-medium text-slate-500">{activeDayDate}</span>}</h2>
           </div>
           {(canManageItinerary || canAdjustItineraryTime) && (
             <button

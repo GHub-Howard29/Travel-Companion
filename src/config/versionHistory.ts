@@ -14,6 +14,16 @@ export type VersionHistoryItem = {
 
 export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
+    version: "3.7.0",
+    date: "2026-09-08",
+    isMandatoryRelease: false,
+    notes: [
+      "Day 行程管理新增一次性的時間調整模式，可從指定活動重新計算當日後續時間。",
+      "後續到達時間會依已確認路線進位到 30 分鐘刻度並保留原停留時間，預覽確認後才整批套用。",
+      "Day 標題顯示依出發日期推算的本地日曆日期，方便辨識目前行程日。",
+    ],
+  },
+  {
     version: "3.6.5",
     date: "2026-09-08",
     isMandatoryRelease: false,

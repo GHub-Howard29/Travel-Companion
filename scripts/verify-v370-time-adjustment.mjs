@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 
 import { calculateTimeAdjustment } from "../src/utils/itineraryTimeAdjustment.ts";
+import { getItineraryDayDate } from "../src/utils/itineraryDate.ts";
 
 const estimate = (minutes) => ({
   mode: "drive",
@@ -30,5 +31,11 @@ const midnight = await calculateTimeAdjustment([item("A", "20:00", "23:50"), ite
 assert.match(midnight.blocker.message, /跨越午夜/);
 const missing = await calculateTimeAdjustment([item("A", "09:00", "10:00"), item("B", "", "11:00")], 0, "10:00", route);
 assert.match(missing.blocker.message, /到達時間/);
+
+assert.equal(getItineraryDayDate("2026-09-08", 1), "2026-09-08");
+assert.equal(getItineraryDayDate("2026-09-08", 2), "2026-09-09");
+assert.equal(getItineraryDayDate("2026-12-31", 2), "2027-01-01");
+assert.equal(getItineraryDayDate("2024-02-28", 2), "2024-02-29");
+assert.equal(getItineraryDayDate("2026-02-29", 1), null);
 
 console.log("V3.7.0 時間連動計算驗證通過。");
