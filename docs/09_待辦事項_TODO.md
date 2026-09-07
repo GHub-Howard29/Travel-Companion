@@ -181,6 +181,9 @@
   - [x] 完成 lint、TypeScript、production build、既有專項、V3.6.4 專項、瀏覽器安全、Guest 桌面與 390×844 手機寬度／console 重測。
   - [x] Supabase production dry-run 確認只待套用 V3.6.4 migration，且未變更正式資料庫；既有 `realtime.apply_rls` lint error 已獨立記錄。
   - [x] Codex 完成自動化、隔離 Supabase／RLS／Realtime、競態、資料保護、桌面瀏覽器與回滾驗證，並建立包含失敗修正與重測的完整驗證報告。
+  - [x] 完成 production 唯讀 preflight：migration history 無分歧、dry-run 只列 V3.6.4 migration、無 seed／role 變更；記錄 advisor、備份與 GitHub Pages 現況。
+  - [ ] 正式 migration 前建立並驗證不含額外費用的 logical schema／data backup；production 目前 `PITR=false` 且沒有可用 physical backup。
+  - [x] 將現行同批 `gh-pages -d dist` 改為具狀態防呆與逐檔 hash 驗證的兩階段流程：先發布 V3.6.4 App assets 並保留 V3.6.3 metadata，通過後才公開 V3.6.4 必要更新 metadata。
   - [ ] Codex 依核准順序完成 production migration、V3.6.3 相容窗口、App／Service Worker／metadata 部署與正式雙 Session smoke test。
   - [ ] Product Owner 完成 iOS Safari／standalone PWA、Android Chrome／PWA 及兩台實體裝置的指定高風險流程，由 Codex 整理結果與證據。
 - [ ] V3.6.5：PWA 更新後介面顯示效能改善（兩項方向已於 2026-09-03 核准，尚未實作）。

@@ -2,6 +2,17 @@ name: V3.6.4 Supabase validation
 
 on:
   workflow_dispatch:
+  # Temporary bootstrap for validating the final pre-release test additions on
+  # develop. Remove after the successful run; the final workflow stays manual.
+  push:
+    branches:
+      - develop
+    paths:
+      - .github/workflows/v364-supabase-validation.yml
+      - docs/sql/022_v364_trip_data_revision_validation.sql
+      - scripts/verify-v364-supabase-realtime.mjs
+      - supabase/migrations/20260904105703_v364_trip_data_revision.sql
+      - supabase/tests/v364_ci_base_schema.sql
 
 permissions:
   contents: read

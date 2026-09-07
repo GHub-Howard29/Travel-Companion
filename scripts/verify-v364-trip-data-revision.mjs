@@ -54,6 +54,9 @@ assert.equal(
 const migration = readSource(
   "supabase/migrations/20260904105703_v364_trip_data_revision.sql",
 );
+const databaseValidation = readSource(
+  "docs/sql/022_v364_trip_data_revision_validation.sql",
+);
 const app = readSource("src/App.tsx");
 const revisionHook = readSource("src/hooks/useTripDataRevision.ts");
 const tripCloud = readSource("src/services/tripCloudService.ts");
@@ -86,6 +89,9 @@ assert.match(payloadFields, /'updated_at'/);
 assert.match(payloadFields, /'source_client_id'/);
 assert.doesNotMatch(payloadFields, /trip_id|email|role|participant/i);
 assert.doesNotMatch(migration, /broadcast_changes/);
+assert.match(databaseValidation, /V3\.6\.3 write without source header remains compatible/);
+assert.match(databaseValidation, /perform set_config\('request\.headers', '', true\)/);
+assert.match(databaseValidation, /source_client_id is null/);
 
 assert.equal(APP_SOURCE_CLIENT_HEADER, "x-travel-companion-client-id");
 assert.match(app, /\[APP_SOURCE_CLIENT_HEADER\]: APP_SOURCE_CLIENT_ID/);

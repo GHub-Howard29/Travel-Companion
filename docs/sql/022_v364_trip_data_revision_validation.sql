@@ -93,6 +93,20 @@ begin
     'before=' || current_revision || ', after=' || revision
   from public.app_data_revision where singleton;
 
+  select revision into current_revision
+  from public.app_data_revision where singleton;
+  perform set_config('request.headers', '', true);
+  update public.trips
+  set title = 'V3.6.3 headerless compatibility write'
+  where id = fixture_trip;
+  insert into v364_results
+  select
+    'V3.6.3 write without source header remains compatible',
+    revision = current_revision + 1 and source_client_id is null,
+    'before=' || current_revision || ', after=' || revision
+      || ', source=' || coalesce(source_client_id::text, 'null')
+  from public.app_data_revision where singleton;
+
   perform set_config(
     'request.jwt.claims',
     jsonb_build_object('sub', no_role_id, 'email', no_role_email)::text,

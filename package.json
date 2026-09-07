@@ -10,7 +10,7 @@
   "packageManager": "npm@10.9.8",
   "scripts": {
     "dev": "vite",
-    "build": "npm run verify:release-history && npm run verify:update-policy && npm run verify:itinerary-time && npm run verify:itinerary-travel && npm run verify:travel-route && npm run verify:v362-trip-lock && npm run verify:v363-front-end && npm run verify:v364-trip-data-revision && tsc && vite build",
+    "build": "npm run verify:release-history && npm run verify:update-policy && npm run verify:itinerary-time && npm run verify:itinerary-travel && npm run verify:travel-route && npm run verify:v362-trip-lock && npm run verify:v363-front-end && npm run verify:v364-trip-data-revision && npm run verify:v364-release && tsc && vite build",
     "postbuild": "npm run verify:browser-security",
     "verify:browser-security": "node scripts/verify-browser-security.mjs",
     "verify:itinerary-time": "node --experimental-strip-types --no-warnings scripts/verify-itinerary-time.mjs",
@@ -19,12 +19,19 @@
     "verify:v362-trip-lock": "node --experimental-strip-types --no-warnings scripts/verify-v362-trip-lock.mjs",
     "verify:v363-front-end": "node --experimental-strip-types --no-warnings scripts/verify-v363-front-end.mjs",
     "verify:v364-trip-data-revision": "node --experimental-strip-types --no-warnings scripts/verify-v364-trip-data-revision.mjs",
+    "verify:v364-release": "node --check scripts/prepare-v364-release.mjs && node scripts/verify-v364-release-preparation.mjs",
     "verify:update-policy": "node --experimental-strip-types --no-warnings scripts/verify-update-policy.mjs",
     "verify:release-history": "node scripts/verify-release-history.mjs",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
     "predeploy": "npm run build",
-    "deploy": "gh-pages -d dist"
+    "deploy": "gh-pages -d dist",
+    "release:v364:prepare-assets": "npm run build && node scripts/prepare-v364-release.mjs prepare-assets",
+    "release:v364:publish-assets": "node scripts/prepare-v364-release.mjs assert-assets-ready && gh-pages -d .release/v364-assets --add -m \"Deploy V3.6.4 assets with V3.6.3 metadata\"",
+    "release:v364:verify-assets": "node scripts/prepare-v364-release.mjs verify-assets",
+    "release:v364:publish-metadata": "node scripts/prepare-v364-release.mjs assert-metadata-ready && gh-pages -d dist --add -m \"Publish V3.6.4 mandatory update metadata\"",
+    "release:v364:verify-metadata": "node scripts/prepare-v364-release.mjs verify-metadata",
+    "release:v364:cleanup": "node scripts/prepare-v364-release.mjs cleanup"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
