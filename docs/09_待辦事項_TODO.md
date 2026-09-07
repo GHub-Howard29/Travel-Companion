@@ -212,7 +212,7 @@
   - [x] 開車／步行僅使用有效已存路線；離線時可預覽，缺少或過期資料會阻擋套用。大眾運輸在可能查詢前提示費用，離線時阻擋。
   - [x] 加入 `verify:v370-time-adjustment`，覆蓋正常連動、30 分鐘邊界、跨午夜及缺少時間；完整 build、TypeScript、lint 與既有專項均通過。
   - [ ] Product Owner 補驗桌面、Android PWA、iOS Safari／standalone 的指定流程，以及實際大眾運輸班次／跨裝置競態（發布後補驗）。
-- [ ] V3.7.1：Day 日期顯示修正（候選版）。
+- [x] V3.7.1：Day 日期顯示修正（2026-09-08 已完成 `v3.7.1`、GitHub Pages 部署與正式 metadata／資產確認，採一般更新）。
   - [x] 修正 Day N 偏移日期被誤拿去比對 Day 1 出發日，導致 Day 2 起日期隱藏的問題。
   - [x] 新增 Day 1、Day 2、跨年、閏年與無效出發日期專項驗證。
 
