@@ -9,6 +9,7 @@
   },
   "packageManager": "npm@10.9.8",
   "scripts": {
+    "setup": "npm ci",
     "dev": "vite",
     "build": "npm run verify:release-history && npm run verify:update-policy && npm run verify:itinerary-time && npm run verify:itinerary-travel && npm run verify:v370-time-adjustment && npm run verify:travel-route && npm run verify:v362-trip-lock && npm run verify:v363-front-end && npm run verify:v364-trip-data-revision && npm run verify:v364-release && npm run verify:v365-performance && tsc && vite build",
     "postbuild": "npm run verify:browser-security",

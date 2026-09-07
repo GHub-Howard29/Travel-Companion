@@ -1,4 +1,16 @@
-# React + TypeScript + Vite
+# Travel Companion
+
+## 開發環境初始化
+
+第一次在新的開發環境取得專案後，使用鎖定版本安裝全部預設套件：
+
+```bash
+npm run setup
+```
+
+此指令等同 `npm ci`，會依 `package-lock.json` 安裝包含 `lunar-javascript` 在內的所有正式與開發依賴。需要新增套件時，使用 `npm install <套件名稱>`，並一併提交 `package.json` 與 `package-lock.json`。
+
+## React + TypeScript + Vite
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
