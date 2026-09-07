@@ -4,7 +4,7 @@
 >
 > 最後更新：2026-09-08
 >
-> 已發布 App 版本：V3.6.4；Git 版本標籤 `v3.6.4`、production migration 與 GitHub Pages 兩階段部署已完成。
+> 已發布 App 版本：V3.6.5；Git 版本標籤 `v3.6.5` 與 GitHub Pages 部署已完成。
 
 ## V3.5.0 iOS PWA 與敏感資訊可見範圍強化（發布前不含 PWA 實機驗證）
 
@@ -186,7 +186,7 @@
   - [x] 將現行同批 `gh-pages -d dist` 改為具狀態防呆與逐檔 hash 驗證的兩階段流程：先發布 V3.6.4 App assets 並保留 V3.6.3 metadata，通過後才公開 V3.6.4 必要更新 metadata。
   - [x] Codex 依核准順序完成 production migration、V3.6.3 相容窗口、App／Service Worker／metadata 兩階段部署、正式站登入及直接範圍 smoke test；隔離環境雙 Session 競態驗證已通過。
   - [ ] Product Owner 完成 iOS Safari／standalone PWA、Android Chrome／PWA 及兩台實體裝置的指定高風險流程，由 Codex 整理結果與證據。
-- [ ] V3.6.5：PWA 更新後介面顯示效能改善（發布候選實作、桌面成對量測與自動驗證已完成；待實體裝置補驗及發布決策）。
+- [ ] V3.6.5：PWA 更新後介面顯示效能改善（已於 2026-09-08 發布；只待 Android、iOS 與兩台實體裝置補驗）。
   - [x] 加入預設關閉、以 `?app-perf=1` 啟用且可集中移除的更新與初始化效能量測。
   - [x] 完成本機桌面基準分析：按鈕至 Worker 接管約 38 ms；主要等待為更新後首次 Service Worker navigation、重複 Trip 雲端讀取及資料 ready 後約 0.31 秒的 lazy chunk 等待。
   - [x] 將啟動畫面移除與功能頁 `Suspense` 解耦，在 Session 與資料 ready 後立即顯示 App，未完成的 lazy 頁面沿用既有 fallback。
@@ -195,8 +195,8 @@
   - [x] 完成 lint、TypeScript、全部既有專項、V3.6.5 單次快照專項、production build、瀏覽器安全與 Service Worker 接管後 reload smoke。
   - [x] 移除暫時效能量測檔與全部呼叫點；`?app-perf=1` 不再產生量測紀錄。
   - [ ] Product Owner 補驗 Android Chrome／PWA、iOS Safari／standalone PWA 與兩台實體裝置的登入、離線、pending、跨裝置及單次更新流程。
-  - [ ] 發布前確認一般更新政策；候選目前採 `minimumSupportedVersion: 3.6.4`、`forceUpdate: false`。
-  - [ ] Product Owner 依《30_V3.6.5_正式發布操作手冊》執行單次 GitHub Pages 手動部署；部署成功前維持「待手動部署」。
+  - [x] Product Owner 確認採一般更新；正式 metadata 為 `minimumSupportedVersion: 3.6.4`、`forceUpdate: false`。
+  - [x] 建立並推送 `v3.6.5`，由 Codex 完成單次 GitHub Pages 部署、workflow、正式 metadata／資產及登入 smoke 驗證，並切回 `develop`。
 - [ ] V3.7.0：當日後續行程時間連動調整（2026-08-31 開發內容與細節已定案，可進入實作）。
   - [x] Day 行程管理標題文案定案為 `Day N 行程探索 YYYY-MM-DD`：Day N 置前、移除既有兩碼 Day 序號，保留既有字級與配色並以空格區隔；Day 1=出發日期、Day N=出發日期加 `N - 1` 個日曆日；切換 Day 即時更新、不寫入資料，無效出發日期安全隱藏。
   - [x] 完成版本範圍、互動流程、權限、文案、計算規則、警告層級、批次儲存與非本版範圍定案。
