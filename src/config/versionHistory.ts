@@ -14,6 +14,14 @@ export type VersionHistoryItem = {
 
 export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
+    version: "3.7.1",
+    date: "2026-09-08",
+    isMandatoryRelease: false,
+    notes: [
+      "修正 Day 日期驗證誤將偏移後日期與 Day 1 出發日比較，導致 Day 2 起日期隱藏的問題。",
+    ],
+  },
+  {
     version: "3.7.0",
     date: "2026-09-08",
     isMandatoryRelease: false,
