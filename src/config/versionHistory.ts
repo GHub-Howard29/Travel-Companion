@@ -14,6 +14,16 @@ export type VersionHistoryItem = {
 
 export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
+    version: "3.6.4",
+    date: "2026-09-04",
+    isMandatoryRelease: true,
+    notes: [
+      "歷史行程編輯者若同時是記帳參與者，改以完整唯讀模式顯示且不再重複提示鎖定。",
+      "新增跨裝置行程與編輯權變動提醒，並加入行程版本衝突保護。",
+      "釐清記帳代號與可編輯者 Google Email 的用途，避免誤解授權範圍。",
+    ],
+  },
+  {
     version: "3.6.3",
     date: "2026-09-03",
     isMandatoryRelease: false,

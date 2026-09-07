@@ -28,6 +28,7 @@ import { getCloudOtherInfoItems } from "./otherInfoCloudService";
 import { sortTripsByDateDesc } from "../utils/tripHelpers";
 import { readOtherInfoSyncState } from "../storage/otherInfoSyncStorage";
 import { normalizeOtherInfoItems } from "../utils/otherInfoUtils";
+import { loadInitialWorkspaceSnapshot } from "./tripInitialization";
 
 const SPECIAL_INFO_SCREEN_ID = "trip_special_info";
 const LEGACY_SPECIAL_INFO_SCREEN_IDS = new Set([
@@ -367,13 +368,14 @@ const chooseLatestRecord = (
 export const getTripMetas = async (
   supabase: SupabaseClient,
   basePath: string,
+  initialCloudRecords?: StoredTripRecord[],
 ): Promise<TripMeta[]> => {
   const seedUrl = `${basePath}trips/list.json`.replace(/\/+/g, "/");
   const seedTrips = await enrichSeedTripsWithDayCount(
     basePath,
     (await fetchJson<TripMeta[]>(seedUrl)) ?? [],
   );
-  const cloudRecords = await getCloudTripRecords(supabase);
+  const cloudRecords = initialCloudRecords ?? await getCloudTripRecords(supabase);
   const currentStoredRecords = readStoredTripRecords();
   const storedRecords = (() => {
     if (cloudRecords.length === 0) return currentStoredRecords;
@@ -398,16 +400,31 @@ export const getTripMetas = async (
   return mergeTripRecords(seedTrips, cloudRecords, storedRecords);
 };
 
+export interface InitialTripWorkspaceSnapshot {
+  tripMetas: TripMeta[];
+  cloudRecords: StoredTripRecord[];
+}
+
+export const getInitialTripWorkspaceSnapshot = async (
+  supabase: SupabaseClient,
+  basePath: string,
+): Promise<InitialTripWorkspaceSnapshot> =>
+  loadInitialWorkspaceSnapshot({
+    loadCloudRecords: () => getCloudTripRecords(supabase),
+    loadTripMetas: (cloudRecords) => getTripMetas(supabase, basePath, cloudRecords),
+  });
+
 export const getTripDetail = async (
   supabase: SupabaseClient,
   basePath: string,
   tripId: string,
   selectedTripMeta?: TripMeta,
+  initialCloudRecords?: StoredTripRecord[],
 ): Promise<TripDetail | null> => {
   const storedTrip = readStoredTripRecords().find(
     (record) => record.meta.id === tripId,
   );
-  const cloudTrip = (await getCloudTripRecords(supabase)).find(
+  const cloudTrip = (initialCloudRecords ?? await getCloudTripRecords(supabase)).find(
     (record) => record.meta.id === tripId,
   );
   const latestRecord = chooseLatestRecord([cloudTrip, storedTrip]);

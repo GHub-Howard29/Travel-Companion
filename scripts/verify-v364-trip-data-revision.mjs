@@ -63,6 +63,7 @@ const tripCloud = readSource("src/services/tripCloudService.ts");
 const sharedCleanup = readSource("src/storage/sharedTripDataStorage.ts");
 const tripEditor = readSource("src/components/TripEditorModal.tsx");
 const appVersion = readSource("src/config/appVersion.ts");
+const versionHistory = readSource("src/config/versionHistory.ts");
 
 assert.match(migration, /create table public\.app_data_revision/);
 assert.match(migration, /constraint app_data_revision_singleton_check check \(singleton\)/);
@@ -109,9 +110,10 @@ assert.doesNotMatch(sharedCleanup, /privateChecklist/i);
 assert.match(sharedCleanup, /removeRestrictedOtherInfoFromStoredTrip/);
 assert.match(tripEditor, /記帳代號設定（不授予本行程編輯權）/);
 assert.match(tripEditor, /可編輯者 Google Email/);
-assert.match(appVersion, /export const APP_VERSION = "3\.6\.4"/);
 assert.match(appVersion, /export const MINIMUM_SUPPORTED_VERSION = "3\.6\.4"/);
-assert.match(appVersion, /export const FORCE_UPDATE = true/);
-assert.match(appVersion, /export const IS_MANDATORY_RELEASE = true/);
+assert.match(
+  versionHistory,
+  /version: "3\.6\.4",[\s\S]*?isMandatoryRelease: true/,
+);
 
 console.log("V3.6.4 歷史參與者、版本訊號、快取清理與併發控制驗證通過。");

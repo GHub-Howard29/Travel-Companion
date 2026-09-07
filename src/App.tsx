@@ -70,7 +70,6 @@ import {
   getTrustedHttpUrl,
   openPendingWindow,
 } from "./utils/browserSecurity";
-import { markAppPerformance } from "./utils/appPerformance";
 import { IS_MANDATORY_RELEASE } from "./config/appVersion";
 import {
   APP_SOURCE_CLIENT_HEADER,
@@ -145,7 +144,6 @@ const finishAppLaunch = () => {
 
 const AppLaunchReady = () => {
   useEffect(() => {
-    markAppPerformance("app:launch-screen-remove");
     finishAppLaunch();
   }, []);
 
@@ -302,23 +300,6 @@ function ConfiguredApp({
     (isManaging: boolean) => setIsSharedDataManageMode(isManaging),
     [],
   );
-
-  useEffect(() => {
-    markAppPerformance("app:configured-mounted");
-  }, []);
-
-  useEffect(() => {
-    if (isSessionReady) markAppPerformance("app:session-ready");
-  }, [isSessionReady]);
-
-  useEffect(() => {
-    if (!isLoading) {
-      markAppPerformance("app:data-ready", {
-        hasTrip: Boolean(currentTrip),
-        selectedTripId,
-      });
-    }
-  }, [currentTrip, isLoading, selectedTripId]);
 
   useEffect(() => {
     let timer = 0;
@@ -974,6 +955,7 @@ function ConfiguredApp({
 
   return (
     <AppContext.Provider value={appContextValue}>
+    {isSessionReady && !isLoading && <AppLaunchReady />}
     <UpdatePrompt
       isOpen={updateAvailable}
       mode={promptMode}
@@ -1142,7 +1124,6 @@ function ConfiguredApp({
         ) : (
           <Suspense fallback={screenLoadingFallback}>
           <>
-            {isSessionReady && <AppLaunchReady />}
             {/* 1. 行程規劃模組 */}
             {currentScreenType === "itinerary" && currentTrip && (
               <ItineraryPage
