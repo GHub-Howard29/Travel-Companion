@@ -196,6 +196,7 @@
   - [x] 移除暫時效能量測檔與全部呼叫點；`?app-perf=1` 不再產生量測紀錄。
   - [ ] Product Owner 補驗 Android Chrome／PWA、iOS Safari／standalone PWA 與兩台實體裝置的登入、離線、pending、跨裝置及單次更新流程。
   - [ ] 發布前確認一般更新政策；候選目前採 `minimumSupportedVersion: 3.6.4`、`forceUpdate: false`。
+  - [ ] Product Owner 依《30_V3.6.5_正式發布操作手冊》執行單次 GitHub Pages 手動部署；部署成功前維持「待手動部署」。
 - [ ] V3.7.0：當日後續行程時間連動調整（2026-08-31 開發內容與細節已定案，可進入實作）。
   - [x] Day 行程管理標題文案定案為 `Day N 行程探索 YYYY-MM-DD`：Day N 置前、移除既有兩碼 Day 序號，保留既有字級與配色並以空格區隔；Day 1=出發日期、Day N=出發日期加 `N - 1` 個日曆日；切換 Day 即時更新、不寫入資料，無效出發日期安全隱藏。
   - [x] 完成版本範圍、互動流程、權限、文案、計算規則、警告層級、批次儲存與非本版範圍定案。
