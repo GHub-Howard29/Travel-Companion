@@ -28,11 +28,16 @@ import {
   getPlaceKey,
   getPreferredTravelMode,
   getSavedTravelEstimate,
+  getTravelModeLabel,
   getTravelTimeWarning,
   hasDistinctConfirmedPlaces,
   isConfirmedPlace,
   isFlightConnection,
 } from "../utils/itineraryTravel";
+import {
+  calculateTimeAdjustment,
+  type TimeAdjustmentResult,
+} from "../utils/itineraryTimeAdjustment";
 import {
   getConfirmedPlace,
   getRouteEstimate,
@@ -84,11 +89,18 @@ export const ItineraryPage = ({
   onManageModeChange,
 }: ItineraryPageProps) => {
   const [isManageMode, setIsManageMode] = useState(false);
+  const [isTimeAdjustmentMode, setIsTimeAdjustmentMode] = useState(false);
+  const [timeAdjustmentStartIndex, setTimeAdjustmentStartIndex] = useState<number | null>(null);
+  const [timeAdjustmentDeparture, setTimeAdjustmentDeparture] = useState("");
+  const [timeAdjustmentResult, setTimeAdjustmentResult] = useState<TimeAdjustmentResult | null>(null);
+  const [isTimeAdjustmentLoading, setIsTimeAdjustmentLoading] = useState(false);
+  const [isTimeAdjustmentSaving, setIsTimeAdjustmentSaving] = useState(false);
+  const [timeAdjustmentSaveError, setTimeAdjustmentSaveError] = useState<string | null>(null);
 
   useEffect(() => {
-    onManageModeChange?.(isManageMode);
+    onManageModeChange?.(isManageMode || isTimeAdjustmentMode);
     return () => onManageModeChange?.(false);
-  }, [isManageMode, onManageModeChange]);
+  }, [isManageMode, isTimeAdjustmentMode, onManageModeChange]);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [draft, setDraft] = useState<ItineraryItem>(createEmptyItineraryDraft);
@@ -166,10 +178,20 @@ export const ItineraryPage = ({
     setItemSaveError(null);
   };
 
+  const resetTimeAdjustment = () => {
+    releaseFocusedControl();
+    setIsTimeAdjustmentMode(false);
+    setTimeAdjustmentStartIndex(null);
+    setTimeAdjustmentDeparture("");
+    setTimeAdjustmentResult(null);
+    setTimeAdjustmentSaveError(null);
+  };
+
   const closeManageMode = () => {
     releaseFocusedControl();
     setIsManageMode(false);
     resetForm();
+    resetTimeAdjustment();
   };
 
   const updateDraft = (patch: Partial<ItineraryItem>) => {
@@ -239,6 +261,103 @@ export const ItineraryPage = ({
   };
 
   const canManageItinerary = hasEditPermission && isOnline;
+  const canAdjustItineraryTime = hasEditPermission;
+
+  const getActiveDayDate = (): string | null => {
+    const match = trip.departureDate.trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!match) return null;
+    const year = Number(match[1]);
+    const month = Number(match[2]);
+    const date = Number(match[3]);
+    const localDate = new Date(year, month - 1, date + activeDay - 1);
+    if (
+      !Number.isFinite(localDate.getTime()) ||
+      localDate.getFullYear() !== year ||
+      localDate.getMonth() !== month - 1 ||
+      localDate.getDate() !== date
+    ) return null;
+    return `${localDate.getFullYear()}-${String(localDate.getMonth() + 1).padStart(2, "0")}-${String(localDate.getDate()).padStart(2, "0")}`;
+  };
+
+  const startTimeAdjustment = () => {
+    resetForm();
+    setIsTimeAdjustmentMode(true);
+    setTimeAdjustmentStartIndex(null);
+    setTimeAdjustmentDeparture("");
+    setTimeAdjustmentResult(null);
+    setTimeAdjustmentSaveError(null);
+  };
+
+  const selectTimeAdjustmentStart = (sortedIndex: number, event: ItineraryItem) => {
+    setTimeAdjustmentStartIndex(sortedIndex);
+    setTimeAdjustmentDeparture(event.departureTime || event.time);
+    setTimeAdjustmentResult(null);
+    setTimeAdjustmentSaveError(null);
+    requestAnimationFrame(() => focusAndRevealControl("time-adjustment-departure"));
+  };
+
+  const prepareTimeAdjustment = async () => {
+    if (timeAdjustmentStartIndex === null || isTimeAdjustmentLoading) return;
+    const remainingEvents = sortedDayEvents.map(({ event }) => event);
+    const hasTransit = remainingEvents.slice(timeAdjustmentStartIndex, -1)
+      .some((event) => getPreferredTravelMode(event) === "transit");
+    if (hasTransit && !confirm("此調整包含大眾運輸，將重新查詢受影響區段，可能產生地圖服務費用。要繼續嗎？")) return;
+
+    setIsTimeAdjustmentLoading(true);
+    setTimeAdjustmentSaveError(null);
+    try {
+      const result = await calculateTimeAdjustment(
+        remainingEvents,
+        timeAdjustmentStartIndex,
+        timeAdjustmentDeparture,
+        async (_originIndex, origin, destination) => {
+          const mode = getPreferredTravelMode(origin);
+          if (mode === "transit") {
+            if (!isOnline) return null;
+            return requestTravelEstimate(origin, destination, mode);
+          }
+          return getSavedTravelEstimate(origin, destination);
+        },
+      );
+      setTimeAdjustmentResult(result);
+      if (result.blocker) {
+        requestAnimationFrame(() => focusAndRevealControl(
+          result.blocker?.focusTarget === "departure"
+            ? "time-adjustment-departure"
+            : "time-adjustment-result",
+        ));
+      }
+    } catch (error) {
+      setTimeAdjustmentSaveError(error instanceof Error ? error.message : "無法建立時間調整預覽，請稍後重試。");
+      requestAnimationFrame(() => focusAndRevealControl("time-adjustment-result"));
+    } finally {
+      setIsTimeAdjustmentLoading(false);
+    }
+  };
+
+  const applyTimeAdjustment = async () => {
+    if (!timeAdjustmentResult || timeAdjustmentResult.blocker || isTimeAdjustmentSaving) return;
+    setIsTimeAdjustmentSaving(true);
+    setTimeAdjustmentSaveError(null);
+    try {
+      await onSaveTripDetail({
+        ...trip,
+        content: {
+          ...trip.content,
+          daysData: {
+            ...trip.content.daysData,
+            [String(activeDay)]: timeAdjustmentResult.items,
+          },
+        },
+      });
+      resetTimeAdjustment();
+    } catch (error) {
+      setTimeAdjustmentSaveError(error instanceof Error ? `無法套用調整：${error.message}` : "無法套用調整，資料尚未變更。");
+      requestAnimationFrame(() => focusAndRevealControl("time-adjustment-result"));
+    } finally {
+      setIsTimeAdjustmentSaving(false);
+    }
+  };
 
   const openPlaceSearch = () => {
     const query = draft.location.trim();
@@ -800,18 +919,14 @@ export const ItineraryPage = ({
       </div>
       <div className="mb-4 border-b border-slate-200 pb-3">
         <div className="flex items-center justify-between gap-3">
-          <div className="flex items-baseline gap-3">
-            <span className="text-4xl font-extrabold text-amber-700 tracking-tight">
-              {String(activeDay).padStart(2, "0")}
-            </span>
-            <div>
-              <h2>行程探索 Day {activeDay}</h2>
-            </div>
+          <div className="min-w-0">
+            <h2 className="truncate">Day {activeDay} 行程探索 {getActiveDayDate() && <span className="text-sm font-medium text-slate-500">{getActiveDayDate()}</span>}</h2>
           </div>
-          {canManageItinerary && (
+          {(canManageItinerary || canAdjustItineraryTime) && (
             <button
               type="button"
               onClick={toggleManageMode}
+              disabled={!canManageItinerary}
               className={`inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition-colors ${
                 isManageMode
                   ? "bg-slate-900 text-white hover:bg-slate-800"
@@ -831,24 +946,34 @@ export const ItineraryPage = ({
         </p>
       )}
 
-      {canManageItinerary && isManageMode && (
+      {(canManageItinerary || (canAdjustItineraryTime && isTimeAdjustmentMode)) && (isManageMode || isTimeAdjustmentMode) && (
         <div className="mb-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-2">
             <h3 className="text-sm font-bold text-slate-800">
               Day {activeDay} 行程管理
             </h3>
-            <button
-              type="button"
-              onClick={isFormOpen && editingIndex === null ? resetForm : startCreateItem}
-              disabled={editingIndex !== null}
-              className="rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {editingIndex !== null
-                ? "卡片編輯中"
-                : isFormOpen
-                  ? "取消"
-                  : "新增活動"}
-            </button>
+            <div className="flex shrink-0 gap-2">
+              <button
+                type="button"
+                onClick={startTimeAdjustment}
+                disabled={!canAdjustItineraryTime || editingIndex !== null || isTimeAdjustmentMode}
+                className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-800 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                調整時間
+              </button>
+              <button
+                type="button"
+                onClick={isFormOpen && editingIndex === null ? resetForm : startCreateItem}
+                disabled={!canManageItinerary || editingIndex !== null || isTimeAdjustmentMode}
+                className="rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {editingIndex !== null
+                  ? "卡片編輯中"
+                  : isFormOpen
+                    ? "取消"
+                    : "新增活動"}
+              </button>
+            </div>
           </div>
 
           <p className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-xs leading-relaxed text-slate-500">
@@ -856,6 +981,59 @@ export const ItineraryPage = ({
           </p>
 
           {isFormOpen && editingIndex === null && renderItemForm(false)}
+
+          {isTimeAdjustmentMode && (
+            <section className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50/60 p-3" aria-label="時間調整模式">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h4 className="text-sm font-bold text-emerald-900">時間調整模式</h4>
+                  <p className="mt-1 text-xs leading-relaxed text-emerald-800">選擇一個起點，重新計算當日後續行程。</p>
+                </div>
+                <button type="button" onClick={resetTimeAdjustment} className="rounded-lg border border-emerald-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-50">退出</button>
+              </div>
+              {timeAdjustmentStartIndex !== null && (
+                <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_auto]">
+                  <label className="space-y-1">
+                    <span className="text-xs font-bold text-slate-700">新的離開時間</span>
+                    <input
+                      id="time-adjustment-departure"
+                      value={timeAdjustmentDeparture}
+                      onChange={(event) => { setTimeAdjustmentDeparture(event.target.value); setTimeAdjustmentResult(null); }}
+                      placeholder="例如 10:30"
+                      className="w-full rounded-lg border border-emerald-200 bg-white px-3 py-2 text-base focus:outline-none focus:ring-2 focus:ring-emerald-500 sm:text-sm"
+                    />
+                  </label>
+                  <button type="button" onClick={() => void prepareTimeAdjustment()} disabled={isTimeAdjustmentLoading} className="self-end rounded-lg bg-emerald-700 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-800 disabled:opacity-60">
+                    {isTimeAdjustmentLoading ? "正在計算…" : "預覽調整"}
+                  </button>
+                </div>
+              )}
+              {timeAdjustmentResult && (
+                <div id="time-adjustment-result" tabIndex={-1} className="mt-3 rounded-lg border border-emerald-100 bg-white p-3 outline-none focus:ring-2 focus:ring-emerald-500">
+                  {timeAdjustmentResult.blocker ? (
+                    <p className="text-xs leading-relaxed text-rose-700" role="alert">⚠️ {timeAdjustmentResult.blocker.message}</p>
+                  ) : (
+                    <div className="space-y-3 text-sm text-slate-700">
+                      {timeAdjustmentResult.items.slice(timeAdjustmentStartIndex ?? 0).map((event, index) => {
+                        const absoluteIndex = (timeAdjustmentStartIndex ?? 0) + index;
+                        const segment = timeAdjustmentResult.segments.find((entry) => entry.destinationIndex === absoluteIndex);
+                        return <Fragment key={`time-adjustment-preview-${absoluteIndex}-${event.title}`}>
+                          {segment && <div className="border-y border-slate-100 py-2 text-xs text-slate-600"><span className="inline-flex items-center gap-1 font-bold"><MaterialTravelModeIcon mode={segment.estimate.mode} />{getTravelModeLabel(segment.estimate.mode)}</span>｜約 {formatTravelDuration(segment.estimate.durationSeconds)}｜{formatTravelDistance(segment.estimate.distanceMeters)}</div>}
+                          <div><p className="font-bold text-slate-800">{event.title || "未命名活動"}</p><p className="mt-0.5 text-xs">{absoluteIndex === timeAdjustmentStartIndex ? `離開 ${event.departureTime}` : `到達 ${event.time} → 離開 ${event.departureTime}`}</p></div>
+                        </Fragment>;
+                      })}
+                    </div>
+                  )}
+                  {timeAdjustmentSaveError && <p className="mt-3 text-xs text-rose-700" role="alert">{timeAdjustmentSaveError}</p>}
+                  <div className="mt-3 flex justify-end gap-2">
+                    <button type="button" onClick={resetTimeAdjustment} disabled={isTimeAdjustmentSaving} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50">取消調整</button>
+                    <button type="button" onClick={() => void applyTimeAdjustment()} disabled={Boolean(timeAdjustmentResult.blocker) || isTimeAdjustmentSaving} className="rounded-lg bg-emerald-700 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-800 disabled:opacity-50">{isTimeAdjustmentSaving ? "正在套用…" : "套用調整"}</button>
+                  </div>
+                </div>
+              )}
+              {timeAdjustmentSaveError && !timeAdjustmentResult && <p id="time-adjustment-result" tabIndex={-1} className="mt-3 text-xs text-rose-700" role="alert">{timeAdjustmentSaveError}</p>}
+            </section>
+          )}
         </div>
       )}
 
@@ -940,6 +1118,17 @@ export const ItineraryPage = ({
                     className="rounded-lg bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-700 hover:bg-rose-100"
                   >
                     刪除
+                  </button>
+                </div>
+              )}
+              {canAdjustItineraryTime && isTimeAdjustmentMode && (
+                <div className="mt-3 flex justify-end border-t border-slate-100 pt-3">
+                  <button
+                    type="button"
+                    onClick={() => selectTimeAdjustmentStart(sortedIndex, event)}
+                    className={`rounded-lg px-3 py-1.5 text-xs font-bold ${timeAdjustmentStartIndex === sortedIndex ? "bg-emerald-700 text-white" : "bg-emerald-50 text-emerald-800 hover:bg-emerald-100"}`}
+                  >
+                    從這站開始
                   </button>
                 </div>
               )}

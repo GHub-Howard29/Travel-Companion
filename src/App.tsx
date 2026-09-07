@@ -1136,13 +1136,15 @@ function ConfiguredApp({
                 onActiveDayChange={setActiveDay}
                 onSaveTripDetail={async (trip) => {
                   if (!canEditTripMaster) return;
-                  if (await checkForRemoteTripChange()) return;
+                  if (await checkForRemoteTripChange()) {
+                    throw new Error("偵測到其他裝置的資料變更，請重新載入後再試。 ");
+                  }
                   try {
                     await saveCurrentTripDetail(trip);
                   } catch (error) {
                     if (error instanceof TripVersionConflictError) {
                       showTripVersionConflict();
-                      return;
+                      throw error;
                     }
                     throw error;
                   }

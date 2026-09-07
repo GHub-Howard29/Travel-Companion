@@ -14,6 +14,15 @@ export type VersionHistoryItem = {
 
 export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
+    version: "3.6.5",
+    date: "2026-09-08",
+    isMandatoryRelease: false,
+    notes: [
+      "App 資料就緒後立即結束啟動畫面，功能頁仍在載入時顯示既有載入提示。",
+      "初次啟動共用同一份 Trip 雲端快照，減少重複讀取與等待。",
+    ],
+  },
+  {
     version: "3.6.4",
     date: "2026-09-04",
     isMandatoryRelease: true,
