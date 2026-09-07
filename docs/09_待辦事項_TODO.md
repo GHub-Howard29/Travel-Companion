@@ -197,7 +197,7 @@
   - [ ] Product Owner 補驗 Android Chrome／PWA、iOS Safari／standalone PWA 與兩台實體裝置的登入、離線、pending、跨裝置及單次更新流程。
   - [x] Product Owner 確認採一般更新；正式 metadata 為 `minimumSupportedVersion: 3.6.4`、`forceUpdate: false`。
   - [x] 建立並推送 `v3.6.5`，由 Codex 完成單次 GitHub Pages 部署、workflow、正式 metadata／資產及登入 smoke 驗證，並切回 `develop`。
-- [ ] V3.7.0：當日後續行程時間連動調整（2026-09-08 已完成本機實作與 production build，尚未部署）。
+- [x] V3.7.0：當日後續行程時間連動調整（2026-09-08 已完成 `v3.7.0`、GitHub Pages 部署與正式 metadata／資產確認，採一般更新）。
   - [x] Day 行程管理標題文案定案為 `Day N 行程探索 YYYY-MM-DD`：Day N 置前、移除既有兩碼 Day 序號，保留既有字級與配色並以空格區隔；Day 1=出發日期、Day N=出發日期加 `N - 1` 個日曆日；切換 Day 即時更新、不寫入資料，無效出發日期安全隱藏。
   - [x] 完成版本範圍、互動流程、權限、文案、計算規則、警告層級、批次儲存與非本版範圍定案。
   - [x] 採 Day 管理中的單次「調整時間」模式；一般卡片儲存不自動觸發連動。
@@ -211,7 +211,7 @@
   - [x] 實作純函式計算、預覽與全有或全無的批次儲存；儲存前重查 Trip revision，衝突／失敗時保留模式、起點、輸入值與預覽。
   - [x] 開車／步行僅使用有效已存路線；離線時可預覽，缺少或過期資料會阻擋套用。大眾運輸在可能查詢前提示費用，離線時阻擋。
   - [x] 加入 `verify:v370-time-adjustment`，覆蓋正常連動、30 分鐘邊界、跨午夜及缺少時間；完整 build、TypeScript、lint 與既有專項均通過。
-  - [ ] Product Owner 補驗桌面、Android PWA、iOS Safari／standalone 的指定流程，以及實際大眾運輸班次／跨裝置競態。
+  - [ ] Product Owner 補驗桌面、Android PWA、iOS Safari／standalone 的指定流程，以及實際大眾運輸班次／跨裝置競態（發布後補驗）。
 
 ### V3.5.1 已確認新增功能（App 分享）
 
