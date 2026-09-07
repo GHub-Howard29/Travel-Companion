@@ -2,9 +2,9 @@
 
 > 本文件只保留尚未完成或仍需驗證的工作；版本順序與範圍以《02_產品開發路線圖》為準。
 >
-> 最後更新：2026-09-04
+> 最後更新：2026-09-07
 >
-> 已發布 App 版本：V3.6.3；Git 版本標籤 `v3.6.3` 與 GitHub Pages 部署已完成。
+> 已發布 App 版本：V3.6.4；Git 版本標籤 `v3.6.4`、production migration 與 GitHub Pages 兩階段部署已完成。
 
 ## V3.5.0 iOS PWA 與敏感資訊可見範圍強化（發布前不含 PWA 實機驗證）
 
@@ -168,7 +168,7 @@
   - [x] 同步 App、package、版本歷史與公開 metadata 為 V3.6.3 發布候選。
   - [x] 完成本機桌面與 390×844 手機寬度的版本政策、版本資訊、交通圖示及瀏覽器錯誤檢查。
   - [x] 合併至 `main`（`2b7a764`）、建立並推送 `v3.6.3`，完成 GitHub Pages 部署及正式 metadata／資產驗證。
-- [ ] V3.6.4：歷史唯讀參與者與跨裝置資料變動提醒（發布候選與隔離資料庫整合驗證已完成；待 production migration、正式部署與實體裝置驗證）。
+- [ ] V3.6.4：歷史唯讀參與者與跨裝置資料變動提醒（已發布；只待 iOS、Android 與兩台實體裝置驗證）。
   - [x] 確認採「歷史唯讀參與者」名稱，不稱為 User；此為目前 Trip 的有效狀態，不變更全域角色。
   - [x] 確認保留完整歷史共用資料讀取能力、取消編輯者專用鎖定提醒，並禁止參與任何歷史共用資料編輯。
   - [x] 定義參與者判定、角色解析、敏感資料、共用帳本、雲端換匯、私人資料與本機快取的一致行為。
@@ -182,9 +182,9 @@
   - [x] Supabase production dry-run 確認只待套用 V3.6.4 migration，且未變更正式資料庫；既有 `realtime.apply_rls` lint error 已獨立記錄。
   - [x] Codex 完成自動化、隔離 Supabase／RLS／Realtime、競態、資料保護、桌面瀏覽器與回滾驗證，並建立包含失敗修正與重測的完整驗證報告。
   - [x] 完成 production 唯讀 preflight：migration history 無分歧、dry-run 只列 V3.6.4 migration、無 seed／role 變更；記錄 advisor、備份與 GitHub Pages 現況。
-  - [ ] 正式 migration 前建立並驗證不含額外費用的 logical schema／data backup；production 目前 `PITR=false` 且沒有可用 physical backup。
+  - [x] 正式 migration 前已建立並驗證不含額外費用的 logical roles／schema／data backup；production 的 `PITR=false` 未變更，未產生額外備份費用。
   - [x] 將現行同批 `gh-pages -d dist` 改為具狀態防呆與逐檔 hash 驗證的兩階段流程：先發布 V3.6.4 App assets 並保留 V3.6.3 metadata，通過後才公開 V3.6.4 必要更新 metadata。
-  - [ ] Codex 依核准順序完成 production migration、V3.6.3 相容窗口、App／Service Worker／metadata 部署與正式雙 Session smoke test。
+  - [x] Codex 依核准順序完成 production migration、V3.6.3 相容窗口、App／Service Worker／metadata 兩階段部署、正式站登入及直接範圍 smoke test；隔離環境雙 Session 競態驗證已通過。
   - [ ] Product Owner 完成 iOS Safari／standalone PWA、Android Chrome／PWA 及兩台實體裝置的指定高風險流程，由 Codex 整理結果與證據。
 - [ ] V3.6.5：PWA 更新後介面顯示效能改善（兩項方向已於 2026-09-03 核准，尚未實作）。
   - [x] 加入預設關閉、以 `?app-perf=1` 啟用且可集中移除的更新與初始化效能量測。
