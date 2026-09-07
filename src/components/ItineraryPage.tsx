@@ -38,7 +38,7 @@ import {
   calculateTimeAdjustment,
   type TimeAdjustmentResult,
 } from "../utils/itineraryTimeAdjustment";
-import { getItineraryDayDate } from "../utils/itineraryDate";
+import { getItineraryDayDate, getLunarDateLabel } from "../utils/itineraryDate";
 import {
   getConfirmedPlace,
   getRouteEstimate,
@@ -265,6 +265,9 @@ export const ItineraryPage = ({
   const canAdjustItineraryTime = hasEditPermission;
 
   const activeDayDate = getItineraryDayDate(trip.departureDate, activeDay);
+  const activeDayLunarDate = activeDayDate
+    ? getLunarDateLabel(activeDayDate)
+    : null;
 
   const startTimeAdjustment = () => {
     resetForm();
@@ -907,7 +910,13 @@ export const ItineraryPage = ({
       <div className="mb-4 border-b border-slate-200 pb-3">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
-            <h2 className="truncate">Day {activeDay} 行程探索 {activeDayDate && <span className="text-sm font-medium text-slate-500">{activeDayDate}</span>}</h2>
+            <h2 className="truncate">
+              Day {activeDay} 行程探索 {activeDayDate && (
+                <span className="text-sm font-medium text-slate-500">
+                  {activeDayDate}{activeDayLunarDate && `（${activeDayLunarDate}）`}
+                </span>
+              )}
+            </h2>
           </div>
           {(canManageItinerary || canAdjustItineraryTime) && (
             <button

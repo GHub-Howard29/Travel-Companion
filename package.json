@@ -41,6 +41,7 @@
     "@dnd-kit/utilities": "^3.2.2",
     "@supabase/supabase-js": "^2.108.2",
     "exceljs": "^4.4.0",
+    "lunar-javascript": "^1.7.7",
     "react": "^19.2.6",
     "react-dom": "^19.2.6"
   },
