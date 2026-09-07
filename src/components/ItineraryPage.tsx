@@ -39,6 +39,7 @@ import {
   type TimeAdjustmentResult,
 } from "../utils/itineraryTimeAdjustment";
 import { getItineraryDayDate, getLunarDateLabel } from "../utils/itineraryDate";
+import { getItineraryDayTone } from "../utils/itineraryDayStyle";
 import {
   getConfirmedPlace,
   getRouteEstimate,
@@ -897,15 +898,32 @@ export const ItineraryPage = ({
   return (
     <>
       <div className="grid grid-cols-5 gap-1.5 mb-6">
-        {trip.content.days.map((day) => (
+        {trip.content.days.map((day, index) => {
+          const tone = getItineraryDayTone(trip.content.days, index);
+          const isActive = activeDay === day;
+          const colorClass = {
+            first: isActive
+              ? "border-blue-300 bg-blue-100 text-blue-700 ring-2 ring-blue-100"
+              : "border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100",
+            middle: isActive
+              ? "border-emerald-300 bg-emerald-100 text-emerald-700 ring-2 ring-emerald-100"
+              : "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100",
+            last: isActive
+              ? "border-rose-300 bg-rose-100 text-rose-700 ring-2 ring-rose-100"
+              : "border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100",
+          }[tone];
+
+          return (
           <button
             key={day}
             onClick={() => handleDayChange(day)}
-            className={`py-2 px-1 rounded-lg font-semibold text-xs transition-all shadow-sm truncate ${activeDay === day ? "bg-slate-900 text-white font-bold" : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-50"}`}
+            aria-current={isActive ? "page" : undefined}
+            className={`rounded-lg border px-1 py-2 text-xs font-semibold shadow-sm transition-all ${colorClass}`}
           >
             D{day}
           </button>
-        ))}
+          );
+        })}
       </div>
       <div className="mb-4 border-b border-slate-200 pb-3">
         <div className="flex items-center justify-between gap-3">
