@@ -20,6 +20,7 @@ export interface TripEditorInput {
   title: string;
   departureDate: string;
   dayCount: number;
+  showLunarDate: boolean;
   mode: TripMode;
   participants: string[];
   participantEmailMap: Record<string, string>;
@@ -117,6 +118,8 @@ export interface TripDetail {
   sidebarConfig: SidebarItemConfig[];
   content: {
     mode?: TripMode;
+    /** 未設定時沿用舊旅程行為：顯示農曆日期。 */
+    showLunarDate?: boolean;
     days: number[];
     custom_tab_1: CustomTabConfig;
     checklistData: ChecklistItem[];

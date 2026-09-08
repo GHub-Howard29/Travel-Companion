@@ -37,8 +37,8 @@ assert.equal(getItineraryDayDate("2026-09-08", 2), "2026-09-09");
 assert.equal(getItineraryDayDate("2026-12-31", 2), "2027-01-01");
 assert.equal(getItineraryDayDate("2024-02-28", 2), "2024-02-29");
 assert.equal(getItineraryDayDate("2026-02-29", 1), null);
-assert.equal(getLunarDateLabel("2026-09-08"), "丙午年七月廿七");
-assert.equal(getLunarDateLabel("2026-09-09"), "丙午年七月廿八");
+assert.equal(getLunarDateLabel("2026-09-08"), "七月廿七");
+assert.equal(getLunarDateLabel("2026-09-09"), "七月廿八");
 assert.equal(getLunarDateLabel("2026-02-29"), null);
 assert.equal(getLunarDateLabel("invalid"), null);
 

@@ -266,7 +266,7 @@ export const ItineraryPage = ({
   const canAdjustItineraryTime = hasEditPermission;
 
   const activeDayDate = getItineraryDayDate(trip.departureDate, activeDay);
-  const activeDayLunarDate = activeDayDate
+  const activeDayLunarDate = trip.content.showLunarDate !== false && activeDayDate
     ? getLunarDateLabel(activeDayDate)
     : null;
 
@@ -931,7 +931,7 @@ export const ItineraryPage = ({
             <h2 className="truncate">
               Day {activeDay} 行程探索 {activeDayDate && (
                 <span className="text-sm font-medium text-slate-500">
-                  {activeDayDate}{activeDayLunarDate && `（${activeDayLunarDate}）`}
+                  {activeDayDate.slice(5)}{activeDayLunarDate && `（${activeDayLunarDate}）`}
                 </span>
               )}
             </h2>

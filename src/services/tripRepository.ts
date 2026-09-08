@@ -496,6 +496,7 @@ export const createTripRecord = (input: TripEditorInput): StoredTripRecord => {
     sidebarConfig: createSidebarConfig(mode),
     content: {
       mode,
+      showLunarDate: input.showLunarDate,
       days,
       custom_tab_1: {
         subtitle: "旅程備忘錄",
@@ -631,6 +632,7 @@ export const updateTripRecord = (
     content: {
       ...currentRecord.detail.content,
       mode,
+      showLunarDate: input.showLunarDate,
       days,
       participantEmailMap,
       otherInfoItems: ensureSpecialInfoItems(
@@ -690,6 +692,7 @@ export const createTripRecordFromExisting = (
     content: {
       ...detail.content,
       mode,
+      showLunarDate: input.showLunarDate,
       days,
       participantEmailMap,
       otherInfoItems: ensureSpecialInfoItems(

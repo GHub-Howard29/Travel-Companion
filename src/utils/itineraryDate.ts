@@ -24,7 +24,7 @@ export const getItineraryDayDate = (
   return `${dayDate.getFullYear()}-${String(dayDate.getMonth() + 1).padStart(2, "0")}-${String(dayDate.getDate()).padStart(2, "0")}`;
 };
 
-/** 將已驗證的本地日曆日期換為農曆干支年、月與日；換算失敗時不阻斷行程瀏覽。 */
+/** 將已驗證的本地日曆日期換為農曆月與日；換算失敗時不阻斷行程瀏覽。 */
 export const getLunarDateLabel = (gregorianDate: string): string | null => {
   const match = gregorianDate.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (!match) return null;
@@ -37,7 +37,7 @@ export const getLunarDateLabel = (gregorianDate: string): string | null => {
 
   try {
     const lunar = Solar.fromYmd(year, month, day).getLunar();
-    return `${lunar.getYearInGanZhi()}年${lunar.getMonthInChinese()}月${lunar.getDayInChinese()}`;
+    return `${lunar.getMonthInChinese()}月${lunar.getDayInChinese()}`;
   } catch {
     return null;
   }

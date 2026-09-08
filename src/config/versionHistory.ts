@@ -14,6 +14,15 @@ export type VersionHistoryItem = {
 
 export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
+    version: "3.7.2",
+    date: "2026-09-08",
+    isMandatoryRelease: false,
+    notes: [
+      "Day 標題新增離線農曆干支年、月、日顯示，並以相同字體樣式呈現。",
+      "Day 切換按鈕改為淺藍、淺綠、淺紅語意配色，標示第一天、中間日與最後一天。",
+    ],
+  },
+  {
     version: "3.7.1",
     date: "2026-09-08",
     isMandatoryRelease: false,

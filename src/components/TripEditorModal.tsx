@@ -131,6 +131,9 @@ export const TripEditorModal = ({
     trip?.departureDate ?? new Date().toISOString().slice(0, 10),
   );
   const [dayCount, setDayCount] = useState(tripDetail?.content.days.length ?? 1);
+  const [showLunarDate, setShowLunarDate] = useState(
+    tripDetail?.content.showLunarDate !== false,
+  );
   const [tripMode, setTripMode] = useState<TripMode>(() =>
     getInitialTripMode(trip, tripDetail),
   );
@@ -240,6 +243,7 @@ export const TripEditorModal = ({
       title,
       departureDate,
       dayCount,
+      showLunarDate,
       mode: tripMode,
       participants: nextParticipants,
       participantEmailMap,
@@ -464,6 +468,23 @@ export const TripEditorModal = ({
             />
           </label>
         </div>
+
+        <label className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 px-3 py-2.5">
+          <span>
+            <span className="block text-sm font-bold text-slate-700">顯示農曆日期</span>
+            <span className="mt-0.5 block text-xs text-slate-500">
+              開啟後會在西洋月日後顯示農曆月日。
+            </span>
+          </span>
+          <input
+            type="checkbox"
+            role="switch"
+            checked={showLunarDate}
+            onChange={(event) => setShowLunarDate(event.target.checked)}
+            className="h-5 w-9 shrink-0 accent-emerald-700"
+            aria-label="顯示農曆日期"
+          />
+        </label>
 
         <label className="block">
           <span className="text-xs font-bold text-slate-500">旅程型態</span>
