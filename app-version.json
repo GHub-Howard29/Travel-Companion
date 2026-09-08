@@ -1,10 +1,10 @@
 {
-  "version": "3.7.2",
+  "version": "3.7.3",
   "minimumSupportedVersion": "3.6.4",
   "releaseDate": "2026-09-08",
   "releaseNotes": [
-    "Day 標題新增與國曆同樣式的離線農曆日期顯示。",
-    "Day 切換按鈕以淺色藍、綠、紅標示第一天、中間日與最後一天。"
+    "可在新增或編輯旅程時，個別決定是否顯示 Day 標題的農曆日期。",
+    "Day 標題改為西洋與農曆月日，關閉農曆時只保留西洋月日。"
   ],
   "forceUpdate": false
 }
