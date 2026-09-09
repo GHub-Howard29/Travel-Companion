@@ -6,6 +6,7 @@ import {
   isValidTime,
   normalizeTransitVehicle,
   parseDurationSeconds,
+  resolveSupabaseRuntimeKey,
 } from "./validation.ts";
 
 const GOOGLE_PLACES_AUTOCOMPLETE_URL =
@@ -16,7 +17,8 @@ const ROUTE_DAILY_LIMIT = 100;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, apikey, content-type, x-client-info",
+  "Access-Control-Allow-Headers":
+    "authorization, apikey, content-type, x-client-info, x-travel-companion-client-id",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
@@ -31,6 +33,21 @@ const requiredEnv = (name: string, fallbackName?: string): string => {
   if (!value) throw new Error(`Missing ${name}`);
   return value;
 };
+
+const getSupabaseRuntimeKeys = () => ({
+  publishableKey: resolveSupabaseRuntimeKey(
+    Deno.env.get("SUPABASE_PUBLISHABLE_KEYS"),
+    Deno.env.get("SUPABASE_ANON_KEY"),
+    "SUPABASE_PUBLISHABLE_KEYS",
+    "SUPABASE_ANON_KEY",
+  ),
+  secretKey: resolveSupabaseRuntimeKey(
+    Deno.env.get("SUPABASE_SECRET_KEYS"),
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"),
+    "SUPABASE_SECRET_KEYS",
+    "SUPABASE_SERVICE_ROLE_KEY",
+  ),
+});
 
 const sha256 = async (value: string): Promise<string> => {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
@@ -84,8 +101,7 @@ const getAuthorizedClients = async (request: Request, tripId: string) => {
   if (!authorization?.startsWith("Bearer ")) return null;
 
   const supabaseUrl = requiredEnv("SUPABASE_URL");
-  const publishableKey = requiredEnv("SUPABASE_ANON_KEY", "SUPABASE_PUBLISHABLE_KEY");
-  const secretKey = requiredEnv("SUPABASE_SERVICE_ROLE_KEY", "SUPABASE_SECRET_KEY");
+  const { publishableKey, secretKey } = getSupabaseRuntimeKeys();
   const token = authorization.slice("Bearer ".length);
   const authClient = createClient(supabaseUrl, publishableKey, {
     global: { headers: { Authorization: authorization } },

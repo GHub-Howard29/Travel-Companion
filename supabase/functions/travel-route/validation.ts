@@ -1,6 +1,34 @@
 export const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value && typeof value === "object" && !Array.isArray(value));
 
+export const resolveSupabaseRuntimeKey = (
+  modernKeysJson: string | undefined,
+  legacyKey: string | undefined,
+  modernEnvironmentName: string,
+  legacyEnvironmentName: string,
+): string => {
+  if (modernKeysJson !== undefined) {
+    let keys: unknown;
+    try {
+      keys = JSON.parse(modernKeysJson);
+    } catch {
+      throw new Error(`Invalid ${modernEnvironmentName}`);
+    }
+
+    if (
+      !isRecord(keys) ||
+      typeof keys.default !== "string" ||
+      keys.default.trim().length === 0
+    ) {
+      throw new Error(`Invalid ${modernEnvironmentName}`);
+    }
+    return keys.default;
+  }
+
+  if (legacyKey?.trim()) return legacyKey;
+  throw new Error(`Missing ${modernEnvironmentName} or ${legacyEnvironmentName}`);
+};
+
 export const isPlace = (value: unknown): value is { placeId: string } =>
   isRecord(value) &&
   typeof value.placeId === "string" &&

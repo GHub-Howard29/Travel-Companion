@@ -1,10 +1,9 @@
 {
-  "version": "3.7.3",
+  "version": "3.7.4",
   "minimumSupportedVersion": "3.6.4",
-  "releaseDate": "2026-09-08",
+  "releaseDate": "2026-09-10",
   "releaseNotes": [
-    "可在新增或編輯旅程時，個別決定是否顯示 Day 標題的農曆日期。",
-    "Day 標題改為西洋與農曆月日，關閉農曆時只保留西洋月日。"
+    "地圖地點搜尋問題改善"
   ],
   "forceUpdate": false
 }
