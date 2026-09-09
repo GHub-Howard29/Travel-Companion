@@ -14,6 +14,15 @@ export type VersionHistoryItem = {
 
 export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
+    version: "3.7.3",
+    date: "2026-09-08",
+    isMandatoryRelease: false,
+    notes: [
+      "可在新增或編輯旅程時，個別決定是否顯示 Day 標題的農曆日期。",
+      "Day 標題改為西洋與農曆月日，關閉農曆時只保留西洋月日。",
+    ],
+  },
+  {
     version: "3.7.2",
     date: "2026-09-08",
     isMandatoryRelease: false,

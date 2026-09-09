@@ -33,8 +33,8 @@ const invokeTravelRoute = async <T>(
   });
 
   if (error) {
-    const context = error.context as Response | undefined;
-    if (context) {
+    const context = error.context;
+    if (context instanceof Response) {
       try {
         const payload = (await context.clone().json()) as FunctionErrorBody;
         if (payload.error) throw new Error(payload.error);
