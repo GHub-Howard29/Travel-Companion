@@ -729,6 +729,33 @@ V3.6.0 更新提醒在手機與桌面第一次按下「馬上更新」後，提�
 
 ---
 
+### BUG030
+
+問題：
+
+- V3.7.3 的每日行程卡片在搜尋地圖地點時，會顯示無法取得正確地點並要求保留文字輸入；原本可用的地點搜尋突然失效。
+- 畫面曾顯示 `clone is not a function`，無法直接看出真正的網路錯誤。
+
+原因：
+
+- V3.6.4 起前端請求會附加 `x-travel-companion-client-id`，但 `travel-route` Edge Function 的 CORS 白名單未允許此標頭，瀏覽器完成 OPTIONS 後即阻擋實際 POST。
+- 前端錯誤處理假設錯誤內容一定是 `Response` 並直接呼叫 `clone()`，因此遮蔽了原始 CORS／網路錯誤。
+- 正式 Supabase 已使用 ES256 非對稱使用者 JWT，函式若維持舊式平台 `verify_jwt=true`，修正 CORS 後仍可能在進入函式前回應 401。
+- 函式使用錯誤的單數新版環境變數名稱，無法解析正式的 `SUPABASE_PUBLISHABLE_KEYS`、`SUPABASE_SECRET_KEYS` 之 `default` 金鑰。
+
+修正方式（V3.7.4）：
+
+- CORS 白名單加入 `x-travel-companion-client-id`；前端僅在錯誤內容確實是 `Response` 時解析 JSON。
+- 正式部署固定使用 `verify_jwt=false`，改由函式內 `auth.getUser()` 驗證使用者 JWT，並保留 `super_admin` 與指定 Trip `trip_editor` 授權。
+- 正確解析新版複數金鑰設定的 `default`，保留舊版 anon／service role 回退；新版設定缺少或損壞時安全失敗且不洩漏密鑰。
+- 擴充 `verify:travel-route`，涵蓋新版金鑰、舊版回退、損壞設定、未授權拒絕、CORS 標頭及禁止錯誤單數名稱。
+
+狀態：
+
+✅ V3.7.4 已於 2026-09-10 完成 `main` 合併、`v3.7.4` 標籤、GitHub Pages 與 `travel-route` version 3 部署。正式授權帳號搜尋「金閣寺」回應 HTTP 200 並取得 5 筆候選；未登入請求回應 HTTP 403。無資料庫 migration 或既有行程資料變更。
+
+---
+
 ## Bug 管理原則
 
 每個 Bug 皆記錄：
@@ -743,6 +770,6 @@ V3.6.0 更新提醒在手機與桌面第一次按下「馬上更新」後，提�
 
 ---
 
-最後更新：2026/09/08
+最後更新：2026/09/10
 
-目前已發布版本：V3.6.5。BUG029 與同批改善已於 V3.6.3 完成一般更新發布；V3.6.4 的 production migration、兩階段部署與正式站登入 smoke，以及 V3.6.5 的啟動效能改善、GitHub Pages 部署與正式站登入 smoke 均已完成。iOS、Android 與兩台實體裝置指定流程仍保留補驗。
+目前已發布版本：V3.7.4。BUG030 的地點搜尋 CORS、錯誤解析、ES256 JWT 與新版 Supabase 金鑰相容修正已發布並完成正式授權／未登入驗證；iOS、Android 與兩台實體裝置既有指定流程仍保留補驗。
