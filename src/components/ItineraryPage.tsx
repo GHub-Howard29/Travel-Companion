@@ -1,7 +1,24 @@
 import { Fragment, useEffect, useRef, useState } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
+  DndContext,
+  KeyboardSensor,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import {
+  ArrowDown,
+  ArrowUp,
   Check,
+  Copy,
   ExternalLink,
   Loader2,
   MapPin,
@@ -16,7 +33,6 @@ import { handlePlaceBrowse, handleRouteBrowse } from "../utils/navigationUtils";
 import { focusAndRevealControl, releaseFocusedControl } from "../utils/viewportUtils";
 import { trimRichText } from "../utils/richText";
 import {
-  getItineraryTimeValue,
   isDepartureBeforeArrival,
   sortItineraryItemsByTime,
   validateItineraryTime,
@@ -41,6 +57,15 @@ import {
 import { getItineraryDayDate, getLunarDateLabel } from "../utils/itineraryDate";
 import { getItineraryDayTone } from "../utils/itineraryDayStyle";
 import {
+  createItineraryCopy,
+  createItineraryItemId,
+  ensureItineraryDaysDataIds,
+  insertItineraryCopyByTime,
+  invalidateChangedTravelDestinations,
+  moveItineraryItem,
+  reorderItineraryItems,
+} from "../utils/itineraryOrder";
+import {
   getConfirmedPlace,
   getRouteEstimate,
   searchPlaceCandidates,
@@ -49,6 +74,7 @@ import {
 import { RichTextColorEditor } from "./RichTextColorEditor";
 import { RichTextDisplay } from "./RichTextDisplay";
 import { MaterialTravelModeIcon } from "./MaterialTravelModeIcon";
+import { SortableCard } from "./SortableCard";
 
 interface ItineraryPageProps {
   supabase: SupabaseClient;
@@ -91,6 +117,17 @@ export const ItineraryPage = ({
   onManageModeChange,
 }: ItineraryPageProps) => {
   const [isManageMode, setIsManageMode] = useState(false);
+  const [isOrderMode, setIsOrderMode] = useState(false);
+  const [orderOriginal, setOrderOriginal] = useState<ItineraryItem[]>([]);
+  const [orderDraft, setOrderDraft] = useState<ItineraryItem[]>([]);
+  const [isOrderSaving, setIsOrderSaving] = useState(false);
+  const [orderSaveError, setOrderSaveError] = useState<string | null>(null);
+  const [showOrderSaved, setShowOrderSaved] = useState(false);
+  const [copySource, setCopySource] = useState<ItineraryItem | null>(null);
+  const [copyTargetDays, setCopyTargetDays] = useState<number[]>([]);
+  const [isCopySaving, setIsCopySaving] = useState(false);
+  const [copySaveError, setCopySaveError] = useState<string | null>(null);
+  const [copySuccess, setCopySuccess] = useState<string | null>(null);
   const [isTimeAdjustmentMode, setIsTimeAdjustmentMode] = useState(false);
   const [timeAdjustmentStartIndex, setTimeAdjustmentStartIndex] = useState<number | null>(null);
   const [timeAdjustmentDeparture, setTimeAdjustmentDeparture] = useState("");
@@ -100,9 +137,9 @@ export const ItineraryPage = ({
   const [timeAdjustmentSaveError, setTimeAdjustmentSaveError] = useState<string | null>(null);
 
   useEffect(() => {
-    onManageModeChange?.(isManageMode || isTimeAdjustmentMode);
+    onManageModeChange?.(isManageMode || isTimeAdjustmentMode || isOrderMode || Boolean(copySource));
     return () => onManageModeChange?.(false);
-  }, [isManageMode, isTimeAdjustmentMode, onManageModeChange]);
+  }, [copySource, isManageMode, isOrderMode, isTimeAdjustmentMode, onManageModeChange]);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [draft, setDraft] = useState<ItineraryItem>(createEmptyItineraryDraft);
@@ -130,6 +167,10 @@ export const ItineraryPage = ({
   const [itemSaveError, setItemSaveError] = useState<string | null>(null);
   const [autoRouteError, setAutoRouteError] = useState<string | null>(null);
   const editingCardRef = useRef<HTMLElement | null>(null);
+  const orderSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
 
   useEffect(() => {
     if (editingIndex === null) return;
@@ -156,16 +197,8 @@ export const ItineraryPage = ({
   }, [editingIndex]);
 
   const currentDayEvents = trip.content.daysData[String(activeDay)] || [];
-  const sortedDayEvents = currentDayEvents
-    .map((event, originalIndex) => ({ event, originalIndex }))
-    .sort((left, right) => {
-      const leftTime = getItineraryTimeValue(left.event.time);
-      const rightTime = getItineraryTimeValue(right.event.time);
-      if (leftTime === null && rightTime === null) return left.originalIndex - right.originalIndex;
-      if (leftTime === null) return 1;
-      if (rightTime === null) return -1;
-      return leftTime - rightTime || left.originalIndex - right.originalIndex;
-    });
+  const displayedDayEvents = (isOrderMode ? orderDraft : currentDayEvents)
+    .map((event, originalIndex) => ({ event, originalIndex }));
 
   const resetForm = () => {
     releaseFocusedControl();
@@ -189,11 +222,29 @@ export const ItineraryPage = ({
     setTimeAdjustmentSaveError(null);
   };
 
+  const resetOrder = () => {
+    setIsOrderMode(false);
+    setOrderOriginal([]);
+    setOrderDraft([]);
+    setOrderSaveError(null);
+  };
+
+  const closeCopyDialog = () => {
+    if (isCopySaving) return;
+    setCopySource(null);
+    setCopyTargetDays([]);
+    setCopySaveError(null);
+  };
+
   const closeManageMode = () => {
     releaseFocusedControl();
     setIsManageMode(false);
     resetForm();
     resetTimeAdjustment();
+    resetOrder();
+    closeCopyDialog();
+    setShowOrderSaved(false);
+    setCopySuccess(null);
   };
 
   const updateDraft = (patch: Partial<ItineraryItem>) => {
@@ -272,11 +323,106 @@ export const ItineraryPage = ({
 
   const startTimeAdjustment = () => {
     resetForm();
+    resetOrder();
+    setShowOrderSaved(false);
     setIsTimeAdjustmentMode(true);
     setTimeAdjustmentStartIndex(null);
     setTimeAdjustmentDeparture("");
     setTimeAdjustmentResult(null);
     setTimeAdjustmentSaveError(null);
+  };
+
+  const startOrderAdjustment = () => {
+    resetForm();
+    resetTimeAdjustment();
+    setShowOrderSaved(false);
+    setCopySuccess(null);
+    const stableItems = ensureItineraryDaysDataIds(trip.content.daysData)[String(activeDay)] ?? [];
+    setOrderOriginal(stableItems);
+    setOrderDraft(stableItems);
+    setOrderSaveError(null);
+    setIsOrderMode(true);
+  };
+
+  const handleOrderDragEnd = ({ active, over }: DragEndEvent) => {
+    if (!over || active.id === over.id) return;
+    setOrderDraft((items) => reorderItineraryItems(items, String(active.id), String(over.id)));
+  };
+
+  const saveOrder = async () => {
+    if (isOrderSaving) return;
+    setIsOrderSaving(true);
+    setOrderSaveError(null);
+    try {
+      const stableDaysData = ensureItineraryDaysDataIds(trip.content.daysData);
+      const savedItems = invalidateChangedTravelDestinations(orderOriginal, orderDraft);
+      await onSaveTripDetail({
+        ...trip,
+        content: {
+          ...trip.content,
+          daysData: {
+            ...stableDaysData,
+            [String(activeDay)]: savedItems,
+          },
+        },
+      });
+      resetOrder();
+      setShowOrderSaved(true);
+    } catch (error) {
+      setOrderSaveError(
+        error instanceof Error
+          ? `無法儲存順序：${error.message}`
+          : "無法儲存順序，排序草稿已保留。",
+      );
+    } finally {
+      setIsOrderSaving(false);
+    }
+  };
+
+  const openCopyDialog = (event: ItineraryItem) => {
+    setCopySource(event);
+    setCopyTargetDays([]);
+    setCopySaveError(null);
+    setCopySuccess(null);
+  };
+
+  const toggleCopyTargetDay = (day: number) => {
+    setCopyTargetDays((days) =>
+      days.includes(day) ? days.filter((value) => value !== day) : [...days, day],
+    );
+  };
+
+  const saveCopies = async () => {
+    if (!copySource || copyTargetDays.length === 0 || isCopySaving) return;
+    setIsCopySaving(true);
+    setCopySaveError(null);
+    try {
+      const stableDaysData = ensureItineraryDaysDataIds(trip.content.daysData);
+      const nextDaysData = { ...stableDaysData };
+      copyTargetDays.forEach((day) => {
+        const dayKey = String(day);
+        nextDaysData[dayKey] = insertItineraryCopyByTime(
+          nextDaysData[dayKey] ?? [],
+          createItineraryCopy(copySource),
+        );
+      });
+      await onSaveTripDetail({
+        ...trip,
+        content: { ...trip.content, daysData: nextDaysData },
+      });
+      const copiedDays = [...copyTargetDays].sort((left, right) => left - right);
+      setCopySource(null);
+      setCopyTargetDays([]);
+      setCopySuccess(`已複製到 ${copiedDays.map((day) => `Day ${day}`).join("、")}`);
+    } catch (error) {
+      setCopySaveError(
+        error instanceof Error
+          ? `無法複製行程：${error.message}`
+          : "無法複製行程，所有日期均維持原狀。",
+      );
+    } finally {
+      setIsCopySaving(false);
+    }
   };
 
   const selectTimeAdjustmentStart = (sortedIndex: number, event: ItineraryItem) => {
@@ -289,7 +435,7 @@ export const ItineraryPage = ({
 
   const prepareTimeAdjustment = async () => {
     if (timeAdjustmentStartIndex === null || isTimeAdjustmentLoading) return;
-    const remainingEvents = sortedDayEvents.map(({ event }) => event);
+    const remainingEvents = currentDayEvents;
     const hasTransit = remainingEvents.slice(timeAdjustmentStartIndex, -1)
       .some((event) => getPreferredTravelMode(event) === "transit");
     if (hasTransit && !confirm("此調整包含大眾運輸，將重新查詢受影響區段，可能產生地圖服務費用。要繼續嗎？")) return;
@@ -331,13 +477,19 @@ export const ItineraryPage = ({
     setIsTimeAdjustmentSaving(true);
     setTimeAdjustmentSaveError(null);
     try {
+      const stableDaysData = ensureItineraryDaysDataIds(trip.content.daysData);
+      const dayKey = String(activeDay);
+      const stableActiveDay = stableDaysData[dayKey] ?? [];
       await onSaveTripDetail({
         ...trip,
         content: {
           ...trip.content,
           daysData: {
-            ...trip.content.daysData,
-            [String(activeDay)]: timeAdjustmentResult.items,
+            ...stableDaysData,
+            [dayKey]: timeAdjustmentResult.items.map((item, index) => ({
+              ...item,
+              id: stableActiveDay[index]?.id ?? item.id ?? createItineraryItemId(),
+            })),
           },
         },
       });
@@ -471,7 +623,8 @@ export const ItineraryPage = ({
   const saveTravelEstimate = async () => {
     if (!activeTravelSegment || !previewEstimate || previewEstimate.mode !== selectedTravelMode) return;
     const dayKey = String(activeDay);
-    const currentEvents = trip.content.daysData[dayKey] ?? [];
+    const stableDaysData = ensureItineraryDaysDataIds(trip.content.daysData);
+    const currentEvents = stableDaysData[dayKey] ?? [];
     const nextEvents = currentEvents.map((event, index) =>
       index === activeTravelSegment.originIndex
         ? {
@@ -485,7 +638,7 @@ export const ItineraryPage = ({
       ...trip,
       content: {
         ...trip.content,
-        daysData: { ...trip.content.daysData, [dayKey]: nextEvents },
+        daysData: { ...stableDaysData, [dayKey]: nextEvents },
       },
     });
     setActiveTravelSegment(null);
@@ -496,7 +649,8 @@ export const ItineraryPage = ({
 
     setItemSaveError(null);
     const dayKey = String(activeDay);
-    const currentEvents = trip.content.daysData[dayKey] ?? [];
+    const stableDaysData = ensureItineraryDaysDataIds(trip.content.daysData);
+    const currentEvents = stableDaysData[dayKey] ?? [];
     const arrivalResult = validateItineraryTime(draft.time);
     const departureResult = validateItineraryTime(draft.departureTime ?? "");
     const nextTimeErrors = {
@@ -549,6 +703,9 @@ export const ItineraryPage = ({
     const departureTime = requestedDepartureTime || arrivalTime;
     const nextEvent: ItineraryItem = {
       ...draft,
+      id: editingIndex === null
+        ? draft.id ?? createItineraryItemId()
+        : currentEvents[editingIndex]?.id ?? draft.id ?? createItineraryItemId(),
       time: arrivalTime || requestedDepartureTime,
       departureTime,
       title: draft.title.trim(),
@@ -562,7 +719,9 @@ export const ItineraryPage = ({
             index === editingIndex ? nextEvent : event,
           );
 
-    let savedEvents = sortItineraryItemsByTime(nextEvents);
+    let savedEvents = editingIndex === null
+      ? sortItineraryItemsByTime(nextEvents)
+      : nextEvents;
     const changedIndex = savedEvents.indexOf(nextEvent);
     const routeOriginIndexes = getAdjacentTravelOriginIndexesNeedingEstimate(
       savedEvents,
@@ -598,7 +757,7 @@ export const ItineraryPage = ({
         content: {
           ...trip.content,
           daysData: {
-            ...trip.content.daysData,
+            ...stableDaysData,
             [dayKey]: savedEvents,
           },
         },
@@ -620,7 +779,8 @@ export const ItineraryPage = ({
 
   const deleteItem = async (index: number) => {
     const dayKey = String(activeDay);
-    const currentEvents = trip.content.daysData[dayKey] ?? [];
+    const stableDaysData = ensureItineraryDaysDataIds(trip.content.daysData);
+    const currentEvents = stableDaysData[dayKey] ?? [];
     const targetEvent = currentEvents[index];
     if (!targetEvent) return;
     if (!confirm(`確定刪除「${targetEvent.title}」？`)) return;
@@ -629,12 +789,13 @@ export const ItineraryPage = ({
       ...trip,
       content: {
         ...trip.content,
-        daysData: {
-          ...trip.content.daysData,
-          [dayKey]: sortItineraryItemsByTime(
-            currentEvents.filter((_, eventIndex) => eventIndex !== index),
-          ),
-        },
+          daysData: {
+            ...stableDaysData,
+            [dayKey]: invalidateChangedTravelDestinations(
+              currentEvents,
+              currentEvents.filter((_, eventIndex) => eventIndex !== index),
+            ),
+          },
       },
     });
     resetForm();
@@ -966,11 +1127,19 @@ export const ItineraryPage = ({
             <h3 className="text-sm font-bold text-slate-800">
               Day {activeDay} 行程管理
             </h3>
-            <div className="flex shrink-0 gap-2">
+            <div className="flex shrink-0 flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                onClick={startOrderAdjustment}
+                disabled={!canManageItinerary || editingIndex !== null || isTimeAdjustmentMode || isOrderMode || currentDayEvents.length < 2}
+                className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs font-bold text-sky-800 hover:bg-sky-100 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                調整順序
+              </button>
               <button
                 type="button"
                 onClick={startTimeAdjustment}
-                disabled={!canAdjustItineraryTime || editingIndex !== null || isTimeAdjustmentMode}
+                disabled={!canAdjustItineraryTime || editingIndex !== null || isTimeAdjustmentMode || isOrderMode}
                 className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-800 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 調整時間
@@ -978,7 +1147,7 @@ export const ItineraryPage = ({
               <button
                 type="button"
                 onClick={isFormOpen && editingIndex === null ? resetForm : startCreateItem}
-                disabled={!canManageItinerary || editingIndex !== null || isTimeAdjustmentMode}
+                disabled={!canManageItinerary || editingIndex !== null || isTimeAdjustmentMode || isOrderMode}
                 className="rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {editingIndex !== null
@@ -991,10 +1160,42 @@ export const ItineraryPage = ({
           </div>
 
           <p className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-xs leading-relaxed text-slate-500">
-            依到達時間排序，未填到達時間的活動會置於最下方；未填離開時間時，儲存後會沿用到達時間。時間可使用半形或全形冒號，但冒號前後不可空格。
+            新增活動會依到達時間插入；編輯時間不會自行移動卡片。未填離開時間時，儲存後會沿用到達時間。時間可使用半形或全形冒號，但冒號前後不可空格。
           </p>
 
           {isFormOpen && editingIndex === null && renderItemForm(false)}
+
+          {isOrderMode && (
+            <section className="mt-3 rounded-xl border border-sky-200 bg-sky-50/60 p-3" aria-label="調整順序模式">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h4 className="text-sm font-bold text-sky-900">調整順序</h4>
+                  <p className="mt-1 text-xs leading-relaxed text-sky-800">拖曳卡片、聚焦拖拉按鈕後按 Alt＋上／下方向鍵，或使用上移／下移按鈕。時間與交通方式偏好不會變更。</p>
+                </div>
+                <span className="shrink-0 rounded-full bg-white px-2 py-1 text-xs font-bold text-sky-700">草稿</span>
+              </div>
+              {orderSaveError && <p className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700" role="alert">{orderSaveError}</p>}
+              <div className="mt-3 flex justify-end gap-2">
+                <button type="button" onClick={resetOrder} disabled={isOrderSaving} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-50">取消</button>
+                <button type="button" onClick={() => void saveOrder()} disabled={isOrderSaving} className="rounded-lg bg-sky-700 px-3 py-2 text-xs font-bold text-white hover:bg-sky-800 disabled:opacity-50">{isOrderSaving ? "正在儲存…" : "儲存順序"}</button>
+              </div>
+            </section>
+          )}
+
+          {showOrderSaved && (
+            <section className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3" aria-label="順序儲存完成" role="status">
+              <p className="text-sm font-bold text-emerald-900">順序已儲存</p>
+              <p className="mt-1 text-xs leading-relaxed text-emerald-800">原本的到達與離開時間已保留；如需讓時間配合新順序，可接著調整。</p>
+              <div className="mt-3 flex justify-end gap-2">
+                <button type="button" onClick={() => setShowOrderSaved(false)} className="rounded-lg border border-emerald-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50">完成</button>
+                <button type="button" onClick={startTimeAdjustment} className="rounded-lg bg-emerald-700 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-800">接著調整時間</button>
+              </div>
+            </section>
+          )}
+
+          {copySuccess && (
+            <p className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-800" role="status">{copySuccess}</p>
+          )}
 
           {isTimeAdjustmentMode && (
             <section className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50/60 p-3" aria-label="時間調整模式">
@@ -1051,11 +1252,17 @@ export const ItineraryPage = ({
         </div>
       )}
 
-      {sortedDayEvents.length > 0 ? (
+      {displayedDayEvents.length > 0 ? (
+        <DndContext sensors={orderSensors} collisionDetection={closestCenter} onDragEnd={handleOrderDragEnd}>
+        <SortableContext
+          items={displayedDayEvents.map(({ event, originalIndex }) => event.id ?? `legacy-${activeDay}-${originalIndex}`)}
+          strategy={verticalListSortingStrategy}
+        >
         <div>
-          {sortedDayEvents.map(({ event, originalIndex }, sortedIndex) => {
-            const nextEntry = sortedDayEvents[sortedIndex + 1];
+          {displayedDayEvents.map(({ event, originalIndex }, sortedIndex) => {
+            const nextEntry = displayedDayEvents[sortedIndex + 1];
             const nextEvent = nextEntry?.event;
+            const sortableId = event.id ?? `legacy-${activeDay}-${originalIndex}`;
             const hasEligiblePlaces = Boolean(
               nextEvent &&
                 hasDistinctConfirmedPlaces(event, nextEvent) &&
@@ -1071,8 +1278,13 @@ export const ItineraryPage = ({
               : null;
 
             return (
-            <Fragment key={`${originalIndex}-${event.title}`}>
-            <article
+            <Fragment key={sortableId}>
+            <SortableCard
+              id={sortableId}
+              disabled={!isOrderMode}
+              onKeyboardMove={(direction) => setOrderDraft((items) => moveItineraryItem(items, sortableId, direction))}
+            >
+            {(dragHandle) => <article
               ref={editingIndex === originalIndex ? editingCardRef : undefined}
               className={`rounded-xl border bg-white p-4 shadow-sm ${
                 editingIndex === originalIndex
@@ -1084,6 +1296,34 @@ export const ItineraryPage = ({
                 renderItemForm(true)
               ) : (
                 <>
+              {isOrderMode && (
+                <div className="mb-3 flex items-center justify-between gap-3 border-b border-sky-100 pb-3">
+                  <span className="text-xs font-bold text-sky-700">第 {sortedIndex + 1} 站</span>
+                  <div className="flex shrink-0 items-center gap-1">
+                    {dragHandle}
+                    <button
+                      type="button"
+                      onClick={() => setOrderDraft((items) => moveItineraryItem(items, sortableId, -1))}
+                      disabled={sortedIndex === 0}
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-sky-100 hover:text-sky-800 disabled:opacity-30"
+                      aria-label={`上移「${event.title || "未命名活動"}」`}
+                      title="上移"
+                    >
+                      <ArrowUp size={15} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setOrderDraft((items) => moveItineraryItem(items, sortableId, 1))}
+                      disabled={sortedIndex === displayedDayEvents.length - 1}
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-sky-100 hover:text-sky-800 disabled:opacity-30"
+                      aria-label={`下移「${event.title || "未命名活動"}」`}
+                      title="下移"
+                    >
+                      <ArrowDown size={15} />
+                    </button>
+                  </div>
+                </div>
+              )}
               <div className="flex justify-between items-center gap-3 mb-2">
                 {event.time ? (
                   <div className="flex min-w-0 items-center gap-2 text-sm font-bold text-slate-500">
@@ -1117,8 +1357,15 @@ export const ItineraryPage = ({
                   </button>
                 </div>
               )}
-              {canManageItinerary && isManageMode && (
+              {canManageItinerary && isManageMode && !isOrderMode && (
                 <div className="mt-3 flex justify-end gap-2 border-t border-slate-100 pt-3">
+                  <button
+                    type="button"
+                    onClick={() => openCopyDialog(event)}
+                    className="inline-flex items-center gap-1 rounded-lg bg-sky-50 px-3 py-1.5 text-xs font-bold text-sky-700 hover:bg-sky-100"
+                  >
+                    <Copy size={13} /> 複製
+                  </button>
                   <button
                     type="button"
                     onClick={() => startEditItem(event, originalIndex)}
@@ -1148,7 +1395,8 @@ export const ItineraryPage = ({
               )}
                 </>
               )}
-            </article>
+            </article>}
+            </SortableCard>
             {nextEvent && (hasEligiblePlaces || warning) && (
               <div className="py-1">
                 {(estimate || hasSavedTravelPreference || canManageItinerary) && hasEligiblePlaces && (
@@ -1189,7 +1437,7 @@ export const ItineraryPage = ({
                         Google Maps <ExternalLink size={11} />
                       </span>
                     </button>
-                    {canManageItinerary && isManageMode && (
+                    {canManageItinerary && isManageMode && !isOrderMode && (
                       <button
                         type="button"
                         onClick={() => openTravelPanel(
@@ -1225,9 +1473,60 @@ export const ItineraryPage = ({
             );
           })}
         </div>
+        </SortableContext>
+        </DndContext>
       ) : (
         <div className="text-center py-12 text-slate-400 bg-white border border-dashed border-slate-200 rounded-xl shadow-sm">
           此行程今日尚無規劃活動景點。
+        </div>
+      )}
+
+      {copySource && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/40 p-3 sm:items-center" role="presentation">
+          <section
+            className="max-h-[min(42rem,calc(100dvh-1.5rem))] w-full max-w-md overflow-y-auto rounded-2xl bg-white p-4 shadow-2xl"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="copy-itinerary-title"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <h3 id="copy-itinerary-title" className="text-lg font-bold text-slate-800">跨日複製</h3>
+                <p className="mt-1 truncate text-sm font-semibold text-slate-600">{copySource.title || "未命名活動"}</p>
+              </div>
+              <button type="button" onClick={closeCopyDialog} disabled={isCopySaving} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 disabled:opacity-50" aria-label="關閉跨日複製">
+                <X size={18} />
+              </button>
+            </div>
+            <p className="mt-3 text-xs leading-relaxed text-slate-500">選擇同一旅程中的一個或多個日期。每個副本會保留內容與時間，並依到達時間插入；不會複製相鄰路線資訊。</p>
+            <div className="mt-4 space-y-2">
+              {trip.content.days.filter((day) => day !== activeDay).map((day) => {
+                const date = getItineraryDayDate(trip.departureDate, day);
+                const itemCount = trip.content.daysData[String(day)]?.length ?? 0;
+                return (
+                  <label key={day} className="flex cursor-pointer items-center gap-3 rounded-xl border border-slate-200 px-3 py-3 hover:bg-slate-50">
+                    <input
+                      type="checkbox"
+                      checked={copyTargetDays.includes(day)}
+                      onChange={() => toggleCopyTargetDay(day)}
+                      disabled={isCopySaving}
+                      className="h-4 w-4 accent-sky-700"
+                    />
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-sm font-bold text-slate-800">Day {day}{date ? `｜${date.slice(5)}` : ""}</span>
+                      <span className="mt-0.5 block text-xs text-slate-500">目前 {itemCount} 張卡片</span>
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+            {trip.content.days.length <= 1 && <p className="mt-4 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">此旅程沒有其他 Day 可供複製。</p>}
+            {copySaveError && <p className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700" role="alert">{copySaveError}</p>}
+            <div className="mt-4 flex justify-end gap-2 border-t border-slate-100 pt-4">
+              <button type="button" onClick={closeCopyDialog} disabled={isCopySaving} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-50">取消</button>
+              <button type="button" onClick={() => void saveCopies()} disabled={copyTargetDays.length === 0 || isCopySaving} className="rounded-lg bg-sky-700 px-4 py-2 text-sm font-bold text-white hover:bg-sky-800 disabled:cursor-not-allowed disabled:opacity-50">{isCopySaving ? "正在複製…" : "複製到所選 Day"}</button>
+            </div>
+          </section>
         </div>
       )}
 
