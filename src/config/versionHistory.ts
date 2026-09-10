@@ -14,6 +14,15 @@ export type VersionHistoryItem = {
 
 export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
+    version: "3.7.4",
+    date: "2026-09-10",
+    isMandatoryRelease: false,
+    notes: [
+      "改善每日行程地點搜尋的 CORS、錯誤解析、ES256 JWT 與 Supabase 新版金鑰相容性。",
+      "維持既有角色授權與前端介面；未變更資料庫或既有行程資料。",
+    ],
+  },
+  {
     version: "3.7.3",
     date: "2026-09-08",
     isMandatoryRelease: false,

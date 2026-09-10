@@ -6,10 +6,11 @@ import { CSS } from "@dnd-kit/utilities";
 interface SortableCardProps {
   id: string;
   disabled?: boolean;
+  onKeyboardMove?: (direction: -1 | 1) => void;
   children: (dragHandle: ReactNode) => ReactNode;
 }
 
-export const SortableCard = ({ id, disabled = false, children }: SortableCardProps) => {
+export const SortableCard = ({ id, disabled = false, onKeyboardMove, children }: SortableCardProps) => {
   const {
     attributes,
     listeners,
@@ -26,7 +27,13 @@ export const SortableCard = ({ id, disabled = false, children }: SortableCardPro
       type="button"
       className="inline-flex h-8 w-7 shrink-0 touch-none items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700"
       aria-label="拖拉排序"
-      title="按住後拖拉排序"
+      title={onKeyboardMove ? "按住後拖拉排序；Alt + 上／下方向鍵可移動" : "按住後拖拉排序"}
+      onKeyDownCapture={(event) => {
+        if (!onKeyboardMove || !event.altKey || (event.key !== "ArrowUp" && event.key !== "ArrowDown")) return;
+        event.preventDefault();
+        event.stopPropagation();
+        onKeyboardMove?.(event.key === "ArrowUp" ? -1 : 1);
+      }}
       {...attributes}
       {...listeners}
     >

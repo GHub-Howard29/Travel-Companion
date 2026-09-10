@@ -59,6 +59,8 @@ export interface SavedTravelEstimate {
 
 // 2. 對應詳細行程中的單一時間軸項目
 export interface ItineraryItem {
+  /** V3.8.0 起使用的穩定卡片識別；舊資料於下一次行程寫入時補齊。 */
+  id?: string;
   /** 到達時間；舊資料沿用既有 time 欄位 */
   time: string;
   /** 離開時間；未輸入時儲存為到達時間 */
