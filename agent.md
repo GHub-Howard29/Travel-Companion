@@ -2,7 +2,7 @@
 
 ## 目前狀態
 
-- 已發布版本：V3.7.4。
+- 已發布版本：V3.8.0。
 - V3.5.2「Supabase 資料庫權限函式硬化」已完成；正式 migration、advisors 與角色回歸通過，Product Owner 確認不建立獨立 App build／tag，App 顯示版本維持 V3.5.1。
 - V3.6.0「地點間預估移動資訊」已於 2026-08-30 合併、建立 `v3.6.0` tag 並部署；正式 Supabase、Google Cloud 與 GitHub Pages 已驗證。完整角色矩陣、正式站 OAuth 自動化登入及 Android／iOS 實機仍保留發布後補驗證。
 - V3.6.1「Android 記帳金額欄位與 PWA 更新流程修正」已於 2026-09-01 合併至 `main`、建立 `v3.6.1` tag 並部署。Android 手機已驗證更新提示一次點擊即可完成，記帳金額輸入欄位不再變形或超出畫面；更新後介面顯示偏慢已由 V3.6.5 正式版完成改善。
@@ -12,7 +12,7 @@
 - V3.7.0「當日後續行程時間連動調整」已於 2026-09-08 完成全部自動驗證、`v3.7.0` 與 GitHub Pages 部署；正式 `app-version.json` 與首頁新版資產已確認，採一般更新。桌面、Android、iOS、實際大眾運輸、離線快取及跨裝置競態指定流程保留發布後補驗。
 - V3.7.1「Day 日期顯示修正」已於 2026-09-08 完成 Day 2、跨年、閏年與無效日期專項、全部自動驗證、`v3.7.1` 與 GitHub Pages 部署；正式 `app-version.json` 與首頁新版資產已確認，採一般更新。
 - V3.7.2「農曆日期與 Day 配色」已於 2026-09-08 完成全部自動驗證、`v3.7.2` 與 GitHub Pages 部署；正式 `app-version.json` 與首頁新版資產已確認，採一般更新。
-- V3.8.0「每日行程排序與跨日複製」已於 2026-09-10 進入發布候選；候選 metadata 為必要更新、`minimumSupportedVersion: 3.8.0`、`forceUpdate: true`。實作與本機驗證已完成，待 Product Owner 手動合併 `main`、建立正式標籤與部署後回報，才可標記為已發布。
+- V3.8.0「每日行程排序與跨日複製」已於 2026-09-10 完成 `main` 合併、帶註解標籤 `v3.8.0` 與 GitHub Pages 部署；正式 metadata、主程式及行程功能資產已驗證，採必要更新，`minimumSupportedVersion: 3.8.0`、`forceUpdate: true`。登入角色、歷史行程、離線阻擋、跨裝置版本衝突與實機更新流程仍保留發布後補驗。
 - 版本順序與範圍唯一以 `docs/02_產品開發路線圖.md` 為準；未完成工作以 `docs/09_待辦事項_TODO.md` 為準；目前有效狀態以 `docs/14_專案現況總覽.md` 為準。
 
 ## 開發與安全規則

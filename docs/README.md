@@ -2,15 +2,13 @@
 
 Travel Companion 是以 Trip 為核心的 Offline First 旅行管理 PWA，使用 React、TypeScript、Vite 與 Supabase，支援行程、清單、資訊、多人帳本、附件及外幣換算。
 
-> 已發布版本：V3.7.4
+> 已發布版本：V3.8.0
 >
 > 已完成資料庫維護：V3.5.2（無獨立 App build／Git 版本標籤）
 >
-> 最新發布：V3.7.4「地圖地點搜尋問題改善」（2026-09-10；GitHub Pages、正式 metadata／資產與 Edge Function 驗證已完成，採一般更新）
+> 最新發布：V3.8.0「每日行程排序與跨日複製」（2026-09-10；GitHub Pages、正式 metadata、主程式與行程功能資產驗證已完成，採必要更新）
 >
-> V3.7.4 發布狀態為「已發布」；正式授權帳號搜尋「金閣寺」取得 5 筆候選地點，未登入請求仍遭拒絕，且未變更資料庫或既有行程資料。
->
-> 發布候選：V3.8.0「每日行程排序與跨日複製」（2026-09-10；必要更新，`minimumSupportedVersion: 3.8.0`、`forceUpdate: true`；待 Product Owner 手動合併、標籤與部署）
+> V3.8.0 發布狀態為「已發布」；`main`、帶註解標籤 `v3.8.0`、正式版本政策與新版資產均已確認，`minimumSupportedVersion: 3.8.0`、`forceUpdate: true`。
 >
 > 最後更新：2026-09-10
 
