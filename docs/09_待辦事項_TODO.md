@@ -4,9 +4,9 @@
 >
 > 最後更新：2026-09-11
 >
-> 已發布 App 版本：V3.8.0。
+> 已發布 App 版本：V3.8.1。
 
-## 目前開發：V3.8.1 Trip 刪除墓碑與唯一識別
+## 最近完成：V3.8.1 Trip 刪除墓碑與唯一識別
 
 - [x] 依已核准的桌面／手機模擬圖完成目前 Trip 遭遠端刪除後靜默切換、每日詳細行程／適合 Day 落點，以及兩筆種子 Trip 的前端與資料庫刪除保護。
 - [x] 依《39_V3.8.1_Trip刪除墓碑與唯一識別規格》完成 UUID Trip ID、永久墓碑、RLS、刪除交易與伺服器端防復活候選程式。
@@ -18,8 +18,8 @@
 - [x] 經 Product Owner 明確授權，以 `--skip-vault` 套用唯一待處理的 migration `20260910140949`；17 筆 history 完全對齊，production-safe 唯讀 postflight 10 項全數通過，PostgREST anon 讀取墓碑為 `200`、匿名刪除 RPC 為 `401`。
 - [x] 重跑 production advisors；保留原 9 筆 baseline，新增 1 筆為刻意開放 authenticated 呼叫、且由函式內 super_admin 驗證的 `tc_delete_trip` SECURITY DEFINER RPC 警告，已審查為設計預期。
 - [x] 完成桌面 1280×720、390×844 viewport、即時離線／恢復連線與兩個獨立 origin 的雙分頁刪除同步驗證；結果見《41_V3.8.1_實作與驗證紀錄》。
-- [ ] 完成 Android／iOS 實體裝置、PWA 冷啟動離線及必要更新流程補驗。
-- [ ] 依已完成的 migration／資料庫驗證 → 前端 → 正式資產 → 必要更新 metadata 順序發布；未經 Product Owner 明確要求不得部署、推送或建立 tag。
+- [ ] 完成 Android／iOS 實體裝置、PWA 冷啟動離線及舊版實機必要更新流程補驗（發布後追蹤）。
+- [x] 依 migration／資料庫驗證 → 前端 → 正式資產 → 必要更新 metadata 順序完成 V3.8.1 發布；已推送、合併、建立 tag 並部署 GitHub Pages。
 - [ ] 若實作需要規格以外的新增／調整介面或可見文案，先停止 UI 修改並補充桌面與手機模擬圖確認。
 
 ## 後續候選版本

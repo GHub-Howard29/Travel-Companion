@@ -14,6 +14,15 @@ export type VersionHistoryItem = {
 
 export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
+    version: "3.8.0",
+    date: "2026-09-10",
+    isMandatoryRelease: true,
+    notes: [
+      "每日行程新增拖曳、鍵盤及上下按鈕排序，儲存後可接著調整行程時間。",
+      "行程卡片可一次複製到同一旅程的多個其他 Day。",
+    ],
+  },
+  {
     version: "3.7.4",
     date: "2026-09-10",
     isMandatoryRelease: false,
