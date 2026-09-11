@@ -32,3 +32,10 @@ export const MAX_ATTACHMENT_BYTES = 1024 * 1024;
 
 // 壓縮後照片最長邊限制
 export const MAX_ATTACHMENT_EDGE = 1800;
+export const PROTECTED_SEED_TRIP_IDS = [
+  "free-travel-2026-01",
+  "group-tour-2026-10",
+] as const;
+
+export const isProtectedSeedTripId = (tripId: string): boolean =>
+  (PROTECTED_SEED_TRIP_IDS as readonly string[]).includes(tripId);

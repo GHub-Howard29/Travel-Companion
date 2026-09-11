@@ -11,6 +11,49 @@ export interface StoredTripRecord {
 }
 
 const TRIP_STORAGE_KEY = "travel_companion_custom_trips";
+const TRIP_CACHE_STATE_KEY = "travel_companion_trip_cache_state";
+export const TRIP_CACHE_SCHEMA_VERSION = 1;
+
+export interface TripCacheState {
+  schemaVersion: number;
+  lastDeletionRevision: number;
+  legacyRepairCompleted: boolean;
+  pendingCleanupTripIds: string[];
+}
+
+const EMPTY_TRIP_CACHE_STATE: TripCacheState = {
+  schemaVersion: TRIP_CACHE_SCHEMA_VERSION,
+  lastDeletionRevision: 0,
+  legacyRepairCompleted: false,
+  pendingCleanupTripIds: [],
+};
+
+export const readTripCacheState = (): TripCacheState => {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(TRIP_CACHE_STATE_KEY) ?? "null") as
+      Partial<TripCacheState> | null;
+    if (!parsed || typeof parsed !== "object") return { ...EMPTY_TRIP_CACHE_STATE };
+    return {
+      schemaVersion: Number.isSafeInteger(parsed.schemaVersion) && Number(parsed.schemaVersion) >= 0
+        ? Number(parsed.schemaVersion)
+        : 0,
+      lastDeletionRevision:
+        Number.isSafeInteger(parsed.lastDeletionRevision) && Number(parsed.lastDeletionRevision) >= 0
+          ? Number(parsed.lastDeletionRevision)
+          : 0,
+      legacyRepairCompleted: parsed.legacyRepairCompleted === true,
+      pendingCleanupTripIds: Array.isArray(parsed.pendingCleanupTripIds)
+        ? [...new Set(parsed.pendingCleanupTripIds.filter((value): value is string => typeof value === "string" && Boolean(value)))]
+        : [],
+    };
+  } catch {
+    return { ...EMPTY_TRIP_CACHE_STATE };
+  }
+};
+
+export const writeTripCacheState = (state: TripCacheState): void => {
+  localStorage.setItem(TRIP_CACHE_STATE_KEY, JSON.stringify(state));
+};
 
 const isStoredTripRecord = (value: unknown): value is StoredTripRecord => {
   if (!value || typeof value !== "object") return false;

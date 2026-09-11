@@ -2,26 +2,35 @@
 
 > 本文件只保留尚未完成或仍需驗證的工作；版本順序與範圍以《02_產品開發路線圖》為準。
 >
-> 最後更新：2026-09-10
+> 最後更新：2026-09-11
 >
-> 已發布 App 版本：V3.7.4。
+> 已發布 App 版本：V3.8.0。
 
-## 目前開發：V3.8.0 每日行程排序與跨日複製
+## 目前開發：V3.8.1 Trip 刪除墓碑與唯一識別
 
-> 2026-09-10：Product Owner 已確認介面、更新提示與必要更新政策；候選 metadata、本機功能及自動／版面驗證已完成。
-
-- [ ] Product Owner 手動將候選合併至 `main`、建立並推送 `v3.8.0`，再部署 GitHub Pages。
-- [ ] 部署後確認正式 metadata／首頁資產、必要更新提示與更新後版本資訊，再回報 AI 將狀態改為「已發布」。
-- [ ] 補驗 Guest、User、`trip_editor`、`super_admin`、歷史行程、離線阻擋及跨裝置版本衝突。
+- [x] 依已核准的桌面／手機模擬圖完成目前 Trip 遭遠端刪除後靜默切換、每日詳細行程／適合 Day 落點，以及兩筆種子 Trip 的前端與資料庫刪除保護。
+- [x] 依《39_V3.8.1_Trip刪除墓碑與唯一識別規格》完成 UUID Trip ID、永久墓碑、RLS、刪除交易與伺服器端防復活候選程式。
+- [x] 完成啟動／登入／重連／前景／Realtime 校正、既有 `cloudUpdatedAt` 殘留清理、seed 排除與本機資料結構版本。
+- [x] 以獨立 baseline 完成本機 Supabase migration、17 項 SQL 角色／交易驗證、database advisors、rollback 拒絕／成功、重套 migration 與再次驗證；結果見《41_V3.8.1_實作與驗證紀錄》。
+- [x] 手動執行 GitHub Actions Run #1 隔離 Auth／PostgREST／Realtime、SQL、advisors、rollback／重套與清理閘門，全部成功。
+- [x] 完成 production 唯讀 preflight：migration history 僅 V3.8.1 待套用、記錄 9 筆既有 advisor warnings、WAL-G 已啟用，且 schema 相依性與未記錄 V3.8.1 物件檢查皆無異常。
+- [x] 建立 production roles、schema 與 data logical backup，並核對非空檔案及 SHA-256；不依賴 Supabase Dashboard backup。
+- [x] 經 Product Owner 明確授權，以 `--skip-vault` 套用唯一待處理的 migration `20260910140949`；17 筆 history 完全對齊，production-safe 唯讀 postflight 10 項全數通過，PostgREST anon 讀取墓碑為 `200`、匿名刪除 RPC 為 `401`。
+- [x] 重跑 production advisors；保留原 9 筆 baseline，新增 1 筆為刻意開放 authenticated 呼叫、且由函式內 super_admin 驗證的 `tc_delete_trip` SECURITY DEFINER RPC 警告，已審查為設計預期。
+- [x] 完成桌面 1280×720、390×844 viewport、即時離線／恢復連線與兩個獨立 origin 的雙分頁刪除同步驗證；結果見《41_V3.8.1_實作與驗證紀錄》。
+- [ ] 完成 Android／iOS 實體裝置、PWA 冷啟動離線及舊版實機必要更新流程補驗（發布後追蹤）。
+- [ ] 依 migration／資料庫驗證 → 前端 → 正式資產 → 必要更新 metadata 順序完成 V3.8.1 發布；目前 metadata 候選已完成，遠端推送、合併、tag 與 GitHub Pages 待環境恢復。
+- [ ] 若實作需要規格以外的新增／調整介面或可見文案，先停止 UI 修改並補充桌面與手機模擬圖確認。
 
 ## 後續候選版本
 
-- [ ] V3.8.1：只在 V3.8.0 實際使用證明有需要時，評估排序後全日時間預覽與路線批次重查。
+- [ ] V3.8.2：依《40_V3.8.2_跨日複製時間設定規格》完成必填新時間、即時驗證、依新抵達時間插入及桌面／手機回歸。
 - [ ] V3.9.0：先驗證卡片照片來源、授權標示、快取、降級、載入效能與成本；驗證完成前不視為定案功能。
 - [ ] V3.10.0：重新確認使用紀錄的必要性與最小資料範圍；原 App 查詢介面、逐次明細、Cron、獨立角色與 TOTP 預覽均標記為先前草案、尚未定案。
 
 ## 已發布版本待補驗證
 
+- [ ] V3.8.0：Guest、User、`trip_editor`、`super_admin`、歷史行程、離線阻擋、跨裝置版本衝突，以及實機必要更新與更新後版本資訊。
 - [ ] iOS Safari／standalone PWA：Google OAuth、啟動畫面、管理欄位縮放、外部連結、附件拍照／相簿、更新提示、離線與同步。
 - [ ] V3.6.0 路線功能：完整角色與付費 API 邊界、正式站 OAuth、Android／iOS 外部開圖、離線與重新連線。
 - [ ] V3.6.1～V3.6.3：iOS、桌面／PWA 單次更新、版面、版本資訊、交通圖示及縮短天數確認流程。
@@ -30,6 +39,7 @@
 
 ## 跨版本改善候選
 
+- [ ] 只在實際使用證明有需要時，重新排程排序後全日時間預覽、路線批次重查、跨午夜與 API 成本控制；不再占用 V3.8.1。
 - [ ] 先量測離線刷新約 30 秒才載入既有資料的原因，再決定是否開發效能改善。
 - [ ] 收集帳本附件管理的具體操作問題與頻率，再決定功能範圍。
 - [ ] 依資料特性評估將保守聯集合併導入其他資訊及外幣換算，不共用單一合併策略。

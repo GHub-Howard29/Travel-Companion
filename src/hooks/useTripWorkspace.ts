@@ -22,22 +22,33 @@ import {
   createTripRecordFromDetail,
   createTripRecordFromExisting,
   deleteTripRecordWithCloudSync,
+  DuplicateTripIdError,
   getAdminProfiles,
-  getInitialTripWorkspaceSnapshot,
   getTripDetail,
   getTripEditorEmails,
   getTripMetas,
   getSuperAdminEmails,
   HistoricalTripLockedError,
-  type InitialTripWorkspaceSnapshot,
   saveTripRecord,
   saveTripRecordWithCloudSync,
   syncTripEditorEmails,
   updateTripRecord,
 } from "../services/tripRepository";
 import { ROLE, type Role } from "../permissions/roles";
-import { removeRestrictedOtherInfoFromStoredTrip } from "../storage/tripStorage";
+import {
+  readStoredTripRecords,
+  readTripCacheState,
+  removeRestrictedOtherInfoFromStoredTrip,
+  replaceStoredTripRecords,
+  writeTripCacheState,
+} from "../storage/tripStorage";
 import { removeRestrictedStoredOtherInfoItems } from "../storage/otherInfoStorage";
+import {
+  getCloudTripRecordsStrict,
+  getTripDeletionTombstones,
+} from "../services/tripCloudService";
+import { decideTripReconciliation } from "../services/tripReconciliation";
+import { clearSharedTripDataAfterAccessLoss } from "../storage/sharedTripDataStorage";
 
 interface UseTripWorkspaceOptions {
   supabase: SupabaseClient;
@@ -66,9 +77,15 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
   >([]);
   // 防止重連時較早開始的讀取，在較新的儲存後才回寫舊快照。
   const tripLoadRevisionRef = useRef(0);
-  const initialCloudRecordsRef = useRef<
-    InitialTripWorkspaceSnapshot["cloudRecords"] | null
-  >(null);
+  const initialCloudRecordsRef = useRef<Awaited<ReturnType<typeof getCloudTripRecordsStrict>> | null>(null);
+  const reconciliationPromiseRef = useRef<Promise<boolean> | null>(null);
+  const selectedTripIdRef = useRef(selectedTripId);
+  const userEmailRef = useRef(userEmail);
+
+  useEffect(() => {
+    selectedTripIdRef.current = selectedTripId;
+    userEmailRef.current = userEmail;
+  }, [selectedTripId, userEmail]);
 
   const selectedTripMeta = tripOptions.find((trip) => trip.id === selectedTripId);
   const currentMembers = useMemo(
@@ -172,22 +189,94 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
     };
   }, []);
 
+  const reconcileTripWorkspace = useCallback(async (): Promise<boolean> => {
+    if (!isSessionReady || !navigator.onLine) return false;
+    if (reconciliationPromiseRef.current) return reconciliationPromiseRef.current;
+
+    const reconciliation = (async () => {
+      const [cloudRecords, tombstones] = await Promise.all([
+        getCloudTripRecordsStrict(supabase),
+        getTripDeletionTombstones(supabase),
+      ]);
+      const decision = decideTripReconciliation(
+        readStoredTripRecords(),
+        cloudRecords,
+        tombstones,
+        readTripCacheState(),
+      );
+
+      replaceStoredTripRecords(decision.storedRecords);
+      writeTripCacheState(decision.nextState);
+      for (const tripId of decision.cleanupTripIds) {
+        await clearSharedTripDataAfterAccessLoss(
+          tripId,
+          userEmailRef.current ?? "",
+          true,
+        );
+      }
+      writeTripCacheState({
+        ...decision.nextState,
+        pendingCleanupTripIds: [],
+      });
+
+      const tombstoneIds = new Set(tombstones.map((tombstone) => tombstone.tripId));
+      const nextTrips = await getTripMetas(
+        supabase,
+        getBasePath(),
+        cloudRecords,
+        tombstoneIds,
+      );
+      const currentSelectedTripId = selectedTripIdRef.current;
+      const selectedTripWasRemoved = Boolean(
+        currentSelectedTripId &&
+        !nextTrips.some((trip) => trip.id === currentSelectedTripId),
+      );
+
+      setTripOptions(nextTrips);
+      if (selectedTripWasRemoved || !currentSelectedTripId) {
+        const nextTrip = findDefaultTrip(nextTrips) ?? nextTrips[0] ?? null;
+        tripLoadRevisionRef.current += 1;
+        initialCloudRecordsRef.current = cloudRecords.filter(
+          (record) => !tombstoneIds.has(record.meta.id),
+        );
+        setCurrentTrip(null);
+        setCurrentScreen("itinerary");
+        setActiveDay(1);
+        setSelectedTripId(nextTrip?.id ?? "");
+        setIsLoading(Boolean(nextTrip));
+      }
+
+      return selectedTripWasRemoved;
+    })().finally(() => {
+      reconciliationPromiseRef.current = null;
+    });
+
+    reconciliationPromiseRef.current = reconciliation;
+    return reconciliation;
+  }, [getBasePath, isSessionReady, supabase]);
+
   useEffect(() => {
     if (!isSessionReady) return;
 
     let isActive = true;
-    getInitialTripWorkspaceSnapshot(supabase, getBasePath())
-      .then(({ tripMetas: sortedTrips, cloudRecords }) => {
-        if (!isActive) return;
-        initialCloudRecordsRef.current = cloudRecords;
-        setTripOptions(sortedTrips);
+    const loadInitialWorkspace = async () => {
+      if (navigator.onLine) {
+        await reconcileTripWorkspace();
+        return;
+      }
 
-        if (sortedTrips.length > 0) {
-          const defaultTrip = findDefaultTrip(sortedTrips);
-          const initialTrip = defaultTrip || sortedTrips[0];
-          setSelectedTripId(initialTrip.id);
-        }
-      })
+      const sortedTrips = await getTripMetas(supabase, getBasePath());
+      if (!isActive) return;
+      setTripOptions(sortedTrips);
+      if (sortedTrips.length > 0) {
+        const defaultTrip = findDefaultTrip(sortedTrips) ?? sortedTrips[0];
+        setSelectedTripId(defaultTrip.id);
+      } else {
+        setIsLoading(false);
+      }
+    };
+
+    void loadInitialWorkspace()
       .catch((error) => {
         if (!isActive) return;
         console.error(error);
@@ -197,7 +286,29 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
     return () => {
       isActive = false;
     };
-  }, [getBasePath, isSessionReady, supabase]);
+  }, [getBasePath, isSessionReady, reconcileTripWorkspace, supabase]);
+
+  useEffect(() => {
+    if (!isSessionReady || !isOnline) return;
+    const reconcile = () => {
+      void reconcileTripWorkspace().catch((error) => {
+        console.warn("Trip reconciliation failed; local data was preserved", error);
+      });
+    };
+    const reconcileWhenVisible = () => {
+      if (document.visibilityState === "visible") reconcile();
+    };
+
+    window.addEventListener("online", reconcile);
+    window.addEventListener("focus", reconcile);
+    document.addEventListener("visibilitychange", reconcileWhenVisible);
+    reconcile();
+    return () => {
+      window.removeEventListener("online", reconcile);
+      window.removeEventListener("focus", reconcile);
+      document.removeEventListener("visibilitychange", reconcileWhenVisible);
+    };
+  }, [isOnline, isSessionReady, reconcileTripWorkspace, userEmail]);
 
   useEffect(() => {
     if (!selectedTripId) return;
@@ -384,12 +495,22 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
 
   const createTrip = useCallback(
     async (input: TripEditorInput, syncEditors = true) => {
-      const record = createTripRecord(input);
-      await createTripRecordWithCloudSync(
-        supabase,
-        record,
-        tripOptions.map((trip) => trip.id),
-      );
+      let record = createTripRecord(input);
+      try {
+        record = await createTripRecordWithCloudSync(
+          supabase,
+          record,
+          tripOptions.map((trip) => trip.id),
+        );
+      } catch (error) {
+        if (!(error instanceof DuplicateTripIdError)) throw error;
+        record = createTripRecord(input);
+        record = await createTripRecordWithCloudSync(
+          supabase,
+          record,
+          tripOptions.map((trip) => trip.id),
+        );
+      }
       if (syncEditors) {
         await syncTripEditorEmails(supabase, record.meta.id, record.editorEmails);
       }
@@ -602,6 +723,7 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
     saveCurrentTripDetail,
     saveCurrentTripDetailLocally,
     reloadCurrentTrip,
+    reconcileTripWorkspace,
     currentTripEditorEmails,
     superAdminEmails,
     defaultParticipantProfiles,

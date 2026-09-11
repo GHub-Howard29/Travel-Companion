@@ -16,6 +16,18 @@ interface CloudTripRow {
   updated_at: string;
 }
 
+interface TripDeletionTombstoneRow {
+  trip_id: string;
+  deleted_at: string;
+  deletion_revision: number | string;
+}
+
+export interface TripDeletionTombstone {
+  tripId: string;
+  deletedAt: string;
+  deletionRevision: number;
+}
+
 const toCloudTripInsert = (record: StoredTripRecord) => ({
   id: record.meta.id,
   title: record.meta.title,
@@ -205,6 +217,19 @@ export const getCloudTripRecords = async (
 ): Promise<StoredTripRecord[]> => {
   if (!navigator.onLine) return [];
 
+  try {
+    return await getCloudTripRecordsStrict(supabase);
+  } catch (error) {
+    console.warn("Failed to load cloud trips", error);
+    return [];
+  }
+};
+
+export const getCloudTripRecordsStrict = async (
+  supabase: SupabaseClient,
+): Promise<StoredTripRecord[]> => {
+  if (!navigator.onLine) throw new Error("Trip cloud reconciliation requires a network connection");
+
   const { data, error } = await supabase
     .from("trips")
     .select(
@@ -212,14 +237,50 @@ export const getCloudTripRecords = async (
     )
     .order("departure_date", { ascending: false });
 
-  if (error) {
-    console.warn("Failed to load cloud trips", error);
-    return [];
-  }
+  if (error) throw error;
 
   return ((data ?? []) as CloudTripRow[])
     .map(toTripRecord)
     .filter((record): record is StoredTripRecord => Boolean(record));
+};
+
+export const getTripDeletionTombstones = async (
+  supabase: SupabaseClient,
+): Promise<TripDeletionTombstone[]> => {
+  if (!navigator.onLine) throw new Error("Trip tombstone reconciliation requires a network connection");
+
+  const { data, error } = await supabase
+    .from("trip_deletion_tombstones")
+    .select("trip_id, deleted_at, deletion_revision")
+    .order("deletion_revision", { ascending: true });
+
+  if (error) throw error;
+
+  return ((data ?? []) as TripDeletionTombstoneRow[]).map((row) => {
+    const deletionRevision = Number(row.deletion_revision);
+    if (!Number.isSafeInteger(deletionRevision) || deletionRevision < 0) {
+      throw new Error(`Invalid Trip tombstone revision for ${row.trip_id}`);
+    }
+    return {
+      tripId: row.trip_id,
+      deletedAt: row.deleted_at,
+      deletionRevision,
+    };
+  });
+};
+
+export const cloudTripTombstoneExists = async (
+  supabase: SupabaseClient,
+  tripId: string,
+): Promise<boolean> => {
+  const { data, error } = await supabase
+    .from("trip_deletion_tombstones")
+    .select("trip_id")
+    .eq("trip_id", tripId)
+    .maybeSingle();
+
+  if (error) throw error;
+  return Boolean(data);
 };
 
 export const upsertCloudTripRecord = async (
@@ -328,31 +389,33 @@ export const deleteCloudTripRecord = async (
     return false;
   }
 
-  const cleanupRequests = [
-    supabase.from("checklists").delete().eq("trip_id", tripId),
-    supabase.from("other_info_items").delete().eq("trip_id", tripId),
-    supabase.from("exchange_purchases").delete().eq("trip_id", tripId),
-    supabase
-      .from("admin_users")
-      .delete()
-      .eq("role", "trip_editor")
-      .eq("trip_id", tripId),
-    supabase.from("expenses").delete().eq("trip_id", tripId),
-  ];
+  const { data, error } = await supabase.rpc("tc_delete_trip", {
+    target_trip_id: tripId,
+  });
+  if (error) throw error;
 
-  for (const request of cleanupRequests) {
-    const { error } = await request;
-    if (error) {
-      console.warn("Failed to clean related trip data", error);
-    }
+  const result = Array.isArray(data) ? data[0] as {
+    deleted_trip_id?: unknown;
+    deletion_revision?: unknown;
+  } | undefined : undefined;
+  const deletionRevision = Number(result?.deletion_revision);
+  if (
+    result?.deleted_trip_id !== tripId ||
+    !Number.isSafeInteger(deletionRevision) ||
+    deletionRevision < 0
+  ) {
+    throw new Error("Trip deletion RPC did not return a valid tombstone");
   }
 
-  const { error } = await supabase.from("trips").delete().eq("id", tripId);
-
-  if (error) {
-    console.warn("Failed to delete cloud trip", error);
-    return false;
+  const { data: tombstone, error: tombstoneError } = await supabase
+    .from("trip_deletion_tombstones")
+    .select("trip_id, deletion_revision")
+    .eq("trip_id", tripId)
+    .eq("deletion_revision", deletionRevision)
+    .maybeSingle();
+  if (tombstoneError) throw tombstoneError;
+  if (!tombstone) {
+    throw new Error("Trip deletion committed but its tombstone could not be confirmed");
   }
-
   return true;
 };

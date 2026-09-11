@@ -1,10 +1,10 @@
 {
-  "version": "3.8.0",
-  "minimumSupportedVersion": "3.8.0",
-  "releaseDate": "2026-09-10",
+  "version": "3.8.1",
+  "minimumSupportedVersion": "3.8.1",
+  "releaseDate": "2026-09-11",
   "releaseNotes": [
-    "每日行程新增拖曳、鍵盤及上下按鈕排序，儲存後可接著調整行程時間。",
-    "行程卡片可一次複製到同一旅程的多個其他 Day。"
+    "強化旅程刪除與跨裝置同步：旅程刪除後會在其他裝置同步移除，不會再次復活。",
+    "新增穩定的旅程識別，支援相同日期建立多趟旅程，並保護系統保留旅程避免誤刪。"
   ],
   "forceUpdate": true
 }
