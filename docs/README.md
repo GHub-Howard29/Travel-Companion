@@ -10,7 +10,7 @@ Travel Companion 是以 Trip 為核心的 Offline First 旅行管理 PWA，使�
 >
 > V3.8.0 發布狀態為「已發布」；`main`、帶註解標籤 `v3.8.0`、正式版本政策與新版資產均已確認，`minimumSupportedVersion: 3.8.0`、`forceUpdate: true`。
 >
-> 目前開發：V3.8.1「Trip 刪除墓碑與唯一識別」候選程式、migration、本機隔離資料庫、GitHub Actions API 與 production 唯讀 preflight 已完成，待最近一次每日備份確認及桌面、390×844、離線重連與雙裝置驗證；採必要更新，正式發布日期待驗證後確認。V3.8.2「跨日複製時間設定」需求與 UI 已核准，排在其後。
+> 目前開發：V3.8.1「Trip 刪除墓碑與唯一識別」候選程式、本機隔離資料庫與 GitHub Actions API 已完成；2026-09-11 已建立 production logical backup、正式套用 migration，且唯讀 postflight 10 項全數通過。待桌面、390×844、離線重連與雙裝置驗證；採必要更新，正式發布日期待驗證後確認。V3.8.2「跨日複製時間設定」需求與 UI 已核准，排在其後。
 >
 > 最後更新：2026-09-11
 

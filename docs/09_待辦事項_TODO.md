@@ -14,9 +14,11 @@
 - [x] 以獨立 baseline 完成本機 Supabase migration、17 項 SQL 角色／交易驗證、database advisors、rollback 拒絕／成功、重套 migration 與再次驗證；結果見《41_V3.8.1_實作與驗證紀錄》。
 - [x] 手動執行 GitHub Actions Run #1 隔離 Auth／PostgREST／Realtime、SQL、advisors、rollback／重套與清理閘門，全部成功。
 - [x] 完成 production 唯讀 preflight：migration history 僅 V3.8.1 待套用、記錄 9 筆既有 advisor warnings、WAL-G 已啟用，且 schema 相依性與未記錄 V3.8.1 物件檢查皆無異常。
-- [ ] 於 Supabase Dashboard 確認最近一次每日備份時間；目前 CLI 只確認 WAL-G `true`、PITR `false`，未提供每日備份時間。
+- [x] 建立 production roles、schema 與 data logical backup，並核對非空檔案及 SHA-256；不依賴 Supabase Dashboard backup。
+- [x] 經 Product Owner 明確授權，以 `--skip-vault` 套用唯一待處理的 migration `20260910140949`；17 筆 history 完全對齊，production-safe 唯讀 postflight 10 項全數通過，PostgREST anon 讀取墓碑為 `200`、匿名刪除 RPC 為 `401`。
+- [x] 重跑 production advisors；保留原 9 筆 baseline，新增 1 筆為刻意開放 authenticated 呼叫、且由函式內 super_admin 驗證的 `tc_delete_trip` SECURITY DEFINER RPC 警告，已審查為設計預期。
 - [ ] 完成桌面、390×844、離線重連與雙裝置實機驗證。
-- [ ] 依 migration → 資料庫驗證 → 前端 → 正式資產 → 必要更新 metadata 順序發布；未經 Product Owner 明確要求不得套用 production、部署、推送或建立 tag。
+- [ ] 依已完成的 migration／資料庫驗證 → 前端 → 正式資產 → 必要更新 metadata 順序發布；未經 Product Owner 明確要求不得部署、推送或建立 tag。
 - [ ] 若實作需要規格以外的新增／調整介面或可見文案，先停止 UI 修改並補充桌面與手機模擬圖確認。
 
 ## 後續候選版本
