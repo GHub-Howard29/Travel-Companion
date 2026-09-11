@@ -288,6 +288,7 @@ function ConfiguredApp({
   const canEditTripMaster = canEditSharedTrip && !isTripMasterLocked;
   const [tripEditorMode, setTripEditorMode] = useState<"create" | "edit">("create");
   const [isTripEditorOpen, setIsTripEditorOpen] = useState(false);
+  const [tripEditorTargetTripId, setTripEditorTargetTripId] = useState<string | null>(null);
   const [isSharedDataManageMode, setIsSharedDataManageMode] = useState(false);
   const [isVersionInfoOpen, setIsVersionInfoOpen] = useState(false);
   const [isLoginSafetyOpen, setIsLoginSafetyOpen] = useState(false);
@@ -547,6 +548,7 @@ function ConfiguredApp({
     try {
       await refreshDefaultParticipantProfiles();
       setTripEditorMode("create");
+      setTripEditorTargetTripId(null);
       setIsTripEditorOpen(true);
     } catch (error) {
       console.error("Failed to load administrator profiles:", error);
@@ -556,8 +558,10 @@ function ConfiguredApp({
   const openEditTrip = () => {
     if (!canEditTripMaster) return;
     setTripEditorMode("edit");
+    setTripEditorTargetTripId(selectedTripId);
     setIsTripEditorOpen(true);
   };
+
   const handleTripEditorSubmit = async (input: TripEditorInput) => {
     if (!canEditTripMaster) return;
     if (await checkForRemoteTripChange()) {
@@ -1043,7 +1047,9 @@ function ConfiguredApp({
         onOpenVersionInfo={() => setIsVersionInfoOpen(true)}
       />
 
-      {isTripEditorOpen && canEditTripMaster && (
+      {isTripEditorOpen &&
+        canEditTripMaster &&
+        (tripEditorMode !== "edit" || tripEditorTargetTripId === selectedTripId) && (
         <Suspense fallback={null}>
         <TripEditorModal
           key={`${tripEditorMode}-${selectedTripId || "new"}`}
