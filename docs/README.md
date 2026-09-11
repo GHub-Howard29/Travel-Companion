@@ -2,15 +2,15 @@
 
 Travel Companion 是以 Trip 為核心的 Offline First 旅行管理 PWA，使用 React、TypeScript、Vite 與 Supabase，支援行程、清單、資訊、多人帳本、附件及外幣換算。
 
-> 已發布版本：V3.8.1
+> 已發布版本：V3.8.0
 >
 > 已完成資料庫維護：V3.5.2（無獨立 App build／Git 版本標籤）
 >
-> 最新發布：V3.8.1「Trip 刪除墓碑與唯一識別」（2026-09-11；GitHub Pages、正式 metadata、主程式與資料庫驗證已完成，採必要更新）
+> 最新發布：V3.8.0「每日行程排序與跨日複製」（2026-09-10；GitHub Pages、正式 metadata、主程式與行程功能資產驗證已完成，採必要更新）
 >
-> V3.8.1 發布狀態為「已發布」；`main`、帶註解標籤 `v3.8.1`、正式版本政策與新版資產均已確認，`minimumSupportedVersion: 3.8.1`、`forceUpdate: true`。更新提示文案已核准：刪除後跨裝置同步移除、不會復活，並新增穩定旅程識別與系統保留旅程保護。
+> V3.8.0 發布狀態為「已發布」；`main`、帶註解標籤 `v3.8.0`、正式版本政策與新版資產均已確認，`minimumSupportedVersion: 3.8.0`、`forceUpdate: true`。
 >
-> 目前開發：V3.8.1「Trip 刪除墓碑與唯一識別」完整開發與發布流程已完成；production logical backup、migration、唯讀 postflight 10 項、桌面／390×844、即時離線重連、雙分頁同步、前端資產與正式 metadata 均已確認。Android／iOS 實體裝置、PWA 冷啟動離線及舊版實機必要更新提示列發布後補驗；V3.8.2「跨日複製時間設定」需求與 UI 已核准，排在其後。
+> 目前開發：V3.8.1「Trip 刪除墓碑與唯一識別」開發、production migration、完整驗證、前端資產與 metadata 候選已完成；遠端推送、`main` 合併、tag、GitHub Pages、正式站 smoke 與實體裝置補驗待環境恢復。更新提示文案已核准；V3.8.2「跨日複製時間設定」需求與 UI 已核准，排在其後。
 >
 > 最後更新：2026-09-11
 
