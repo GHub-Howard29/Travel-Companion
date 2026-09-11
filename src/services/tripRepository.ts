@@ -17,6 +17,7 @@ import {
 } from "../storage/tripStorage";
 import {
   cloudTripExists,
+  cloudTripTombstoneExists,
   deleteCloudTripRecord,
   getCloudTripRecords,
   insertCloudTripRecord,
@@ -29,6 +30,9 @@ import { sortTripsByDateDesc } from "../utils/tripHelpers";
 import { readOtherInfoSyncState } from "../storage/otherInfoSyncStorage";
 import { normalizeOtherInfoItems } from "../utils/otherInfoUtils";
 import { loadInitialWorkspaceSnapshot } from "./tripInitialization";
+import { isProtectedSeedTripId } from "../constants/appConstants";
+import { createTripId } from "../utils/tripIdentity";
+export { createTripId } from "../utils/tripIdentity";
 
 const SPECIAL_INFO_SCREEN_ID = "trip_special_info";
 const LEGACY_SPECIAL_INFO_SCREEN_IDS = new Set([
@@ -228,13 +232,7 @@ const normalizeTripDetail = (
   };
 };
 
-export const createTripId = (
-  mode: TripMode,
-  departureDate: string,
-): string => {
-  const prefix = mode === "selfGuided" ? "free-travel" : "group-tour";
-  return `${prefix}-${departureDate}`;
-};
+export type TripIdFactory = () => string;
 
 const createDays = (dayCount: number): number[] => {
   return Array.from({ length: dayCount }, (_, index) => index + 1);
@@ -369,14 +367,17 @@ export const getTripMetas = async (
   supabase: SupabaseClient,
   basePath: string,
   initialCloudRecords?: StoredTripRecord[],
+  excludedTripIds: ReadonlySet<string> = new Set(),
 ): Promise<TripMeta[]> => {
   const seedUrl = `${basePath}trips/list.json`.replace(/\/+/g, "/");
-  const seedTrips = await enrichSeedTripsWithDayCount(
+  const seedTrips = (await enrichSeedTripsWithDayCount(
     basePath,
     (await fetchJson<TripMeta[]>(seedUrl)) ?? [],
-  );
-  const cloudRecords = initialCloudRecords ?? await getCloudTripRecords(supabase);
-  const currentStoredRecords = readStoredTripRecords();
+  )).filter((trip) => !excludedTripIds.has(trip.id));
+  const cloudRecords = (initialCloudRecords ?? await getCloudTripRecords(supabase))
+    .filter((record) => !excludedTripIds.has(record.meta.id));
+  const currentStoredRecords = readStoredTripRecords()
+    .filter((record) => !excludedTripIds.has(record.meta.id));
   const storedRecords = (() => {
     if (cloudRecords.length === 0) return currentStoredRecords;
 
@@ -465,8 +466,11 @@ export const getTripDetail = async (
   return seedDetail ? normalizeTripDetail(seedDetail, selectedTripMeta) : null;
 };
 
-export const createTripRecord = (input: TripEditorInput): StoredTripRecord => {
-  const id = createTripId(input.mode, input.departureDate);
+export const createTripRecord = (
+  input: TripEditorInput,
+  createId: TripIdFactory = createTripId,
+): StoredTripRecord => {
+  const id = createId();
   const days = createDays(input.dayCount);
   const editorEmails = normalizeEmails(input.editorEmails);
   const mode = input.mode;
@@ -518,9 +522,12 @@ export const createTripRecord = (input: TripEditorInput): StoredTripRecord => {
 };
 
 export class DuplicateTripIdError extends Error {
-  constructor(public readonly tripId: string) {
+  readonly tripId: string;
+
+  constructor(tripId: string) {
     super(`Trip ID 已存在：${tripId}`);
     this.name = "DuplicateTripIdError";
+    this.tripId = tripId;
   }
 }
 
@@ -563,6 +570,9 @@ export const createTripRecordWithCloudSync = async (
   }
 
   if (await cloudTripExists(supabase, record.meta.id)) {
+    throw new DuplicateTripIdError(record.meta.id);
+  }
+  if (await cloudTripTombstoneExists(supabase, record.meta.id)) {
     throw new DuplicateTripIdError(record.meta.id);
   }
 
@@ -770,9 +780,12 @@ export const deleteTripRecordWithCloudSync = async (
   supabase: SupabaseClient,
   tripId: string,
 ): Promise<void> => {
+  if (isProtectedSeedTripId(tripId)) {
+    throw new Error("系統保留旅程不可刪除");
+  }
   const didDeleteCloudRecord = await deleteCloudTripRecord(supabase, tripId);
   if (!didDeleteCloudRecord) {
-    throw new Error("無法完成行程刪除，雲端附件與資料均未變更。");
+    throw new Error("附件清理或刪除確認未完成，Trip 資料庫交易尚未執行");
   }
 
   deleteStoredTripRecord(tripId);

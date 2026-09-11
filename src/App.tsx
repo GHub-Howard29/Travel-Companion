@@ -242,6 +242,7 @@ function ConfiguredApp({
     saveCurrentTripDetail,
     saveCurrentTripDetailLocally,
     reloadCurrentTrip,
+    reconcileTripWorkspace,
     currentTripEditorEmails,
     superAdminEmails,
     defaultParticipantProfiles,
@@ -282,6 +283,7 @@ function ConfiguredApp({
     role,
     hasAnyManagementRole,
     isOnline,
+    onReconcileTrips: reconcileTripWorkspace,
   });
   const canEditTripMaster = canEditSharedTrip && !isTripMasterLocked;
   const [tripEditorMode, setTripEditorMode] = useState<"create" | "edit">("create");
@@ -587,9 +589,7 @@ function ConfiguredApp({
     } catch (error) {
       console.error("Trip save failed:", error);
       if (error instanceof DuplicateTripIdError) {
-        alert(
-          "相同旅程型態與初始出發日期的旅程已存在，請調整初始出發日期或旅程型態後再試。",
-        );
+        alert("無法建立唯一的旅程識別碼，請重新開啟新增旅程後再試。");
       } else if (error instanceof TripCreationOfflineError) {
         alert("新增旅程需要網路連線");
       } else if (error instanceof HistoricalTripLockedError) {
@@ -619,7 +619,7 @@ function ConfiguredApp({
       setIsMenuOpen(false);
     } catch (error) {
       console.error("Trip deletion failed:", error);
-      alert("無法完成行程刪除，雲端資料未變更。請確認網路後再試一次。");
+      alert("無法確認旅程已完整刪除，請保留此畫面並確認網路後再試一次。");
       setIsLoading(false);
     }
   };
@@ -1017,9 +1017,7 @@ function ConfiguredApp({
                 applyTripDefaults(selectedTrip);
               }
 
-              if (!didFindPreferredTrip) {
-                alert("此旅程已被其他設備刪除，已切換到目前可用的旅程。");
-              }
+              if (!didFindPreferredTrip) setCurrentScreen("itinerary");
 
               setIsMenuOpen(false);
             },

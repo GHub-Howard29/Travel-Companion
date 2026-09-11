@@ -12,6 +12,7 @@ import {
   getRemovedDayImpacts,
   type RemovedDayImpact,
 } from "../utils/tripHelpers";
+import { isProtectedSeedTripId } from "../constants/appConstants";
 
 interface TripEditorModalProps {
   mode: "create" | "edit";
@@ -126,6 +127,7 @@ export const TripEditorModal = ({
   onDelete,
   historicalTripEndDate,
 }: TripEditorModalProps) => {
+  const isDeleteProtected = Boolean(trip && isProtectedSeedTripId(trip.id));
   const [title, setTitle] = useState(trip?.title ?? "");
   const [departureDate, setDepartureDate] = useState(
     trip?.departureDate ?? new Date().toISOString().slice(0, 10),
@@ -278,7 +280,13 @@ export const TripEditorModal = ({
   };
 
   const handleDelete = async () => {
-    if (mode !== "edit" || !trip || !onDelete || !canManageEditors) return;
+    if (
+      mode !== "edit" ||
+      !trip ||
+      !onDelete ||
+      !canManageEditors ||
+      isDeleteProtected
+    ) return;
 
     const firstConfirm = confirm(`確定要刪除「${trip.title}」整個旅程？`);
     if (!firstConfirm) return;
@@ -573,11 +581,16 @@ export const TripEditorModal = ({
             <button
               type="button"
               onClick={() => void handleDelete()}
-              disabled={isSaving || isDeleting}
+              disabled={isSaving || isDeleting || isDeleteProtected}
               className="w-full rounded-lg border border-rose-200 bg-rose-50 px-4 py-2.5 text-sm font-bold text-rose-700 hover:bg-rose-100 disabled:opacity-60"
             >
               {isDeleting ? "刪除中..." : "刪除整個旅程"}
             </button>
+            {isDeleteProtected && (
+              <p className="mt-2 text-xs leading-5 text-slate-500">
+                此為系統保留旅程，無法刪除；仍可編輯旅程內容。
+              </p>
+            )}
           </div>
         )}
       </form>

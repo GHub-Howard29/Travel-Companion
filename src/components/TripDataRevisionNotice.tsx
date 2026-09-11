@@ -8,14 +8,10 @@ interface TripDataRevisionNoticeProps {
   onReload: () => void;
 }
 
-const criticalCopy: Record<"deleted" | "revoked" | "conflict", {
+const criticalCopy: Record<"revoked" | "conflict", {
   title: string;
   body: string;
 }> = {
-  deleted: {
-    title: "此行程已被刪除",
-    body: "此行程已被其他裝置刪除。App 將清除本行程尚未同步的共用資料，重新載入並切換至目前可用的行程。",
-  },
   revoked: {
     title: "本行程編輯權限已變更",
     body: "你的本行程編輯權限已被其他裝置移除。App 已清除本行程尚未同步的共用資料；私人資料會保留。請重新載入以套用最新權限。",
@@ -34,7 +30,7 @@ export const TripDataRevisionNotice = ({
 }: TripDataRevisionNoticeProps) => {
   if (!kind) return null;
 
-  if (kind === "deleted" || kind === "revoked" || kind === "conflict") {
+  if (kind === "revoked" || kind === "conflict") {
     const copy = criticalCopy[kind];
     return (
       <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50 sm:items-center">

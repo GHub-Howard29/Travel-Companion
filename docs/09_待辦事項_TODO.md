@@ -8,15 +8,17 @@
 
 ## 目前開發：V3.8.1 Trip 刪除墓碑與唯一識別
 
-- [ ] 先提供目前 Trip 遭遠端刪除後靜默切換的桌面／手機模擬圖，確認選單、預設 Trip、目前頁面／Day 與無可用 Trip 狀態；核准前不得修改相關前端程式。
-- [ ] 依《39_V3.8.1_Trip刪除墓碑與唯一識別規格》完成 UUID Trip ID、永久墓碑、RLS、刪除交易與伺服器端防復活。
-- [ ] 完成啟動／登入／重連／前景／Realtime 校正、既有 `cloudUpdatedAt` 殘留清理、seed 排除與本機資料結構版本。
-- [ ] 補齊 migration validation／rollback、database advisors、專項測試、TypeScript、lint、build、角色、離線及雙裝置驗證。
+- [x] 依已核准的桌面／手機模擬圖完成目前 Trip 遭遠端刪除後靜默切換、每日詳細行程／適合 Day 落點，以及兩筆種子 Trip 的前端與資料庫刪除保護。
+- [x] 依《39_V3.8.1_Trip刪除墓碑與唯一識別規格》完成 UUID Trip ID、永久墓碑、RLS、刪除交易與伺服器端防復活候選程式。
+- [x] 完成啟動／登入／重連／前景／Realtime 校正、既有 `cloudUpdatedAt` 殘留清理、seed 排除與本機資料結構版本。
+- [x] 以獨立 baseline 完成本機 Supabase migration、17 項 SQL 角色／交易驗證、database advisors、rollback 拒絕／成功、重套 migration 與再次驗證；結果見《41_V3.8.1_實作與驗證紀錄》。
+- [ ] 執行手動 GitHub Actions 隔離 Auth／PostgREST／Realtime 閘門，以及桌面、390×844、離線重連與雙裝置實機驗證。
 - [ ] 依 migration → 資料庫驗證 → 前端 → 正式資產 → 必要更新 metadata 順序發布；未經 Product Owner 明確要求不得套用 production、部署、推送或建立 tag。
 - [ ] 若實作需要規格以外的新增／調整介面或可見文案，先停止 UI 修改並補充桌面與手機模擬圖確認。
 
 ## 後續候選版本
 
+- [ ] V3.8.2：依《40_V3.8.2_跨日複製時間設定規格》完成必填新時間、即時驗證、依新抵達時間插入及桌面／手機回歸。
 - [ ] V3.9.0：先驗證卡片照片來源、授權標示、快取、降級、載入效能與成本；驗證完成前不視為定案功能。
 - [ ] V3.10.0：重新確認使用紀錄的必要性與最小資料範圍；原 App 查詢介面、逐次明細、Cron、獨立角色與 TOTP 預覽均標記為先前草案、尚未定案。
 

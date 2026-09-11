@@ -14,7 +14,6 @@ import { clearSharedTripDataAfterAccessLoss } from "../storage/sharedTripDataSto
 export type TripDataNoticeKind =
   | "available"
   | "snoozed"
-  | "deleted"
   | "revoked"
   | "conflict";
 
@@ -26,6 +25,7 @@ interface UseTripDataRevisionOptions {
   role: Role;
   hasAnyManagementRole: boolean;
   isOnline: boolean;
+  onReconcileTrips: () => Promise<boolean>;
 }
 
 export const useTripDataRevision = ({
@@ -36,6 +36,7 @@ export const useTripDataRevision = ({
   role,
   hasAnyManagementRole,
   isOnline,
+  onReconcileTrips,
 }: UseTripDataRevisionOptions) => {
   const [noticeKind, setNoticeKind] = useState<TripDataNoticeKind | null>(null);
   const knownRevisionRef = useRef<number | null>(null);
@@ -60,10 +61,16 @@ export const useTripDataRevision = ({
     }
 
     try {
+      const selectedTripWasRemoved = await onReconcileTrips();
+      if (selectedTripWasRemoved) {
+        setNoticeKind(null);
+        return;
+      }
+
       const access = await getCurrentTripRemoteAccess(supabase, tripId, email);
       if (!access.tripExists) {
-        await clearSharedTripDataAfterAccessLoss(tripId, email, true);
-        setNoticeKind("deleted");
+        await onReconcileTrips();
+        setNoticeKind(null);
         return;
       }
       if (
@@ -76,7 +83,7 @@ export const useTripDataRevision = ({
         return;
       }
       setNoticeKind((current) =>
-        current === "deleted" || current === "revoked" || current === "conflict"
+        current === "revoked" || current === "conflict"
           ? current
           : "available",
       );
@@ -84,7 +91,7 @@ export const useTripDataRevision = ({
       console.warn("Failed to revalidate Trip access after revision", error);
       setNoticeKind((current) => current ?? "available");
     }
-  }, [supabase]);
+  }, [onReconcileTrips, supabase]);
 
   const scheduleNotice = useCallback(() => {
     pendingNoticeRef.current = true;
@@ -153,7 +160,6 @@ export const useTripDataRevision = ({
       !isOnline ||
       !userId ||
       !hasAnyManagementRole ||
-      noticeKind === "deleted" ||
       noticeKind === "revoked"
     ) return;
 
