@@ -13,6 +13,8 @@
 - [x] 完成啟動／登入／重連／前景／Realtime 校正、既有 `cloudUpdatedAt` 殘留清理、seed 排除與本機資料結構版本。
 - [x] 以獨立 baseline 完成本機 Supabase migration、17 項 SQL 角色／交易驗證、database advisors、rollback 拒絕／成功、重套 migration 與再次驗證；結果見《41_V3.8.1_實作與驗證紀錄》。
 - [x] 手動執行 GitHub Actions Run #1 隔離 Auth／PostgREST／Realtime、SQL、advisors、rollback／重套與清理閘門，全部成功。
+- [x] 完成 production 唯讀 preflight：migration history 僅 V3.8.1 待套用、記錄 9 筆既有 advisor warnings、WAL-G 已啟用，且 schema 相依性與未記錄 V3.8.1 物件檢查皆無異常。
+- [ ] 於 Supabase Dashboard 確認最近一次每日備份時間；目前 CLI 只確認 WAL-G `true`、PITR `false`，未提供每日備份時間。
 - [ ] 完成桌面、390×844、離線重連與雙裝置實機驗證。
 - [ ] 依 migration → 資料庫驗證 → 前端 → 正式資產 → 必要更新 metadata 順序發布；未經 Product Owner 明確要求不得套用 production、部署、推送或建立 tag。
 - [ ] 若實作需要規格以外的新增／調整介面或可見文案，先停止 UI 修改並補充桌面與手機模擬圖確認。
