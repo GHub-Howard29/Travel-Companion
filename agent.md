@@ -2,7 +2,7 @@
 
 ## 目前狀態
 
-- 已發布版本：V3.8.0。
+- 已發布版本：V3.8.1。
 - V3.5.2「Supabase 資料庫權限函式硬化」已完成；正式 migration、advisors 與角色回歸通過，Product Owner 確認不建立獨立 App build／tag，App 顯示版本維持 V3.5.1。
 - V3.6.0「地點間預估移動資訊」已於 2026-08-30 合併、建立 `v3.6.0` tag 並部署；正式 Supabase、Google Cloud 與 GitHub Pages 已驗證。完整角色矩陣、正式站 OAuth 自動化登入及 Android／iOS 實機仍保留發布後補驗證。
 - V3.6.1「Android 記帳金額欄位與 PWA 更新流程修正」已於 2026-09-01 合併至 `main`、建立 `v3.6.1` tag 並部署。Android 手機已驗證更新提示一次點擊即可完成，記帳金額輸入欄位不再變形或超出畫面；更新後介面顯示偏慢已由 V3.6.5 正式版完成改善。
@@ -13,7 +13,7 @@
 - V3.7.1「Day 日期顯示修正」已於 2026-09-08 完成 Day 2、跨年、閏年與無效日期專項、全部自動驗證、`v3.7.1` 與 GitHub Pages 部署；正式 `app-version.json` 與首頁新版資產已確認，採一般更新。
 - V3.7.2「農曆日期與 Day 配色」已於 2026-09-08 完成全部自動驗證、`v3.7.2` 與 GitHub Pages 部署；正式 `app-version.json` 與首頁新版資產已確認，採一般更新。
 - V3.8.0「每日行程排序與跨日複製」已於 2026-09-10 完成 `main` 合併、帶註解標籤 `v3.8.0` 與 GitHub Pages 部署；正式 metadata、主程式及行程功能資產已驗證，採必要更新，`minimumSupportedVersion: 3.8.0`、`forceUpdate: true`。登入角色、歷史行程、離線阻擋、跨裝置版本衝突與實機更新流程仍保留發布後補驗。
-- V3.8.1「Trip 刪除墓碑與唯一識別」資料方案、靜默切換與兩筆種子 Trip 保護介面已於 2026-09-10 確認；候選程式、本機隔離 baseline、17 項 SQL、rollback／重套與 GitHub Actions 隔離 API 均已完成。2026-09-11 已建立 production logical backup、套用 migration `20260910140949`，migration history 完全對齊且 production-safe 唯讀 postflight 10 項全數通過；桌面、390×844、即時離線／重連與兩個獨立 origin 的雙分頁驗證已完成，雙分頁驗證發現的編輯 modal 殘留已修正並完成回歸。Product Owner 已核准更新提示文案並授權完整發布，但目前環境無法連線 GitHub 443 且 `.git` 無寫入權限，遠端推送、`main` 合併、tag、GitHub Pages 與正式站 smoke 尚未完成；正式 metadata 候選為 `minimumSupportedVersion: 3.8.1`、`forceUpdate: true`。Android／iOS 實體裝置、PWA 冷啟動離線及舊版實機必要更新提示待遠端資產可取得後補驗。`free-travel-2026-01` 與 `group-tour-2026-10` 可編輯但前端／資料庫均不得刪除；目前 Trip 被刪除後不顯示提示，依既有規則切換至預設 Trip 的每日詳細行程及適合 Day。
+- V3.8.1「Trip 刪除墓碑與唯一識別」已完成正式發布：production migration `20260910140949`、完整驗證、`main` 合併、annotated tag `v3.8.1`、GitHub Pages 與正式站 smoke 均已完成；發布提交為 `da0b87d`，目前已切回 `develop`。正式 metadata 為 `minimumSupportedVersion: 3.8.1`、`forceUpdate: true`。Android／iOS 實體裝置、PWA 冷啟動離線及舊版實機必要更新提示列為發布後補驗。`free-travel-2026-01` 與 `group-tour-2026-10` 可編輯但前端／資料庫均不得刪除；目前 Trip 被刪除後不顯示提示，依既有規則切換至預設 Trip 的每日詳細行程及適合 Day。
 - V3.8.2「跨日複製時間設定」已排在 V3.8.1 後；需求與桌面／手機 UI 已於 2026-09-10 確認。副本抵達／離開時間預設空白且必填，多個 Day 共用一組時間，依新抵達時間插入但不重排既有卡片；尚未實作。
 - 版本順序與範圍唯一以 `docs/02_產品開發路線圖.md` 為準；未完成工作以 `docs/09_待辦事項_TODO.md` 為準；目前有效狀態以 `docs/14_專案現況總覽.md` 為準。
 

@@ -4,7 +4,7 @@
 >
 > 最後更新：2026-09-11
 >
-> 已發布 App 版本：V3.8.0。
+> 已發布 App 版本：V3.8.1。
 
 ## 目前開發：V3.8.1 Trip 刪除墓碑與唯一識別
 
@@ -19,7 +19,7 @@
 - [x] 重跑 production advisors；保留原 9 筆 baseline，新增 1 筆為刻意開放 authenticated 呼叫、且由函式內 super_admin 驗證的 `tc_delete_trip` SECURITY DEFINER RPC 警告，已審查為設計預期。
 - [x] 完成桌面 1280×720、390×844 viewport、即時離線／恢復連線與兩個獨立 origin 的雙分頁刪除同步驗證；結果見《41_V3.8.1_實作與驗證紀錄》。
 - [ ] 完成 Android／iOS 實體裝置、PWA 冷啟動離線及舊版實機必要更新流程補驗（發布後追蹤）。
-- [ ] 依 migration／資料庫驗證 → 前端 → 正式資產 → 必要更新 metadata 順序完成 V3.8.1 發布；目前 metadata 候選已完成，遠端推送、合併、tag 與 GitHub Pages 待環境恢復。
+- [x] 依 migration／資料庫驗證 → 前端 → 正式資產 → 必要更新 metadata 順序完成 V3.8.1 發布；`main`、`v3.8.1` tag、GitHub Pages 與正式站 smoke 均已完成，發布後補驗另列追蹤。
 - [ ] 若實作需要規格以外的新增／調整介面或可見文案，先停止 UI 修改並補充桌面與手機模擬圖確認。
 
 ## 後續候選版本
