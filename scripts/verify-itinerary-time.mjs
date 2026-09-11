@@ -6,6 +6,7 @@ import {
   normalizeItineraryTime,
   sortItineraryItemsByTime,
   validateItineraryTime,
+  validateRequiredItineraryTimeRange,
 } from "../src/utils/itineraryTime.ts";
 
 assert.equal(getItineraryTimeValue("08:00"), 8 * 60);
@@ -37,6 +38,30 @@ assert.deepEqual(validateItineraryTime("08 : 00"), {
 for (const invalidTime of ["08-00", "上午八點", "24:00", "08:60", "8:", ":00"]) {
   assert.equal(validateItineraryTime(invalidTime).isValid, false, invalidTime);
 }
+
+assert.deepEqual(validateRequiredItineraryTimeRange("", ""), {
+  isValid: false,
+  arrivalTime: "",
+  departureTime: "",
+  arrivalError: "required",
+  departureError: "required",
+});
+assert.deepEqual(validateRequiredItineraryTimeRange("9：05", "11：30"), {
+  isValid: true,
+  arrivalTime: "09:05",
+  departureTime: "11:30",
+  arrivalError: undefined,
+  departureError: undefined,
+});
+assert.equal(
+  validateRequiredItineraryTimeRange("09:00", "格式錯誤").departureError,
+  "invalid",
+);
+assert.equal(
+  validateRequiredItineraryTimeRange("09:00", "08:59").departureError,
+  "before-arrival",
+);
+assert.equal(validateRequiredItineraryTimeRange("09:00", "09:00").isValid, true);
 
 const sortedItems = sortItineraryItemsByTime([
   { id: "afternoon", time: "15:00" },

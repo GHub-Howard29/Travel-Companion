@@ -24,6 +24,16 @@ export type ItineraryTimeValidationResult =
   | { isValid: true; normalized: string }
   | { isValid: false; normalized: string };
 
+export type RequiredItineraryTimeError = "required" | "invalid" | "before-arrival";
+
+export interface RequiredItineraryTimeRangeValidationResult {
+  isValid: boolean;
+  arrivalTime: string;
+  departureTime: string;
+  arrivalError?: RequiredItineraryTimeError;
+  departureError?: RequiredItineraryTimeError;
+}
+
 export const validateItineraryTime = (value: string): ItineraryTimeValidationResult => {
   const trimmedValue = value.trim();
   if (!trimmedValue) return { isValid: true, normalized: "" };
@@ -44,6 +54,40 @@ export const isDepartureBeforeArrival = (
   const arrival = parseItineraryTime(arrivalTime);
   const departure = parseItineraryTime(departureTime);
   return Boolean(arrival && departure && departure.minutes < arrival.minutes);
+};
+
+export const validateRequiredItineraryTimeRange = (
+  arrivalTime: string,
+  departureTime: string,
+): RequiredItineraryTimeRangeValidationResult => {
+  const arrivalResult = validateItineraryTime(arrivalTime);
+  const departureResult = validateItineraryTime(departureTime);
+  const arrivalError = !arrivalTime.trim()
+    ? "required"
+    : !arrivalResult.isValid
+      ? "invalid"
+      : undefined;
+  let departureError = !departureTime.trim()
+    ? "required"
+    : !departureResult.isValid
+      ? "invalid"
+      : undefined;
+
+  if (
+    !arrivalError &&
+    !departureError &&
+    isDepartureBeforeArrival(arrivalResult.normalized, departureResult.normalized)
+  ) {
+    departureError = "before-arrival";
+  }
+
+  return {
+    isValid: !arrivalError && !departureError,
+    arrivalTime: arrivalResult.normalized,
+    departureTime: departureResult.normalized,
+    arrivalError,
+    departureError,
+  };
 };
 
 export const normalizeItineraryTime = (value: string): string => {

@@ -86,9 +86,11 @@ export const moveItineraryItem = (
 
 export const createItineraryCopy = (
   source: ItineraryItem,
+  time: string,
+  departureTime: string,
   createId: ItineraryIdFactory = createItineraryItemId,
 ): ItineraryItem => {
-  const copy = { ...source, id: createId() };
+  const copy = { ...source, id: createId(), time, departureTime };
   delete copy.travelModeToNext;
   delete copy.travelToNext;
   return copy;
@@ -110,4 +112,23 @@ export const insertItineraryCopyByTime = (
   const nextItems = [...items];
   nextItems.splice(targetIndex, 0, copy);
   return invalidateChangedTravelDestinations(items, nextItems);
+};
+
+export const copyItineraryItemToDays = (
+  daysData: TripDetail["content"]["daysData"],
+  targetDays: number[],
+  source: ItineraryItem,
+  time: string,
+  departureTime: string,
+  createId: ItineraryIdFactory = createItineraryItemId,
+): TripDetail["content"]["daysData"] => {
+  const nextDaysData = { ...daysData };
+  targetDays.forEach((day) => {
+    const dayKey = String(day);
+    nextDaysData[dayKey] = insertItineraryCopyByTime(
+      nextDaysData[dayKey] ?? [],
+      createItineraryCopy(source, time, departureTime, createId),
+    );
+  });
+  return nextDaysData;
 };

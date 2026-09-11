@@ -14,6 +14,15 @@ export type VersionHistoryItem = {
 
 export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
+    version: "3.8.1",
+    date: "2026-09-11",
+    isMandatoryRelease: true,
+    notes: [
+      "強化旅程刪除與跨裝置同步：旅程刪除後會在其他裝置同步移除，不會再次復活。",
+      "新增穩定的旅程識別，支援相同日期建立多趟旅程，並保護系統保留旅程避免誤刪。",
+    ],
+  },
+  {
     version: "3.8.0",
     date: "2026-09-10",
     isMandatoryRelease: true,

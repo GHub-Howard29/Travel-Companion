@@ -36,6 +36,8 @@ import {
   isDepartureBeforeArrival,
   sortItineraryItemsByTime,
   validateItineraryTime,
+  validateRequiredItineraryTimeRange,
+  type RequiredItineraryTimeError,
 } from "../utils/itineraryTime";
 import {
   formatTravelDistance,
@@ -57,10 +59,9 @@ import {
 import { getItineraryDayDate, getLunarDateLabel } from "../utils/itineraryDate";
 import { getItineraryDayTone } from "../utils/itineraryDayStyle";
 import {
-  createItineraryCopy,
+  copyItineraryItemToDays,
   createItineraryItemId,
   ensureItineraryDaysDataIds,
-  insertItineraryCopyByTime,
   invalidateChangedTravelDestinations,
   moveItineraryItem,
   reorderItineraryItems,
@@ -125,6 +126,8 @@ export const ItineraryPage = ({
   const [showOrderSaved, setShowOrderSaved] = useState(false);
   const [copySource, setCopySource] = useState<ItineraryItem | null>(null);
   const [copyTargetDays, setCopyTargetDays] = useState<number[]>([]);
+  const [copyArrivalTime, setCopyArrivalTime] = useState("");
+  const [copyDepartureTime, setCopyDepartureTime] = useState("");
   const [isCopySaving, setIsCopySaving] = useState(false);
   const [copySaveError, setCopySaveError] = useState<string | null>(null);
   const [copySuccess, setCopySuccess] = useState<string | null>(null);
@@ -233,6 +236,8 @@ export const ItineraryPage = ({
     if (isCopySaving) return;
     setCopySource(null);
     setCopyTargetDays([]);
+    setCopyArrivalTime("");
+    setCopyDepartureTime("");
     setCopySaveError(null);
   };
 
@@ -382,6 +387,8 @@ export const ItineraryPage = ({
   const openCopyDialog = (event: ItineraryItem) => {
     setCopySource(event);
     setCopyTargetDays([]);
+    setCopyArrivalTime("");
+    setCopyDepartureTime("");
     setCopySaveError(null);
     setCopySuccess(null);
   };
@@ -392,20 +399,58 @@ export const ItineraryPage = ({
     );
   };
 
+  const copyTimeValidation = validateRequiredItineraryTimeRange(
+    copyArrivalTime,
+    copyDepartureTime,
+  );
+
+  const getCopyTimeErrorMessage = (
+    field: "arrival" | "departure",
+    error?: RequiredItineraryTimeError,
+  ) => {
+    if (error === "required") {
+      return field === "arrival" ? "請輸入抵達時間" : "請輸入離開時間";
+    }
+    if (error === "before-arrival") return "離開時間不得早於抵達時間";
+    if (error === "invalid") {
+      return `${field === "arrival" ? "抵達" : "離開"}時間格式有誤。請輸入 HH:MM，例如 08:00`;
+    }
+    return undefined;
+  };
+
+  const copyArrivalError = getCopyTimeErrorMessage(
+    "arrival",
+    copyTimeValidation.arrivalError,
+  );
+  const copyDepartureError = getCopyTimeErrorMessage(
+    "departure",
+    copyTimeValidation.departureError,
+  );
+
   const saveCopies = async () => {
-    if (!copySource || copyTargetDays.length === 0 || isCopySaving) return;
+    if (!copySource || isCopySaving) return;
+    if (!copyTimeValidation.isValid) {
+      requestAnimationFrame(() => {
+        focusAndRevealControl(
+          copyTimeValidation.arrivalError
+            ? "copy-arrival-time-input"
+            : "copy-departure-time-input",
+        );
+      });
+      return;
+    }
+    if (copyTargetDays.length === 0) return;
     setIsCopySaving(true);
     setCopySaveError(null);
     try {
       const stableDaysData = ensureItineraryDaysDataIds(trip.content.daysData);
-      const nextDaysData = { ...stableDaysData };
-      copyTargetDays.forEach((day) => {
-        const dayKey = String(day);
-        nextDaysData[dayKey] = insertItineraryCopyByTime(
-          nextDaysData[dayKey] ?? [],
-          createItineraryCopy(copySource),
-        );
-      });
+      const nextDaysData = copyItineraryItemToDays(
+        stableDaysData,
+        copyTargetDays,
+        copySource,
+        copyTimeValidation.arrivalTime,
+        copyTimeValidation.departureTime,
+      );
       await onSaveTripDetail({
         ...trip,
         content: { ...trip.content, daysData: nextDaysData },
@@ -413,6 +458,8 @@ export const ItineraryPage = ({
       const copiedDays = [...copyTargetDays].sort((left, right) => left - right);
       setCopySource(null);
       setCopyTargetDays([]);
+      setCopyArrivalTime("");
+      setCopyDepartureTime("");
       setCopySuccess(`已複製到 ${copiedDays.map((day) => `Day ${day}`).join("、")}`);
     } catch (error) {
       setCopySaveError(
@@ -1483,7 +1530,16 @@ export const ItineraryPage = ({
 
       {copySource && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/40 p-3 sm:items-center" role="presentation">
-          <section
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              void saveCopies();
+            }}
+            onKeyDown={(event) => {
+              if (event.key !== "Enter" || copyTimeValidation.isValid) return;
+              event.preventDefault();
+              void saveCopies();
+            }}
             className="max-h-[min(42rem,calc(100dvh-1.5rem))] w-full max-w-md overflow-y-auto rounded-2xl bg-white p-4 shadow-2xl"
             role="dialog"
             aria-modal="true"
@@ -1498,13 +1554,72 @@ export const ItineraryPage = ({
                 <X size={18} />
               </button>
             </div>
-            <p className="mt-3 text-xs leading-relaxed text-slate-500">選擇同一旅程中的一個或多個日期。每個副本會保留內容與時間，並依到達時間插入；不會複製相鄰路線資訊。</p>
-            <div className="mt-4 space-y-2">
+
+            <p className="mt-4 rounded-xl bg-sky-50 px-3 py-3 text-sm font-bold text-sky-800">
+              來源時間：{copySource.time.trim() || "未設定"}–{copySource.departureTime?.trim() || "未設定"}
+            </p>
+            <p className="mt-2 text-xs leading-relaxed text-slate-500">
+              請先設定副本時間，再選擇要複製的日期。所有所選 Day 將套用同一組時間。
+            </p>
+
+            <div className="mt-4 grid grid-cols-2 gap-2">
+              <label className="space-y-1">
+                <span className="text-xs font-bold text-slate-600">抵達時間（必填）</span>
+                <input
+                  id="copy-arrival-time-input"
+                  value={copyArrivalTime}
+                  onChange={(event) => setCopyArrivalTime(event.target.value)}
+                  placeholder="例如 13:30"
+                  inputMode="numeric"
+                  autoComplete="off"
+                  disabled={isCopySaving}
+                  aria-invalid={Boolean(copyArrivalError)}
+                  aria-describedby={copyArrivalError ? "copy-arrival-time-error" : undefined}
+                  className={`w-full rounded-lg border px-3 py-2 text-base focus:outline-none focus:ring-2 sm:text-sm ${
+                    copyArrivalError
+                      ? "border-rose-400 focus:ring-rose-400"
+                      : "border-slate-200 focus:ring-sky-600"
+                  }`}
+                />
+                {copyArrivalError && (
+                  <span id="copy-arrival-time-error" className="block text-xs leading-relaxed text-rose-700">
+                    {copyArrivalError}
+                  </span>
+                )}
+              </label>
+              <label className="space-y-1">
+                <span className="text-xs font-bold text-slate-600">離開時間（必填）</span>
+                <input
+                  id="copy-departure-time-input"
+                  value={copyDepartureTime}
+                  onChange={(event) => setCopyDepartureTime(event.target.value)}
+                  placeholder="例如 15:00"
+                  inputMode="numeric"
+                  autoComplete="off"
+                  disabled={isCopySaving}
+                  aria-invalid={Boolean(copyDepartureError)}
+                  aria-describedby={copyDepartureError ? "copy-departure-time-error" : undefined}
+                  className={`w-full rounded-lg border px-3 py-2 text-base focus:outline-none focus:ring-2 sm:text-sm ${
+                    copyDepartureError
+                      ? "border-rose-400 focus:ring-rose-400"
+                      : "border-slate-200 focus:ring-sky-600"
+                  }`}
+                />
+                {copyDepartureError && (
+                  <span id="copy-departure-time-error" className="block text-xs leading-relaxed text-rose-700">
+                    {copyDepartureError}
+                  </span>
+                )}
+              </label>
+            </div>
+
+            <fieldset className="mt-4">
+              <legend className="pb-2 text-xs font-bold text-slate-700">複製到</legend>
               {trip.content.days.filter((day) => day !== activeDay).map((day) => {
                 const date = getItineraryDayDate(trip.departureDate, day);
                 const itemCount = trip.content.daysData[String(day)]?.length ?? 0;
                 return (
-                  <label key={day} className="flex cursor-pointer items-center gap-3 rounded-xl border border-slate-200 px-3 py-3 hover:bg-slate-50">
+                  <label key={day} className="flex cursor-pointer items-center gap-3 border-t border-slate-200 px-3 py-2.5 hover:bg-slate-50">
                     <input
                       type="checkbox"
                       checked={copyTargetDays.includes(day)}
@@ -1519,14 +1634,14 @@ export const ItineraryPage = ({
                   </label>
                 );
               })}
-            </div>
+            </fieldset>
             {trip.content.days.length <= 1 && <p className="mt-4 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">此旅程沒有其他 Day 可供複製。</p>}
             {copySaveError && <p className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700" role="alert">{copySaveError}</p>}
             <div className="mt-4 flex justify-end gap-2 border-t border-slate-100 pt-4">
               <button type="button" onClick={closeCopyDialog} disabled={isCopySaving} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-50">取消</button>
-              <button type="button" onClick={() => void saveCopies()} disabled={copyTargetDays.length === 0 || isCopySaving} className="rounded-lg bg-sky-700 px-4 py-2 text-sm font-bold text-white hover:bg-sky-800 disabled:cursor-not-allowed disabled:opacity-50">{isCopySaving ? "正在複製…" : "複製到所選 Day"}</button>
+              <button type="submit" disabled={copyTargetDays.length === 0 || !copyTimeValidation.isValid || isCopySaving} className="rounded-lg bg-sky-700 px-4 py-2 text-sm font-bold text-white hover:bg-sky-800 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400">{isCopySaving ? "正在複製…" : "複製到所選 Day"}</button>
             </div>
-          </section>
+          </form>
         </div>
       )}
 
