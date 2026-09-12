@@ -19,11 +19,12 @@ Google 路徑、真實照片 spike、現有架構、降級與成本模型已完�
 - [x] Product Owner 核准跨日複製沿用同一照片引用，僅在最後一個引用移除時刪除 Storage 物件。
 - [x] 補齊正式 API schema、Storage migration、RLS、資料相容與清理規格，完成前端與 Edge Function 本機實作，並建立 V3.9.0 一般更新候選 metadata。
 - [x] 以本機 Docker 29.7.2 與 Supabase CLI 2.115.0 啟動隔離 Postgres，實際套用 migration；Storage RLS、月額度原子性、瀏覽器角色隔離均通過，security／performance advisors 為零問題，Edge Runtime 可載入 `travel-route`。
-- [ ] 完成 production logical backup；將隔離驗證 workflow 跑過遠端 CI，部署 migration／Edge Function並完成管理者真實照片流程驗證。
+- [x] 遠端隔離 Supabase CI run `34688235879` 通過；migration、Storage／RLS、額度、advisors 與清理均成功且無 annotations。
+- [ ] 完成 production logical backup，部署 migration／Edge Function並完成管理者真實照片流程驗證。
 
 ## 後續候選版本
 
-- [ ] V3.9.0：發布候選已建立；待 production backup、遠端 CI、production 部署及真實管理者流程驗證。
+- [ ] V3.9.0：發布候選與遠端 CI 已完成；待 production backup、production 部署及真實管理者流程驗證。
 - [ ] V3.10.0：重新確認使用紀錄的必要性與最小資料範圍；原 App 查詢介面、逐次明細、Cron、獨立角色與 TOTP 預覽均標記為先前草案、尚未定案。
 
 ## 已發布版本待補驗證
