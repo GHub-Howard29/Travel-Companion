@@ -21,6 +21,9 @@ const getSupabaseConnectSources = (supabaseUrl: string | undefined) => {
   }
 }
 
+const getSupabaseHttpSource = (supabaseUrl: string | undefined) =>
+  getSupabaseConnectSources(supabaseUrl).find((source) => source.startsWith('http')) ?? ''
+
 const createContentSecurityPolicy = (supabaseUrl: string | undefined) =>
   [
     "default-src 'self'",
@@ -28,7 +31,7 @@ const createContentSecurityPolicy = (supabaseUrl: string | undefined) =>
     "object-src 'none'",
     "script-src 'self'",
     "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data: blob: https://*.googleusercontent.com https://upload.wikimedia.org",
+    `img-src 'self' data: blob: ${getSupabaseHttpSource(supabaseUrl)} https://*.googleusercontent.com https://upload.wikimedia.org`.trim(),
     "font-src 'self'",
     `connect-src 'self' ${getSupabaseConnectSources(supabaseUrl).join(' ')} https://upload.wikimedia.org`.trim(),
     "worker-src 'self' blob:",

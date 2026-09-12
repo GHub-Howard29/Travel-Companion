@@ -2,7 +2,7 @@
 
 > 本文件只保留尚未完成或仍需驗證的工作；版本順序與範圍以《02_產品開發路線圖》為準。
 >
-> 最後更新：2026-09-12
+> 最後更新：2026-09-13
 >
 > 已發布 App 版本：V3.8.2。
 
@@ -21,12 +21,13 @@ Google 路徑、真實照片 spike、現有架構、降級與成本模型已完�
 - [x] 以本機 Docker 29.7.2 與 Supabase CLI 2.115.0 啟動隔離 Postgres，實際套用 migration；Storage RLS、月額度原子性、瀏覽器角色隔離均通過，security／performance advisors 為零問題，Edge Runtime 可載入 `travel-route`。
 - [x] 遠端隔離 Supabase CI run `34688235879` 通過；migration、Storage／RLS、額度、advisors 與清理均成功且無 annotations。
 - [x] production logical backup、migration `20260912093527`、production-safe postflight、advisors 與 `travel-route` version 4 已完成；兩個新增 action 的未登入請求均為 403。
-- [ ] 在本機 V3.9.0 候選以正式管理者完成 Google 候選照片、Commons 選圖、Storage 保存／移除與重新整理 smoke。
+- [x] 在本機 V3.9.0 候選以正式管理者完成 Google 候選照片、Commons 選圖、Storage 保存與重新整理 smoke；修正 Commons 縮圖 host、Supabase Storage CSP，並通過桌面／390×844 卡片文字回流版面驗證。
+- [ ] 經 Product Owner 行動當下確認後，移除熊本城卡片的 smoke 測試照片並確認最後引用的 Storage 物件清除；不處理其他既有照片。
 - [ ] 依 Product Owner 指示停止在正式前端發布前；管理者 smoke 通過後另行取得放行，才合併 `main`、建立 `v3.9.0` tag 與部署 GitHub Pages。
 
 ## 後續候選版本
 
-- [ ] V3.9.0：發布候選、遠端 CI 與 production backend 已完成；待真實管理者流程驗證與正式前端放行。
+- [ ] V3.9.0：發布候選、production backend 與管理者新增／保存／重整 smoke 已完成；待測試照片清理確認與正式前端放行。
 - [ ] V3.10.0：重新確認使用紀錄的必要性與最小資料範圍；原 App 查詢介面、逐次明細、Cron、獨立角色與 TOTP 預覽均標記為先前草案、尚未定案。
 
 ## 已發布版本待補驗證

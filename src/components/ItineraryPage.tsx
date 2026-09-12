@@ -1543,9 +1543,9 @@ export const ItineraryPage = ({
                   </div>
                 </div>
               )}
-              <div className={hasVisibleCover ? "grid grid-cols-[76px_minmax(0,1fr)] gap-3 sm:grid-cols-[76px_minmax(0,1fr)_auto]" : ""}>
+              <div className={hasVisibleCover ? "relative flow-root" : ""}>
               {hasVisibleCover && event.coverPhoto && (
-                <div className="w-[76px]">
+                <div className="float-left mb-2 mr-3 w-[76px]">
                   <img
                     src={getCoverPublicUrl(event.coverPhoto.storagePath)}
                     alt={`${event.title || "行程"}照片`}
@@ -1565,7 +1565,7 @@ export const ItineraryPage = ({
                   </a>
                 </div>
               )}
-              <div className="min-w-0">
+              <div className={`min-w-0 ${hasVisibleCover && canManageItinerary && isManageMode && !isOrderMode ? "sm:pr-28" : ""}`}>
               <div className="flex justify-between items-center gap-3 mb-2">
                 {event.time ? (
                   <div className="flex min-w-0 items-center gap-2 text-sm font-bold text-slate-500">
@@ -1606,7 +1606,7 @@ export const ItineraryPage = ({
               )}
               </div>
               {canManageItinerary && isManageMode && !isOrderMode && (
-                <div className={`mt-3 flex flex-wrap justify-end gap-2 border-t border-slate-100 pt-3 ${hasVisibleCover ? "col-start-2 sm:col-start-3 sm:row-start-1 sm:mt-0 sm:flex-col sm:border-0 sm:pt-0" : ""}`}>
+                <div className={`mt-3 flex flex-wrap justify-end gap-2 border-t border-slate-100 pt-3 ${hasVisibleCover ? "clear-both sm:absolute sm:right-0 sm:top-0 sm:mt-0 sm:w-24 sm:flex-col sm:border-0 sm:pt-0" : ""}`}>
                   <button
                     type="button"
                     onClick={() => openCoverPhotoDialog(originalIndex, event)}

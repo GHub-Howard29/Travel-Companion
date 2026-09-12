@@ -85,6 +85,12 @@ const isHttpsUrl = (value: unknown): value is string => {
   }
 };
 
+const normalizeCommonsThumbnailUrl = (value: string): string => {
+  const url = new URL(value);
+  if (url.hostname === "thumb.wikimedia.org") url.hostname = "upload.wikimedia.org";
+  return url.toString();
+};
+
 const getTransitVehicle = (route: Record<string, unknown>): string => {
   const legs = Array.isArray(route.legs) ? route.legs : [];
   for (const leg of legs) {
@@ -344,7 +350,7 @@ Deno.serve(async (request) => {
           !isHttpsUrl(info.thumburl) || !isHttpsUrl(info.descriptionurl) || (!isPublicDomain && !isHttpsUrl(licenseUrl))) return [];
         return [{
           fileTitle: page.title,
-          thumbnailUrl: info.thumburl,
+          thumbnailUrl: normalizeCommonsThumbnailUrl(info.thumburl),
           sourcePageUrl: info.descriptionurl,
           creator: creator.slice(0, 500),
           credit: metadataValue(metadata, "Credit")?.slice(0, 500),
