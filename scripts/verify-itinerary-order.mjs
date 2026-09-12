@@ -24,6 +24,22 @@ const route = {
   expiresAt: "2026-09-11T00:00:00.000Z",
 };
 
+const coverPhoto = {
+  source: "wikimedia-commons",
+  storagePath: "s_74726970/s_6974656d/12345678-1234-1234-1234-123456789abc.webp",
+  fileTitle: "File:Cape Manzamo.jpg",
+  sourcePageUrl: "https://commons.wikimedia.org/wiki/File:Cape_Manzamo.jpg",
+  creator: "Photographer",
+  license: "CC BY-SA 4.0",
+  licenseUrl: "https://creativecommons.org/licenses/by-sa/4.0/",
+  selectedAt: "2026-09-12T00:00:00.000Z",
+  modified: true,
+  width: 640,
+  height: 426,
+  mime: "image/webp",
+  size: 100_000,
+};
+
 const item = (id, time, title, extra = {}) => ({
   id,
   time,
@@ -55,6 +71,7 @@ const original = [
     travelKind: "flight",
     travelModeToNext: "walk",
     travelToNext: route,
+    coverPhoto,
   }),
   item("b", "10:00", "B", { travelModeToNext: "transit", travelToNext: route }),
   item("c", "11:00", "C"),
@@ -81,6 +98,7 @@ assert.equal(copied.desc, "保留說明");
 assert.equal(copied.location, "熊本城");
 assert.deepEqual(copied.place, { placeId: "place-a" });
 assert.equal(copied.travelKind, "flight");
+assert.equal(copied.coverPhoto, coverPhoto, "跨日副本應沿用同一照片引用");
 assert.equal(original[0].time, "09:00", "來源卡片時間不得被修改");
 
 const sameTimeInserted = insertItineraryCopyByTime(

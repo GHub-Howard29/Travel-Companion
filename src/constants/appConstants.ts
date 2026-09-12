@@ -17,6 +17,9 @@ export const SUPPORTED_CURRENCIES = [
 
 // Supabase Storage Bucket 名稱
 export const ATTACHMENT_BUCKET = 'expense-attachments';
+export const ITINERARY_COVER_BUCKET = 'itinerary-covers';
+export const MAX_ITINERARY_COVER_BYTES = 120 * 1024;
+export const MAX_ITINERARY_COVER_EDGE = 640;
 
 // 私有附件簽名網址僅供當次開啟或匯出使用，15 分鐘後失效。
 export const ATTACHMENT_SIGNED_URL_EXPIRES_IN_SECONDS = 15 * 60;

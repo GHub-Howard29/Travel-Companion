@@ -14,6 +14,15 @@ export type VersionHistoryItem = {
 
 export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
+    version: "3.8.2",
+    date: "2026-09-11",
+    isMandatoryRelease: false,
+    notes: [
+      "跨日複製行程時，可先設定副本的抵達與離開時間，並一次套用到所有所選 Day。",
+      "副本依新的抵達時間插入正確位置，避免未填時間而落到當日行程最下方。",
+    ],
+  },
+  {
     version: "3.8.1",
     date: "2026-09-11",
     isMandatoryRelease: true,

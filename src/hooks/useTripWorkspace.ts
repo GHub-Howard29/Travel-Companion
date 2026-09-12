@@ -49,6 +49,8 @@ import {
 } from "../services/tripCloudService";
 import { decideTripReconciliation } from "../services/tripReconciliation";
 import { clearSharedTripDataAfterAccessLoss } from "../storage/sharedTripDataStorage";
+import { getUnusedItineraryCoverPaths } from "../utils/itineraryCoverPhoto";
+import { removeItineraryCoverPaths } from "../services/itineraryCoverPhotoService";
 
 interface UseTripWorkspaceOptions {
   supabase: SupabaseClient;
@@ -536,6 +538,14 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
         createTripRecordFromExisting(selectedTripMeta, currentTrip, input);
 
       await saveTripRecordWithCloudSync(supabase, record);
+      try {
+        await removeItineraryCoverPaths(
+          supabase,
+          getUnusedItineraryCoverPaths(currentTrip, record.detail),
+        );
+      } catch (error) {
+        console.warn("Failed to remove unused itinerary covers", error);
+      }
       if (syncEditors) {
         await syncTripEditorEmails(supabase, record.meta.id, record.editorEmails);
       }
@@ -628,6 +638,16 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
         undefined,
         enforceVersion,
       );
+      if (currentTrip) {
+        try {
+          await removeItineraryCoverPaths(
+            supabase,
+            getUnusedItineraryCoverPaths(currentTrip, record.detail),
+          );
+        } catch (error) {
+          console.warn("Failed to remove unused itinerary covers", error);
+        }
+      }
       setCurrentTrip(record.detail);
       setIsLoading(false);
       return didSync;
@@ -635,6 +655,7 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
     [
       currentTripEditorEmails,
       canWriteSelectedTripNow,
+      currentTrip,
       selectedTripMeta,
       supabase,
     ],

@@ -13,7 +13,12 @@ const GOOGLE_PLACES_AUTOCOMPLETE_URL =
   "https://places.googleapis.com/v1/places:autocomplete";
 const GOOGLE_COMPUTE_ROUTES_URL =
   "https://routes.googleapis.com/directions/v2:computeRoutes";
+const GOOGLE_PLACE_DETAILS_URL = "https://places.googleapis.com/v1/places";
+const COMMONS_API_URL = "https://commons.wikimedia.org/w/api.php";
 const ROUTE_DAILY_LIMIT = 100;
+const PLACE_PHOTO_MONTHLY_LIMIT = 1_000;
+const MAX_PLACE_PHOTO_CANDIDATES = 5;
+const MAX_COMMONS_CANDIDATES = 8;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -55,6 +60,30 @@ const sha256 = async (value: string): Promise<string> => {
 };
 
 const getPlaceKey = (place: { placeId: string }) => `place:${place.placeId.trim()}`;
+
+const cleanMetadataText = (value: unknown): string | undefined => {
+  if (typeof value !== "string") return undefined;
+  const text = value.replace(/<[^>]*>/g, " ").replace(/&nbsp;/gi, " ").replace(/\s+/g, " ").trim();
+  return text || undefined;
+};
+
+const metadataValue = (metadata: Record<string, unknown>, key: string): string | undefined => {
+  const field = metadata[key];
+  return isRecord(field) ? cleanMetadataText(field.value) : undefined;
+};
+
+const isAllowedCommonsLicense = (license: string): boolean =>
+  /^(?:CC0|Public domain|CC BY(?:-SA)?(?: |$))/i.test(license) &&
+  !/(?:\bNC\b|\bND\b|noncommercial|no derivatives)/i.test(license);
+
+const isHttpsUrl = (value: unknown): value is string => {
+  if (typeof value !== "string") return false;
+  try {
+    return new URL(value).protocol === "https:";
+  } catch {
+    return false;
+  }
+};
 
 const getTransitVehicle = (route: Record<string, unknown>): string => {
   const legs = Array.isArray(route.legs) ? route.legs : [];
@@ -174,9 +203,8 @@ Deno.serve(async (request) => {
 
     const clients = await getAuthorizedClients(request, body.tripId);
     if (!clients) return json({ error: "只有本行程管理者可以查詢地圖服務。" }, 403);
-    const apiKey = requiredEnv("GOOGLE_MAPS_API_KEY");
-
     if (body.action === "placeAutocomplete") {
+      const apiKey = requiredEnv("GOOGLE_MAPS_API_KEY");
       if (typeof body.input !== "string" || body.input.trim().length < 2 || body.input.trim().length > 120) {
         return json({ error: "請輸入至少 2 個字的地點名稱。" }, 400);
       }
@@ -209,6 +237,128 @@ Deno.serve(async (request) => {
       return json({ candidates });
     }
 
+    if (body.action === "placePhotos") {
+      const rawPlaceIds = Array.isArray(body.placeIds) ? body.placeIds : [];
+      const placeIds = [...new Set(rawPlaceIds.filter((value): value is string =>
+        typeof value === "string" && /^[A-Za-z0-9_-]{10,300}$/.test(value)
+      ))].slice(0, MAX_PLACE_PHOTO_CANDIDATES);
+      if (placeIds.length === 0) return json({ photos: [] });
+
+      const { data: claimed, error: claimError } = await clients.admin.rpc(
+        "tc_claim_place_photo_slots",
+        { requested_slots: placeIds.length, maximum_requests: PLACE_PHOTO_MONTHLY_LIMIT },
+      );
+      if (claimError) throw claimError;
+      if (!claimed) return json({ photos: [], limitReached: true });
+
+      const apiKey = requiredEnv("GOOGLE_MAPS_API_KEY");
+      const photos = (await Promise.all(placeIds.map(async (placeId) => {
+        try {
+          const detailsResponse = await fetch(`${GOOGLE_PLACE_DETAILS_URL}/${encodeURIComponent(placeId)}`, {
+            headers: {
+              "X-Goog-Api-Key": apiKey,
+              "X-Goog-FieldMask": "photos",
+            },
+            signal: AbortSignal.timeout(8_000),
+          });
+          if (!detailsResponse.ok) return null;
+          const details = await detailsResponse.json();
+          const photo = isRecord(details) && Array.isArray(details.photos) && isRecord(details.photos[0])
+            ? details.photos[0]
+            : null;
+          if (!photo || typeof photo.name !== "string" ||
+            !/^places\/[A-Za-z0-9_-]+\/photos\/[A-Za-z0-9_-]+$/.test(photo.name)) return null;
+
+          const mediaUrl = new URL(`https://places.googleapis.com/v1/${photo.name}/media`);
+          mediaUrl.searchParams.set("maxWidthPx", "320");
+          mediaUrl.searchParams.set("maxHeightPx", "180");
+          mediaUrl.searchParams.set("skipHttpRedirect", "true");
+          mediaUrl.searchParams.set("key", apiKey);
+          const mediaResponse = await fetch(mediaUrl, { signal: AbortSignal.timeout(8_000) });
+          if (!mediaResponse.ok) return null;
+          const media = await mediaResponse.json();
+          if (!isRecord(media) || !isHttpsUrl(media.photoUri)) return null;
+
+          const authorAttributions = Array.isArray(photo.authorAttributions)
+            ? photo.authorAttributions.flatMap((entry) => {
+                if (!isRecord(entry) || typeof entry.displayName !== "string") return [];
+                return [{
+                  displayName: entry.displayName.slice(0, 200),
+                  uri: isHttpsUrl(entry.uri) ? entry.uri : undefined,
+                }];
+              }).slice(0, 3)
+            : [];
+          return {
+            placeId,
+            photoUri: media.photoUri,
+            googleMapsUri: isHttpsUrl(photo.googleMapsUri) ? photo.googleMapsUri : undefined,
+            authorAttributions,
+          };
+        } catch {
+          return null;
+        }
+      }))).filter((photo) => photo !== null);
+      return json({ photos, limitReached: false });
+    }
+
+    if (body.action === "commonsPhotoSearch") {
+      if (typeof body.query !== "string" || body.query.trim().length < 2 || body.query.trim().length > 120) {
+        return json({ error: "請輸入至少 2 個字的照片搜尋詞。" }, 400);
+      }
+      const params = new URLSearchParams({
+        action: "query",
+        generator: "search",
+        gsrsearch: body.query.trim(),
+        gsrnamespace: "6",
+        gsrlimit: String(MAX_COMMONS_CANDIDATES),
+        prop: "imageinfo",
+        iiprop: "url|mime|thumbmime|mediatype|size|sha1|timestamp|extmetadata",
+        iiurlwidth: "640",
+        iiextmetadatalanguage: "en",
+        iiextmetadatafilter: "Artist|Credit|LicenseShortName|LicenseUrl|UsageTerms|AttributionRequired|Restrictions",
+        format: "json",
+        origin: "*",
+      });
+      const response = await fetch(`${COMMONS_API_URL}?${params}`, {
+        headers: { "User-Agent": "Travel-Companion/3.9.0 (Wikimedia Commons photo selector)" },
+        signal: AbortSignal.timeout(12_000),
+      });
+      if (response.status === 429) return json({ error: "照片來源目前忙碌，請稍後再試。" }, 429);
+      if (!response.ok) return json({ error: "照片搜尋暫時無法使用。" }, 502);
+      const payload = await response.json();
+      const pages = isRecord(payload) && isRecord(payload.query) && isRecord(payload.query.pages)
+        ? Object.values(payload.query.pages)
+        : [];
+      const candidates = pages.flatMap((page) => {
+        if (!isRecord(page) || typeof page.title !== "string" || !page.title.startsWith("File:") ||
+          !Array.isArray(page.imageinfo) || !isRecord(page.imageinfo[0])) return [];
+        const info = page.imageinfo[0];
+        const metadata = isRecord(info.extmetadata) ? info.extmetadata : {};
+        const license = metadataValue(metadata, "LicenseShortName") ?? metadataValue(metadata, "UsageTerms");
+        const creator = metadataValue(metadata, "Artist");
+        const restrictions = metadataValue(metadata, "Restrictions");
+        const licenseUrl = metadataValue(metadata, "LicenseUrl");
+        const isPublicDomain = license?.toLowerCase() === "public domain" || license?.toLowerCase() === "cc0";
+        if (info.mediatype !== "BITMAP" || !["image/jpeg", "image/png", "image/webp"].includes(String(info.thumbmime)) ||
+          !license || !creator || !isAllowedCommonsLicense(license) || restrictions ||
+          !isHttpsUrl(info.thumburl) || !isHttpsUrl(info.descriptionurl) || (!isPublicDomain && !isHttpsUrl(licenseUrl))) return [];
+        return [{
+          fileTitle: page.title,
+          thumbnailUrl: info.thumburl,
+          sourcePageUrl: info.descriptionurl,
+          creator: creator.slice(0, 500),
+          credit: metadataValue(metadata, "Credit")?.slice(0, 500),
+          license: license.slice(0, 100),
+          licenseUrl: isHttpsUrl(licenseUrl) ? licenseUrl : undefined,
+          sourceSha1: typeof info.sha1 === "string" ? info.sha1 : undefined,
+          sourceRevisionAt: typeof info.timestamp === "string" ? info.timestamp : undefined,
+          width: typeof info.width === "number" ? info.width : 0,
+          height: typeof info.height === "number" ? info.height : 0,
+        }];
+      }).slice(0, MAX_COMMONS_CANDIDATES);
+      return json({ candidates });
+    }
+
     if (body.action !== "routeEstimate" || !isPlace(body.origin) || !isPlace(body.destination) ||
       !["drive", "walk", "transit"].includes(String(body.mode))) {
       return json({ error: "路線查詢資料格式不正確。" }, 400);
@@ -218,6 +368,7 @@ Deno.serve(async (request) => {
     }
 
     const mode = String(body.mode);
+    const apiKey = requiredEnv("GOOGLE_MAPS_API_KEY");
     if (body.departureTime !== undefined && body.departureTime !== "" &&
       !isValidTime(body.departureTime)) {
       return json({ error: "出發時間格式不正確。" }, 400);

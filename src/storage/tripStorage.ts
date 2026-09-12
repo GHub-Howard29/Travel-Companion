@@ -1,5 +1,6 @@
 import type { TripDetail, TripMeta } from "../types";
 import { removeExpiredTravelEstimates } from "../utils/itineraryTravel.ts";
+import { sanitizeItineraryCoverPhotos } from "../utils/itineraryCoverPhoto.ts";
 
 export interface StoredTripRecord {
   meta: TripMeta;
@@ -72,7 +73,9 @@ export const sanitizeStoredTripRecord = (
   record: StoredTripRecord,
 ): StoredTripRecord => {
   if (!record.detail.content?.daysData) return record;
-  const content = removeExpiredTravelEstimates(record.detail.content);
+  const content = sanitizeItineraryCoverPhotos(
+    removeExpiredTravelEstimates(record.detail.content),
+  );
   return content === record.detail.content
     ? record
     : {

@@ -57,6 +57,25 @@ export interface SavedTravelEstimate {
   transitVehicle?: TransitVehicle;
 }
 
+export interface ItineraryCoverPhoto {
+  source: "wikimedia-commons";
+  storagePath: string;
+  fileTitle: string;
+  sourcePageUrl: string;
+  creator: string;
+  credit?: string;
+  license: string;
+  licenseUrl?: string;
+  sourceSha1?: string;
+  sourceRevisionAt?: string;
+  selectedAt: string;
+  modified: boolean;
+  width: number;
+  height: number;
+  mime: "image/webp";
+  size: number;
+}
+
 // 2. 對應詳細行程中的單一時間軸項目
 export interface ItineraryItem {
   /** V3.8.0 起使用的穩定卡片識別；舊資料於下一次行程寫入時補齊。 */
@@ -78,6 +97,8 @@ export interface ItineraryItem {
   travelModeToNext?: TravelMode;
   /** 由本卡片前往下一張相鄰卡片的最後儲存交通結果。 */
   travelToNext?: SavedTravelEstimate;
+  /** 管理者自 Wikimedia Commons 選定並保存至專案 Storage 的卡片照片。 */
+  coverPhoto?: ItineraryCoverPhoto;
 }
 
 // 3. 對應詳細行程中的行前檢查清單項目

@@ -2,8 +2,10 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { SidebarItemConfig, TripDetail, TripMeta, TripMode } from "../types";
 import type { StoredTripRecord } from "../storage/tripStorage";
 import { ATTACHMENT_BUCKET } from "../constants/appConstants";
+import { ITINERARY_COVER_BUCKET } from "../constants/appConstants";
 import { isExpenseAttachmentPathForTrip } from "../utils/attachmentUtils";
 import { removeExpiredTravelEstimates } from "../utils/itineraryTravel";
+import { sanitizeItineraryCoverPhotos } from "../utils/itineraryCoverPhoto";
 
 interface CloudTripRow {
   id: string;
@@ -36,7 +38,7 @@ const toCloudTripInsert = (record: StoredTripRecord) => ({
   currency_config: record.meta.currencyConfig,
   sidebar_config: record.detail.sidebarConfig,
   content: {
-    ...removeExpiredTravelEstimates(record.detail.content),
+    ...sanitizeItineraryCoverPhotos(removeExpiredTravelEstimates(record.detail.content)),
     mode: record.meta.mode ?? "guided",
     participantEmailMap:
       record.meta.participantEmailMap ??
@@ -54,8 +56,9 @@ export class TripVersionConflictError extends Error {
 
 const STORAGE_REMOVE_BATCH_SIZE = 1_000;
 
-const getCloudAttachmentPaths = async (
+const getCloudPaths = async (
   supabase: SupabaseClient,
+  bucket: string,
   folderPath: string,
 ): Promise<string[]> => {
   const entries: Array<{ id: string | null; name: string }> = [];
@@ -63,7 +66,7 @@ const getCloudAttachmentPaths = async (
 
   while (true) {
     const { data, error } = await supabase.storage
-      .from(ATTACHMENT_BUCKET)
+      .from(bucket)
       .list(folderPath, { limit: STORAGE_REMOVE_BATCH_SIZE, offset });
     if (error) throw error;
 
@@ -79,7 +82,7 @@ const getCloudAttachmentPaths = async (
   const nestedPaths = await Promise.all(
     entries
       .filter((entry) => entry.id === null)
-      .map((entry) => getCloudAttachmentPaths(supabase, `${folderPath}/${entry.name}`)),
+      .map((entry) => getCloudPaths(supabase, bucket, `${folderPath}/${entry.name}`)),
   );
 
   return [...files, ...nestedPaths.flat()];
@@ -89,13 +92,27 @@ const removeCloudAttachmentsForTrip = async (
   supabase: SupabaseClient,
   tripId: string,
 ): Promise<void> => {
-  const paths = (await getCloudAttachmentPaths(supabase, tripId)).filter(
+  const paths = (await getCloudPaths(supabase, ATTACHMENT_BUCKET, tripId)).filter(
     (path) => isExpenseAttachmentPathForTrip(path, tripId),
   );
 
   for (let index = 0; index < paths.length; index += STORAGE_REMOVE_BATCH_SIZE) {
     const { error } = await supabase.storage
       .from(ATTACHMENT_BUCKET)
+      .remove(paths.slice(index, index + STORAGE_REMOVE_BATCH_SIZE));
+    if (error) throw error;
+  }
+};
+
+const removeCloudItineraryCoversForTrip = async (
+  supabase: SupabaseClient,
+  tripId: string,
+): Promise<void> => {
+  const folderPath = `s_${Array.from(new TextEncoder().encode(tripId), (byte) => byte.toString(16).padStart(2, "0")).join("")}`;
+  const paths = await getCloudPaths(supabase, ITINERARY_COVER_BUCKET, folderPath);
+  for (let index = 0; index < paths.length; index += STORAGE_REMOVE_BATCH_SIZE) {
+    const { error } = await supabase.storage
+      .from(ITINERARY_COVER_BUCKET)
       .remove(paths.slice(index, index + STORAGE_REMOVE_BATCH_SIZE));
     if (error) throw error;
   }
@@ -197,7 +214,7 @@ const toTripRecord = (row: CloudTripRow): StoredTripRecord | null => {
     isPublic: true,
     sidebarConfig: row.sidebar_config,
     content: {
-      ...removeExpiredTravelEstimates(row.content),
+      ...sanitizeItineraryCoverPhotos(removeExpiredTravelEstimates(row.content)),
       mode,
       participantEmailMap,
     },
@@ -384,6 +401,7 @@ export const deleteCloudTripRecord = async (
     // Keep the trip editor permission intact until Storage is cleaned. The
     // storage delete policy checks the trip id from the attachment path.
     await removeCloudAttachmentsForTrip(supabase, tripId);
+    await removeCloudItineraryCoversForTrip(supabase, tripId);
   } catch (error) {
     console.warn("Failed to remove trip attachments", error);
     return false;

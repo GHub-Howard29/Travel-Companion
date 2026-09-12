@@ -1,0 +1,54 @@
+name: V3.9.0 Supabase validation
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - develop
+    paths:
+      - ".github/workflows/v390-supabase-validation.yml"
+      - "docs/sql/030_v390_itinerary_cover_storage_validation.sql"
+      - "supabase/config.toml"
+      - "supabase/migrations/20260912093527_v390_itinerary_cover_storage.sql"
+      - "supabase/tests/v390_ci_base_schema.sql"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: v390-supabase-validation
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Storage, RLS, quota and advisors
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Set up pinned Supabase CLI
+        uses: supabase/setup-cli@ab058987d8d6c725971f6cf9d0b5c98467e30bd1
+        with:
+          version: 2.115.0
+      - name: Prepare isolated V3.9.0 baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          find supabase/migrations -maxdepth 1 -type f ! -name '20260912093527_v390_itinerary_cover_storage.sql' -delete
+          cp supabase/tests/v390_ci_base_schema.sql supabase/migrations/20260912000000_v390_ci_base_schema.sql
+      - name: Start isolated Supabase stack
+        run: supabase start --yes
+      - name: Export database URL
+        shell: bash
+        run: |
+          set -euo pipefail
+          eval "$(supabase status -o env)"
+          echo "V390_DB_URL=${DB_URL}" >> "${GITHUB_ENV}"
+      - name: Validate Storage and quota security
+        run: psql "${V390_DB_URL}" -v ON_ERROR_STOP=1 -f docs/sql/030_v390_itinerary_cover_storage_validation.sql
+      - name: Run security and performance advisors
+        run: supabase db advisors --local --type all --level warn --fail-on none
+      - name: Stop and erase isolated Supabase data
+        if: always()
+        run: supabase stop --no-backup

@@ -20,6 +20,7 @@ import {
   Check,
   Copy,
   ExternalLink,
+  Image as ImageIcon,
   Loader2,
   MapPin,
   Search,
@@ -70,8 +71,17 @@ import {
   getConfirmedPlace,
   getRouteEstimate,
   searchPlaceCandidates,
+  getPlaceCandidatePhotos,
+  searchCommonsPhotoCandidates,
+  type CommonsPhotoCandidate,
   type PlaceCandidate,
+  type PlaceCandidatePhoto,
 } from "../services/travelRouteService";
+import {
+  removeItineraryCoverPaths,
+  uploadItineraryCoverPhoto,
+} from "../services/itineraryCoverPhotoService";
+import { ITINERARY_COVER_BUCKET } from "../constants/appConstants";
 import { RichTextColorEditor } from "./RichTextColorEditor";
 import { RichTextDisplay } from "./RichTextDisplay";
 import { MaterialTravelModeIcon } from "./MaterialTravelModeIcon";
@@ -153,6 +163,8 @@ export const ItineraryPage = ({
   const [isPlaceSearchOpen, setIsPlaceSearchOpen] = useState(false);
   const [placeQuery, setPlaceQuery] = useState("");
   const [placeCandidates, setPlaceCandidates] = useState<PlaceCandidate[]>([]);
+  const [placeCandidatePhotos, setPlaceCandidatePhotos] = useState<Record<string, PlaceCandidatePhoto>>({});
+  const [isPlacePhotosLoading, setIsPlacePhotosLoading] = useState(false);
   const [isPlaceSearching, setIsPlaceSearching] = useState(false);
   const [placeSearchError, setPlaceSearchError] = useState<string | null>(null);
   const [isPlaceDecisionPending, setIsPlaceDecisionPending] = useState(false);
@@ -169,6 +181,14 @@ export const ItineraryPage = ({
   const [isItemSaving, setIsItemSaving] = useState(false);
   const [itemSaveError, setItemSaveError] = useState<string | null>(null);
   const [autoRouteError, setAutoRouteError] = useState<string | null>(null);
+  const [coverTargetIndex, setCoverTargetIndex] = useState<number | null>(null);
+  const [commonsQuery, setCommonsQuery] = useState("");
+  const [commonsCandidates, setCommonsCandidates] = useState<CommonsPhotoCandidate[]>([]);
+  const [selectedCommonsPhoto, setSelectedCommonsPhoto] = useState<CommonsPhotoCandidate | null>(null);
+  const [isCommonsSearching, setIsCommonsSearching] = useState(false);
+  const [isCoverSaving, setIsCoverSaving] = useState(false);
+  const [coverPhotoError, setCoverPhotoError] = useState<string | null>(null);
+  const [failedCoverPaths, setFailedCoverPaths] = useState<Set<string>>(() => new Set());
   const editingCardRef = useRef<HTMLElement | null>(null);
   const orderSensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -211,6 +231,7 @@ export const ItineraryPage = ({
     setTimeErrors({});
     setIsPlaceSearchOpen(false);
     setPlaceCandidates([]);
+    setPlaceCandidatePhotos({});
     setPlaceSearchError(null);
     setIsPlaceDecisionPending(false);
     setItemSaveError(null);
@@ -320,6 +341,8 @@ export const ItineraryPage = ({
 
   const canManageItinerary = hasEditPermission && isOnline;
   const canAdjustItineraryTime = hasEditPermission;
+  const getCoverPublicUrl = (path: string) =>
+    supabase.storage.from(ITINERARY_COVER_BUCKET).getPublicUrl(path).data.publicUrl;
 
   const activeDayDate = getItineraryDayDate(trip.departureDate, activeDay);
   const activeDayLunarDate = trip.content.showLunarDate !== false && activeDayDate
@@ -576,10 +599,127 @@ export const ItineraryPage = ({
       );
       setPlaceCandidates(candidates);
       if (candidates.length === 0) setPlaceSearchError("找不到相符地點，請調整關鍵字。");
+      if (candidates.length > 0) {
+        setIsPlacePhotosLoading(true);
+        void getPlaceCandidatePhotos(
+          supabase,
+          trip.id,
+          candidates.slice(0, 5).map((candidate) => candidate.placeId),
+        ).then((result) => {
+          setPlaceCandidatePhotos(Object.fromEntries(result.photos.map((photo) => [photo.placeId, photo])));
+        }).catch(() => {
+          setPlaceCandidatePhotos({});
+        }).finally(() => setIsPlacePhotosLoading(false));
+      }
     } catch (error) {
       setPlaceSearchError(error instanceof Error ? error.message : "地點搜尋暫時無法使用。");
     } finally {
       setIsPlaceSearching(false);
+    }
+  };
+
+  const openCoverPhotoDialog = (index: number, event: ItineraryItem) => {
+    const query = event.location.trim() || event.title.trim();
+    setCoverTargetIndex(index);
+    setCommonsQuery(query);
+    setCommonsCandidates([]);
+    setSelectedCommonsPhoto(null);
+    setCoverPhotoError(null);
+    void searchCommonsPhotos(query);
+  };
+
+  const closeCoverPhotoDialog = () => {
+    if (isCoverSaving) return;
+    setCoverTargetIndex(null);
+    setCommonsCandidates([]);
+    setSelectedCommonsPhoto(null);
+    setCoverPhotoError(null);
+  };
+
+  const searchCommonsPhotos = async (queryValue = commonsQuery) => {
+    const query = queryValue.trim();
+    if (query.length < 2) {
+      setCoverPhotoError("請輸入至少 2 個字的照片搜尋詞。");
+      return;
+    }
+    setIsCommonsSearching(true);
+    setCoverPhotoError(null);
+    setSelectedCommonsPhoto(null);
+    try {
+      const candidates = await searchCommonsPhotoCandidates(supabase, trip.id, query);
+      setCommonsCandidates(candidates);
+      if (candidates.length === 0) setCoverPhotoError("找不到適合的 Commons 照片，請調整搜尋詞。");
+    } catch (error) {
+      setCoverPhotoError(error instanceof Error ? error.message : "照片搜尋暫時無法使用。");
+    } finally {
+      setIsCommonsSearching(false);
+    }
+  };
+
+  const saveCommonsPhoto = async () => {
+    if (coverTargetIndex === null || !selectedCommonsPhoto || isCoverSaving) return;
+    const stableDaysData = ensureItineraryDaysDataIds(trip.content.daysData);
+    const dayKey = String(activeDay);
+    const target = stableDaysData[dayKey]?.[coverTargetIndex];
+    if (!target?.id) return;
+    setIsCoverSaving(true);
+    setCoverPhotoError(null);
+    let uploadedPath: string | null = null;
+    try {
+      const coverPhoto = await uploadItineraryCoverPhoto(
+        supabase,
+        trip.id,
+        target.id,
+        selectedCommonsPhoto,
+      );
+      uploadedPath = coverPhoto.storagePath;
+      const nextTrip: TripDetail = {
+        ...trip,
+        content: {
+          ...trip.content,
+          daysData: {
+            ...stableDaysData,
+            [dayKey]: stableDaysData[dayKey].map((item, index) =>
+              index === coverTargetIndex ? { ...item, coverPhoto } : item,
+            ),
+          },
+        },
+      };
+      await onSaveTripDetail(nextTrip);
+      setCoverTargetIndex(null);
+      setCommonsCandidates([]);
+      setSelectedCommonsPhoto(null);
+    } catch (error) {
+      if (uploadedPath) {
+        try { await removeItineraryCoverPaths(supabase, [uploadedPath]); } catch { /* 保留待後續清理。 */ }
+      }
+      setCoverPhotoError(error instanceof Error ? error.message : "照片設定失敗，行程尚未變更。");
+    } finally {
+      setIsCoverSaving(false);
+    }
+  };
+
+  const removeCoverPhoto = async (index: number) => {
+    const stableDaysData = ensureItineraryDaysDataIds(trip.content.daysData);
+    const dayKey = String(activeDay);
+    const target = stableDaysData[dayKey]?.[index];
+    if (!target?.coverPhoto) return;
+    const nextItem = { ...target };
+    delete nextItem.coverPhoto;
+    const nextTrip: TripDetail = {
+      ...trip,
+      content: {
+        ...trip.content,
+        daysData: {
+          ...stableDaysData,
+          [dayKey]: stableDaysData[dayKey].map((item, itemIndex) => itemIndex === index ? nextItem : item),
+        },
+      },
+    };
+    try {
+      await onSaveTripDetail(nextTrip);
+    } catch (error) {
+      setAutoRouteError(error instanceof Error ? `移除照片失敗：${error.message}` : "移除照片失敗，行程尚未變更。");
     }
   };
 
@@ -1041,21 +1181,50 @@ export const ItineraryPage = ({
             {placeCandidates.length > 0 && (
               <div className="mt-3 space-y-2">
                 {placeCandidates.map((candidate) => (
-                  <button
-                    key={candidate.placeId}
-                    type="button"
-                    onClick={() => void confirmPlaceCandidate(candidate)}
-                    disabled={isPlaceSearching}
-                    className="flex w-full items-start gap-2 rounded-lg border border-slate-200 px-3 py-2 text-left hover:border-emerald-300 hover:bg-emerald-50 disabled:opacity-60"
-                  >
-                    <MapPin size={16} className="mt-0.5 shrink-0 text-emerald-600" />
-                    <span className="min-w-0">
-                      <strong className="block text-sm text-slate-800">{candidate.displayName}</strong>
-                      {candidate.address && (
-                        <span className="mt-0.5 block text-xs leading-relaxed text-slate-500">{candidate.address}</span>
+                  <div key={candidate.placeId} className="rounded-lg border border-slate-200 p-2 hover:border-emerald-300 hover:bg-emerald-50">
+                    <button
+                      type="button"
+                      onClick={() => void confirmPlaceCandidate(candidate)}
+                      disabled={isPlaceSearching}
+                      className="flex w-full items-start gap-3 text-left disabled:opacity-60"
+                    >
+                      {placeCandidatePhotos[candidate.placeId] ? (
+                        <img
+                          src={placeCandidatePhotos[candidate.placeId].photoUri}
+                          alt=""
+                          width={76}
+                          height={76}
+                          referrerPolicy="no-referrer"
+                          className="h-[76px] w-[76px] shrink-0 rounded-lg object-cover"
+                        />
+                      ) : isPlacePhotosLoading ? (
+                        <span className="h-[76px] w-[76px] shrink-0 animate-pulse rounded-lg bg-slate-100" aria-hidden="true" />
+                      ) : (
+                        <span className="flex h-[76px] w-[76px] shrink-0 items-center justify-center rounded-lg bg-slate-100 text-emerald-600"><MapPin size={20} /></span>
                       )}
-                    </span>
-                  </button>
+                      <span className="min-w-0 flex-1">
+                        <strong className="block text-sm text-slate-800">{candidate.displayName}</strong>
+                        {candidate.address && (
+                          <span className="mt-0.5 block text-xs leading-relaxed text-slate-500">{candidate.address}</span>
+                        )}
+                        {placeCandidatePhotos[candidate.placeId]?.authorAttributions.length ? (
+                          <span className="mt-1 block text-[11px] text-slate-500">
+                            照片：{placeCandidatePhotos[candidate.placeId].authorAttributions.map((author) => author.displayName).join("、")}
+                          </span>
+                        ) : null}
+                      </span>
+                    </button>
+                    {placeCandidatePhotos[candidate.placeId]?.googleMapsUri && (
+                      <a
+                        href={placeCandidatePhotos[candidate.placeId].googleMapsUri}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="mt-1 flex justify-end text-[11px] font-semibold text-slate-500 hover:text-emerald-700"
+                      >
+                        在 Google Maps 查看照片 <ExternalLink size={10} className="ml-1" />
+                      </a>
+                    )}
+                  </div>
                 ))}
                 <p className="text-right text-xs font-normal text-slate-500" translate="no">Google Maps</p>
               </div>
@@ -1323,6 +1492,9 @@ export const ItineraryPage = ({
             const warning = nextEvent
               ? getTravelTimeWarning(event, nextEvent, estimate)
               : null;
+            const hasVisibleCover = Boolean(
+              event.coverPhoto && !failedCoverPaths.has(event.coverPhoto.storagePath),
+            );
 
             return (
             <Fragment key={sortableId}>
@@ -1371,6 +1543,29 @@ export const ItineraryPage = ({
                   </div>
                 </div>
               )}
+              <div className={hasVisibleCover ? "grid grid-cols-[76px_minmax(0,1fr)] gap-3 sm:grid-cols-[76px_minmax(0,1fr)_auto]" : ""}>
+              {hasVisibleCover && event.coverPhoto && (
+                <div className="w-[76px]">
+                  <img
+                    src={getCoverPublicUrl(event.coverPhoto.storagePath)}
+                    alt={`${event.title || "行程"}照片`}
+                    width={76}
+                    height={76}
+                    loading="lazy"
+                    className="h-[76px] w-[76px] rounded-lg bg-slate-100 object-cover"
+                    onError={() => setFailedCoverPaths((paths) => new Set(paths).add(event.coverPhoto!.storagePath))}
+                  />
+                  <a
+                    href={event.coverPhoto.sourcePageUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mt-1 block text-[11px] font-semibold text-emerald-700 hover:text-emerald-800"
+                  >
+                    照片來源 ↗
+                  </a>
+                </div>
+              )}
+              <div className="min-w-0">
               <div className="flex justify-between items-center gap-3 mb-2">
                 {event.time ? (
                   <div className="flex min-w-0 items-center gap-2 text-sm font-bold text-slate-500">
@@ -1404,8 +1599,30 @@ export const ItineraryPage = ({
                   </button>
                 </div>
               )}
+              {hasVisibleCover && event.coverPhoto && (
+                <p className="mt-2 text-[11px] leading-relaxed text-slate-500">
+                  {event.coverPhoto.creator} · {event.coverPhoto.license}
+                </p>
+              )}
+              </div>
               {canManageItinerary && isManageMode && !isOrderMode && (
-                <div className="mt-3 flex justify-end gap-2 border-t border-slate-100 pt-3">
+                <div className={`mt-3 flex flex-wrap justify-end gap-2 border-t border-slate-100 pt-3 ${hasVisibleCover ? "col-start-2 sm:col-start-3 sm:row-start-1 sm:mt-0 sm:flex-col sm:border-0 sm:pt-0" : ""}`}>
+                  <button
+                    type="button"
+                    onClick={() => openCoverPhotoDialog(originalIndex, event)}
+                    className="inline-flex items-center gap-1 rounded-lg bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700 hover:bg-emerald-100"
+                  >
+                    <ImageIcon size={13} /> {event.coverPhoto ? "更換照片" : "設定照片"}
+                  </button>
+                  {event.coverPhoto && (
+                    <button
+                      type="button"
+                      onClick={() => void removeCoverPhoto(originalIndex)}
+                      className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-200"
+                    >
+                      移除照片
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => openCopyDialog(event)}
@@ -1440,6 +1657,7 @@ export const ItineraryPage = ({
                   </button>
                 </div>
               )}
+              </div>
                 </>
               )}
             </article>}
@@ -1525,6 +1743,71 @@ export const ItineraryPage = ({
       ) : (
         <div className="text-center py-12 text-slate-400 bg-white border border-dashed border-slate-200 rounded-xl shadow-sm">
           此行程今日尚無規劃活動景點。
+        </div>
+      )}
+
+      {coverTargetIndex !== null && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/40 p-3 sm:items-center" role="presentation">
+          <section
+            className="max-h-[min(46rem,calc(100dvh-1.5rem))] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-4 shadow-2xl"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="commons-photo-title"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 id="commons-photo-title" className="text-lg font-bold text-slate-800">設定照片</h3>
+                <p className="mt-1 text-xs text-slate-500">請確認照片代表正確地點，並查看作者與授權。</p>
+              </div>
+              <button type="button" onClick={closeCoverPhotoDialog} disabled={isCoverSaving} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 disabled:opacity-50" aria-label="關閉照片選擇">
+                <X size={18} />
+              </button>
+            </div>
+            <form
+              className="mt-4 flex items-stretch gap-2"
+              onSubmit={(event) => { event.preventDefault(); void searchCommonsPhotos(); }}
+            >
+              <input
+                value={commonsQuery}
+                onChange={(event) => setCommonsQuery(event.target.value)}
+                aria-label="Commons 搜尋詞"
+                className="min-w-0 flex-1 rounded-lg border border-slate-200 px-3 py-2 text-base focus:outline-none focus:ring-2 focus:ring-emerald-500 sm:text-sm"
+              />
+              <button type="submit" disabled={isCommonsSearching || commonsQuery.trim().length < 2} className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-700 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-800 disabled:opacity-50">
+                {isCommonsSearching ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />} 搜尋
+              </button>
+            </form>
+            {coverPhotoError && <p className="mt-3 text-xs text-rose-700" role="alert">{coverPhotoError}</p>}
+            {commonsCandidates.length > 0 && (
+              <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                {commonsCandidates.map((candidate) => {
+                  const isSelected = selectedCommonsPhoto?.fileTitle === candidate.fileTitle;
+                  return (
+                    <button
+                      key={candidate.fileTitle}
+                      type="button"
+                      onClick={() => setSelectedCommonsPhoto(candidate)}
+                      aria-pressed={isSelected}
+                      className={`overflow-hidden rounded-xl border text-left ${isSelected ? "border-emerald-600 ring-2 ring-emerald-100" : "border-slate-200 hover:border-emerald-300"}`}
+                    >
+                      <img src={candidate.thumbnailUrl} alt="" loading="lazy" referrerPolicy="no-referrer" className="h-28 w-full bg-slate-100 object-cover" />
+                      <span className="block p-2">
+                        <strong className="line-clamp-2 block text-xs text-slate-800">{candidate.fileTitle.replace(/^File:/, "")}</strong>
+                        <span className="mt-1 block text-[11px] text-slate-500">{candidate.creator}</span>
+                        <span className="mt-1 block text-[11px] font-semibold text-emerald-700">{candidate.license}</span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            <div className="mt-4 flex justify-end gap-2 border-t border-slate-100 pt-4">
+              <button type="button" onClick={closeCoverPhotoDialog} disabled={isCoverSaving} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-50">取消</button>
+              <button type="button" onClick={() => void saveCommonsPhoto()} disabled={!selectedCommonsPhoto || isCoverSaving} className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-800 disabled:bg-slate-200 disabled:text-slate-400">
+                {isCoverSaving ? "正在設定…" : "使用照片"}
+              </button>
+            </div>
+          </section>
         </div>
       )}
 

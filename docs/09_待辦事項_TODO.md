@@ -2,34 +2,34 @@
 
 > 本文件只保留尚未完成或仍需驗證的工作；版本順序與範圍以《02_產品開發路線圖》為準。
 >
-> 最後更新：2026-09-11
+> 最後更新：2026-09-12
 >
-> 已發布 App 版本：V3.8.1。
+> 已發布 App 版本：V3.8.2。
 
-## 目前開發：V3.8.1 Trip 刪除墓碑與唯一識別
+## 目前開發：V3.9.0 地點照片雙方案
 
-- [x] 依已核准的桌面／手機模擬圖完成目前 Trip 遭遠端刪除後靜默切換、每日詳細行程／適合 Day 落點，以及兩筆種子 Trip 的前端與資料庫刪除保護。
-- [x] 依《39_V3.8.1_Trip刪除墓碑與唯一識別規格》完成 UUID Trip ID、永久墓碑、RLS、刪除交易與伺服器端防復活候選程式。
-- [x] 完成啟動／登入／重連／前景／Realtime 校正、既有 `cloudUpdatedAt` 殘留清理、seed 排除與本機資料結構版本。
-- [x] 以獨立 baseline 完成本機 Supabase migration、17 項 SQL 角色／交易驗證、database advisors、rollback 拒絕／成功、重套 migration 與再次驗證；結果見《41_V3.8.1_實作與驗證紀錄》。
-- [x] 手動執行 GitHub Actions Run #1 隔離 Auth／PostgREST／Realtime、SQL、advisors、rollback／重套與清理閘門，全部成功。
-- [x] 完成 production 唯讀 preflight：migration history 僅 V3.8.1 待套用、記錄 9 筆既有 advisor warnings、WAL-G 已啟用，且 schema 相依性與未記錄 V3.8.1 物件檢查皆無異常。
-- [x] 建立 production roles、schema 與 data logical backup，並核對非空檔案及 SHA-256；不依賴 Supabase Dashboard backup。
-- [x] 經 Product Owner 明確授權，以 `--skip-vault` 套用唯一待處理的 migration `20260910140949`；17 筆 history 完全對齊，production-safe 唯讀 postflight 10 項全數通過，PostgREST anon 讀取墓碑為 `200`、匿名刪除 RPC 為 `401`。
-- [x] 重跑 production advisors；保留原 9 筆 baseline，新增 1 筆為刻意開放 authenticated 呼叫、且由函式內 super_admin 驗證的 `tc_delete_trip` SECURITY DEFINER RPC 警告，已審查為設計預期。
-- [x] 完成桌面 1280×720、390×844 viewport、即時離線／恢復連線與兩個獨立 origin 的雙分頁刪除同步驗證；結果見《41_V3.8.1_實作與驗證紀錄》。
-- [ ] 完成 Android／iOS 實體裝置、PWA 冷啟動離線及舊版實機必要更新流程補驗（發布後追蹤）。
-- [x] 依 migration／資料庫驗證 → 前端 → 正式資產 → 必要更新 metadata 順序完成 V3.8.1 發布；`main`、`v3.8.1` tag、GitHub Pages 與正式站 smoke 均已完成，發布後補驗另列追蹤。
-- [ ] 若實作需要規格以外的新增／調整介面或可見文案，先停止 UI 修改並補充桌面與手機模擬圖確認。
+Google 路徑、真實照片 spike、現有架構、降級與成本模型已完成；原報告遺漏免費圖庫的問題已補做 Commons／Openverse 實測，並改提出用途分流建議。詳見《45_V3.9.0_每日行程卡片地點照片可行性報告》。
+
+- [x] 地點搜尋候選索引照片：契約與真實 Google spike 均通過；5 組搜尋共 10 個候選，10／10 有照片且成功載入，實際使用 10／25 次核准照片請求，暫時性 Edge Function 已刪除並確認 404。
+- [x] 免費公開來源 spike：Commons／Openverse 以 12 地點、24 次查詢完成；知名景點與桃機／飯店 hit@3 為 7／12，租車點與四家餐廳未命中，不能自動採第一張。
+- [ ] 後續研究候選：取得 API key 後，以相同代表性地點矩陣補測 Pexels、Pixabay；此項不阻擋已核准的 Google／Commons 雙方案。Unsplash 只評估 hotlink，不下載保存。
+- [x] Product Owner 確認 V3.9.0 同時納入 Google 搜尋候選暫態索引照與 Commons 每日卡片管理者選圖；兩軌不混用來源或保存資料。
+- [x] Commons 補充 spike：中文／英文 14 組查詢中 12 組有圖片；7 張人工確認樣本的授權 metadata 7／7 完整，但 640px 平均約 239.8 KiB，必須壓縮後保存。
+- [x] 完成兩方案桌面與 390×844 模擬圖並經 Product Owner 確認；每日卡片採與「選擇正確地點」一致的左圖、中間文字、右側操作緊湊橫列，不使用大幅封面。
+- [x] Product Owner 核准跨日複製沿用同一照片引用，僅在最後一個引用移除時刪除 Storage 物件。
+- [x] 補齊正式 API schema、Storage migration、RLS、資料相容與清理規格，完成前端與 Edge Function 本機實作，並建立 V3.9.0 一般更新候選 metadata。
+- [x] 以本機 Docker 29.7.2 與 Supabase CLI 2.115.0 啟動隔離 Postgres，實際套用 migration；Storage RLS、月額度原子性、瀏覽器角色隔離均通過，security／performance advisors 為零問題，Edge Runtime 可載入 `travel-route`。
+- [ ] 完成 production logical backup；將隔離驗證 workflow 跑過遠端 CI，部署 migration／Edge Function並完成管理者真實照片流程驗證。
 
 ## 後續候選版本
 
-- [ ] V3.8.2：依《40_V3.8.2_跨日複製時間設定規格》完成必填新時間、即時驗證、依新抵達時間插入及桌面／手機回歸。
-- [ ] V3.9.0：先驗證卡片照片來源、授權標示、快取、降級、載入效能與成本；驗證完成前不視為定案功能。
+- [ ] V3.9.0：發布候選已建立；待 production backup、遠端 CI、production 部署及真實管理者流程驗證。
 - [ ] V3.10.0：重新確認使用紀錄的必要性與最小資料範圍；原 App 查詢介面、逐次明細、Cron、獨立角色與 TOTP 預覽均標記為先前草案、尚未定案。
 
 ## 已發布版本待補驗證
 
+- [ ] V3.8.2：Android／iOS 實體裝置安裝／更新、Service Worker 接管、正式管理者單日／多日複製及多裝置版本衝突回歸。
+- [ ] V3.8.1：Android／iOS 實體裝置、PWA 冷啟動離線及舊版實機必要更新流程。
 - [ ] V3.8.0：Guest、User、`trip_editor`、`super_admin`、歷史行程、離線阻擋、跨裝置版本衝突，以及實機必要更新與更新後版本資訊。
 - [ ] iOS Safari／standalone PWA：Google OAuth、啟動畫面、管理欄位縮放、外部連結、附件拍照／相簿、更新提示、離線與同步。
 - [ ] V3.6.0 路線功能：完整角色與付費 API 邊界、正式站 OAuth、Android／iOS 外部開圖、離線與重新連線。

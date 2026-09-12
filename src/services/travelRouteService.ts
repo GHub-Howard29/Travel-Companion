@@ -15,6 +15,32 @@ export interface PlaceCandidate {
   address?: string;
 }
 
+export interface PlaceCandidatePhoto {
+  placeId: string;
+  photoUri: string;
+  googleMapsUri?: string;
+  authorAttributions: Array<{ displayName: string; uri?: string }>;
+}
+
+export interface PlaceCandidatePhotoResult {
+  photos: PlaceCandidatePhoto[];
+  limitReached: boolean;
+}
+
+export interface CommonsPhotoCandidate {
+  fileTitle: string;
+  thumbnailUrl: string;
+  sourcePageUrl: string;
+  creator: string;
+  credit?: string;
+  license: string;
+  licenseUrl?: string;
+  sourceSha1?: string;
+  sourceRevisionAt?: string;
+  width: number;
+  height: number;
+}
+
 export interface RouteEstimateResult {
   durationSeconds: number;
   distanceMeters: number;
@@ -58,6 +84,29 @@ export const searchPlaceCandidates = async (
   const result = await invokeTravelRoute<{ candidates: PlaceCandidate[] }>(
     supabase,
     { action: "placeAutocomplete", tripId, input },
+  );
+  return result.candidates;
+};
+
+export const getPlaceCandidatePhotos = async (
+  supabase: SupabaseClient,
+  tripId: string,
+  placeIds: string[],
+): Promise<PlaceCandidatePhotoResult> =>
+  invokeTravelRoute<PlaceCandidatePhotoResult>(supabase, {
+    action: "placePhotos",
+    tripId,
+    placeIds,
+  });
+
+export const searchCommonsPhotoCandidates = async (
+  supabase: SupabaseClient,
+  tripId: string,
+  query: string,
+): Promise<CommonsPhotoCandidate[]> => {
+  const result = await invokeTravelRoute<{ candidates: CommonsPhotoCandidate[] }>(
+    supabase,
+    { action: "commonsPhotoSearch", tripId, query },
   );
   return result.candidates;
 };
