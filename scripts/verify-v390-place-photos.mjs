@@ -84,6 +84,8 @@ assert.match(page, /在 Google Maps 查看照片/);
 assert.match(page, /照片來源 ↗/);
 assert.match(page, /float-left mb-2 mr-3 w-\[76px\]/);
 assert.doesNotMatch(page, /grid-cols-\[76px_minmax\(0,1fr\)\]/);
+assert.match(page, /flex items-start justify-between gap-3 border-t border-slate-100 pt-2/);
+assert.doesNotMatch(page, /mt-2 text-\[11px\] leading-relaxed text-slate-500/);
 assert.match(migration, /public\.tc_can_write_shared_trip/);
 assert.match(migration, /revoke all on table public\.place_photo_monthly_usage from public, anon, authenticated/);
 assert.match(viteConfig, /https:\/\/\*\.googleusercontent\.com/);

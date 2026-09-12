@@ -1588,21 +1588,23 @@ export const ItineraryPage = ({
                   <RichTextDisplay value={event.desc} />
                 </p>
               )}
-              {event.location && (
-                <div className="flex justify-end pt-2 border-t border-slate-100">
-                  <button
-                    onClick={() => handlePlaceBrowse(event.location!, event.place)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 rounded-lg text-xs font-bold text-slate-600 transition-colors"
-                  >
-                    <MapPin size={14} className="text-emerald-600" /> 在地圖中查看{" "}
-                    <ExternalLink size={10} />
-                  </button>
+              {(event.location || (hasVisibleCover && event.coverPhoto)) && (
+                <div className="flex items-start justify-between gap-3 border-t border-slate-100 pt-2">
+                  {hasVisibleCover && event.coverPhoto ? (
+                    <p className="text-[11px] leading-relaxed text-slate-500">
+                      {event.coverPhoto.creator} · {event.coverPhoto.license}
+                    </p>
+                  ) : <span />}
+                  {event.location && (
+                    <button
+                      onClick={() => handlePlaceBrowse(event.location!, event.place)}
+                      className="flex shrink-0 items-center gap-1.5 rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600 transition-colors hover:bg-emerald-50 hover:text-emerald-700"
+                    >
+                      <MapPin size={14} className="text-emerald-600" /> 在地圖中查看{" "}
+                      <ExternalLink size={10} />
+                    </button>
+                  )}
                 </div>
-              )}
-              {hasVisibleCover && event.coverPhoto && (
-                <p className="mt-2 text-[11px] leading-relaxed text-slate-500">
-                  {event.coverPhoto.creator} · {event.coverPhoto.license}
-                </p>
               )}
               </div>
               {canManageItinerary && isManageMode && !isOrderMode && (

@@ -22,7 +22,8 @@ Google 路徑、真實照片 spike、現有架構、降級與成本模型已完�
 - [x] 遠端隔離 Supabase CI run `34688235879` 通過；migration、Storage／RLS、額度、advisors 與清理均成功且無 annotations。
 - [x] production logical backup、migration `20260912093527`、production-safe postflight、advisors 已完成；`travel-route` 修正部署後為 version 5、ACTIVE、`verify_jwt=false`，兩個新增 action 的未登入請求均為 403。
 - [x] 在本機 V3.9.0 候選以正式管理者完成 Google 候選照片、Commons 選圖、Storage 保存與重新整理 smoke；修正 Commons 縮圖 host、Supabase Storage CSP，並通過桌面／390×844 卡片文字回流版面驗證。
-- [ ] 經 Product Owner 行動當下確認後，移除熊本城卡片的 smoke 測試照片並確認最後引用的 Storage 物件清除；不處理其他既有照片。
+- [x] 作者／授權文字移至與地圖按鈕同列上緣，保留原字級與左側間距；完整 build 與結構回歸通過。
+- [ ] 重新載入後頁面已無熊本城 smoke 照片引用；待 Product Owner 行動當下確認後，才能檢查及清除可能殘留的 Storage 測試物件，不處理其他既有照片。
 - [ ] 依 Product Owner 指示停止在正式前端發布前；管理者 smoke 通過後另行取得放行，才合併 `main`、建立 `v3.9.0` tag 與部署 GitHub Pages。
 
 ## 後續候選版本
