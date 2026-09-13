@@ -311,6 +311,10 @@ Deno.serve(async (request) => {
       if (typeof body.query !== "string" || body.query.trim().length < 2 || body.query.trim().length > 120) {
         return json({ error: "請輸入至少 2 個字的照片搜尋詞。" }, 400);
       }
+      const offset = body.offset === undefined ? 0 : body.offset;
+      if (!Number.isInteger(offset) || Number(offset) < 0 || Number(offset) > 10_000) {
+        return json({ error: "照片搜尋分頁資訊無效。" }, 400);
+      }
       const params = new URLSearchParams({
         action: "query",
         generator: "search",
@@ -325,6 +329,10 @@ Deno.serve(async (request) => {
         format: "json",
         origin: "*",
       });
+      if (Number(offset) > 0) {
+        params.set("continue", "gsroffset||");
+        params.set("gsroffset", String(offset));
+      }
       const response = await fetch(`${COMMONS_API_URL}?${params}`, {
         headers: { "User-Agent": "Travel-Companion/3.9.0 (Wikimedia Commons photo selector)" },
         signal: AbortSignal.timeout(12_000),
@@ -362,7 +370,17 @@ Deno.serve(async (request) => {
           height: typeof info.height === "number" ? info.height : 0,
         }];
       }).slice(0, MAX_COMMONS_CANDIDATES);
-      return json({ candidates });
+      const rawNextOffset = isRecord(payload) && isRecord(payload.continue)
+        ? payload.continue.gsroffset
+        : null;
+      const parsedNextOffset = (typeof rawNextOffset === "number" || typeof rawNextOffset === "string") &&
+          Number.isInteger(Number(rawNextOffset)) && Number(rawNextOffset) >= 0
+        ? Number(rawNextOffset)
+        : null;
+      const nextOffset = parsedNextOffset ?? (candidates.length === MAX_COMMONS_CANDIDATES && Number(offset) < 10_000
+        ? Number(offset) + MAX_COMMONS_CANDIDATES
+        : null);
+      return json({ candidates, nextOffset });
     }
 
     if (body.action !== "routeEstimate" || !isPlace(body.origin) || !isPlace(body.destination) ||

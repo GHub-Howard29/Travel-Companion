@@ -41,6 +41,11 @@ export interface CommonsPhotoCandidate {
   height: number;
 }
 
+export interface CommonsPhotoSearchResult {
+  candidates: CommonsPhotoCandidate[];
+  nextOffset: number | null;
+}
+
 export interface RouteEstimateResult {
   durationSeconds: number;
   distanceMeters: number;
@@ -103,13 +108,12 @@ export const searchCommonsPhotoCandidates = async (
   supabase: SupabaseClient,
   tripId: string,
   query: string,
-): Promise<CommonsPhotoCandidate[]> => {
-  const result = await invokeTravelRoute<{ candidates: CommonsPhotoCandidate[] }>(
+  offset = 0,
+): Promise<CommonsPhotoSearchResult> =>
+  invokeTravelRoute<CommonsPhotoSearchResult>(
     supabase,
-    { action: "commonsPhotoSearch", tripId, query },
+    { action: "commonsPhotoSearch", tripId, query, offset },
   );
-  return result.candidates;
-};
 
 export const getConfirmedPlace = (
   candidate: PlaceCandidate,

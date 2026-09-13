@@ -87,6 +87,8 @@ import { RichTextDisplay } from "./RichTextDisplay";
 import { MaterialTravelModeIcon } from "./MaterialTravelModeIcon";
 import { SortableCard } from "./SortableCard";
 
+const COMMONS_CANDIDATE_PAGE_SIZE = 8;
+
 interface ItineraryPageProps {
   supabase: SupabaseClient;
   trip: TripDetail;
@@ -184,6 +186,8 @@ export const ItineraryPage = ({
   const [coverTargetIndex, setCoverTargetIndex] = useState<number | null>(null);
   const [commonsQuery, setCommonsQuery] = useState("");
   const [commonsCandidates, setCommonsCandidates] = useState<CommonsPhotoCandidate[]>([]);
+  const [commonsNextOffset, setCommonsNextOffset] = useState<number | null>(null);
+  const [commonsSeenFileTitles, setCommonsSeenFileTitles] = useState<Set<string>>(new Set());
   const [selectedCommonsPhoto, setSelectedCommonsPhoto] = useState<CommonsPhotoCandidate | null>(null);
   const [isCommonsSearching, setIsCommonsSearching] = useState(false);
   const [isCoverSaving, setIsCoverSaving] = useState(false);
@@ -623,6 +627,8 @@ export const ItineraryPage = ({
     setCoverTargetIndex(index);
     setCommonsQuery(query);
     setCommonsCandidates([]);
+    setCommonsNextOffset(null);
+    setCommonsSeenFileTitles(new Set());
     setSelectedCommonsPhoto(null);
     setCoverPhotoError(null);
     void searchCommonsPhotos(query);
@@ -632,11 +638,13 @@ export const ItineraryPage = ({
     if (isCoverSaving) return;
     setCoverTargetIndex(null);
     setCommonsCandidates([]);
+    setCommonsNextOffset(null);
+    setCommonsSeenFileTitles(new Set());
     setSelectedCommonsPhoto(null);
     setCoverPhotoError(null);
   };
 
-  const searchCommonsPhotos = async (queryValue = commonsQuery) => {
+  const searchCommonsPhotos = async (queryValue = commonsQuery, offset = 0) => {
     const query = queryValue.trim();
     if (query.length < 2) {
       setCoverPhotoError("請輸入至少 2 個字的照片搜尋詞。");
@@ -646,9 +654,22 @@ export const ItineraryPage = ({
     setCoverPhotoError(null);
     setSelectedCommonsPhoto(null);
     try {
-      const candidates = await searchCommonsPhotoCandidates(supabase, trip.id, query);
-      setCommonsCandidates(candidates);
-      if (candidates.length === 0) setCoverPhotoError("找不到適合的 Commons 照片，請調整搜尋詞。");
+      const result = await searchCommonsPhotoCandidates(supabase, trip.id, query, offset);
+      const freshCandidates = result.candidates.filter((candidate) => !commonsSeenFileTitles.has(candidate.fileTitle));
+      const nextSeenFileTitles = new Set(commonsSeenFileTitles);
+      result.candidates.forEach((candidate) => nextSeenFileTitles.add(candidate.fileTitle));
+      setCommonsSeenFileTitles(nextSeenFileTitles);
+      setCommonsCandidates(freshCandidates);
+      setCommonsNextOffset(result.nextOffset ?? (
+        result.candidates.length === COMMONS_CANDIDATE_PAGE_SIZE
+          ? offset + COMMONS_CANDIDATE_PAGE_SIZE
+          : null
+      ));
+      if (freshCandidates.length === 0) {
+        setCoverPhotoError(result.nextOffset === null
+          ? "沒有更多未顯示的 Commons 照片，請調整搜尋詞。"
+          : "這一批沒有新的 Commons 照片，請再按一次換一批。");
+      }
     } catch (error) {
       setCoverPhotoError(error instanceof Error ? error.message : "照片搜尋暫時無法使用。");
     } finally {
@@ -1767,11 +1788,18 @@ export const ItineraryPage = ({
             </div>
             <form
               className="mt-4 flex items-stretch gap-2"
-              onSubmit={(event) => { event.preventDefault(); void searchCommonsPhotos(); }}
+              onSubmit={(event) => {
+                event.preventDefault();
+                void searchCommonsPhotos(commonsQuery, commonsNextOffset ?? 0);
+              }}
             >
               <input
                 value={commonsQuery}
-                onChange={(event) => setCommonsQuery(event.target.value)}
+                onChange={(event) => {
+                  setCommonsQuery(event.target.value);
+                  setCommonsNextOffset(null);
+                  setCommonsSeenFileTitles(new Set());
+                }}
                 aria-label="Commons 搜尋詞"
                 className="min-w-0 flex-1 rounded-lg border border-slate-200 px-3 py-2 text-base focus:outline-none focus:ring-2 focus:ring-emerald-500 sm:text-sm"
               />
@@ -1803,11 +1831,18 @@ export const ItineraryPage = ({
                 })}
               </div>
             )}
-            <div className="mt-4 flex justify-end gap-2 border-t border-slate-100 pt-4">
-              <button type="button" onClick={closeCoverPhotoDialog} disabled={isCoverSaving} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-50">取消</button>
-              <button type="button" onClick={() => void saveCommonsPhoto()} disabled={!selectedCommonsPhoto || isCoverSaving} className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-800 disabled:bg-slate-200 disabled:text-slate-400">
-                {isCoverSaving ? "正在設定…" : "使用照片"}
-              </button>
+            <div className="mt-4 flex items-center gap-2 border-t border-slate-100 pt-4">
+              {commonsNextOffset !== null && commonsCandidates.length > 0 && (
+                <button type="button" onClick={() => void searchCommonsPhotos(commonsQuery, commonsNextOffset)} disabled={isCommonsSearching || isCoverSaving} className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-700 hover:bg-emerald-100 disabled:opacity-50">
+                  換一批
+                </button>
+              )}
+              <div className="ml-auto flex gap-2">
+                <button type="button" onClick={closeCoverPhotoDialog} disabled={isCoverSaving} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-50">取消</button>
+                <button type="button" onClick={() => void saveCommonsPhoto()} disabled={!selectedCommonsPhoto || isCoverSaving} className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-800 disabled:bg-slate-200 disabled:text-slate-400">
+                  {isCoverSaving ? "正在設定…" : "使用照片"}
+                </button>
+              </div>
             </div>
           </section>
         </div>

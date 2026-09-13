@@ -23,13 +23,17 @@ Google 路徑、真實照片 spike、現有架構、降級與成本模型已完�
 - [x] production logical backup、migration `20260912093527`、production-safe postflight、advisors 已完成；`travel-route` 修正部署後為 version 5、ACTIVE、`verify_jwt=false`，兩個新增 action 的未登入請求均為 403。
 - [x] 在本機 V3.9.0 候選以正式管理者完成 Google 候選照片、Commons 選圖、Storage 保存與重新整理 smoke；修正 Commons 縮圖 host、Supabase Storage CSP，並通過桌面／390×844 卡片文字回流版面驗證。
 - [x] 作者／授權文字移至與地圖按鈕同列上緣，保留原字級與左側間距；完整 build 與結構回歸通過。
+- [x] Commons 候選新增「換一批」：以 `gsroffset` 取得下一批結果，換關鍵字時重置分頁；本機契約、TypeScript、lint 與 build 通過。
 - [ ] 重新載入後頁面已無熊本城 smoke 照片引用；待 Product Owner 行動當下確認後，才能檢查及清除可能殘留的 Storage 測試物件，不處理其他既有照片。
-- [ ] 依 Product Owner 指示停止在正式前端發布前；管理者 smoke 通過後另行取得放行，才合併 `main`、建立 `v3.9.0` tag 與部署 GitHub Pages。
+- [x] Product Owner 已於 2026-09-13 解除正式前端停止線，授權合併 `main`、建立 `v3.9.0` tag、部署 GitHub Pages及發布後文件回寫。
 
 ## 後續候選版本
 
-- [ ] V3.9.0：發布候選、production backend 與管理者新增／保存／重整 smoke 已完成；待測試照片清理確認與正式前端放行。
+- [ ] V3.9.0：發布候選、production backend 與管理者新增／保存／重整 smoke 已完成；「換一批」localhost 管理者互動驗證通過且 production Function version 9 為 ACTIVE，正式前端已取得發布授權。
 - [ ] V3.10.0：重新確認使用紀錄的必要性與最小資料範圍；原 App 查詢介面、逐次明細、Cron、獨立角色與 TOTP 預覽均標記為先前草案、尚未定案。
+- [ ] V3.9.1 子方案 A：中文搜尋自動擴充英文關鍵詞；討論詞彙來源、雙語結果合併去重、專有名詞、失敗降級、成本及提示文案。
+- [ ] V3.9.1 子方案 B：Commons／Pexels／Pixabay 來源切換；討論來源切換、重新搜尋、換一批、API 額度、快取、授權與保存規則。
+- [ ] V3.9.1 共同停止條件：兩個子方案獨立追蹤、互不取代；各自規格定稿並經 Product Owner 核准前，禁止程式實作、API key 建立、UI 設計及模擬圖製作。詳見《48_V3.9.1_每日行程照片來源擴充規劃草案》。
 
 ## 已發布版本待補驗證
 
