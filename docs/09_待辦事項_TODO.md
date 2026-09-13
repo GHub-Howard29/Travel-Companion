@@ -4,9 +4,9 @@
 >
 > 最後更新：2026-09-13
 >
-> 已發布 App 版本：V3.8.2。
+> 已發布 App 版本：V3.9.0。
 
-## 目前開發：V3.9.0 地點照片雙方案
+## V3.9.0 已發布結果
 
 Google 路徑、真實照片 spike、現有架構、降級與成本模型已完成；原報告遺漏免費圖庫的問題已補做 Commons／Openverse 實測，並改提出用途分流建議。詳見《45_V3.9.0_每日行程卡片地點照片可行性報告》。
 
@@ -20,20 +20,21 @@ Google 路徑、真實照片 spike、現有架構、降級與成本模型已完�
 - [x] 補齊正式 API schema、Storage migration、RLS、資料相容與清理規格，完成前端與 Edge Function 本機實作，並建立 V3.9.0 一般更新候選 metadata。
 - [x] 以本機 Docker 29.7.2 與 Supabase CLI 2.115.0 啟動隔離 Postgres，實際套用 migration；Storage RLS、月額度原子性、瀏覽器角色隔離均通過，security／performance advisors 為零問題，Edge Runtime 可載入 `travel-route`。
 - [x] 遠端隔離 Supabase CI run `34688235879` 通過；migration、Storage／RLS、額度、advisors 與清理均成功且無 annotations。
-- [x] production logical backup、migration `20260912093527`、production-safe postflight、advisors 已完成；`travel-route` 修正部署後為 version 5、ACTIVE、`verify_jwt=false`，兩個新增 action 的未登入請求均為 403。
+- [x] production logical backup、migration `20260912093527`、production-safe postflight、advisors 已完成；`travel-route` 最終部署為 version 9、ACTIVE、`verify_jwt=false`，兩個新增 action 的未登入請求均為 403。
 - [x] 在本機 V3.9.0 候選以正式管理者完成 Google 候選照片、Commons 選圖、Storage 保存與重新整理 smoke；修正 Commons 縮圖 host、Supabase Storage CSP，並通過桌面／390×844 卡片文字回流版面驗證。
 - [x] 作者／授權文字移至與地圖按鈕同列上緣，保留原字級與左側間距；完整 build 與結構回歸通過。
 - [x] Commons 候選新增「換一批」：以 `gsroffset` 取得下一批結果，換關鍵字時重置分頁；本機契約、TypeScript、lint 與 build 通過。
-- [ ] 重新載入後頁面已無熊本城 smoke 照片引用；待 Product Owner 行動當下確認後，才能檢查及清除可能殘留的 Storage 測試物件，不處理其他既有照片。
-- [x] Product Owner 已於 2026-09-13 解除正式前端停止線，授權合併 `main`、建立 `v3.9.0` tag、部署 GitHub Pages及發布後文件回寫。
+- [ ] 若後續確認需移除 smoke 測試照片，須在刪除行動當下取得確認；不處理目前卡片上的其他既有照片。
+- [x] Product Owner 已於 2026-09-13 解除正式前端停止線，授權合併 `main`、建立 `v3.9.0` tag、部署 GitHub Pages 及發布後文件回寫。
+- [x] `main` 與 `v3.9.0` 已推送至 `7abac83`；GitHub Pages 部署 `d7b8e93` 已上線，正式 metadata、Service Worker、manifest、桌面／390×844 版本資訊及 Guest 行程載入通過。
 
 ## 後續候選版本
 
-- [ ] V3.9.0：發布候選、production backend 與管理者新增／保存／重整 smoke 已完成；「換一批」localhost 管理者互動驗證通過且 production Function version 9 為 ACTIVE，正式前端已取得發布授權。
-- [ ] V3.10.0：重新確認使用紀錄的必要性與最小資料範圍；原 App 查詢介面、逐次明細、Cron、獨立角色與 TOTP 預覽均標記為先前草案、尚未定案。
+- [x] V3.9.0：已於 2026-09-13 正式發布；production Function version 9 為 ACTIVE，正式前端與發布後 smoke 均通過。
 - [ ] V3.9.1 子方案 A：中文搜尋自動擴充英文關鍵詞；討論詞彙來源、雙語結果合併去重、專有名詞、失敗降級、成本及提示文案。
 - [ ] V3.9.1 子方案 B：Commons／Pexels／Pixabay 來源切換；討論來源切換、重新搜尋、換一批、API 額度、快取、授權與保存規則。
 - [ ] V3.9.1 共同停止條件：兩個子方案獨立追蹤、互不取代；各自規格定稿並經 Product Owner 核准前，禁止程式實作、API key 建立、UI 設計及模擬圖製作。詳見《48_V3.9.1_每日行程照片來源擴充規劃草案》。
+- [ ] V3.10.0：重新確認使用紀錄的必要性與最小資料範圍；原 App 查詢介面、逐次明細、Cron、獨立角色與 TOTP 預覽均標記為先前草案、尚未定案。
 
 ## 已發布版本待補驗證
 
