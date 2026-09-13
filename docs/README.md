@@ -10,9 +10,9 @@ Travel Companion 是以 Trip 為核心的 Offline First 旅行管理 PWA，使�
 >
 > V3.9.0 發布狀態為「已發布」；`main`、帶註解標籤 `v3.9.0`、正式版本政策與新版資產均已確認，`minimumSupportedVersion: 3.8.2`、`forceUpdate: false`。
 >
-> 下一版本規劃：V3.9.1 保留「中文搜尋自動擴充英文關鍵詞」與「Commons／Pexels／Pixabay 來源切換」兩個獨立候選；討論及 UI 尚未完成，不得實作。
+> 下一版本規劃：V3.9.1 保留「中文搜尋自動擴充英文關鍵詞」、「Commons／Pexels／Pixabay 來源切換」及「已確認 MAP 地點脈絡輔助搜尋」三個獨立候選；討論、額度實測及 UI 尚未完成，不得實作。
 >
-> 最後更新：2026-09-13
+> 最後更新：2026-09-14
 
 ## 優先閱讀
 
