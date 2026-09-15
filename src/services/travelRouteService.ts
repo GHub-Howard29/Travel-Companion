@@ -29,6 +29,8 @@ export interface PlaceCandidatePhotoResult {
 export interface CommonsPhotoCandidate {
   fileTitle: string;
   thumbnailUrl: string;
+  cropImageUrl: string;
+  thumbnailMime: "image/jpeg" | "image/png" | "image/webp";
   sourcePageUrl: string;
   creator: string;
   credit?: string;

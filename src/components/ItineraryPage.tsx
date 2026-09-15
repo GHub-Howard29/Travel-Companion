@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   DndContext,
@@ -20,6 +20,7 @@ import {
   Check,
   Copy,
   ExternalLink,
+  Eye,
   Image as ImageIcon,
   Loader2,
   MapPin,
@@ -91,6 +92,13 @@ import { RichTextColorEditor } from "./RichTextColorEditor";
 import { RichTextDisplay } from "./RichTextDisplay";
 import { MaterialTravelModeIcon } from "./MaterialTravelModeIcon";
 import { SortableCard } from "./SortableCard";
+import { CoverPhotoCropEditor } from "./CoverPhotoCropEditor";
+import { CoverPhotoViewer, type CoverPhotoViewerData } from "./CoverPhotoViewer";
+import {
+  DEFAULT_ITINERARY_COVER_CROP,
+  getWikimediaDerivativeSize,
+  type ItineraryCoverCropTransform,
+} from "../utils/itineraryCoverCrop";
 
 const COMMONS_CANDIDATE_PAGE_SIZE = 6;
 
@@ -197,12 +205,18 @@ export const ItineraryPage = ({
   const [commonsNextOffset, setCommonsNextOffset] = useState<number | null>(null);
   const [commonsSeenFileTitles, setCommonsSeenFileTitles] = useState<Set<string>>(new Set());
   const [selectedCommonsPhoto, setSelectedCommonsPhoto] = useState<CommonsPhotoCandidate | null>(null);
+  const [coverDialogStep, setCoverDialogStep] = useState<"search" | "confirm">("search");
+  const [coverCrop, setCoverCrop] = useState<ItineraryCoverCropTransform>(DEFAULT_ITINERARY_COVER_CROP);
+  const [photoViewer, setPhotoViewer] = useState<CoverPhotoViewerData | null>(null);
   const [isCommonsSearching, setIsCommonsSearching] = useState(false);
   const [isCoverSaving, setIsCoverSaving] = useState(false);
   const [coverPhotoError, setCoverPhotoError] = useState<string | null>(null);
   const [commonsPageStatus, setCommonsPageStatus] = useState<CommonsPageStatus | null>(null);
   const [failedCoverPaths, setFailedCoverPaths] = useState<Set<string>>(() => new Set());
   const editingCardRef = useRef<HTMLElement | null>(null);
+  const coverDialogRef = useRef<HTMLElement | null>(null);
+  const coverDialogOpenerRef = useRef<HTMLElement | null>(null);
+  const photoViewerOpenerRef = useRef<HTMLElement | null>(null);
   const copyTimeAlertButtonRef = useRef<HTMLButtonElement | null>(null);
   const copyTimeCompositionRef = useRef(false);
   const orderSensors = useSensors(
@@ -237,6 +251,12 @@ export const ItineraryPage = ({
   const currentDayEvents = trip.content.daysData[String(activeDay)] || [];
   const displayedDayEvents = (isOrderMode ? orderDraft : currentDayEvents)
     .map((event, originalIndex) => ({ event, originalIndex }));
+  const selectedCommonsDerivativeSize = selectedCommonsPhoto
+    ? getWikimediaDerivativeSize(selectedCommonsPhoto.width, selectedCommonsPhoto.height)
+    : null;
+  const canSaveSelectedCrop = Boolean(
+    selectedCommonsDerivativeSize && Math.min(selectedCommonsDerivativeSize.width, selectedCommonsDerivativeSize.height) >= 640,
+  );
 
   const resetForm = () => {
     releaseFocusedControl();
@@ -678,14 +698,18 @@ export const ItineraryPage = ({
 
   const openCoverPhotoDialog = (index: number, event: ItineraryItem) => {
     const query = event.location.trim();
+    coverDialogOpenerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     setCoverTargetIndex(index);
     setCommonsQuery(query);
     setCommonsCandidates([]);
     setCommonsNextOffset(null);
     setCommonsSeenFileTitles(new Set());
     setSelectedCommonsPhoto(null);
+    setCoverDialogStep("search");
+    setCoverCrop(DEFAULT_ITINERARY_COVER_CROP);
     setCoverPhotoError(null);
     setCommonsPageStatus(null);
+    requestAnimationFrame(() => coverDialogRef.current?.querySelector<HTMLElement>("input:not([disabled]), button:not([disabled])")?.focus());
   };
 
   const closeCoverPhotoDialog = () => {
@@ -695,8 +719,48 @@ export const ItineraryPage = ({
     setCommonsNextOffset(null);
     setCommonsSeenFileTitles(new Set());
     setSelectedCommonsPhoto(null);
+    setCoverDialogStep("search");
+    setCoverCrop(DEFAULT_ITINERARY_COVER_CROP);
     setCoverPhotoError(null);
     setCommonsPageStatus(null);
+    const opener = coverDialogOpenerRef.current;
+    coverDialogOpenerRef.current = null;
+    requestAnimationFrame(() => opener?.focus());
+  };
+
+  const handleCoverDialogKeyDown = (event: ReactKeyboardEvent<HTMLElement>) => {
+    if (photoViewer) return;
+    if (event.key === "Escape") {
+      event.preventDefault();
+      closeCoverPhotoDialog();
+      return;
+    }
+    if (event.key !== "Tab") return;
+    const focusable = [...(coverDialogRef.current?.querySelectorAll<HTMLElement>(
+      "a[href], input:not([disabled]), button:not([disabled]), [tabindex]:not([tabindex='-1'])",
+    ) ?? [])];
+    if (focusable.length === 0) return;
+    const first = focusable[0];
+    const last = focusable.at(-1)!;
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  };
+
+  const openPhotoViewer = (photo: CoverPhotoViewerData, opener: HTMLElement) => {
+    photoViewerOpenerRef.current = opener;
+    setPhotoViewer(photo);
+  };
+
+  const closePhotoViewer = () => {
+    const opener = photoViewerOpenerRef.current;
+    photoViewerOpenerRef.current = null;
+    setPhotoViewer(null);
+    requestAnimationFrame(() => opener?.focus());
   };
 
   const startCommonsSearch = () => {
@@ -770,6 +834,7 @@ export const ItineraryPage = ({
         trip.id,
         target.id,
         selectedCommonsPhoto,
+        coverCrop,
       );
       uploadedPath = coverPhoto.storagePath;
       const nextTrip: TripDetail = {
@@ -1643,15 +1708,32 @@ export const ItineraryPage = ({
               <div className={hasVisibleCover ? "relative flow-root" : ""}>
               {hasVisibleCover && event.coverPhoto && (
                 <div className="float-left mb-2 mr-3 w-[76px]">
-                  <img
-                    src={getCoverPublicUrl(event.coverPhoto.storagePath)}
-                    alt={`${event.title || "行程"}照片`}
-                    width={76}
-                    height={76}
-                    loading="lazy"
-                    className="h-[76px] w-[76px] rounded-lg bg-slate-100 object-cover"
-                    onError={() => setFailedCoverPaths((paths) => new Set(paths).add(event.coverPhoto!.storagePath))}
-                  />
+                  <button
+                    type="button"
+                    onClick={(clickEvent) => openPhotoViewer({
+                      url: getCoverPublicUrl(event.coverPhoto!.storagePath),
+                      alt: `${event.title || "行程"}照片`,
+                      sourceLabel: "Wikimedia Commons",
+                      sourcePageUrl: event.coverPhoto!.sourcePageUrl,
+                      creator: event.coverPhoto!.creator,
+                      credit: event.coverPhoto!.credit,
+                      license: event.coverPhoto!.license,
+                      licenseUrl: event.coverPhoto!.licenseUrl,
+                      transformation: event.coverPhoto!.transformation,
+                    }, clickEvent.currentTarget)}
+                    className="block rounded-lg outline-none ring-emerald-500 focus:ring-2"
+                    aria-label={`放大檢視「${event.title || "行程"}」照片`}
+                  >
+                    <img
+                      src={getCoverPublicUrl(event.coverPhoto.storagePath)}
+                      alt=""
+                      width={76}
+                      height={76}
+                      loading="lazy"
+                      className="h-[76px] w-[76px] rounded-lg bg-slate-100 object-cover"
+                      onError={() => setFailedCoverPaths((paths) => new Set(paths).add(event.coverPhoto!.storagePath))}
+                    />
+                  </button>
                   <a
                     href={event.coverPhoto.sourcePageUrl}
                     target="_blank"
@@ -1846,8 +1928,10 @@ export const ItineraryPage = ({
       )}
 
       {coverTargetIndex !== null && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/40 p-3 sm:items-center" role="presentation">
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/40 p-3 sm:items-center" role="presentation" aria-hidden={photoViewer ? true : undefined}>
           <section
+            ref={coverDialogRef}
+            onKeyDown={handleCoverDialogKeyDown}
             className="max-h-[min(46rem,calc(100dvh-1.5rem))] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-4 shadow-2xl"
             role="dialog"
             aria-modal="true"
@@ -1855,88 +1939,157 @@ export const ItineraryPage = ({
           >
             <div className="flex items-start justify-between gap-3">
               <div>
-                <h3 id="commons-photo-title" className="text-lg font-bold text-slate-800">設定照片</h3>
-                <p className="mt-1 text-xs text-slate-500">請確認照片代表正確地點，並查看作者與授權。</p>
+                <h3 id="commons-photo-title" className="text-lg font-bold text-slate-800">{coverDialogStep === "search" ? "設定照片" : "確認照片與裁切"}</h3>
+                <p className="mt-1 text-xs text-slate-500">{coverDialogStep === "search" ? "先選擇來源與候選照片；選取不會立即儲存。" : "確認照片代表正確地點，再調整正方形封面範圍。"}</p>
               </div>
               <button type="button" onClick={closeCoverPhotoDialog} disabled={isCoverSaving} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 disabled:opacity-50" aria-label="關閉照片選擇">
                 <X size={18} />
               </button>
             </div>
-            <form
-              className="mt-4 flex items-stretch gap-2"
-              onSubmit={(event) => {
-                event.preventDefault();
-                startCommonsSearch();
-              }}
-            >
-              <input
-                value={commonsQuery}
-                onChange={(event) => {
-                  setCommonsQuery(event.target.value);
-                  setCommonsCandidates([]);
-                  setCommonsNextOffset(null);
-                  setCommonsSeenFileTitles(new Set());
-                  setSelectedCommonsPhoto(null);
-                  setCommonsPageStatus(null);
-                  setCoverPhotoError(null);
-                }}
-                aria-label="Commons 搜尋詞"
-                className="min-w-0 flex-1 rounded-lg border border-slate-200 px-3 py-2 text-base focus:outline-none focus:ring-2 focus:ring-emerald-500 sm:text-sm"
-              />
-              <button type="submit" disabled={!isOnline || isCommonsSearching || commonsQuery.trim().length < 2} className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-700 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-800 disabled:opacity-50">
-                {isCommonsSearching ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />} 搜尋
-              </button>
-            </form>
-            {!isOnline && <p className="mt-3 text-xs text-amber-700" aria-live="polite">目前離線，無法搜尋、換一批或儲存照片。</p>}
-            {coverPhotoError && <p className="mt-3 text-xs text-rose-700" aria-live="polite">{coverPhotoError}</p>}
-            {commonsPageStatus && (
-              <p className="mt-3 text-xs text-slate-600" aria-live="polite">
-                {{
-                  "empty-first-page": "找不到符合條件的照片，請調整搜尋詞後再試。",
-                  "duplicate-page": "這一批沒有新的照片；可再換一批或調整搜尋詞。",
-                  exhausted: "已沒有更多照片；可調整搜尋詞或改用其他來源。",
-                }[commonsPageStatus]}
-              </p>
-            )}
-            {commonsCandidates.length > 0 && (
-              <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
-                {commonsCandidates.map((candidate) => {
-                  const isSelected = selectedCommonsPhoto?.fileTitle === candidate.fileTitle;
-                  return (
-                    <button
-                      key={candidate.fileTitle}
-                      type="button"
-                      onClick={() => setSelectedCommonsPhoto(candidate)}
-                      aria-pressed={isSelected}
-                      className={`overflow-hidden rounded-xl border text-left ${isSelected ? "border-emerald-600 ring-2 ring-emerald-100" : "border-slate-200 hover:border-emerald-300"}`}
-                    >
-                      <img src={candidate.thumbnailUrl} alt="" loading="lazy" referrerPolicy="no-referrer" className="h-28 w-full bg-slate-100 object-cover" />
-                      <span className="block p-2">
-                        <strong className="line-clamp-2 block text-xs text-slate-800">{candidate.fileTitle.replace(/^File:/, "")}</strong>
-                        <span className="mt-1 block text-[11px] text-slate-500">{candidate.creator}</span>
-                        <span className="mt-1 block text-[11px] font-semibold text-emerald-700">{candidate.license}</span>
-                      </span>
+            {coverDialogStep === "search" ? (
+              <>
+                <fieldset className="mt-4">
+                  <legend className="text-sm font-bold text-slate-700">照片來源</legend>
+                  <div className="mt-2 grid gap-2 sm:grid-cols-3">
+                    <label className="flex items-start gap-2 rounded-xl border border-emerald-300 bg-emerald-50 p-3 text-sm font-bold text-emerald-800">
+                      <input type="radio" name="cover-photo-source" value="wikimedia-commons" checked readOnly className="mt-0.5 accent-emerald-700" />
+                      Wikimedia Commons
+                    </label>
+                    {(["Pexels", "Pixabay"] as const).map((source) => (
+                      <label key={source} className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-400">
+                        <span className="flex items-start gap-2 font-bold"><input type="radio" name="cover-photo-source" disabled className="mt-0.5" />{source}</span>
+                        <span className="mt-1 block text-[11px] font-normal">{source}目前未啟用，可改用其他來源。</span>
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
+                <form
+                  className="mt-4 flex items-stretch gap-2"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    startCommonsSearch();
+                  }}
+                >
+                  <input
+                    value={commonsQuery}
+                    onChange={(event) => {
+                      setCommonsQuery(event.target.value);
+                      setCommonsCandidates([]);
+                      setCommonsNextOffset(null);
+                      setCommonsSeenFileTitles(new Set());
+                      setSelectedCommonsPhoto(null);
+                      setCommonsPageStatus(null);
+                      setCoverPhotoError(null);
+                    }}
+                    aria-label="Commons 搜尋詞"
+                    className="min-w-0 flex-1 rounded-lg border border-slate-200 px-3 py-2 text-base focus:outline-none focus:ring-2 focus:ring-emerald-500 sm:text-sm"
+                  />
+                  <button type="submit" disabled={!isOnline || isCommonsSearching || commonsQuery.trim().length < 2} className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-700 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-800 disabled:opacity-50">
+                    {isCommonsSearching ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />} 搜尋
+                  </button>
+                </form>
+                {!isOnline && <p className="mt-3 text-xs text-amber-700" aria-live="polite">目前離線，無法搜尋、換一批或儲存照片。</p>}
+                {coverPhotoError && <p className="mt-3 text-xs text-rose-700" aria-live="polite">{coverPhotoError}</p>}
+                {commonsPageStatus && (
+                  <p className="mt-3 text-xs text-slate-600" aria-live="polite">
+                    {{
+                      "empty-first-page": "找不到符合條件的照片，請調整搜尋詞後再試。",
+                      "duplicate-page": "這一批沒有新的照片；可再換一批或調整搜尋詞。",
+                      exhausted: "已沒有更多照片；可調整搜尋詞或改用其他來源。",
+                    }[commonsPageStatus]}
+                  </p>
+                )}
+                {commonsCandidates.length > 0 && (
+                  <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3" role="radiogroup" aria-label="Commons 候選照片">
+                    {commonsCandidates.map((candidate) => {
+                      const isSelected = selectedCommonsPhoto?.fileTitle === candidate.fileTitle;
+                      const name = candidate.fileTitle.replace(/^File:/, "");
+                      return (
+                        <article key={candidate.fileTitle} className={`overflow-hidden rounded-xl border ${isSelected ? "border-emerald-600 ring-2 ring-emerald-100" : "border-slate-200"}`}>
+                          <button
+                            type="button"
+                            onClick={(clickEvent) => openPhotoViewer({
+                              url: candidate.thumbnailUrl,
+                              alt: name,
+                              sourceLabel: "Wikimedia Commons",
+                              sourcePageUrl: candidate.sourcePageUrl,
+                              creator: candidate.creator,
+                              credit: candidate.credit,
+                              license: candidate.license,
+                              licenseUrl: candidate.licenseUrl,
+                            }, clickEvent.currentTarget)}
+                            className="group relative block w-full outline-none ring-inset ring-emerald-500 focus:ring-2"
+                            aria-label={`放大檢視「${name}」`}
+                          >
+                            <img src={candidate.thumbnailUrl} alt="" loading="lazy" referrerPolicy="no-referrer" className="h-28 w-full bg-slate-100 object-cover" />
+                            <span className="absolute bottom-2 right-2 rounded-full bg-slate-950/70 p-1.5 text-white"><Eye size={14} /></span>
+                          </button>
+                          <div className="p-2">
+                            <strong className="line-clamp-2 block text-xs text-slate-800">{name}</strong>
+                            <span className="mt-1 block text-[11px] text-slate-500">{candidate.creator}</span>
+                            <span className="mt-1 block text-[11px] font-semibold text-emerald-700">{candidate.license}</span>
+                            <label className={`mt-2 flex w-full cursor-pointer items-center justify-center rounded-lg px-2 py-1.5 text-xs font-bold ${isSelected ? "bg-emerald-700 text-white" : "bg-emerald-50 text-emerald-700 hover:bg-emerald-100"}`}>
+                              <input
+                                type="radio"
+                                name="commons-photo-candidate"
+                                checked={isSelected}
+                                onChange={() => setSelectedCommonsPhoto(candidate)}
+                                className="sr-only"
+                              />
+                              {isSelected ? "已選取" : "選取照片"}
+                            </label>
+                          </div>
+                        </article>
+                      );
+                    })}
+                  </div>
+                )}
+                <div className="mt-4 flex flex-col gap-2 border-t border-slate-100 pt-4 sm:flex-row sm:items-center">
+                  {commonsNextOffset !== null && (
+                    <button type="button" onClick={() => void searchCommonsPhotos(commonsQuery, commonsNextOffset)} disabled={!isOnline || isCommonsSearching || isCoverSaving} className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-700 hover:bg-emerald-100 disabled:opacity-50">
+                      換一批
                     </button>
-                  );
-                })}
-              </div>
-            )}
-            <div className="mt-4 flex items-center gap-2 border-t border-slate-100 pt-4">
-              {commonsNextOffset !== null && (
-                <button type="button" onClick={() => void searchCommonsPhotos(commonsQuery, commonsNextOffset)} disabled={!isOnline || isCommonsSearching || isCoverSaving} className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-700 hover:bg-emerald-100 disabled:opacity-50">
-                  換一批
-                </button>
-              )}
-              <div className="ml-auto flex gap-2">
-                <button type="button" onClick={closeCoverPhotoDialog} disabled={isCoverSaving} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-50">取消</button>
-                <button type="button" onClick={() => void saveCommonsPhoto()} disabled={!isOnline || !selectedCommonsPhoto || isCoverSaving} className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-800 disabled:bg-slate-200 disabled:text-slate-400">
-                  {isCoverSaving ? "正在設定…" : "使用照片"}
-                </button>
-              </div>
-            </div>
+                  )}
+                  <div className="flex flex-col gap-2 sm:ml-auto sm:flex-row">
+                    <button type="button" onClick={closeCoverPhotoDialog} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50">取消</button>
+                    <button type="button" onClick={() => { setCoverCrop(DEFAULT_ITINERARY_COVER_CROP); setCoverDialogStep("confirm"); }} disabled={!selectedCommonsPhoto} className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-800 disabled:bg-slate-200 disabled:text-slate-400">
+                      確認候選照片
+                    </button>
+                  </div>
+                </div>
+              </>
+            ) : selectedCommonsPhoto ? (
+              <>
+                <div className="mt-4 grid gap-4 sm:grid-cols-[minmax(0,1fr)_15rem]">
+                  <CoverPhotoCropEditor candidate={selectedCommonsPhoto} value={coverCrop} onChange={setCoverCrop} />
+                  <aside className="rounded-xl bg-slate-50 p-3 text-xs leading-relaxed text-slate-600">
+                    <strong className="block text-sm text-slate-800">{selectedCommonsPhoto.fileTitle.replace(/^File:/, "")}</strong>
+                    <p className="mt-2">來源：Wikimedia Commons</p>
+                    <p className="mt-1">作者：{selectedCommonsPhoto.creator}</p>
+                    {selectedCommonsPhoto.credit && <p className="mt-1">Credit：{selectedCommonsPhoto.credit}</p>}
+                    <p className="mt-1">授權：{selectedCommonsPhoto.license}</p>
+                    <div className="mt-3 flex flex-col items-start gap-2">
+                      <a href={selectedCommonsPhoto.sourcePageUrl} target="_blank" rel="noreferrer" className="font-bold text-emerald-700 hover:text-emerald-800">查看來源頁 ↗</a>
+                      {selectedCommonsPhoto.licenseUrl && <a href={selectedCommonsPhoto.licenseUrl} target="_blank" rel="noreferrer" className="font-bold text-emerald-700 hover:text-emerald-800">查看授權 ↗</a>}
+                    </div>
+                    {/^CC BY(?: |$)/i.test(selectedCommonsPhoto.license) && <p className="mt-3 rounded-lg bg-white p-2">儲存後標示：已裁切、縮放並轉為 WebP</p>}
+                  </aside>
+                </div>
+                {coverPhotoError && <p className="mt-3 text-xs text-rose-700" aria-live="polite">{coverPhotoError}</p>}
+                <div className="mt-4 flex flex-col gap-2 border-t border-slate-100 pt-4 sm:flex-row sm:justify-end">
+                  <button type="button" onClick={() => { setCoverPhotoError(null); setCoverDialogStep("search"); }} disabled={isCoverSaving} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-50">返回候選</button>
+                  <button type="button" onClick={closeCoverPhotoDialog} disabled={isCoverSaving} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-50">取消</button>
+                  <button type="button" onClick={() => void saveCommonsPhoto()} disabled={!isOnline || !canSaveSelectedCrop || isCoverSaving} className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-800 disabled:bg-slate-200 disabled:text-slate-400">
+                    {isCoverSaving ? "正在設定…" : "確認裁切並儲存"}
+                  </button>
+                </div>
+              </>
+            ) : null}
           </section>
         </div>
       )}
+
+      {photoViewer && <CoverPhotoViewer photo={photoViewer} onClose={closePhotoViewer} />}
 
       {copySource && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/40 p-3 sm:items-center" role="presentation">

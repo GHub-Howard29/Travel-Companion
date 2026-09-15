@@ -73,8 +73,7 @@ const metadataValue = (metadata: Record<string, unknown>, key: string): string |
 };
 
 const isAllowedCommonsLicense = (license: string): boolean =>
-  /^(?:CC0|Public domain|CC BY(?:-SA)?(?: |$))/i.test(license) &&
-  !/(?:\bNC\b|\bND\b|noncommercial|no derivatives)/i.test(license);
+  /^(?:CC0(?: 1\.0)?|Public domain|CC BY (?:1\.0|2\.0|2\.5|3\.0|4\.0))$/i.test(license.trim());
 
 const isHttpsUrl = (value: unknown): value is string => {
   if (typeof value !== "string") return false;
@@ -88,6 +87,14 @@ const isHttpsUrl = (value: unknown): value is string => {
 const normalizeCommonsThumbnailUrl = (value: string): string => {
   const url = new URL(value);
   if (url.hostname === "thumb.wikimedia.org") url.hostname = "upload.wikimedia.org";
+  return url.toString();
+};
+
+const getCommonsDerivativeUrl = (value: string, width: number): string | undefined => {
+  const normalized = normalizeCommonsThumbnailUrl(value);
+  const url = new URL(normalized);
+  if (url.hostname !== "upload.wikimedia.org" || !/\/\d+px-[^/]+$/.test(url.pathname)) return undefined;
+  url.pathname = url.pathname.replace(/\/\d+px-([^/]+)$/, `/${width}px-$1`);
   return url.toString();
 };
 
@@ -349,18 +356,24 @@ Deno.serve(async (request) => {
         const metadata = isRecord(info.extmetadata) ? info.extmetadata : {};
         const license = metadataValue(metadata, "LicenseShortName") ?? metadataValue(metadata, "UsageTerms");
         const creator = metadataValue(metadata, "Artist");
+        const credit = metadataValue(metadata, "Credit")?.slice(0, 500);
         const restrictions = metadataValue(metadata, "Restrictions");
         const licenseUrl = metadataValue(metadata, "LicenseUrl");
-        const isPublicDomain = license?.toLowerCase() === "public domain" || license?.toLowerCase() === "cc0";
+        const isPublicDomain = license?.toLowerCase() === "public domain" || license?.toLowerCase().startsWith("cc0");
+        const isCcBy = /^CC BY (?:1\.0|2\.0|2\.5|3\.0|4\.0)$/i.test(license ?? "");
+        const cropImageUrl = typeof info.thumburl === "string" ? getCommonsDerivativeUrl(info.thumburl, 1280) : undefined;
         if (info.mediatype !== "BITMAP" || !["image/jpeg", "image/png", "image/webp"].includes(String(info.thumbmime)) ||
           !license || !creator || !isAllowedCommonsLicense(license) || restrictions ||
-          !isHttpsUrl(info.thumburl) || !isHttpsUrl(info.descriptionurl) || (!isPublicDomain && !isHttpsUrl(licenseUrl))) return [];
+          !isHttpsUrl(info.thumburl) || !cropImageUrl || !isHttpsUrl(info.descriptionurl) ||
+          (!isPublicDomain && !isHttpsUrl(licenseUrl)) || (isCcBy && !credit)) return [];
         return [{
           fileTitle: page.title,
           thumbnailUrl: normalizeCommonsThumbnailUrl(info.thumburl),
+          cropImageUrl,
+          thumbnailMime: info.thumbmime,
           sourcePageUrl: info.descriptionurl,
           creator: creator.slice(0, 500),
-          credit: metadataValue(metadata, "Credit")?.slice(0, 500),
+          credit,
           license: license.slice(0, 100),
           licenseUrl: isHttpsUrl(licenseUrl) ? licenseUrl : undefined,
           sourceSha1: typeof info.sha1 === "string" ? info.sha1 : undefined,

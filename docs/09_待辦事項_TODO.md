@@ -57,7 +57,8 @@ Google 路徑、真實照片 spike、現有架構、降級與成本模型已完�
 - [x] V3.9.1 子方案 C：2026-09-15 已定案為本版停用。不得增加 Google Place Details 呼叫、以 `placeId` 取得搜尋脈絡，或把 Google Places 衍生內容傳給 Commons／Pexels／Pixabay／AI；原因為 Place Details SKU 成本及再利用條款適用性未取得明確依據。保留為後續研究，須另行確認條款、SKU、成本、attribution、保存與安全邊界後才可重啟。
 - [ ] V3.9.1 Commons 搜尋提示修正：三種分頁狀態、換詞／重開重置、末頁隱藏換批與離線停用已完成本機首批實作及自動契約驗證；尚待登入管理者桌面／390×844 實際互動。
 - [ ] V3.9.1 地點／照片介面：候選 `placeId` Maps 地點頁、核准文案、選圖只預填 `location` 且不自動搜尋，以及前後端每批 6 張已完成本機實作；尚待登入管理者互動與 Edge Function 部署後驗證。
-- [ ] V3.9.1 後續實作閘門：精準 Commons 共享快取／用量 migration、15 例真實 Wikimedia spike、Gemini 型號／key、Pexels／Pixabay key 與正式 API、精準搜尋完整 UI、裁切／放大檢視、正式部署與發布仍須依《48》至《50》的個別核准及驗收條件處理。
+- [ ] V3.9.1 來源選擇、候選確認、手動裁切與放大檢視：Commons 可用且 Pexels／Pixabay 保持可見停用、選取與放大控制分離、確認頁 1:1 平移／縮放、1280px 單張下載安全檢查、640×640 WebP、固定變更聲明、焦點陷阱與舊資料相容已完成本機實作及自動契約驗證；尚待登入管理者桌面／390×844 實際互動及 Edge Function 部署後驗證。
+- [ ] V3.9.1 後續實作閘門：精準 Commons 共享快取／用量 migration、15 例真實 Wikimedia spike、Gemini 型號／key、Pexels／Pixabay key 與正式 API、精準搜尋完整 UI、正式部署與發布仍須依《48》至《50》的個別核准及驗收條件處理。
 - [ ] V3.10.0：重新確認使用紀錄的必要性與最小資料範圍；原 App 查詢介面、逐次明細、Cron、獨立角色與 TOTP 預覽均標記為先前草案、尚未定案。
 - [ ] 後續版本評估：Google Maps「任意地圖落針」座標作為行程交通估算點。V3.9.1 維持確認地點後只保存 `placeId`、交由既有路線估算，因官方建議 `placeId` 通常較精準；本項若重啟，須獨立確認座標資料契約、手動落針 UI、隱私／保存期限、Routes 成本與 Google 條款。不得傳送座標給 Commons／Pexels／Pixabay／AI，也不得藉此重啟 V3.9.1 子方案 C。
 
