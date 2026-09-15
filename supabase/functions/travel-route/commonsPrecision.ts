@@ -51,7 +51,7 @@ export interface CommonsPrecisionRawCandidate {
   targetQid: string;
   targetNames: CommonsPrecisionName[];
   directP18?: boolean;
-  exactCategory?: string;
+  exactCategories?: string[];
   depictsQids?: string[];
   reliableCapturedAt?: string;
   currentAppearanceVerified?: boolean;
@@ -214,10 +214,14 @@ export const evaluateCommonsPrecisionCandidate = (
     scoreBreakdown.push({ rule: "direct-p18", points: 45, evidence: input.targetQid });
     matchEvidence.push({ kind: "p18", qid: input.targetQid });
   }
-  if (input.exactCategory?.trim()) {
-    const category = input.exactCategory.trim();
-    scoreBreakdown.push({ rule: "exact-category", points: 35, evidence: category });
-    matchEvidence.push({ kind: "exact-category", qid: input.targetQid, category });
+  const exactCategories = [...new Set(input.exactCategories?.map((category) => category.trim()).filter(Boolean) ?? [])].slice(0, 10);
+  if (exactCategories.length > 0) {
+    scoreBreakdown.push({ rule: "exact-category", points: 35, evidence: exactCategories.join(" | ") });
+    matchEvidence.push(...exactCategories.map((category) => ({
+      kind: "exact-category" as const,
+      qid: input.targetQid,
+      category,
+    })));
   }
   if (depictsTarget) {
     scoreBreakdown.push({ rule: "structured-depicts", points: 25, evidence: input.targetQid });

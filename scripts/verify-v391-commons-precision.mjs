@@ -85,7 +85,7 @@ assert.equal(broadButPassing.candidate.score, 25);
 
 const ranked = rankCommonsPrecisionCandidates([
   { ...baseCandidate, fileTitle: "File:Z.jpg", directP18: true, targetNames: [] },
-  { ...baseCandidate, fileTitle: "File:B.jpg", exactCategory: "Target landmark", targetNames: [] },
+  { ...baseCandidate, fileTitle: "File:B.jpg", exactCategories: ["Target landmark"], targetNames: [] },
   { ...baseCandidate, fileTitle: "File:A.jpg", depictsQids: ["Q123"], targetNames: [] },
   { ...baseCandidate, fileTitle: "File:C.jpg", description: "Target landmark", targetNames: [{ value: "Target landmark", languageTag: "en" }] },
 ]);
