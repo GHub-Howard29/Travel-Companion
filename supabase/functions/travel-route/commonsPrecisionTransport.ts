@@ -48,7 +48,7 @@ const toPlannedRequest = (layer: CommonsPrecisionRequestLayer, endpoint: string,
 
 export type CommonsPrecisionPlanInput =
   | { layer: "resolve-entity"; query: string; language: string }
-  | { layer: "read-entity-evidence"; qid: string; targetLanguage: string }
+  | { layer: "read-entity-evidence"; qids: readonly string[]; targetLanguage: string }
   | { layer: "read-p18-files"; fileTitles: readonly string[] }
   | { layer: "read-category-files"; category: string; continuation?: string }
   | { layer: "read-structured-data"; pageIds: readonly number[] }
@@ -59,7 +59,7 @@ export const planCommonsPrecisionRequest = (input: CommonsPrecisionPlanInput): C
     case "resolve-entity":
       return toPlannedRequest(input.layer, WIKIDATA_API_URL, buildWikidataEntitySearchParams(input.query, input.language));
     case "read-entity-evidence":
-      return toPlannedRequest(input.layer, WIKIDATA_API_URL, buildWikidataEntityEvidenceParams([requireQid(input.qid)], input.targetLanguage));
+      return toPlannedRequest(input.layer, WIKIDATA_API_URL, buildWikidataEntityEvidenceParams(input.qids.map(requireQid), input.targetLanguage));
     case "read-p18-files":
       return toPlannedRequest(input.layer, COMMONS_API_URL, buildCommonsFileMetadataParams(input.fileTitles));
     case "read-category-files":

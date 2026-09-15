@@ -19,8 +19,8 @@ assert.equal(resolvePlan.timeoutMs, COMMONS_PRECISION_REQUEST_TIMEOUT_MS);
 assert.equal(resolvePlan.url.startsWith(`${WIKIDATA_API_URL}?`), true);
 assert.equal(new URL(resolvePlan.url).searchParams.get("action"), "wbsearchentities");
 
-const evidencePlan = planCommonsPrecisionRequest({ layer: "read-entity-evidence", qid: "Q100", targetLanguage: "zh-Hant" });
-assert.equal(new URL(evidencePlan.url).searchParams.get("ids"), "Q100");
+const evidencePlan = planCommonsPrecisionRequest({ layer: "read-entity-evidence", qids: ["Q100", "Q200"], targetLanguage: "zh-Hant" });
+assert.equal(new URL(evidencePlan.url).searchParams.get("ids"), "Q100|Q200");
 assert.equal(new URL(evidencePlan.url).searchParams.get("props"), "claims|labels|aliases");
 
 const p18Plan = planCommonsPrecisionRequest({ layer: "read-p18-files", fileTitles: ["File:One.jpg", "File:Two.jpg"] });
@@ -43,7 +43,7 @@ for (const plan of [resolvePlan, evidencePlan, p18Plan, categoryPlan, depictsPla
   assert.equal(plan.url.includes("P279"), false);
 }
 
-assert.throws(() => planCommonsPrecisionRequest({ layer: "read-entity-evidence", qid: "Q0", targetLanguage: "en" }), /QID/);
+assert.throws(() => planCommonsPrecisionRequest({ layer: "read-entity-evidence", qids: ["Q0"], targetLanguage: "en" }), /QID/);
 assert.throws(() => planCommonsPrecisionRequest({ layer: "read-category-files", category: "x", continuation: "" }), /continuation/);
 assert.throws(() => planCommonsPrecisionRequest({ layer: "read-structured-data", pageIds: [] }), /page ID/);
 assert.equal(isAllowedCommonsPrecisionApiUrl("http://commons.wikimedia.org/w/api.php?x=1"), false);

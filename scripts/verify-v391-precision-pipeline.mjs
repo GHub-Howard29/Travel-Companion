@@ -95,6 +95,7 @@ const payload = {
       info({ pageid: 13, title: "File:Share alike.jpg", license: "CC BY-SA 4.0" }),
       info({ pageid: 14, title: "File:Missing creator.jpg", artist: "" }),
       info({ pageid: 15, title: "File:Wrong host.jpg", thumburl: "https://example.com/640.jpg" }),
+      info({ pageid: 19, title: "File:Legacy CDN.jpg", thumburl: "https://thumb.wikimedia.org/wikipedia/commons/thumb/a/a1/19.jpg/640px-19.jpg" }),
       info({ pageid: 16, title: "File:Too small.jpg", width: 1100, height: 900 }),
       info({ pageid: 17, title: "File:Truncated description.jpg", description: `第一航廈${"x".repeat(600)}` }),
       info({ pageid: 18, title: "File:Vector.svg", mime: "image/svg+xml", mediatype: "DRAWING" }),
@@ -103,13 +104,14 @@ const payload = {
 };
 
 const parsed = parseCommonsFileMetadataResponse(payload);
-assert.deepEqual(parsed.files.map(({ pageId }) => pageId), [10, 11, 12, 13, 16, 17]);
+assert.deepEqual(parsed.files.map(({ pageId }) => pageId), [10, 11, 12, 13, 19, 16, 17]);
 assert.equal(parsed.files[0].creator, "Alice & Bob");
 assert.equal(parsed.files[0].cropImageUrl.includes("/1280px-10.jpg"), true);
 assert.equal(parsed.files.find(({ pageId }) => pageId === 17)?.descriptionWasTruncated, true);
+assert.equal(parsed.files.find(({ pageId }) => pageId === 19)?.thumbnailUrl.startsWith("https://upload.wikimedia.org/"), true);
 assert.deepEqual(parsed.rejected.map(({ pageId, reason }) => [pageId, reason]), [
   [14, "missing-attribution"],
-  [15, "invalid-source-url"],
+  [15, "invalid-thumbnail-url"],
   [18, "unsupported-media"],
 ]);
 
@@ -147,6 +149,14 @@ assert.equal(composed.rejected.some(({ fileTitle, reason }) => fileTitle === "Fi
 assert.equal(composed.rejected.some(({ fileTitle, reason }) => fileTitle === "File:Share alike.jpg" && reason === "license-not-allowed"), true);
 assert.equal(composed.rejected.some(({ fileTitle, reason }) => fileTitle === "File:Too small.jpg" && reason === "image-too-small"), true);
 assert.equal(composed.rejected.some(({ fileTitle, reason }) => fileTitle === "File:Truncated description.jpg" && reason === "no-strong-evidence"), true);
+
+const duplicateMetadataCandidates = composeCommonsPrecisionCandidates({
+  metadataPayload: { query: { pages: [info({ pageid: 20, title: "File:Same.jpg" }), info({ pageid: 20, title: "File:Same.jpg" })] } },
+  seeds: [{ pageId: 20, fileTitle: "File:Same.jpg", directP18: true, exactCategories: ["Terminal One"], fromAdoptedTextSearch: false }],
+  depictsByPageId: new Map(),
+  entityEvidence: { qid: "Q100", names: [{ value: "Terminal One", languageTag: "en" }] },
+});
+assert.equal(duplicateMetadataCandidates.candidates.length, 1, "同一 Commons page ID 不得因多個證據層重複顯示");
 
 const projectRoot = resolve(import.meta.dirname, "..");
 const source = readFileSync(resolve(projectRoot, "supabase/functions/travel-route/commonsPrecisionPipeline.ts"), "utf8");

@@ -8,6 +8,35 @@ import {
   parseDurationSeconds,
   resolveSupabaseRuntimeKey,
 } from "./validation.ts";
+import { runCommonsPrecisionContinuationEngine, runCommonsPrecisionEngine } from "./commonsPrecisionEngine.ts";
+import { executeCommonsPrecisionRequest } from "./commonsPrecisionFetch.ts";
+import { projectCommonsPrecisionResponse, type CommonsPrecisionPublicResponse } from "./commonsPrecision.ts";
+import {
+  COMMONS_PRECISION_CANDIDATE_CACHE_TTL_MS,
+  COMMONS_PRECISION_ENTITY_CACHE_TTL_MS,
+  createCommonsPrecisionCandidateCacheKey,
+  createCommonsPrecisionEntityCacheKey,
+  createCommonsPrecisionNoSuitableCacheKey,
+} from "./commonsPrecisionCache.ts";
+import {
+  acquireCommonsPrecisionOperationLock,
+  acquireCommonsPrecisionUpstreamLock,
+  claimCommonsPrecisionUpstreamSlot,
+  readCommonsPrecisionCache,
+  recordCommonsPrecisionUsage,
+  releaseCommonsPrecisionOperationLock,
+  releaseCommonsPrecisionUpstreamLock,
+  writeCommonsPrecisionCache,
+} from "./commonsPrecisionDatabase.ts";
+import { getCommonsPrecisionTaipeiDateKey } from "./commonsPrecisionQuota.ts";
+import { createCommonsPrecisionUsageDelta } from "./commonsPrecisionUsage.ts";
+import {
+  hashAdoptedCommonsQuery,
+  importCommonsPrecisionTokenKey,
+  openCommonsPrecisionNextPageToken,
+  sealCommonsPrecisionNextPageToken,
+} from "./commonsPrecisionSession.ts";
+import type { WikidataEntityEvidence } from "./commonsPrecisionWikimedia.ts";
 
 const GOOGLE_PLACES_AUTOCOMPLETE_URL =
   "https://places.googleapis.com/v1/places:autocomplete";
@@ -393,6 +422,114 @@ Deno.serve(async (request) => {
         ? Number(offset) + MAX_COMMONS_CANDIDATES
         : null);
       return json({ candidates, nextOffset });
+    }
+
+    if (body.action === "commonsPrecisionSearch") {
+      if (typeof body.query !== "string" || body.query.trim().length < 2 || body.query.trim().length > 120) {
+        return json({ error: "請輸入 2 至 120 個字的照片搜尋詞。" }, 400);
+      }
+      const language = typeof body.language === "string" && /^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8})*$/.test(body.language.trim())
+        ? body.language.trim()
+        : "zh-Hant";
+      const query = body.query.normalize("NFKC").replace(/\s+/g, " ").trim();
+      const queryHash = await sha256(query);
+      const adoptedQueryHash = await hashAdoptedCommonsQuery(query);
+      const nextPageToken = typeof body.nextPageToken === "string" ? body.nextPageToken : undefined;
+      if (body.nextPageToken !== undefined && (!nextPageToken || nextPageToken.length > 4096)) {
+        return json({ error: "照片搜尋 session 已失效，請重新搜尋。", state: "session-expired" }, 400);
+      }
+      const candidateKey = createCommonsPrecisionCandidateCacheKey({ queryHash, language });
+      const noSuitableKey = createCommonsPrecisionNoSuitableCacheKey({ queryHash, language });
+      const lockKey = `lock:commons-precision-v1:${await sha256(`${queryHash}:${language.toLowerCase()}`)}`;
+      const startedAtMs = Date.now();
+      const cached = nextPageToken ? null : await readCommonsPrecisionCache<CommonsPrecisionPublicResponse>(clients.admin, candidateKey, "candidate-results");
+      if (cached) {
+        await recordCommonsPrecisionUsage(clients.admin, getCommonsPrecisionTaipeiDateKey(Date.now()), createCommonsPrecisionUsageDelta({
+          state: "results", upstreamRequests: 0, durationMs: Math.min(20_000, Date.now() - startedAtMs), candidateCacheHit: true,
+        }));
+        return json(cached);
+      }
+      const cachedEmpty = nextPageToken ? null : await readCommonsPrecisionCache<CommonsPrecisionPublicResponse>(clients.admin, noSuitableKey, "no-suitable-image");
+      if (cachedEmpty) {
+        await recordCommonsPrecisionUsage(clients.admin, getCommonsPrecisionTaipeiDateKey(Date.now()), createCommonsPrecisionUsageDelta({
+          state: "no-suitable-image", upstreamRequests: 0, durationMs: Math.min(20_000, Date.now() - startedAtMs), noSuitableCacheHit: true,
+        }));
+        return json(cachedEmpty);
+      }
+      if (!await acquireCommonsPrecisionOperationLock(clients.admin, lockKey)) {
+        return json({ error: "精準照片搜尋正在處理中，請稍後由管理者重新操作。", state: "in-progress" }, 409);
+      }
+      try {
+        const contactUrl = requiredEnv("WIKIMEDIA_CONTACT_URL");
+        const tokenSecret = requiredEnv("COMMONS_PRECISION_TOKEN_SECRET");
+        const tokenKey = await importCommonsPrecisionTokenKey(new TextEncoder().encode(tokenSecret));
+        const transport = {
+          request: async (plan) => {
+            const token = crypto.randomUUID();
+            if (!await acquireCommonsPrecisionUpstreamLock(clients.admin, token)) return { state: "in-progress" };
+            try {
+              if (!await claimCommonsPrecisionUpstreamSlot(clients.admin)) return { state: "project-quota-reached" };
+              return await executeCommonsPrecisionRequest(plan, contactUrl);
+            } finally {
+              await releaseCommonsPrecisionUpstreamLock(clients.admin, token);
+            }
+          },
+        };
+        let result;
+        if (nextPageToken) {
+          const opened = await openCommonsPrecisionNextPageToken(nextPageToken, tokenKey, { nowMs: Date.now(), adoptedQueryHash });
+          if (opened.status !== "valid") return json({ error: "照片搜尋 session 已失效，請重新搜尋。", state: "session-expired" }, 400);
+          const entityEvidence = await readCommonsPrecisionCache<WikidataEntityEvidence>(clients.admin, createCommonsPrecisionEntityCacheKey(opened.session.qid), "entity-evidence");
+          if (!entityEvidence) return json({ error: "照片搜尋 session 已失效，請重新搜尋。", state: "session-expired" }, 400);
+          result = await runCommonsPrecisionContinuationEngine({
+            query,
+            entityEvidence,
+            layer: opened.session.layer,
+            continuation: opened.session.continuation,
+            seenPageIds: opened.session.seenPageIds,
+          }, transport);
+        } else {
+          result = await runCommonsPrecisionEngine({ query, language }, transport);
+          if (result.entityEvidence) {
+            await writeCommonsPrecisionCache(clients.admin, {
+              key: createCommonsPrecisionEntityCacheKey(result.entityEvidence.qid), kind: "entity-evidence", payload: result.entityEvidence,
+              expiresAt: new Date(Date.now() + COMMONS_PRECISION_ENTITY_CACHE_TTL_MS),
+            });
+          }
+        }
+        const sealedNextPageToken = result.response.state === "results" && result.continuation && result.qid
+          ? await sealCommonsPrecisionNextPageToken({
+              qid: result.qid,
+              adoptedQueryHash,
+              layer: result.continuation.layer,
+              continuation: result.continuation.value,
+              seenPageIds: result.seenPageIds,
+            }, tokenKey, Date.now())
+          : undefined;
+        const response = projectCommonsPrecisionResponse({ ...result.response, nextPageToken: sealedNextPageToken });
+        if (!nextPageToken && !result.continuation && response.state === "results") {
+          await writeCommonsPrecisionCache(clients.admin, {
+            key: candidateKey, kind: "candidate-results", payload: response,
+            expiresAt: new Date(Date.now() + COMMONS_PRECISION_CANDIDATE_CACHE_TTL_MS),
+          });
+        } else if (!nextPageToken && response.state === "no-suitable-image") {
+          await writeCommonsPrecisionCache(clients.admin, {
+            key: noSuitableKey, kind: "no-suitable-image", payload: response,
+            expiresAt: new Date(Date.now() + COMMONS_PRECISION_CANDIDATE_CACHE_TTL_MS),
+          });
+        }
+        await recordCommonsPrecisionUsage(clients.admin, getCommonsPrecisionTaipeiDateKey(Date.now()), createCommonsPrecisionUsageDelta({
+          state: response.state,
+          upstreamRequests: result.requestCount,
+          durationMs: result.durationMs,
+          allCandidatesRejected: result.allCandidatesRejected,
+          upstreamStatus: result.upstreamStatus,
+        }));
+        if (response.state === "in-progress") return json({ error: "精準照片搜尋正在處理中，請稍後由管理者重新操作。", state: response.state }, 409);
+        return json(response);
+      } finally {
+        await releaseCommonsPrecisionOperationLock(clients.admin, lockKey);
+      }
     }
 
     if (body.action !== "routeEstimate" || !isPlace(body.origin) || !isPlace(body.destination) ||

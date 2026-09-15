@@ -40,11 +40,17 @@ export interface CommonsPhotoCandidate {
   sourceRevisionAt?: string;
   width: number;
   height: number;
+  reviewStatus?: "needs-review";
+  score?: number;
+  scoreBreakdown?: Array<{ rule: string; points: number; evidence: string }>;
+  matchEvidence?: Array<{ kind: string; category?: string; queryLanguage?: string }>;
 }
 
 export interface CommonsPhotoSearchResult {
+  contractVersion: "commons-precision-v1";
+  state: "results" | "no-suitable-image" | "entity-not-found" | "entity-ambiguous" | "inspection-limit-reached" | "project-quota-reached" | "in-progress" | "offline" | "rate-limited" | "timeout" | "upstream-error" | "session-expired";
   candidates: CommonsPhotoCandidate[];
-  nextOffset: number | null;
+  nextPageToken?: string;
 }
 
 export interface RouteEstimateResult {
@@ -109,11 +115,11 @@ export const searchCommonsPhotoCandidates = async (
   supabase: SupabaseClient,
   tripId: string,
   query: string,
-  offset = 0,
+  nextPageToken?: string,
 ): Promise<CommonsPhotoSearchResult> =>
   invokeTravelRoute<CommonsPhotoSearchResult>(
     supabase,
-    { action: "commonsPhotoSearch", tripId, query, offset },
+    { action: "commonsPrecisionSearch", tripId, query, ...(nextPageToken ? { nextPageToken } : {}) },
   );
 
 export const getConfirmedPlace = (

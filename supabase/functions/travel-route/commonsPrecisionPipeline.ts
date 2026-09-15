@@ -206,6 +206,21 @@ const isHttpsHost = (value: unknown, hostname: string): value is string => {
   }
 };
 
+// Commons may return its legacy thumbnail CDN host in imageinfo.  Preserve the
+// approved upload.wikimedia.org boundary in every public candidate by mapping
+// only that documented alias before validating it.
+const normalizeCommonsThumbnailUrl = (value: unknown): string | undefined => {
+  if (typeof value !== "string") return undefined;
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "https:") return undefined;
+    if (url.hostname === "thumb.wikimedia.org") url.hostname = "upload.wikimedia.org";
+    return url.hostname === "upload.wikimedia.org" ? url.toString() : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
 const isHttpsUrl = (value: unknown): value is string => {
   if (typeof value !== "string") return false;
   try {
@@ -231,6 +246,7 @@ export interface CommonsFileMetadata {
   fileTitle: string;
   thumbnailUrl: string;
   cropImageUrl: string;
+  thumbnailMime: "image/jpeg" | "image/png" | "image/webp";
   sourcePageUrl: string;
   creator: string;
   credit?: string;
@@ -240,12 +256,15 @@ export interface CommonsFileMetadata {
   height: number;
   description?: string;
   descriptionWasTruncated: boolean;
+  sourceSha1?: string;
+  sourceRevisionAt?: string;
 }
 
 export type CommonsMetadataRejectReason =
   | "invalid-page"
   | "unsupported-media"
-  | "invalid-source-url"
+  | "invalid-thumbnail-url"
+  | "invalid-source-page-url"
   | "missing-attribution";
 
 export const parseCommonsFileMetadataResponse = (payload: unknown): {
@@ -274,8 +293,13 @@ export const parseCommonsFileMetadataResponse = (payload: unknown): {
       reject("unsupported-media");
       continue;
     }
-    if (!isHttpsHost(info.thumburl, "upload.wikimedia.org") || !isHttpsHost(info.descriptionurl, "commons.wikimedia.org")) {
-      reject("invalid-source-url");
+    const thumbnailUrl = normalizeCommonsThumbnailUrl(info.thumburl);
+    if (!thumbnailUrl) {
+      reject("invalid-thumbnail-url");
+      continue;
+    }
+    if (!isHttpsHost(info.descriptionurl, "commons.wikimedia.org")) {
+      reject("invalid-source-page-url");
       continue;
     }
     const metadata = info.extmetadata;
@@ -301,8 +325,9 @@ export const parseCommonsFileMetadataResponse = (payload: unknown): {
     files.push({
       pageId,
       fileTitle,
-      thumbnailUrl: info.thumburl,
-      cropImageUrl: getCropImageUrl(info.thumburl),
+      thumbnailUrl,
+      cropImageUrl: getCropImageUrl(thumbnailUrl),
+      thumbnailMime: mime as CommonsFileMetadata["thumbnailMime"],
       sourcePageUrl: info.descriptionurl,
       creator: creator.value,
       credit: credit.value,
@@ -312,6 +337,8 @@ export const parseCommonsFileMetadataResponse = (payload: unknown): {
       height,
       description: description.value,
       descriptionWasTruncated: description.truncated,
+      sourceSha1: typeof info.sha1 === "string" ? info.sha1 : undefined,
+      sourceRevisionAt: typeof info.timestamp === "string" ? info.timestamp : undefined,
     });
   }
   return { files, rejected };
@@ -328,7 +355,11 @@ export const composeCommonsPrecisionCandidates = (input: {
 } => {
   const metadata = parseCommonsFileMetadataResponse(input.metadataPayload);
   const seeds = new Map(input.seeds.map((seed) => [seed.pageId, seed]));
-  const rawCandidates: CommonsPrecisionRawCandidate[] = metadata.files.flatMap((file) => {
+  const uniqueMetadata = new Map<number, CommonsFileMetadata>();
+  for (const file of metadata.files) {
+    if (!uniqueMetadata.has(file.pageId)) uniqueMetadata.set(file.pageId, file);
+  }
+  const rawCandidates: CommonsPrecisionRawCandidate[] = [...uniqueMetadata.values()].flatMap((file) => {
     const seed = seeds.get(file.pageId);
     if (!seed || seed.fileTitle !== file.fileTitle || !QID.test(input.entityEvidence.qid)) return [];
     return [{

@@ -122,9 +122,9 @@ export const sealCommonsPrecisionNextPageToken = async (
 export const openCommonsPrecisionNextPageToken = async (
   token: string,
   key: CryptoKey,
-  input: { nowMs: number; qid: string; adoptedQueryHash: string },
+  input: { nowMs: number; qid?: string; adoptedQueryHash: string },
 ): Promise<OpenCommonsPrecisionTokenResult> => {
-  if (!Number.isSafeInteger(input.nowMs) || input.nowMs < 0 || !QID.test(input.qid) || !SHA256.test(input.adoptedQueryHash)) {
+  if (!Number.isSafeInteger(input.nowMs) || input.nowMs < 0 || (input.qid !== undefined && !QID.test(input.qid)) || !SHA256.test(input.adoptedQueryHash)) {
     return { status: "session-expired" };
   }
   if (typeof token !== "string" || !token.startsWith("cp1.")) return { status: "session-expired" };
@@ -140,7 +140,7 @@ export const openCommonsPrecisionNextPageToken = async (
     );
     const parsed: unknown = JSON.parse(new TextDecoder().decode(plaintext));
     if (!isValidSessionPayload(parsed) || parsed.expiresAtMs <= input.nowMs ||
-      parsed.qid !== input.qid || parsed.adoptedQueryHash !== input.adoptedQueryHash) {
+      (input.qid !== undefined && parsed.qid !== input.qid) || parsed.adoptedQueryHash !== input.adoptedQueryHash) {
       return { status: "session-expired" };
     }
     return { status: "valid", session: parsed };

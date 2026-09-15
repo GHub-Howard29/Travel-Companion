@@ -12,6 +12,7 @@ const internal = {
   fileTitle: "File:Terminal One.jpg",
   thumbnailUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a1/Terminal.jpg/640px-Terminal.jpg",
   cropImageUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a1/Terminal.jpg/1280px-Terminal.jpg",
+  thumbnailMime: "image/jpeg",
   sourcePageUrl: "https://commons.wikimedia.org/wiki/File:Terminal_One.jpg",
   creator: "Alice",
   credit: "Alice",
@@ -20,6 +21,8 @@ const internal = {
   width: 2400,
   height: 1600,
   description: "Terminal One exterior",
+  sourceSha1: "a".repeat(40),
+  sourceRevisionAt: "2026-09-15T00:00:00Z",
   targetQid: "Q100",
   targetNames: [{ value: "Terminal One", languageTag: "en" }],
   directP18: true,
@@ -39,7 +42,7 @@ const publicCandidate = projectCommonsPrecisionCandidate(evaluation.candidate);
 assert.deepEqual(Object.keys(publicCandidate).sort(), [
   "creator", "credit", "cropImageUrl", "description", "descriptionWasTruncated", "fileTitle",
   "height", "license", "licenseUrl", "matchEvidence", "reviewStatus", "score", "scoreBreakdown",
-  "sourcePageUrl", "thumbnailUrl", "width",
+  "sourcePageUrl", "sourceRevisionAt", "sourceSha1", "thumbnailMime", "thumbnailUrl", "width",
 ].sort());
 assert.equal("targetQid" in publicCandidate, false);
 assert.equal("targetNames" in publicCandidate, false);

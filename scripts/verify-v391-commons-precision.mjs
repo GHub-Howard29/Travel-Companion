@@ -67,7 +67,8 @@ assert.deepEqual(
   { accepted: false, reason: "no-strong-evidence" },
   "檔名命中不得單獨通過強證據門檻",
 );
-assert.equal(evaluateCommonsPrecisionCandidate({ ...baseCandidate, credit: undefined, directP18: true }).accepted, false);
+assert.equal(evaluateCommonsPrecisionCandidate({ ...baseCandidate, credit: undefined, directP18: true }).accepted, true);
+assert.equal(evaluateCommonsPrecisionCandidate({ ...baseCandidate, credit: "x".repeat(501), directP18: true }).accepted, false);
 assert.equal(evaluateCommonsPrecisionCandidate({ ...baseCandidate, creator: "x".repeat(501), directP18: true }).accepted, false);
 assert.equal(evaluateCommonsPrecisionCandidate({ ...baseCandidate, license: "CC BY-SA 4.0", directP18: true }).accepted, false);
 assert.equal(evaluateCommonsPrecisionCandidate({ ...baseCandidate, height: 1199, directP18: true }).accepted, false);

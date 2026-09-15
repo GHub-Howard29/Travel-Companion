@@ -100,9 +100,10 @@ import {
   type ItineraryCoverCropTransform,
 } from "../utils/itineraryCoverCrop";
 
-const COMMONS_CANDIDATE_PAGE_SIZE = 6;
 
-type CommonsPageStatus = "empty-first-page" | "duplicate-page" | "exhausted";
+type CommonsPageStatus = "empty-first-page" | "duplicate-page" | "exhausted" | "entity-not-found" |
+  "entity-ambiguous" | "inspection-limit-reached" | "project-quota-reached" | "rate-limited" |
+  "timeout" | "upstream-error" | "session-expired" | "in-progress";
 
 interface ItineraryPageProps {
   supabase: SupabaseClient;
@@ -202,7 +203,7 @@ export const ItineraryPage = ({
   const [coverTargetIndex, setCoverTargetIndex] = useState<number | null>(null);
   const [commonsQuery, setCommonsQuery] = useState("");
   const [commonsCandidates, setCommonsCandidates] = useState<CommonsPhotoCandidate[]>([]);
-  const [commonsNextOffset, setCommonsNextOffset] = useState<number | null>(null);
+  const [commonsNextPageToken, setCommonsNextPageToken] = useState<string | null>(null);
   const [commonsSeenFileTitles, setCommonsSeenFileTitles] = useState<Set<string>>(new Set());
   const [selectedCommonsPhoto, setSelectedCommonsPhoto] = useState<CommonsPhotoCandidate | null>(null);
   const [coverDialogStep, setCoverDialogStep] = useState<"search" | "confirm">("search");
@@ -702,7 +703,7 @@ export const ItineraryPage = ({
     setCoverTargetIndex(index);
     setCommonsQuery(query);
     setCommonsCandidates([]);
-    setCommonsNextOffset(null);
+    setCommonsNextPageToken(null);
     setCommonsSeenFileTitles(new Set());
     setSelectedCommonsPhoto(null);
     setCoverDialogStep("search");
@@ -716,7 +717,7 @@ export const ItineraryPage = ({
     if (isCoverSaving) return;
     setCoverTargetIndex(null);
     setCommonsCandidates([]);
-    setCommonsNextOffset(null);
+    setCommonsNextPageToken(null);
     setCommonsSeenFileTitles(new Set());
     setSelectedCommonsPhoto(null);
     setCoverDialogStep("search");
@@ -765,16 +766,16 @@ export const ItineraryPage = ({
 
   const startCommonsSearch = () => {
     setCommonsCandidates([]);
-    setCommonsNextOffset(null);
+    setCommonsNextPageToken(null);
     setCommonsSeenFileTitles(new Set());
     setSelectedCommonsPhoto(null);
     setCommonsPageStatus(null);
-    void searchCommonsPhotos(commonsQuery, 0, new Set());
+    void searchCommonsPhotos(commonsQuery, undefined, new Set());
   };
 
   const searchCommonsPhotos = async (
     queryValue = commonsQuery,
-    offset = 0,
+    nextPageToken: string | undefined = undefined,
     seenFileTitles = commonsSeenFileTitles,
   ) => {
     const query = queryValue.trim();
@@ -790,27 +791,28 @@ export const ItineraryPage = ({
     setCoverPhotoError(null);
     setSelectedCommonsPhoto(null);
     try {
-      const result = await searchCommonsPhotoCandidates(supabase, trip.id, query, offset);
+      const result = await searchCommonsPhotoCandidates(supabase, trip.id, query, nextPageToken);
       const freshCandidates = result.candidates.filter((candidate) => !seenFileTitles.has(candidate.fileTitle));
       const nextSeenFileTitles = new Set(seenFileTitles);
       result.candidates.forEach((candidate) => nextSeenFileTitles.add(candidate.fileTitle));
       setCommonsSeenFileTitles(nextSeenFileTitles);
       setCommonsCandidates(freshCandidates);
-      const nextOffset = result.nextOffset ?? (
-        result.candidates.length === COMMONS_CANDIDATE_PAGE_SIZE
-          ? offset + COMMONS_CANDIDATE_PAGE_SIZE
-          : null
-      );
+      const nextToken = result.nextPageToken ?? null;
+      if (result.state !== "results") {
+        setCommonsNextPageToken(null);
+        setCommonsPageStatus(result.state === "no-suitable-image" || result.state === "offline" ? "empty-first-page" : result.state);
+        return;
+      }
       if (freshCandidates.length === 0) {
-        setCommonsNextOffset(offset === 0 ? null : nextOffset);
-        setCommonsPageStatus(offset === 0
+        setCommonsNextPageToken(nextPageToken ? nextToken : null);
+        setCommonsPageStatus(!nextPageToken
           ? "empty-first-page"
-          : nextOffset === null
+          : nextToken === null
             ? "exhausted"
             : "duplicate-page");
       } else {
-        setCommonsNextOffset(nextOffset);
-        setCommonsPageStatus(nextOffset === null ? "exhausted" : null);
+        setCommonsNextPageToken(nextToken);
+        setCommonsPageStatus(nextToken === null ? "exhausted" : null);
       }
     } catch (error) {
       setCoverPhotoError(error instanceof Error ? error.message : "照片搜尋暫時無法使用。");
@@ -1975,7 +1977,7 @@ export const ItineraryPage = ({
                     onChange={(event) => {
                       setCommonsQuery(event.target.value);
                       setCommonsCandidates([]);
-                      setCommonsNextOffset(null);
+                      setCommonsNextPageToken(null);
                       setCommonsSeenFileTitles(new Set());
                       setSelectedCommonsPhoto(null);
                       setCommonsPageStatus(null);
@@ -1996,6 +1998,15 @@ export const ItineraryPage = ({
                       "empty-first-page": "找不到符合條件的照片，請調整搜尋詞後再試。",
                       "duplicate-page": "這一批沒有新的照片；可再換一批或調整搜尋詞。",
                       exhausted: "已沒有更多照片；可調整搜尋詞或改用其他來源。",
+                      "entity-not-found": "找不到唯一對應的地點實體，請調整搜尋詞後再試。",
+                      "entity-ambiguous": "搜尋詞對應多個地點，請輸入更完整的地點名稱。",
+                      "inspection-limit-reached": "已達本次檢查上限；請檢視目前候選或重新調整搜尋詞。",
+                      "project-quota-reached": "今日精準搜尋額度已用完，請稍後再試。",
+                      "rate-limited": "Wikimedia Commons 暫時受限，請稍後再試。",
+                      timeout: "Wikimedia Commons 回應逾時，請稍後再試。",
+                      "upstream-error": "Wikimedia Commons 暫時無法使用，請稍後再試。",
+                      "session-expired": "照片搜尋工作階段已失效，請重新搜尋。",
+                      "in-progress": "精準照片搜尋正在處理中，請稍後由管理者重新操作。",
                     }[commonsPageStatus]}
                   </p>
                 )}
@@ -2028,6 +2039,19 @@ export const ItineraryPage = ({
                             <strong className="line-clamp-2 block text-xs text-slate-800">{name}</strong>
                             <span className="mt-1 block text-[11px] text-slate-500">{candidate.creator}</span>
                             <span className="mt-1 block text-[11px] font-semibold text-emerald-700">{candidate.license}</span>
+                            {candidate.matchEvidence && candidate.matchEvidence.length > 0 && (
+                              <span className="mt-1 block text-[11px] text-slate-600">
+                                符合依據：{candidate.matchEvidence.map((evidence) => ({
+                                  p18: "Wikidata 代表圖",
+                                  "exact-category": "直接 Commons 分類",
+                                  "structured-depicts": "結構化描繪實體",
+                                  description: "描述精確命中",
+                                  filename: "檔名命中",
+                                  "broad-association": "可驗證關聯",
+                                  "wrong-entity": "非目標實體",
+                                })[evidence.kind] ?? evidence.kind).join("、")}
+                              </span>
+                            )}
                             <label className={`mt-2 flex w-full cursor-pointer items-center justify-center rounded-lg px-2 py-1.5 text-xs font-bold ${isSelected ? "bg-emerald-700 text-white" : "bg-emerald-50 text-emerald-700 hover:bg-emerald-100"}`}>
                               <input
                                 type="radio"
@@ -2045,8 +2069,8 @@ export const ItineraryPage = ({
                   </div>
                 )}
                 <div className="mt-4 flex flex-col gap-2 border-t border-slate-100 pt-4 sm:flex-row sm:items-center">
-                  {commonsNextOffset !== null && (
-                    <button type="button" onClick={() => void searchCommonsPhotos(commonsQuery, commonsNextOffset)} disabled={!isOnline || isCommonsSearching || isCoverSaving} className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-700 hover:bg-emerald-100 disabled:opacity-50">
+                  {commonsNextPageToken !== null && (
+                    <button type="button" onClick={() => void searchCommonsPhotos(commonsQuery, commonsNextPageToken)} disabled={!isOnline || isCommonsSearching || isCoverSaving} className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-700 hover:bg-emerald-100 disabled:opacity-50">
                       換一批
                     </button>
                   )}

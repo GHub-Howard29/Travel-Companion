@@ -12,6 +12,7 @@ export type CommonsPrecisionState =
   | "entity-ambiguous"
   | "inspection-limit-reached"
   | "project-quota-reached"
+  | "in-progress"
   | "offline"
   | "rate-limited"
   | "timeout"
@@ -40,6 +41,7 @@ export interface CommonsPrecisionRawCandidate {
   fileTitle: string;
   thumbnailUrl: string;
   cropImageUrl: string;
+  thumbnailMime: "image/jpeg" | "image/png" | "image/webp";
   sourcePageUrl: string;
   creator: string;
   credit?: string;
@@ -49,6 +51,8 @@ export interface CommonsPrecisionRawCandidate {
   height: number;
   description?: string;
   descriptionWasTruncated?: boolean;
+  sourceSha1?: string;
+  sourceRevisionAt?: string;
   targetQid: string;
   targetNames: CommonsPrecisionName[];
   directP18?: boolean;
@@ -106,6 +110,7 @@ export interface CommonsPrecisionPublicCandidate {
   fileTitle: string;
   thumbnailUrl: string;
   cropImageUrl: string;
+  thumbnailMime: "image/jpeg" | "image/png" | "image/webp";
   sourcePageUrl: string;
   creator: string;
   credit?: string;
@@ -115,6 +120,8 @@ export interface CommonsPrecisionPublicCandidate {
   height: number;
   description?: string;
   descriptionWasTruncated?: boolean;
+  sourceSha1?: string;
+  sourceRevisionAt?: string;
   reviewStatus: "needs-review";
   score: number;
   scoreBreakdown: CommonsPrecisionScoreItem[];
@@ -134,6 +141,7 @@ export const projectCommonsPrecisionCandidate = (
   fileTitle: candidate.fileTitle,
   thumbnailUrl: candidate.thumbnailUrl,
   cropImageUrl: candidate.cropImageUrl,
+  thumbnailMime: candidate.thumbnailMime,
   sourcePageUrl: candidate.sourcePageUrl,
   creator: candidate.creator,
   credit: candidate.credit,
@@ -143,6 +151,8 @@ export const projectCommonsPrecisionCandidate = (
   height: candidate.height,
   description: candidate.description,
   descriptionWasTruncated: candidate.descriptionWasTruncated,
+  sourceSha1: candidate.sourceSha1,
+  sourceRevisionAt: candidate.sourceRevisionAt,
   reviewStatus: candidate.reviewStatus,
   score: candidate.score,
   scoreBreakdown: candidate.scoreBreakdown.map((item) => ({ ...item })),
@@ -226,8 +236,7 @@ export const isAllowedCommonsPrecisionLicense = (license: string): boolean =>
 const hasValidAttribution = (candidate: CommonsPrecisionRawCandidate): boolean => {
   const isCcBy = /^CC BY /i.test(candidate.license.trim());
   return Boolean(candidate.creator.trim()) && candidate.creator.length <= 500 &&
-    (!isCcBy || Boolean(candidate.credit?.trim())) &&
-    (!isCcBy || candidate.credit!.length <= 500) &&
+    (!candidate.credit || candidate.credit.length <= 500) &&
     (!isCcBy || isHttpsUrl(candidate.licenseUrl));
 };
 
@@ -364,6 +373,7 @@ const EMPTY_ONLY_STATES = new Set<CommonsPrecisionState>([
   "entity-not-found",
   "entity-ambiguous",
   "project-quota-reached",
+  "in-progress",
   "session-expired",
 ]);
 const PARTIAL_STATES = new Set<CommonsPrecisionState>([
