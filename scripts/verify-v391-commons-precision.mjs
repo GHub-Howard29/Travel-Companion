@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import {
+  COMMONS_PRECISION_CONTRACT_VERSION,
   COMMONS_PRECISION_MAX_DURATION_MS,
   COMMONS_PRECISION_MAX_INSPECTED,
   COMMONS_PRECISION_MAX_REQUESTS,
@@ -12,6 +13,8 @@ import {
   rankCommonsPrecisionCandidates,
   validateCommonsPrecisionResponse,
 } from "../supabase/functions/travel-route/commonsPrecision.ts";
+
+const response = (value) => ({ contractVersion: COMMONS_PRECISION_CONTRACT_VERSION, ...value });
 
 const baseCandidate = {
   fileTitle: "File:Target landmark.jpg",
@@ -98,13 +101,14 @@ const dateTie = rankCommonsPrecisionCandidates([
 ]);
 assert.deepEqual(dateTie.candidates.map(({ fileTitle }) => fileTitle), ["File:Older.jpg", "File:Newer-unverified.jpg"]);
 
-assert.equal(validateCommonsPrecisionResponse({ state: "results", candidates: [p18.candidate], nextPageToken: "opaque" }), true);
-assert.equal(validateCommonsPrecisionResponse({ state: "results", candidates: [] }), false);
-assert.equal(validateCommonsPrecisionResponse({ state: "no-suitable-image", candidates: [] }), true);
-assert.equal(validateCommonsPrecisionResponse({ state: "no-suitable-image", candidates: [p18.candidate] }), false);
-assert.equal(validateCommonsPrecisionResponse({ state: "results", candidates: [p18.candidate, p18.candidate] }), false);
-assert.equal(validateCommonsPrecisionResponse({ state: "timeout", candidates: [p18.candidate] }), true);
-assert.equal(validateCommonsPrecisionResponse({ state: "timeout", candidates: [], nextPageToken: "forbidden" }), false);
+assert.equal(validateCommonsPrecisionResponse(response({ state: "results", candidates: [p18.candidate], nextPageToken: "opaque" })), true);
+assert.equal(validateCommonsPrecisionResponse(response({ state: "results", candidates: [] })), false);
+assert.equal(validateCommonsPrecisionResponse(response({ state: "no-suitable-image", candidates: [] })), true);
+assert.equal(validateCommonsPrecisionResponse(response({ state: "no-suitable-image", candidates: [p18.candidate] })), false);
+assert.equal(validateCommonsPrecisionResponse(response({ state: "results", candidates: [p18.candidate, p18.candidate] })), false);
+assert.equal(validateCommonsPrecisionResponse(response({ state: "timeout", candidates: [p18.candidate] })), true);
+assert.equal(validateCommonsPrecisionResponse(response({ state: "timeout", candidates: [], nextPageToken: "forbidden" })), false);
+assert.equal(validateCommonsPrecisionResponse({ state: "no-suitable-image", candidates: [] }), false, "缺少 contractVersion 必須拒絕");
 
 assert.equal(hasReachedCommonsInspectionLimit({ requestCount: COMMONS_PRECISION_MAX_REQUESTS, elapsedMs: 1, inspectedCount: 1 }), true);
 assert.equal(hasReachedCommonsInspectionLimit({ requestCount: 1, elapsedMs: COMMONS_PRECISION_MAX_DURATION_MS, inspectedCount: 1 }), true);

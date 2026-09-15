@@ -3,6 +3,7 @@ export const COMMONS_PRECISION_PAGE_SIZE = 6;
 export const COMMONS_PRECISION_MAX_REQUESTS = 9;
 export const COMMONS_PRECISION_MAX_DURATION_MS = 20_000;
 export const COMMONS_PRECISION_MAX_INSPECTED = 30;
+export const COMMONS_PRECISION_CONTRACT_VERSION = "commons-precision-v1";
 
 export type CommonsPrecisionState =
   | "results"
@@ -95,6 +96,7 @@ export type CommonsPrecisionEvaluation =
   | { accepted: false; reason: CommonsPrecisionRejectReason };
 
 export interface CommonsPrecisionResponse {
+  contractVersion: typeof COMMONS_PRECISION_CONTRACT_VERSION;
   state: CommonsPrecisionState;
   candidates: CommonsPrecisionCandidate[];
   nextPageToken?: string;
@@ -303,6 +305,7 @@ const PARTIAL_STATES = new Set<CommonsPrecisionState>([
 ]);
 
 export const validateCommonsPrecisionResponse = (response: CommonsPrecisionResponse): boolean => {
+  if (response.contractVersion !== COMMONS_PRECISION_CONTRACT_VERSION) return false;
   if (response.candidates.length > COMMONS_PRECISION_PAGE_SIZE) return false;
   if (new Set(response.candidates.map((candidate) => candidate.fileTitle)).size !== response.candidates.length) return false;
   if (response.candidates.some((candidate) => candidate.reviewStatus !== "needs-review" || candidate.score < COMMONS_PRECISION_MIN_SCORE)) return false;
