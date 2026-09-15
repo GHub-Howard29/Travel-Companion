@@ -54,10 +54,12 @@ assert.equal(publicCandidate.matchEvidence.some(({ kind }) => kind === "p18"), t
 const projected = projectCommonsPrecisionResponse({
   state: "results",
   candidates: [evaluation.candidate],
+  resolvedEntity: { qid: "Q100", label: "Terminal One" },
   nextPageToken: "cp1.abcdefghijklmnop",
 });
 assert.equal(projected.contractVersion, "commons-precision-v1");
 assert.equal(projected.nextPageToken, "cp1.abcdefghijklmnop");
+assert.deepEqual(projected.resolvedEntity, { qid: "Q100", label: "Terminal One" });
 assert.equal("targetQid" in projected.candidates[0], false);
 assert.deepEqual(projectCommonsPrecisionResponse({ state: "no-suitable-image", candidates: [] }), {
   contractVersion: "commons-precision-v1",
@@ -78,6 +80,16 @@ assert.throws(() => projectCommonsPrecisionResponse({
   candidates: [evaluation.candidate],
   nextPageToken: "raw-continuation",
 }), /不透明 token/);
+assert.deepEqual(projectCommonsPrecisionResponse({
+  state: "entity-ambiguous",
+  candidates: [],
+  entityChoices: [{ qid: "Q101", label: "Terminal One (airport)" }],
+}), {
+  contractVersion: "commons-precision-v1",
+  state: "entity-ambiguous",
+  candidates: [],
+  entityChoices: [{ qid: "Q101", label: "Terminal One (airport)" }],
+});
 
 const projectRoot = resolve(import.meta.dirname, "..");
 const source = readFileSync(resolve(projectRoot, "supabase/functions/travel-route/commonsPrecision.ts"), "utf8");

@@ -15,10 +15,14 @@ for (const expected of [
 ]) assert.match(edge, new RegExp(expected.replace(/[()]/g, "\\$&")));
 assert.match(client, /action: "commonsPrecisionSearch"/);
 assert.match(client, /nextPageToken/);
+assert.match(client, /selectedEntityQid/);
 assert.doesNotMatch(client, /action: "commonsPhotoSearch"/);
 assert.match(ui, /commonsNextPageToken/);
 assert.match(ui, /符合依據/);
 assert.match(ui, /entity-ambiguous/);
+assert.match(ui, /搜尋範圍/);
+assert.match(ui, /請選擇要搜尋的地點範圍/);
+assert.match(ui, /選擇前不會搜尋照片/);
 assert.match(ui, /project-quota-reached/);
 assert.doesNotMatch(client + ui, /COMMONS_PRECISION_TOKEN_SECRET|WIKIMEDIA_CONTACT_URL/);
 console.log("V3.9.1 Commons Edge、用量／快取、加密分頁與前端精準搜尋接線驗證通過。");

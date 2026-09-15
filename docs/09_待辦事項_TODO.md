@@ -32,10 +32,10 @@ Google 路徑、真實照片 spike、現有架構、降級與成本模型已完�
 
 - [x] V3.9.0：已於 2026-09-13 正式發布；production Function version 9 為 ACTIVE，正式前端與發布後 smoke 均通過。
 - [ ] V3.9.1 跨日複製四碼時間輸入修正：本機程式、純函式、TypeScript、lint 與完整 build 已完成；尚待登入管理者桌面／390×844 的輸入、IME、游標、刪除、警告焦點陷阱、單日／多日複製互動驗證。詳見《51》。
-- [ ] V3.9.1 第一優先：Commons 實體導向候選照片精準搜尋已完成第 14–20 階段本機實作，包含 fetch transport、核准 Issues User-Agent、Edge Function action、AES-GCM token、共享快取／配額／鎖／日彙總 migration、前端狀態與公開候選投影；隔離 Docker migration、RLS、service-role-only、配額／鎖／容量／retention、advisors、自動契約、TypeScript、lint 與 build 已通過。三次核准的 15 例真實矩陣共 171 次請求且零寫入；第三次已有六個預期案例回傳候選，但高千穗峽 timeout、桃園第一航廈未解析且同檔去重修正尚未重跑，發布閘門未通過。第四次驗證 spike 尚待單次核准，正式部署與發布不得開始。詳見《50》與《52》。
+- [ ] V3.9.1 第一優先：Commons 實體導向候選照片精準搜尋已完成第 14–20 階段本機實作，包含 fetch transport、核准 Issues User-Agent、Edge Function action、AES-GCM token、共享快取／配額／鎖／日彙總 migration、前端狀態與公開候選投影；已補入歷史手動 schema 的 baseline migration，`supabase start` 可從空白本機資料庫完整套用至 V3.9.1，API、資料庫與 Edge Runtime 已啟動。RLS、service-role-only、配額／鎖／容量／retention、advisors、自動契約、TypeScript、lint 與 build 已通過。四次核准的 15 例真實矩陣共 234 次請求且零寫入；第四次確認高千穗峽與同檔去重通過，第一航廈依新核准的設施級安全停止契約通過精準矩陣閘門。唯一範圍直接搜尋／多實體選擇／設施級停止 UI 已完成本機實作與自動驗證，尚待登入管理者互動；正式部署與發布不得開始。詳見《50》與《52》。
 - [x] V3.9.1 精準搜尋用量治理：2026-09-14 核准 `commons_precision_usage_daily` 無 UI、無個資／行程資料的專案日彙總、13 完整月加當月保留與 service-role-only 原子讀寫；只有程式開發者取得每次單次明確授權後，Codex 等開發 AI 才可完整唯讀彙總，無資料庫／secret／寫入／搜尋觸發權。Gemini 等外部 AI 不在本項範圍。不依 Wikimedia 公開分析資料推估本 App 用量；只有連續兩完整月低於上限 50% 且無 429／503，才可另案建議放寬，禁止自動調高。詳見《50》8 節。
 - [x] V3.9.1 精準篩選視覺辨識邊界：不導入 Gemini／其他影像 AI、不傳送 Commons 圖片；本版只依可稽核中介資料排序並人工核可，不能宣稱自動辨識主體或品質。影像辨識待文字 AI 與 Commons 實測數據後另案討論。詳見《50》3.1.1 節。
-- [ ] V3.9.1 精準搜尋驗證閘門：15 例矩陣已完成三次真實執行（46／64／61 次）。第三次驗證 CDN 正規化有效，六個預期案例有候選；但高千穗峽 timeout、桃園第一航廈未解析，且同檔跨證據層去重修正尚未重跑，故持續符合發布停止條件。詳見《50》6.1 節與《52》。
+- [x] V3.9.1 精準搜尋驗證閘門：15 例矩陣已完成四次真實執行（46／64／61／63 次）。第四次確認 CDN 正規化、同檔跨證據層去重與高千穗峽均通過；桃園第一航廈 `entity-not-found` 已依核准的設施級安全停止契約驗收通過。範圍 UI、互動、部署與發布仍為獨立未完成閘門。詳見《50》6.1 節與《52》。
 - [x] V3.9.1 子方案 A：2026-09-15 已定案停用自動中文轉英文／自動多語擴充，避免與人工採用的單語言 Gemini 候選詞規則衝突。B 只接受原始輸入或已採用的一個 AI 候選詞；改語言須明確採用或手動換詞。
 - [x] V3.9.1 子方案 B：Commons／Pexels／Pixabay 來源切換；2026-09-14 Product Owner 已核准《49_V3.9.1_Commons_Pexels_Pixabay來源切換決策規格》八項來源策略與技術邊界，並原則同意後續申請 Pexels／Pixabay 驗證用 key。每次申請或提高額度前須先說明官方費用／額度、Supabase 間接成本、條款、隱私與安全風險；帳號、條款、CAPTCHA、信箱驗證、個人／付款資料一律由 Product Owner 手動完成。2026-09-15 已核准桌面／390×844 主要選圖流程、狀態文案與完整無障礙；真實矩陣與實作屬後續開發閘門。
 - [x] V3.9.1 子方案 B 免費額度限制：2026-09-14 Product Owner 已核准《49》6.3 節的 Pexels／Pixabay 單次 session、Trip／管理者日上限、來源速率、月內配速、圖片下載及快取限制；Pexels 以官方額度保留 20% 的內部硬停，Pixabay 10,000/month 為專案自訂保護預算。下一步進入文字式 UI 行為討論，仍不得製作 UI 或模擬圖。
@@ -58,7 +58,15 @@ Google 路徑、真實照片 spike、現有架構、降級與成本模型已完�
 - [ ] V3.9.1 Commons 搜尋提示修正：三種分頁狀態、換詞／重開重置、末頁隱藏換批與離線停用已完成本機首批實作及自動契約驗證；尚待登入管理者桌面／390×844 實際互動。
 - [ ] V3.9.1 地點／照片介面：候選 `placeId` Maps 地點頁、核准文案、選圖只預填 `location` 且不自動搜尋，以及前後端每批 6 張已完成本機實作；尚待登入管理者互動與 Edge Function 部署後驗證。
 - [ ] V3.9.1 來源選擇、候選確認、手動裁切與放大檢視：Commons 可用且 Pexels／Pixabay 保持可見停用、選取與放大控制分離、確認頁 1:1 平移／縮放、1280px 單張下載安全檢查、640×640 WebP、固定變更聲明、焦點陷阱與舊資料相容已完成本機實作及自動契約驗證；尚待登入管理者桌面／390×844 實際互動及 Edge Function 部署後驗證。
-- [ ] V3.9.1 後續實作閘門：第四次 Wikimedia 驗證 spike、登入管理者桌面／390×844 互動、正式 secrets／migration、正式 Edge Function 部署、完整 smoke、版本 metadata、tag 與發布仍須依《48》至《52》的個別核准及驗收條件處理。
+- [ ] V3.9.1 後續實作閘門：登入管理者桌面／390×844 的範圍 UI 互動、正式 secrets／migration、正式 Edge Function 部署、完整 smoke、版本 metadata、tag 與發布仍須依《48》至《52》的個別核准及驗收條件處理。
+- [x] 2026-09-16 本機初始化修正：新增歷史前置結構 baseline migration；空白資料庫 `npx supabase start` 已完整套用至 V3.9.1，API／資料庫／Edge Runtime 啟動成功。此項不代表正式 migration、secrets、部署或發布已核准。
+
+### V3.9.1 停止線前工作順序
+
+1. 完成登入管理者桌面與 390×844 的互動驗收，記錄範圍選擇、錯誤狀態、換批、裁切、放大與無障礙結果。
+2. 完成本機 Edge Function 整合回歸，確認新 baseline、授權、續頁、快取／配額／鎖及錯誤狀態在同一環境可運作。
+3. 取得個別核准後，才執行正式 migration／secrets／Edge Function 部署與 production-safe smoke；不得以本機成功替代正式驗收。
+4. 完成 metadata、release build、tag、部署與發布後 smoke，才可跨過 V3.9.1 發布前停止線。
 - [ ] V3.10.0：重新確認使用紀錄的必要性與最小資料範圍；原 App 查詢介面、逐次明細、Cron、獨立角色與 TOTP 預覽均標記為先前草案、尚未定案。
 - [ ] 後續版本評估：Google Maps「任意地圖落針」座標作為行程交通估算點。V3.9.1 維持確認地點後只保存 `placeId`、交由既有路線估算，因官方建議 `placeId` 通常較精準；本項若重啟，須獨立確認座標資料契約、手動落針 UI、隱私／保存期限、Routes 成本與 Google 條款。不得傳送座標給 Commons／Pexels／Pixabay／AI，也不得藉此重啟 V3.9.1 子方案 C。
 

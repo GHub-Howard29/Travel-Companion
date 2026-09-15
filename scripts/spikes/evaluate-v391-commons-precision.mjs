@@ -1,8 +1,11 @@
 import { runCommonsPrecisionEngine } from "../../supabase/functions/travel-route/commonsPrecisionEngine.ts";
 import { executeCommonsPrecisionRequest } from "../../supabase/functions/travel-route/commonsPrecisionFetch.ts";
+import { mkdir, writeFile } from "node:fs/promises";
+import { dirname } from "node:path";
 
 const CONTACT_URL = "https://github.com/GHub-Howard29/Travel-Companion/issues";
 const MAX_TOTAL_REQUESTS = 135;
+const OUTPUT_PATH = process.env.V391_SPIKE_OUTPUT_PATH ?? "supabase/.temp/v391-commons-precision-spike.json";
 const CASES = [
   { category: "landmark", label: "熊本城", query: "熊本城", language: "ja", expectedCandidates: true },
   { category: "landmark", label: "高千穗峽", query: "高千穂峡", language: "ja", expectedCandidates: true },
@@ -32,6 +35,40 @@ const countResponseItems = (layer, payload) => {
 
 let totalRequestCount = 0;
 const results = [];
+
+const createReport = (completed) => {
+  const durations = results.map((item) => item.durationMs);
+  return {
+    generatedAt: new Date().toISOString(),
+    completed,
+    contactUrl: CONTACT_URL,
+    constraints: {
+      sequential: true,
+      retry: false,
+      maximumTotalRequests: MAX_TOTAL_REQUESTS,
+      supabaseWrites: 0,
+      cacheWrites: 0,
+      storageWrites: 0,
+    },
+    summary: {
+      caseCount: results.length,
+      requestCount: totalRequestCount,
+      resultCases: results.filter((item) => item.finalCount > 0).length,
+      regressionCases: results.filter((item) => item.regression).map((item) => item.label),
+      durationMs: durations.length === 0 ? null : {
+        minimum: Math.min(...durations),
+        maximum: Math.max(...durations),
+        average: Math.round(durations.reduce((sum, value) => sum + value, 0) / durations.length),
+      },
+    },
+    results,
+  };
+};
+
+const saveCheckpoint = async (completed) => {
+  await mkdir(dirname(OUTPUT_PATH), { recursive: true });
+  await writeFile(OUTPUT_PATH, `${JSON.stringify(createReport(completed), null, 2)}\n`, "utf8");
+};
 
 for (const [caseIndex, testCase] of CASES.entries()) {
   const layerCounts = {};
@@ -82,31 +119,10 @@ for (const [caseIndex, testCase] of CASES.entries()) {
       sourcePageUrl: candidate.sourcePageUrl,
     })),
   });
+  await saveCheckpoint(false);
   process.stderr.write(`[${caseIndex + 1}/${CASES.length}] ${testCase.label}: ${result.response.state}, ${finalCount} candidates, ${result.requestCount} requests\n`);
 }
 
-const durations = results.map((item) => item.durationMs);
-process.stdout.write(`${JSON.stringify({
-  generatedAt: new Date().toISOString(),
-  contactUrl: CONTACT_URL,
-  constraints: {
-    sequential: true,
-    retry: false,
-    maximumTotalRequests: MAX_TOTAL_REQUESTS,
-    supabaseWrites: 0,
-    cacheWrites: 0,
-    storageWrites: 0,
-  },
-  summary: {
-    caseCount: results.length,
-    requestCount: totalRequestCount,
-    resultCases: results.filter((item) => item.finalCount > 0).length,
-    regressionCases: results.filter((item) => item.regression).map((item) => item.label),
-    durationMs: {
-      minimum: Math.min(...durations),
-      maximum: Math.max(...durations),
-      average: Math.round(durations.reduce((sum, value) => sum + value, 0) / durations.length),
-    },
-  },
-  results,
-}, null, 2)}\n`);
+await saveCheckpoint(true);
+const report = createReport(true);
+process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);

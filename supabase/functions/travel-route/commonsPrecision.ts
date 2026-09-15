@@ -103,7 +103,14 @@ export interface CommonsPrecisionResponse {
   contractVersion: typeof COMMONS_PRECISION_CONTRACT_VERSION;
   state: CommonsPrecisionState;
   candidates: CommonsPrecisionCandidate[];
+  resolvedEntity?: CommonsPrecisionResolvedEntity;
+  entityChoices?: CommonsPrecisionResolvedEntity[];
   nextPageToken?: string;
+}
+
+export interface CommonsPrecisionResolvedEntity {
+  qid: string;
+  label: string;
 }
 
 export interface CommonsPrecisionPublicCandidate {
@@ -132,6 +139,8 @@ export interface CommonsPrecisionPublicResponse {
   contractVersion: typeof COMMONS_PRECISION_CONTRACT_VERSION;
   state: CommonsPrecisionState;
   candidates: CommonsPrecisionPublicCandidate[];
+  resolvedEntity?: CommonsPrecisionResolvedEntity;
+  entityChoices?: CommonsPrecisionResolvedEntity[];
   nextPageToken?: string;
 }
 
@@ -164,6 +173,8 @@ const OPAQUE_NEXT_PAGE_TOKEN = /^cp1\.[A-Za-z0-9_-]{16,4096}$/;
 export const projectCommonsPrecisionResponse = (input: {
   state: CommonsPrecisionState;
   candidates: readonly CommonsPrecisionCandidate[];
+  resolvedEntity?: CommonsPrecisionResolvedEntity;
+  entityChoices?: CommonsPrecisionResolvedEntity[];
   nextPageToken?: string;
 }): CommonsPrecisionPublicResponse => {
   if (input.candidates.length > COMMONS_PRECISION_PAGE_SIZE ||
@@ -178,6 +189,8 @@ export const projectCommonsPrecisionResponse = (input: {
     contractVersion: COMMONS_PRECISION_CONTRACT_VERSION,
     state: input.state,
     candidates: input.candidates.map(projectCommonsPrecisionCandidate),
+    ...(input.resolvedEntity ? { resolvedEntity: { ...input.resolvedEntity } } : {}),
+    ...(input.entityChoices?.length ? { entityChoices: input.entityChoices.map((entity) => ({ ...entity })) } : {}),
     ...(input.state === "results" && input.nextPageToken !== undefined ? { nextPageToken: input.nextPageToken } : {}),
   };
 };

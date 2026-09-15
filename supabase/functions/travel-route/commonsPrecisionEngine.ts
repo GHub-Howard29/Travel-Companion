@@ -4,6 +4,7 @@ import {
   COMMONS_PRECISION_MAX_DURATION_MS,
   COMMONS_PRECISION_MAX_INSPECTED,
   COMMONS_PRECISION_MAX_REQUESTS,
+  type CommonsPrecisionResolvedEntity,
   type CommonsPrecisionResponse,
   type CommonsPrecisionState,
 } from "./commonsPrecision.ts";
@@ -79,7 +80,7 @@ const mapTransportState = (state: CommonsPrecisionTransportResult["state"]): Ext
     : "upstream-error";
 
 export const runCommonsPrecisionEngine = async (
-  input: { query: string; language: string },
+  input: { query: string; language: string; selectedEntityQid?: string },
   dependencies: CommonsPrecisionEngineDependencies,
 ): Promise<CommonsPrecisionEngineResult> => {
   const now = dependencies.now ?? Date.now;
@@ -90,11 +91,15 @@ export const runCommonsPrecisionEngine = async (
   const metadataPayloads: unknown[] = [];
   const evidenceInputs: CommonsFileEvidenceInput[] = [];
   let rejectedByReason: Record<string, number> = {};
+  const responseContext: {
+    resolvedEntity?: CommonsPrecisionResolvedEntity;
+    entityChoices?: CommonsPrecisionResolvedEntity[];
+  } = {};
 
   let nextContinuation: CommonsPrecisionEngineResult["continuation"];
   const engineContext: { entityEvidence?: WikidataEntityEvidence } = {};
   const finish = (state: CommonsPrecisionState, candidates: CommonsPrecisionResponse["candidates"] = [], qid?: string): CommonsPrecisionEngineResult => ({
-    response: { contractVersion: COMMONS_PRECISION_CONTRACT_VERSION, state, candidates },
+    response: { contractVersion: COMMONS_PRECISION_CONTRACT_VERSION, state, candidates, ...responseContext },
     qid,
     requestCount,
     inspectedCount,
@@ -132,13 +137,33 @@ export const runCommonsPrecisionEngine = async (
     const evidence = parseWikidataEntityEvidenceResponse(evidenceRequest.payload, entity.qid, input.language);
     if (evidence) evidenceByQid.set(entity.qid, evidence);
   }
-  const resolution = resolveUniqueWikidataEntity(
+  const initialResolution = resolveUniqueWikidataEntity(
     input.query,
     entities,
     new Map([...evidenceByQid].map(([qid, evidence]) => [qid, evidence.instanceOfQids])),
     COMMONS_PRECISION_EXCLUDED_INSTANCE_OF_QIDS,
   );
+  if (initialResolution.state === "entity-ambiguous") {
+    responseContext.entityChoices = entities.flatMap((entity) => {
+      const candidateResolution = resolveUniqueWikidataEntity(
+        input.query,
+        [entity],
+        new Map([[entity.qid, evidenceByQid.get(entity.qid)?.instanceOfQids ?? []]]),
+        COMMONS_PRECISION_EXCLUDED_INSTANCE_OF_QIDS,
+      );
+      return candidateResolution.state === "resolved" ? [{ qid: entity.qid, label: entity.label }] : [];
+    });
+  }
+  const resolution = input.selectedEntityQid && initialResolution.state === "entity-ambiguous"
+    ? resolveUniqueWikidataEntity(
+      input.query,
+      entities.filter((entity) => entity.qid === input.selectedEntityQid),
+      new Map([[input.selectedEntityQid, evidenceByQid.get(input.selectedEntityQid)?.instanceOfQids ?? []]]),
+      COMMONS_PRECISION_EXCLUDED_INSTANCE_OF_QIDS,
+    )
+    : initialResolution;
   if (resolution.state !== "resolved") return finish(resolution.state);
+  responseContext.resolvedEntity = { qid: resolution.entity.qid, label: resolution.entity.label };
   const entityEvidence = evidenceByQid.get(resolution.entity.qid);
   if (!entityEvidence) return finish("entity-not-found");
   engineContext.entityEvidence = entityEvidence;

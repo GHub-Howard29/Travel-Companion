@@ -50,6 +50,8 @@ export interface CommonsPhotoSearchResult {
   contractVersion: "commons-precision-v1";
   state: "results" | "no-suitable-image" | "entity-not-found" | "entity-ambiguous" | "inspection-limit-reached" | "project-quota-reached" | "in-progress" | "offline" | "rate-limited" | "timeout" | "upstream-error" | "session-expired";
   candidates: CommonsPhotoCandidate[];
+  resolvedEntity?: { qid: string; label: string };
+  entityChoices?: Array<{ qid: string; label: string }>;
   nextPageToken?: string;
 }
 
@@ -116,10 +118,11 @@ export const searchCommonsPhotoCandidates = async (
   tripId: string,
   query: string,
   nextPageToken?: string,
+  selectedEntityQid?: string,
 ): Promise<CommonsPhotoSearchResult> =>
   invokeTravelRoute<CommonsPhotoSearchResult>(
     supabase,
-    { action: "commonsPrecisionSearch", tripId, query, ...(nextPageToken ? { nextPageToken } : {}) },
+    { action: "commonsPrecisionSearch", tripId, query, ...(nextPageToken ? { nextPageToken } : {}), ...(selectedEntityQid ? { selectedEntityQid } : {}) },
   );
 
 export const getConfirmedPlace = (

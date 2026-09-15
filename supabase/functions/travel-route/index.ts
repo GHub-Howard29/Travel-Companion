@@ -432,15 +432,22 @@ Deno.serve(async (request) => {
         ? body.language.trim()
         : "zh-Hant";
       const query = body.query.normalize("NFKC").replace(/\s+/g, " ").trim();
+      const selectedEntityQid = typeof body.selectedEntityQid === "string" && /^Q[1-9][0-9]*$/.test(body.selectedEntityQid)
+        ? body.selectedEntityQid
+        : undefined;
+      if (body.selectedEntityQid !== undefined && !selectedEntityQid) {
+        return json({ error: "地點範圍已失效，請重新搜尋後選擇。", state: "entity-ambiguous" }, 400);
+      }
       const queryHash = await sha256(query);
+      const scopedQueryHash = await sha256(`${queryHash}:${selectedEntityQid ?? ""}`);
       const adoptedQueryHash = await hashAdoptedCommonsQuery(query);
       const nextPageToken = typeof body.nextPageToken === "string" ? body.nextPageToken : undefined;
       if (body.nextPageToken !== undefined && (!nextPageToken || nextPageToken.length > 4096)) {
         return json({ error: "照片搜尋 session 已失效，請重新搜尋。", state: "session-expired" }, 400);
       }
-      const candidateKey = createCommonsPrecisionCandidateCacheKey({ queryHash, language });
-      const noSuitableKey = createCommonsPrecisionNoSuitableCacheKey({ queryHash, language });
-      const lockKey = `lock:commons-precision-v1:${await sha256(`${queryHash}:${language.toLowerCase()}`)}`;
+      const candidateKey = createCommonsPrecisionCandidateCacheKey({ queryHash: scopedQueryHash, language });
+      const noSuitableKey = createCommonsPrecisionNoSuitableCacheKey({ queryHash: scopedQueryHash, language });
+      const lockKey = `lock:commons-precision-v1:${await sha256(`${scopedQueryHash}:${language.toLowerCase()}`)}`;
       const startedAtMs = Date.now();
       const cached = nextPageToken ? null : await readCommonsPrecisionCache<CommonsPrecisionPublicResponse>(clients.admin, candidateKey, "candidate-results");
       if (cached) {
@@ -489,7 +496,7 @@ Deno.serve(async (request) => {
             seenPageIds: opened.session.seenPageIds,
           }, transport);
         } else {
-          result = await runCommonsPrecisionEngine({ query, language }, transport);
+          result = await runCommonsPrecisionEngine({ query, language, selectedEntityQid }, transport);
           if (result.entityEvidence) {
             await writeCommonsPrecisionCache(clients.admin, {
               key: createCommonsPrecisionEntityCacheKey(result.entityEvidence.qid), kind: "entity-evidence", payload: result.entityEvidence,

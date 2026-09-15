@@ -202,6 +202,8 @@ export const ItineraryPage = ({
   const [autoRouteError, setAutoRouteError] = useState<string | null>(null);
   const [coverTargetIndex, setCoverTargetIndex] = useState<number | null>(null);
   const [commonsQuery, setCommonsQuery] = useState("");
+  const [commonsResolvedEntity, setCommonsResolvedEntity] = useState<{ qid: string; label: string } | null>(null);
+  const [commonsEntityChoices, setCommonsEntityChoices] = useState<Array<{ qid: string; label: string }>>([]);
   const [commonsCandidates, setCommonsCandidates] = useState<CommonsPhotoCandidate[]>([]);
   const [commonsNextPageToken, setCommonsNextPageToken] = useState<string | null>(null);
   const [commonsSeenFileTitles, setCommonsSeenFileTitles] = useState<Set<string>>(new Set());
@@ -702,6 +704,8 @@ export const ItineraryPage = ({
     coverDialogOpenerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     setCoverTargetIndex(index);
     setCommonsQuery(query);
+    setCommonsResolvedEntity(null);
+    setCommonsEntityChoices([]);
     setCommonsCandidates([]);
     setCommonsNextPageToken(null);
     setCommonsSeenFileTitles(new Set());
@@ -716,6 +720,8 @@ export const ItineraryPage = ({
   const closeCoverPhotoDialog = () => {
     if (isCoverSaving) return;
     setCoverTargetIndex(null);
+    setCommonsResolvedEntity(null);
+    setCommonsEntityChoices([]);
     setCommonsCandidates([]);
     setCommonsNextPageToken(null);
     setCommonsSeenFileTitles(new Set());
@@ -770,6 +776,8 @@ export const ItineraryPage = ({
     setCommonsSeenFileTitles(new Set());
     setSelectedCommonsPhoto(null);
     setCommonsPageStatus(null);
+    setCommonsResolvedEntity(null);
+    setCommonsEntityChoices([]);
     void searchCommonsPhotos(commonsQuery, undefined, new Set());
   };
 
@@ -777,6 +785,7 @@ export const ItineraryPage = ({
     queryValue = commonsQuery,
     nextPageToken: string | undefined = undefined,
     seenFileTitles = commonsSeenFileTitles,
+    selectedEntityQid: string | undefined = undefined,
   ) => {
     const query = queryValue.trim();
     if (query.length < 2) {
@@ -791,7 +800,9 @@ export const ItineraryPage = ({
     setCoverPhotoError(null);
     setSelectedCommonsPhoto(null);
     try {
-      const result = await searchCommonsPhotoCandidates(supabase, trip.id, query, nextPageToken);
+      const result = await searchCommonsPhotoCandidates(supabase, trip.id, query, nextPageToken, selectedEntityQid ?? commonsResolvedEntity?.qid);
+      setCommonsResolvedEntity(result.resolvedEntity ?? (nextPageToken ? commonsResolvedEntity : null));
+      setCommonsEntityChoices(result.entityChoices ?? []);
       const freshCandidates = result.candidates.filter((candidate) => !seenFileTitles.has(candidate.fileTitle));
       const nextSeenFileTitles = new Set(seenFileTitles);
       result.candidates.forEach((candidate) => nextSeenFileTitles.add(candidate.fileTitle));
@@ -799,6 +810,9 @@ export const ItineraryPage = ({
       setCommonsCandidates(freshCandidates);
       const nextToken = result.nextPageToken ?? null;
       if (result.state !== "results") {
+        if (result.state === "entity-ambiguous" && result.entityChoices?.length) {
+          setCommonsCandidates([]);
+        }
         setCommonsNextPageToken(null);
         setCommonsPageStatus(result.state === "no-suitable-image" || result.state === "offline" ? "empty-first-page" : result.state);
         return;
@@ -1976,6 +1990,8 @@ export const ItineraryPage = ({
                     value={commonsQuery}
                     onChange={(event) => {
                       setCommonsQuery(event.target.value);
+                      setCommonsResolvedEntity(null);
+                      setCommonsEntityChoices([]);
                       setCommonsCandidates([]);
                       setCommonsNextPageToken(null);
                       setCommonsSeenFileTitles(new Set());
@@ -1992,14 +2008,60 @@ export const ItineraryPage = ({
                 </form>
                 {!isOnline && <p className="mt-3 text-xs text-amber-700" aria-live="polite">目前離線，無法搜尋、換一批或儲存照片。</p>}
                 {coverPhotoError && <p className="mt-3 text-xs text-rose-700" aria-live="polite">{coverPhotoError}</p>}
+                {commonsResolvedEntity && (
+                  <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900" aria-live="polite">
+                    <span>搜尋範圍：<strong>{commonsResolvedEntity.label}</strong></span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCommonsResolvedEntity(null);
+                        setCommonsCandidates([]);
+                        setCommonsNextPageToken(null);
+                        setCommonsSeenFileTitles(new Set());
+                        setSelectedCommonsPhoto(null);
+                        setCommonsPageStatus(null);
+                        requestAnimationFrame(() => coverDialogRef.current?.querySelector<HTMLInputElement>("input[aria-label='Commons 搜尋詞']")?.focus());
+                      }}
+                      className="font-bold text-emerald-800 underline hover:text-emerald-950"
+                    >
+                      變更關鍵字
+                    </button>
+                  </div>
+                )}
+                {commonsEntityChoices.length > 0 && (
+                  <section className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3" aria-labelledby="commons-entity-choice-title" aria-live="polite">
+                    <h4 id="commons-entity-choice-title" className="text-sm font-bold text-amber-900">請選擇要搜尋的地點範圍</h4>
+                    <p className="mt-1 text-xs text-amber-800">選擇前不會搜尋照片；若都不正確，請修改關鍵字。</p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {commonsEntityChoices.map((entity) => (
+                        <button
+                          key={entity.qid}
+                          type="button"
+                          disabled={isCommonsSearching}
+                          onClick={() => {
+                            setCommonsCandidates([]);
+                            setCommonsNextPageToken(null);
+                            setCommonsSeenFileTitles(new Set());
+                            setSelectedCommonsPhoto(null);
+                            setCommonsPageStatus(null);
+                            void searchCommonsPhotos(commonsQuery, undefined, new Set(), entity.qid);
+                          }}
+                          className="rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm font-bold text-amber-900 hover:bg-amber-100 disabled:opacity-50"
+                        >
+                          {entity.label}
+                        </button>
+                      ))}
+                    </div>
+                  </section>
+                )}
                 {commonsPageStatus && (
                   <p className="mt-3 text-xs text-slate-600" aria-live="polite">
                     {{
                       "empty-first-page": "找不到符合條件的照片，請調整搜尋詞後再試。",
                       "duplicate-page": "這一批沒有新的照片；可再換一批或調整搜尋詞。",
                       exhausted: "已沒有更多照片；可調整搜尋詞或改用其他來源。",
-                      "entity-not-found": "找不到唯一對應的地點實體，請調整搜尋詞後再試。",
-                      "entity-ambiguous": "搜尋詞對應多個地點，請輸入更完整的地點名稱。",
+                      "entity-not-found": "找不到可精確對應的地點實體，請使用完整地點名稱或調整關鍵字後再試。",
+                      "entity-ambiguous": "搜尋詞對應多個地點，請先選擇正確範圍，或輸入更完整的地點名稱。",
                       "inspection-limit-reached": "已達本次檢查上限；請檢視目前候選或重新調整搜尋詞。",
                       "project-quota-reached": "今日精準搜尋額度已用完，請稍後再試。",
                       "rate-limited": "Wikimedia Commons 暫時受限，請稍後再試。",
