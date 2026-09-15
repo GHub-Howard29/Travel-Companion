@@ -11,7 +11,7 @@
   "scripts": {
     "setup": "npm ci",
     "dev": "vite",
-    "build": "npm run verify:release-history && npm run verify:update-policy && npm run verify:itinerary-time && npm run verify:itinerary-travel && npm run verify:itinerary-day-style && npm run verify:itinerary-order && npm run verify:trip-lifecycle && npm run verify:v370-time-adjustment && npm run verify:travel-route && npm run verify:v390-place-photos && npm run verify:v391-cover-photo && npm run verify:v391-commons-precision && npm run verify:v391-wikimedia-parsers && npm run verify:v391-precision-pipeline && npm run verify:v391-precision-session && npm run verify:v391-precision-transport && npm run verify:v391-precision-response && npm run verify:v391-precision-quota && npm run verify:v391-precision-cache && npm run verify:v391-precision-usage && npm run verify:v391-precision-usage-daily && npm run verify:v362-trip-lock && npm run verify:v363-front-end && npm run verify:v364-trip-data-revision && npm run verify:v364-release && npm run verify:v365-performance && tsc && vite build",
+    "build": "npm run verify:release-history && npm run verify:update-policy && npm run verify:itinerary-time && npm run verify:itinerary-travel && npm run verify:itinerary-day-style && npm run verify:itinerary-order && npm run verify:trip-lifecycle && npm run verify:v370-time-adjustment && npm run verify:travel-route && npm run verify:v390-place-photos && npm run verify:v391-cover-photo && npm run verify:v391-commons-precision && npm run verify:v391-wikimedia-parsers && npm run verify:v391-precision-pipeline && npm run verify:v391-precision-session && npm run verify:v391-precision-transport && npm run verify:v391-precision-response && npm run verify:v391-precision-quota && npm run verify:v391-precision-cache && npm run verify:v391-precision-usage && npm run verify:v391-precision-usage-daily && npm run verify:v391-precision-usage-persistence && npm run verify:v362-trip-lock && npm run verify:v363-front-end && npm run verify:v364-trip-data-revision && npm run verify:v364-release && npm run verify:v365-performance && tsc && vite build",
     "postbuild": "npm run verify:browser-security",
     "verify:browser-security": "node scripts/verify-browser-security.mjs",
     "verify:itinerary-time": "node --experimental-strip-types --no-warnings scripts/verify-itinerary-time.mjs",
@@ -33,6 +33,7 @@
     "verify:v391-precision-cache": "node --experimental-strip-types --no-warnings scripts/verify-v391-precision-cache.mjs",
     "verify:v391-precision-usage": "node --experimental-strip-types --no-warnings scripts/verify-v391-precision-usage.mjs",
     "verify:v391-precision-usage-daily": "node --experimental-strip-types --no-warnings scripts/verify-v391-precision-usage-daily.mjs",
+    "verify:v391-precision-usage-persistence": "node --experimental-strip-types --no-warnings scripts/verify-v391-precision-usage-persistence.mjs",
     "verify:v362-trip-lock": "node --experimental-strip-types --no-warnings scripts/verify-v362-trip-lock.mjs",
     "verify:v363-front-end": "node --experimental-strip-types --no-warnings scripts/verify-v363-front-end.mjs",
     "verify:v364-trip-data-revision": "node --experimental-strip-types --no-warnings scripts/verify-v364-trip-data-revision.mjs",
