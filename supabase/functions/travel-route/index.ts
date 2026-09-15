@@ -18,7 +18,7 @@ const COMMONS_API_URL = "https://commons.wikimedia.org/w/api.php";
 const ROUTE_DAILY_LIMIT = 100;
 const PLACE_PHOTO_MONTHLY_LIMIT = 1_000;
 const MAX_PLACE_PHOTO_CANDIDATES = 5;
-const MAX_COMMONS_CANDIDATES = 8;
+const MAX_COMMONS_CANDIDATES = 6;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -297,7 +297,6 @@ Deno.serve(async (request) => {
           return {
             placeId,
             photoUri: media.photoUri,
-            googleMapsUri: isHttpsUrl(photo.googleMapsUri) ? photo.googleMapsUri : undefined,
             authorAttributions,
           };
         } catch {

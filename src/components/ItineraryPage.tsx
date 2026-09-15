@@ -30,10 +30,15 @@ import {
 } from "lucide-react";
 
 import type { ItineraryItem, SavedTravelEstimate, TravelMode, TripDetail } from "../types";
-import { handlePlaceBrowse, handleRouteBrowse } from "../utils/navigationUtils";
+import {
+  getGoogleMapsPlaceUrl,
+  handlePlaceBrowse,
+  handleRouteBrowse,
+} from "../utils/navigationUtils";
 import { focusAndRevealControl, releaseFocusedControl } from "../utils/viewportUtils";
 import { trimRichText } from "../utils/richText";
 import {
+  formatCompleteNumericTimeInput,
   isDepartureBeforeArrival,
   sortItineraryItemsByTime,
   validateItineraryTime,
@@ -87,7 +92,9 @@ import { RichTextDisplay } from "./RichTextDisplay";
 import { MaterialTravelModeIcon } from "./MaterialTravelModeIcon";
 import { SortableCard } from "./SortableCard";
 
-const COMMONS_CANDIDATE_PAGE_SIZE = 8;
+const COMMONS_CANDIDATE_PAGE_SIZE = 6;
+
+type CommonsPageStatus = "empty-first-page" | "duplicate-page" | "exhausted";
 
 interface ItineraryPageProps {
   supabase: SupabaseClient;
@@ -140,6 +147,7 @@ export const ItineraryPage = ({
   const [copyTargetDays, setCopyTargetDays] = useState<number[]>([]);
   const [copyArrivalTime, setCopyArrivalTime] = useState("");
   const [copyDepartureTime, setCopyDepartureTime] = useState("");
+  const [copyTimeAlertErrors, setCopyTimeAlertErrors] = useState<string[] | null>(null);
   const [isCopySaving, setIsCopySaving] = useState(false);
   const [copySaveError, setCopySaveError] = useState<string | null>(null);
   const [copySuccess, setCopySuccess] = useState<string | null>(null);
@@ -192,8 +200,11 @@ export const ItineraryPage = ({
   const [isCommonsSearching, setIsCommonsSearching] = useState(false);
   const [isCoverSaving, setIsCoverSaving] = useState(false);
   const [coverPhotoError, setCoverPhotoError] = useState<string | null>(null);
+  const [commonsPageStatus, setCommonsPageStatus] = useState<CommonsPageStatus | null>(null);
   const [failedCoverPaths, setFailedCoverPaths] = useState<Set<string>>(() => new Set());
   const editingCardRef = useRef<HTMLElement | null>(null);
+  const copyTimeAlertButtonRef = useRef<HTMLButtonElement | null>(null);
+  const copyTimeCompositionRef = useRef(false);
   const orderSensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
@@ -263,6 +274,7 @@ export const ItineraryPage = ({
     setCopyTargetDays([]);
     setCopyArrivalTime("");
     setCopyDepartureTime("");
+    setCopyTimeAlertErrors(null);
     setCopySaveError(null);
   };
 
@@ -416,6 +428,7 @@ export const ItineraryPage = ({
     setCopyTargetDays([]);
     setCopyArrivalTime("");
     setCopyDepartureTime("");
+    setCopyTimeAlertErrors(null);
     setCopySaveError(null);
     setCopySuccess(null);
   };
@@ -436,11 +449,16 @@ export const ItineraryPage = ({
     error?: RequiredItineraryTimeError,
   ) => {
     if (error === "required") {
-      return field === "arrival" ? "請輸入抵達時間" : "請輸入離開時間";
+      return `請輸入${field === "arrival" ? "抵達" : "離開"}時間；可輸入 1400 或 14:00。`;
     }
-    if (error === "before-arrival") return "離開時間不得早於抵達時間";
-    if (error === "invalid") {
-      return `${field === "arrival" ? "抵達" : "離開"}時間格式有誤。請輸入 HH:MM，例如 08:00`;
+    if (error === "before-arrival") {
+      return "離開時間需等於或晚於抵達時間；跨午夜請分開建立行程。";
+    }
+    if (error === "invalid-range") {
+      return `${field === "arrival" ? "抵達" : "離開"}時間需介於 00:00 至 23:59；例如 1400 或 14:00。`;
+    }
+    if (error === "invalid-format") {
+      return `${field === "arrival" ? "抵達" : "離開"}時間請輸入四碼，例如 0930，或使用 H:MM／HH:MM，例如 9:30 或 09:30。`;
     }
     return undefined;
   };
@@ -454,16 +472,52 @@ export const ItineraryPage = ({
     copyTimeValidation.departureError,
   );
 
+  const updateCopyTime = (
+    field: "arrival" | "departure",
+    value: string,
+    input: HTMLInputElement,
+  ) => {
+    const previousValue = field === "arrival" ? copyArrivalTime : copyDepartureTime;
+    const removedFormattedColon = /^\d{2}:\d{2}$/.test(previousValue) &&
+      value === previousValue.replace(":", "");
+    const nextValue = copyTimeCompositionRef.current || removedFormattedColon
+      ? value
+      : formatCompleteNumericTimeInput(value);
+    if (field === "arrival") setCopyArrivalTime(nextValue);
+    else setCopyDepartureTime(nextValue);
+    if (nextValue !== value) {
+      requestAnimationFrame(() => input.setSelectionRange(nextValue.length, nextValue.length));
+    }
+  };
+
+  const finishCopyTimeComposition = (
+    field: "arrival" | "departure",
+    input: HTMLInputElement,
+  ) => {
+    copyTimeCompositionRef.current = false;
+    const nextValue = formatCompleteNumericTimeInput(input.value);
+    if (field === "arrival") setCopyArrivalTime(nextValue);
+    else setCopyDepartureTime(nextValue);
+    if (nextValue !== input.value) {
+      requestAnimationFrame(() => input.setSelectionRange(nextValue.length, nextValue.length));
+    }
+  };
+
+  const closeCopyTimeAlert = () => {
+    const focusTarget = copyTimeValidation.arrivalError
+      ? "copy-arrival-time-input"
+      : "copy-departure-time-input";
+    setCopyTimeAlertErrors(null);
+    requestAnimationFrame(() => focusAndRevealControl(focusTarget));
+  };
+
   const saveCopies = async () => {
     if (!copySource || isCopySaving) return;
     if (!copyTimeValidation.isValid) {
-      requestAnimationFrame(() => {
-        focusAndRevealControl(
-          copyTimeValidation.arrivalError
-            ? "copy-arrival-time-input"
-            : "copy-departure-time-input",
-        );
-      });
+      setCopyTimeAlertErrors(
+        [copyArrivalError, copyDepartureError].filter((message): message is string => Boolean(message)),
+      );
+      requestAnimationFrame(() => copyTimeAlertButtonRef.current?.focus());
       return;
     }
     if (copyTargetDays.length === 0) return;
@@ -623,7 +677,7 @@ export const ItineraryPage = ({
   };
 
   const openCoverPhotoDialog = (index: number, event: ItineraryItem) => {
-    const query = event.location.trim() || event.title.trim();
+    const query = event.location.trim();
     setCoverTargetIndex(index);
     setCommonsQuery(query);
     setCommonsCandidates([]);
@@ -631,7 +685,7 @@ export const ItineraryPage = ({
     setCommonsSeenFileTitles(new Set());
     setSelectedCommonsPhoto(null);
     setCoverPhotoError(null);
-    void searchCommonsPhotos(query);
+    setCommonsPageStatus(null);
   };
 
   const closeCoverPhotoDialog = () => {
@@ -642,12 +696,30 @@ export const ItineraryPage = ({
     setCommonsSeenFileTitles(new Set());
     setSelectedCommonsPhoto(null);
     setCoverPhotoError(null);
+    setCommonsPageStatus(null);
   };
 
-  const searchCommonsPhotos = async (queryValue = commonsQuery, offset = 0) => {
+  const startCommonsSearch = () => {
+    setCommonsCandidates([]);
+    setCommonsNextOffset(null);
+    setCommonsSeenFileTitles(new Set());
+    setSelectedCommonsPhoto(null);
+    setCommonsPageStatus(null);
+    void searchCommonsPhotos(commonsQuery, 0, new Set());
+  };
+
+  const searchCommonsPhotos = async (
+    queryValue = commonsQuery,
+    offset = 0,
+    seenFileTitles = commonsSeenFileTitles,
+  ) => {
     const query = queryValue.trim();
     if (query.length < 2) {
       setCoverPhotoError("請輸入至少 2 個字的照片搜尋詞。");
+      return;
+    }
+    if (!isOnline) {
+      setCoverPhotoError("目前離線，無法搜尋、換一批或儲存照片。");
       return;
     }
     setIsCommonsSearching(true);
@@ -655,20 +727,26 @@ export const ItineraryPage = ({
     setSelectedCommonsPhoto(null);
     try {
       const result = await searchCommonsPhotoCandidates(supabase, trip.id, query, offset);
-      const freshCandidates = result.candidates.filter((candidate) => !commonsSeenFileTitles.has(candidate.fileTitle));
-      const nextSeenFileTitles = new Set(commonsSeenFileTitles);
+      const freshCandidates = result.candidates.filter((candidate) => !seenFileTitles.has(candidate.fileTitle));
+      const nextSeenFileTitles = new Set(seenFileTitles);
       result.candidates.forEach((candidate) => nextSeenFileTitles.add(candidate.fileTitle));
       setCommonsSeenFileTitles(nextSeenFileTitles);
       setCommonsCandidates(freshCandidates);
-      setCommonsNextOffset(result.nextOffset ?? (
+      const nextOffset = result.nextOffset ?? (
         result.candidates.length === COMMONS_CANDIDATE_PAGE_SIZE
           ? offset + COMMONS_CANDIDATE_PAGE_SIZE
           : null
-      ));
+      );
       if (freshCandidates.length === 0) {
-        setCoverPhotoError(result.nextOffset === null
-          ? "沒有更多未顯示的 Commons 照片，請調整搜尋詞。"
-          : "這一批沒有新的 Commons 照片，請再按一次換一批。");
+        setCommonsNextOffset(offset === 0 ? null : nextOffset);
+        setCommonsPageStatus(offset === 0
+          ? "empty-first-page"
+          : nextOffset === null
+            ? "exhausted"
+            : "duplicate-page");
+      } else {
+        setCommonsNextOffset(nextOffset);
+        setCommonsPageStatus(nextOffset === null ? "exhausted" : null);
       }
     } catch (error) {
       setCoverPhotoError(error instanceof Error ? error.message : "照片搜尋暫時無法使用。");
@@ -1189,7 +1267,7 @@ export const ItineraryPage = ({
               </button>
             </div>
             <p className="mt-1 text-xs leading-relaxed text-slate-500">
-              已依輸入內容搜尋。請選擇正確地點，以取得穩定的交通估算。
+              已依輸入內容搜尋。請選擇正確地點，以取得穩定的交通估算；若結果不理想，請調整地點關鍵字後重新搜尋。
             </p>
             {isPlaceSearching && (
               <p className="mt-3 inline-flex items-center gap-2 text-xs font-bold text-emerald-700" role="status">
@@ -1235,16 +1313,14 @@ export const ItineraryPage = ({
                         ) : null}
                       </span>
                     </button>
-                    {placeCandidatePhotos[candidate.placeId]?.googleMapsUri && (
-                      <a
-                        href={placeCandidatePhotos[candidate.placeId].googleMapsUri}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="mt-1 flex justify-end text-[11px] font-semibold text-slate-500 hover:text-emerald-700"
-                      >
-                        在 Google Maps 查看照片 <ExternalLink size={10} className="ml-1" />
-                      </a>
-                    )}
+                    <a
+                      href={getGoogleMapsPlaceUrl(candidate.displayName, candidate.placeId)}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-1 flex justify-end text-[11px] font-semibold text-slate-500 hover:text-emerald-700"
+                    >
+                      在 Google Maps 查看地點資訊 <ExternalLink size={10} className="ml-1" />
+                    </a>
                   </div>
                 ))}
                 <p className="text-right text-xs font-normal text-slate-500" translate="no">Google Maps</p>
@@ -1790,26 +1866,40 @@ export const ItineraryPage = ({
               className="mt-4 flex items-stretch gap-2"
               onSubmit={(event) => {
                 event.preventDefault();
-                void searchCommonsPhotos(commonsQuery, commonsNextOffset ?? 0);
+                startCommonsSearch();
               }}
             >
               <input
                 value={commonsQuery}
                 onChange={(event) => {
                   setCommonsQuery(event.target.value);
+                  setCommonsCandidates([]);
                   setCommonsNextOffset(null);
                   setCommonsSeenFileTitles(new Set());
+                  setSelectedCommonsPhoto(null);
+                  setCommonsPageStatus(null);
+                  setCoverPhotoError(null);
                 }}
                 aria-label="Commons 搜尋詞"
                 className="min-w-0 flex-1 rounded-lg border border-slate-200 px-3 py-2 text-base focus:outline-none focus:ring-2 focus:ring-emerald-500 sm:text-sm"
               />
-              <button type="submit" disabled={isCommonsSearching || commonsQuery.trim().length < 2} className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-700 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-800 disabled:opacity-50">
+              <button type="submit" disabled={!isOnline || isCommonsSearching || commonsQuery.trim().length < 2} className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-700 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-800 disabled:opacity-50">
                 {isCommonsSearching ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />} 搜尋
               </button>
             </form>
-            {coverPhotoError && <p className="mt-3 text-xs text-rose-700" role="alert">{coverPhotoError}</p>}
+            {!isOnline && <p className="mt-3 text-xs text-amber-700" aria-live="polite">目前離線，無法搜尋、換一批或儲存照片。</p>}
+            {coverPhotoError && <p className="mt-3 text-xs text-rose-700" aria-live="polite">{coverPhotoError}</p>}
+            {commonsPageStatus && (
+              <p className="mt-3 text-xs text-slate-600" aria-live="polite">
+                {{
+                  "empty-first-page": "找不到符合條件的照片，請調整搜尋詞後再試。",
+                  "duplicate-page": "這一批沒有新的照片；可再換一批或調整搜尋詞。",
+                  exhausted: "已沒有更多照片；可調整搜尋詞或改用其他來源。",
+                }[commonsPageStatus]}
+              </p>
+            )}
             {commonsCandidates.length > 0 && (
-              <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
                 {commonsCandidates.map((candidate) => {
                   const isSelected = selectedCommonsPhoto?.fileTitle === candidate.fileTitle;
                   return (
@@ -1832,14 +1922,14 @@ export const ItineraryPage = ({
               </div>
             )}
             <div className="mt-4 flex items-center gap-2 border-t border-slate-100 pt-4">
-              {commonsNextOffset !== null && commonsCandidates.length > 0 && (
-                <button type="button" onClick={() => void searchCommonsPhotos(commonsQuery, commonsNextOffset)} disabled={isCommonsSearching || isCoverSaving} className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-700 hover:bg-emerald-100 disabled:opacity-50">
+              {commonsNextOffset !== null && (
+                <button type="button" onClick={() => void searchCommonsPhotos(commonsQuery, commonsNextOffset)} disabled={!isOnline || isCommonsSearching || isCoverSaving} className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-700 hover:bg-emerald-100 disabled:opacity-50">
                   換一批
                 </button>
               )}
               <div className="ml-auto flex gap-2">
                 <button type="button" onClick={closeCoverPhotoDialog} disabled={isCoverSaving} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-50">取消</button>
-                <button type="button" onClick={() => void saveCommonsPhoto()} disabled={!selectedCommonsPhoto || isCoverSaving} className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-800 disabled:bg-slate-200 disabled:text-slate-400">
+                <button type="button" onClick={() => void saveCommonsPhoto()} disabled={!isOnline || !selectedCommonsPhoto || isCoverSaving} className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-800 disabled:bg-slate-200 disabled:text-slate-400">
                   {isCoverSaving ? "正在設定…" : "使用照片"}
                 </button>
               </div>
@@ -1855,11 +1945,7 @@ export const ItineraryPage = ({
               event.preventDefault();
               void saveCopies();
             }}
-            onKeyDown={(event) => {
-              if (event.key !== "Enter" || copyTimeValidation.isValid) return;
-              event.preventDefault();
-              void saveCopies();
-            }}
+            aria-hidden={copyTimeAlertErrors ? true : undefined}
             className="max-h-[min(42rem,calc(100dvh-1.5rem))] w-full max-w-md overflow-y-auto rounded-2xl bg-white p-4 shadow-2xl"
             role="dialog"
             aria-modal="true"
@@ -1885,51 +1971,37 @@ export const ItineraryPage = ({
             <div className="mt-4 grid grid-cols-2 gap-2">
               <label className="space-y-1">
                 <span className="text-xs font-bold text-slate-600">抵達時間（必填）</span>
+                <span className="block text-xs text-slate-500">可輸入 1400 或 14:00。</span>
                 <input
                   id="copy-arrival-time-input"
                   value={copyArrivalTime}
-                  onChange={(event) => setCopyArrivalTime(event.target.value)}
+                  type="text"
+                  onCompositionStart={() => { copyTimeCompositionRef.current = true; }}
+                  onCompositionEnd={(event) => finishCopyTimeComposition("arrival", event.currentTarget)}
+                  onChange={(event) => updateCopyTime("arrival", event.target.value, event.currentTarget)}
                   placeholder="例如 13:30"
                   inputMode="numeric"
                   autoComplete="off"
                   disabled={isCopySaving}
-                  aria-invalid={Boolean(copyArrivalError)}
-                  aria-describedby={copyArrivalError ? "copy-arrival-time-error" : undefined}
-                  className={`w-full rounded-lg border px-3 py-2 text-base focus:outline-none focus:ring-2 sm:text-sm ${
-                    copyArrivalError
-                      ? "border-rose-400 focus:ring-rose-400"
-                      : "border-slate-200 focus:ring-sky-600"
-                  }`}
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-base focus:outline-none focus:ring-2 focus:ring-sky-600 sm:text-sm"
                 />
-                {copyArrivalError && (
-                  <span id="copy-arrival-time-error" className="block text-xs leading-relaxed text-rose-700">
-                    {copyArrivalError}
-                  </span>
-                )}
               </label>
               <label className="space-y-1">
                 <span className="text-xs font-bold text-slate-600">離開時間（必填）</span>
+                <span className="block text-xs text-slate-500">可輸入 1400 或 14:00。</span>
                 <input
                   id="copy-departure-time-input"
                   value={copyDepartureTime}
-                  onChange={(event) => setCopyDepartureTime(event.target.value)}
+                  type="text"
+                  onCompositionStart={() => { copyTimeCompositionRef.current = true; }}
+                  onCompositionEnd={(event) => finishCopyTimeComposition("departure", event.currentTarget)}
+                  onChange={(event) => updateCopyTime("departure", event.target.value, event.currentTarget)}
                   placeholder="例如 15:00"
                   inputMode="numeric"
                   autoComplete="off"
                   disabled={isCopySaving}
-                  aria-invalid={Boolean(copyDepartureError)}
-                  aria-describedby={copyDepartureError ? "copy-departure-time-error" : undefined}
-                  className={`w-full rounded-lg border px-3 py-2 text-base focus:outline-none focus:ring-2 sm:text-sm ${
-                    copyDepartureError
-                      ? "border-rose-400 focus:ring-rose-400"
-                      : "border-slate-200 focus:ring-sky-600"
-                  }`}
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-base focus:outline-none focus:ring-2 focus:ring-sky-600 sm:text-sm"
                 />
-                {copyDepartureError && (
-                  <span id="copy-departure-time-error" className="block text-xs leading-relaxed text-rose-700">
-                    {copyDepartureError}
-                  </span>
-                )}
               </label>
             </div>
 
@@ -1959,9 +2031,37 @@ export const ItineraryPage = ({
             {copySaveError && <p className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700" role="alert">{copySaveError}</p>}
             <div className="mt-4 flex justify-end gap-2 border-t border-slate-100 pt-4">
               <button type="button" onClick={closeCopyDialog} disabled={isCopySaving} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-50">取消</button>
-              <button type="submit" disabled={copyTargetDays.length === 0 || !copyTimeValidation.isValid || isCopySaving} className="rounded-lg bg-sky-700 px-4 py-2 text-sm font-bold text-white hover:bg-sky-800 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400">{isCopySaving ? "正在複製…" : "複製到所選 Day"}</button>
+              <button type="submit" disabled={copyTargetDays.length === 0 || isCopySaving} className="rounded-lg bg-sky-700 px-4 py-2 text-sm font-bold text-white hover:bg-sky-800 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400">{isCopySaving ? "正在複製…" : "複製到所選 Day"}</button>
             </div>
           </form>
+          {copyTimeAlertErrors && (
+            <div className="fixed inset-0 z-[60] flex items-end justify-center bg-slate-950/50 p-3 sm:items-center" role="presentation">
+              <section
+                className="w-full max-w-sm rounded-2xl bg-white p-4 shadow-2xl"
+                role="alertdialog"
+                aria-modal="true"
+                aria-labelledby="copy-time-alert-title"
+                aria-describedby="copy-time-alert-description"
+                onKeyDown={(event) => {
+                  if (event.key === "Escape") {
+                    event.preventDefault();
+                    closeCopyTimeAlert();
+                  } else if (event.key === "Tab") {
+                    event.preventDefault();
+                    copyTimeAlertButtonRef.current?.focus();
+                  }
+                }}
+              >
+                <h4 id="copy-time-alert-title" className="text-lg font-bold text-slate-800">請檢查時間格式</h4>
+                <ul id="copy-time-alert-description" className="mt-3 list-disc space-y-2 pl-5 text-sm leading-relaxed text-slate-700">
+                  {copyTimeAlertErrors.map((message) => <li key={message}>{message}</li>)}
+                </ul>
+                <div className="mt-4 flex justify-end">
+                  <button ref={copyTimeAlertButtonRef} type="button" onClick={closeCopyTimeAlert} className="rounded-lg bg-sky-700 px-4 py-2 text-sm font-bold text-white hover:bg-sky-800">知道了</button>
+                </div>
+              </section>
+            </div>
+          )}
         </div>
       )}
 

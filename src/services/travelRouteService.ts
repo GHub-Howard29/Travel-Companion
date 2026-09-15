@@ -18,7 +18,6 @@ export interface PlaceCandidate {
 export interface PlaceCandidatePhoto {
   placeId: string;
   photoUri: string;
-  googleMapsUri?: string;
   authorAttributions: Array<{ displayName: string; uri?: string }>;
 }
 

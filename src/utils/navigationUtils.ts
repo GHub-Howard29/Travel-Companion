@@ -10,13 +10,20 @@ export const handlePlaceBrowse = (
 ) => {
   if (!location) return;
 
+  openExternalUrl(getGoogleMapsPlaceUrl(location, place?.placeId));
+};
+
+export const getGoogleMapsPlaceUrl = (
+  location: string,
+  placeId?: string,
+): string => {
   const params = new URLSearchParams({
     api: "1",
     query: location,
   });
-  if (place?.placeId) params.set("query_place_id", place.placeId);
+  if (placeId) params.set("query_place_id", placeId);
 
-  openExternalUrl(`https://www.google.com/maps/search/?${params.toString()}`);
+  return `https://www.google.com/maps/search/?${params.toString()}`;
 };
 
 export const handleRouteBrowse = (
