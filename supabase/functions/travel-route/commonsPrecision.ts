@@ -102,6 +102,76 @@ export interface CommonsPrecisionResponse {
   nextPageToken?: string;
 }
 
+export interface CommonsPrecisionPublicCandidate {
+  fileTitle: string;
+  thumbnailUrl: string;
+  cropImageUrl: string;
+  sourcePageUrl: string;
+  creator: string;
+  credit?: string;
+  license: string;
+  licenseUrl?: string;
+  width: number;
+  height: number;
+  description?: string;
+  descriptionWasTruncated?: boolean;
+  reviewStatus: "needs-review";
+  score: number;
+  scoreBreakdown: CommonsPrecisionScoreItem[];
+  matchEvidence: CommonsPrecisionMatchEvidence[];
+}
+
+export interface CommonsPrecisionPublicResponse {
+  contractVersion: typeof COMMONS_PRECISION_CONTRACT_VERSION;
+  state: CommonsPrecisionState;
+  candidates: CommonsPrecisionPublicCandidate[];
+  nextPageToken?: string;
+}
+
+export const projectCommonsPrecisionCandidate = (
+  candidate: CommonsPrecisionCandidate,
+): CommonsPrecisionPublicCandidate => ({
+  fileTitle: candidate.fileTitle,
+  thumbnailUrl: candidate.thumbnailUrl,
+  cropImageUrl: candidate.cropImageUrl,
+  sourcePageUrl: candidate.sourcePageUrl,
+  creator: candidate.creator,
+  credit: candidate.credit,
+  license: candidate.license,
+  licenseUrl: candidate.licenseUrl,
+  width: candidate.width,
+  height: candidate.height,
+  description: candidate.description,
+  descriptionWasTruncated: candidate.descriptionWasTruncated,
+  reviewStatus: candidate.reviewStatus,
+  score: candidate.score,
+  scoreBreakdown: candidate.scoreBreakdown.map((item) => ({ ...item })),
+  matchEvidence: candidate.matchEvidence.map((item) => ({ ...item })),
+});
+
+const OPAQUE_NEXT_PAGE_TOKEN = /^cp1\.[A-Za-z0-9_-]{16,4096}$/;
+
+export const projectCommonsPrecisionResponse = (input: {
+  state: CommonsPrecisionState;
+  candidates: readonly CommonsPrecisionCandidate[];
+  nextPageToken?: string;
+}): CommonsPrecisionPublicResponse => {
+  if (input.candidates.length > COMMONS_PRECISION_PAGE_SIZE ||
+    new Set(input.candidates.map((candidate) => candidate.fileTitle)).size !== input.candidates.length) {
+    throw new RangeError("候選回應數量或去重契約不正確");
+  }
+  if (input.nextPageToken !== undefined &&
+    (input.state !== "results" || !OPAQUE_NEXT_PAGE_TOKEN.test(input.nextPageToken))) {
+    throw new RangeError("nextPageToken 必須為同一 session 的不透明 token");
+  }
+  return {
+    contractVersion: COMMONS_PRECISION_CONTRACT_VERSION,
+    state: input.state,
+    candidates: input.candidates.map(projectCommonsPrecisionCandidate),
+    ...(input.state === "results" && input.nextPageToken !== undefined ? { nextPageToken: input.nextPageToken } : {}),
+  };
+};
+
 const normalizeText = (value: string): string => value
   .normalize("NFKC")
   .toLocaleLowerCase("en")
