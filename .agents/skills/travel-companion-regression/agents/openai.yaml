@@ -1,0 +1,6 @@
+interface:
+  display_name: "Travel Companion 本機回歸"
+  short_description: "執行本專案的 Supabase、Edge 與瀏覽器整合回歸"
+  default_prompt: "Use $travel-companion-regression to run the appropriate local regression for the current Travel-Companion changes."
+policy:
+  allow_implicit_invocation: true

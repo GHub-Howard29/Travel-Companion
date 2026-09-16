@@ -10,9 +10,9 @@ Travel Companion 是以 Trip 為核心的 Offline First 旅行管理 PWA，使�
 >
 > V3.9.0 發布狀態為「已發布」；`main`、帶註解標籤 `v3.9.0`、正式版本政策與新版資產均已確認，`minimumSupportedVersion: 3.8.2`、`forceUpdate: false`。
 >
-> 下一版本：V3.9.1 已開始本機分階段實作；首批完成跨日四碼時間、地點連結與提示、Commons 每批 6 張、分頁狀態與手動搜尋起點。精準搜尋 migration／真實矩陣、Gemini、Pexels／Pixabay、正式 API、部署與發布仍受個別閘門限制；A 自動多語及 C Google Places 脈絡維持停用。
+> 下一版本：V3.9.1 已完成跨日四碼時間、Commons 精準搜尋 migration／乾淨重建、四次固定真實矩陣、候選／裁切／放大／焦點，以及桌面／390×844 主要管理者互動；唯一實體首批與三次續頁亦已通過。末頁無 token 與真實多實體仍需新的單次 Wikimedia 授權；正式 secrets／migration、部署、metadata 與發布尚未執行。Gemini、Pexels／Pixabay 維持未接入，A 自動多語及 C Google Places 脈絡維持停用。
 >
-> 最後更新：2026-09-15
+> 最後更新：2026-09-16
 
 ## 優先閱讀
 

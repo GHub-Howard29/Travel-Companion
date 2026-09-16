@@ -251,6 +251,20 @@ export const ItineraryPage = ({
     };
   }, [editingIndex]);
 
+  useEffect(() => {
+    if (coverTargetIndex === null) return;
+
+    const frameId = requestAnimationFrame(() => {
+      const dialog = coverDialogRef.current;
+      if (!dialog || dialog.contains(document.activeElement)) return;
+      dialog.querySelector<HTMLElement>(
+        "a[href], input:not([disabled]), button:not([disabled]), [tabindex]:not([tabindex='-1'])",
+      )?.focus();
+    });
+
+    return () => cancelAnimationFrame(frameId);
+  }, [coverDialogStep, coverTargetIndex, isCommonsSearching]);
+
   const currentDayEvents = trip.content.daysData[String(activeDay)] || [];
   const displayedDayEvents = (isOrderMode ? orderDraft : currentDayEvents)
     .map((event, originalIndex) => ({ event, originalIndex }));

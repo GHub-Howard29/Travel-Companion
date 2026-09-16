@@ -71,6 +71,8 @@ assert.match(page, /\["Pexels", "Pixabay"\]/);
 assert.match(page, /確認候選照片/);
 assert.match(page, /確認裁切並儲存/);
 assert.match(page, /role="radiogroup"/);
+assert.match(page, /dialog\.contains\(document\.activeElement\)/);
+assert.match(page, /\[coverDialogStep, coverTargetIndex, isCommonsSearching\]/);
 assert.match(cropEditor, /雙指縮放/);
 assert.match(cropEditor, /方向鍵與加減鍵/);
 assert.match(viewer, /已裁切、縮放並轉為 WebP/);
