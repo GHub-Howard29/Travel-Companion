@@ -35,6 +35,10 @@ Google 路徑、真實照片 spike、現有架構、降級與成本模型已完�
 - [x] V3.9.3 本機發布前收斂：verify 聚合、冷啟動埋點、系統開發者 capability、使用紀錄 migration／RPC、側邊欄彙總 UI、TypeScript／lint／build、本機 Supabase 與桌面／390×844 回歸均已通過。
 - [x] V3.9.3 正式發布：production preflight／migration／postflight、`main`／`develop`、annotated tag `v3.9.3`、GitHub Pages 與正式 metadata 均已完成；發布提交為 `3e92c22`。
 - [ ] V3.9.4：依《56》先建立照片搜尋請求成本、hit@6、零候選、去重與快取基線，再改善前置去重、解析重用、提前停止、negative cache 與續頁效率；外部矩陣、額度調整與實作均未授權。
+- [ ] V3.9.6：在已另行規劃的 V3.9.5 之後，先建立完整 build 各驗證群組、TypeScript 與 Vite build 的耗時基線；再依領域整併驗證套件與失敗報告。完整發布驗證不得縮減，快速日常檢查不得取代 release build；不含功能、資料庫、Edge、CI、版本 metadata 或部署變更。
+- [ ] V3.9.7：在 V3.9.6 完成後，量測離線刷新約 30 秒載入既有資料的分段原因，再決定是否修正。只在本機記錄 Service Worker／navigation、session、Trip 快取、localStorage、IndexedDB 與首個可操作畫面耗時；不得上傳資料或破壞 Offline First、墓碑、pending 與同步安全。V3.6.5 的更新後載入改善與 V3.9.3 的冷啟動總埋點不重複安排。
+- [ ] V3.9.8：在 V3.9.7 的離線回歸可重現後，建立零費用本機 Playwright E2E，使用 loopback Supabase、合成帳號與 fixture 驗證桌面／390×844 的核心流程、離線快取、可及性、水平溢位與 Commons 歧義狀態；不使用 production、外部 API、付費雲端實機或長期憑證。Android／iOS PWA、OAuth、相機與原生行為仍列人工實機補驗。
+- [ ] V3.9.9：以 V3.9.8 E2E 為回歸護欄，先量測 bundle／import graph，再模組化照片搜尋、候選、裁切與放大檢視，並只在照片管理流程按需載入。保留既有頁面 lazy loading 與 Excel 動態載入，不改 Edge API、快取／配額、資料契約或 secret 邊界。
 - [x] V3.9.1 跨日複製四碼時間輸入修正：本機程式、純函式、TypeScript、lint 與完整 build 已完成；2026-09-16 以登入管理者在桌面／390×844 完成半形與全形四碼、IME 組字延後格式化、游標、刪除不自動補回、雙欄警告、焦點陷阱與 Escape 返回驗收，並實際通過單日 Day 2 與多日 Day 2／Day 3 複製；synthetic fixture 已還原。詳見《51》。
 - [x] V3.9.1 第一優先：Commons 實體導向候選照片精準搜尋已完成本機、正式資料庫與正式 Edge 收斂。包含 fetch transport、核准 Issues User-Agent、AES-GCM token、共享快取／配額／鎖／日彙總、前端狀態、公開候選投影、同名實體描述／QID、乾淨重建、RLS／service-role-only、四次 15 例真實矩陣、production-safe smoke、桌面／390×844 互動及 loopback fixture。正式 `travel-route` 為 version 11／ACTIVE／`verify_jwt=false`；發布前停止線已達。詳見《50》、《52》與《53》。
 - [x] V3.9.1 精準搜尋用量治理：2026-09-14 核准 `commons_precision_usage_daily` 無 UI、無個資／行程資料的專案日彙總、13 完整月加當月保留與 service-role-only 原子讀寫；只有程式開發者取得每次單次明確授權後，Codex 等開發 AI 才可完整唯讀彙總，無資料庫／secret／寫入／搜尋觸發權。Gemini 等外部 AI 不在本項範圍。不依 Wikimedia 公開分析資料推估本 App 用量；只有連續兩完整月低於上限 50% 且無 429／503，才可另案建議放寬，禁止自動調高。詳見《50》8 節。
@@ -96,6 +100,5 @@ Google 路徑、真實照片 spike、現有架構、降級與成本模型已完�
 ## 跨版本改善候選
 
 - [ ] 只在實際使用證明有需要時，重新排程排序後全日時間預覽、路線批次重查、跨午夜與 API 成本控制；不再占用 V3.8.1。
-- [ ] 先量測離線刷新約 30 秒才載入既有資料的原因，再決定是否開發效能改善。
 - [ ] 收集帳本附件管理的具體操作問題與頻率，再決定功能範圍。
 - [ ] 依資料特性評估將保守聯集合併導入其他資訊及外幣換算，不共用單一合併策略。
