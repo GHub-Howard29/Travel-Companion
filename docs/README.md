@@ -10,7 +10,7 @@ Travel Companion 是以 Trip 為核心的 Offline First 旅行管理 PWA，使�
 >
 > V3.9.0 發布狀態為「已發布」；`main`、帶註解標籤 `v3.9.0`、正式版本政策與新版資產均已確認，`minimumSupportedVersion: 3.8.2`、`forceUpdate: false`。
 >
-> 下一版本：V3.9.1 已完成跨日四碼時間、Commons 精準搜尋 migration／乾淨重建、四次固定真實矩陣、候選／裁切／放大／焦點、桌面／390×844 主要管理者互動，以及無 token 的 `inspection-limit-reached` 終態與真實多實體清單回應。同名多實體已加入 Wikidata 描述與 QID 判讀介面，不增加外部請求，並以 loopback-only Edge fixture 完成選定流程。既有真實執行已核准為足夠的代表性抽查，selected-QID 真實後續僅為可選 smoke，不阻擋停止線。2026-09-17 已完成正式 migration history 安全對齊、三筆 V3.9.1 migration 套用及 RLS／權限／advisors postflight；正式 secrets、Edge 部署、production smoke、metadata 與發布尚未執行。Gemini、Pexels／Pixabay 維持未接入，A 自動多語及 C Google Places 脈絡維持停用。
+> 下一版本：V3.9.1 已完成跨日四碼時間、Commons 精準搜尋 migration／乾淨重建、四次固定真實矩陣、候選／裁切／放大／焦點、桌面／390×844 主要管理者互動，以及無 token 的 `inspection-limit-reached` 終態與真實多實體清單回應。同名多實體已加入 Wikidata 描述與 QID 判讀介面，不增加外部請求，並以 loopback-only Edge fixture 完成選定流程。2026-09-17 已完成正式 migration、兩項 secrets、`travel-route` version 11、無 Wikimedia／無業務寫入的 production-safe smoke、3.9.1 metadata、完整本機回歸與 release build，已到達發布前停止線。尚未執行 `develop` 合併 `main`、`v3.9.1` tag、GitHub Pages 發布與發布後正式站 smoke。Gemini、Pexels／Pixabay 維持未接入，A 自動多語及 C Google Places 脈絡維持停用。
 >
 > 最後更新：2026-09-17
 
@@ -61,6 +61,8 @@ Travel Companion 是以 Trip 為核心的 Offline First 旅行管理 PWA，使�
 - [V3.9.1 Commons／Pexels／Pixabay 來源切換決策規格](49_V3.9.1_Commons_Pexels_Pixabay來源切換決策規格.md)
 - [V3.9.1 Commons 實體導向候選照片精準篩選決策規格](50_V3.9.1_Commons實體導向候選照片精準篩選決策規格.md)
 - [V3.9.1 跨日複製四碼時間輸入修正規格](51_V3.9.1_跨日複製四碼時間輸入修正規格.md)
+- [V3.9.1 Commons 精準搜尋真實矩陣報告](52_V3.9.1_Commons精準搜尋真實矩陣報告.md)
+- [V3.9.1 發布前驗證與正式環境紀錄](53_V3.9.1_發布前驗證與正式環境紀錄.md)
 - [V3.9.2／V3.10.0 使用紀錄與系統開發者權限規劃](37_V3.10.0_使用紀錄重新評估草案.md)
 - [先前方案草案：原 V3.9.0 使用者使用紀錄與開發者二次驗證](36_V3.9.0_使用者使用紀錄與開發者二次驗證規格.md)
 - [V3.4.1 離線同步規格](16_V3.4.1_離線狀態與OtherInfo本機優先同步規格.md)

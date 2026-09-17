@@ -14,6 +14,15 @@ export type VersionHistoryItem = {
 
 export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
+    version: "3.9.0",
+    date: "2026-09-13",
+    isMandatoryRelease: false,
+    notes: [
+      "搜尋地點時會顯示候選地點照片，協助確認選擇的位置是否正確。",
+      "每日行程可從 Wikimedia Commons 挑選景點照片，並保留圖片來源、作者與授權資訊。",
+    ],
+  },
+  {
     version: "3.8.2",
     date: "2026-09-11",
     isMandatoryRelease: false,
