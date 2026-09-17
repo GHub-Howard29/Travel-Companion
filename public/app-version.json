@@ -1,11 +1,10 @@
 {
-  "version": "3.9.1",
-  "minimumSupportedVersion": "3.8.2",
+  "version": "3.9.2",
+  "minimumSupportedVersion": "3.9.2",
   "releaseDate": "2026-09-17",
   "releaseNotes": [
-    "跨日複製行程可直接輸入四碼時間，例如 0930 會自動整理為 09:30。",
-    "Commons 選圖加入實體範圍辨識與同名地點選擇，讓候選照片更貼近指定景點。",
-    "選取候選照片前可確認、裁切並放大檢視，所有結果仍由管理者人工採用。"
+    "修正 V3.9.1 更新後可能持續停在載入畫面的正式環境連線問題。",
+    "正式建置新增環境隔離與產物檢查，避免本機服務位址再次進入發布版本。"
   ],
-  "forceUpdate": false
+  "forceUpdate": true
 }

@@ -4,6 +4,24 @@
 
 ---
 
+## 2026/09/17
+
+### BUG031
+
+問題：V3.9.1 發布後，手機／PWA 完成更新會長時間停在「正在建立雲端 safe 連線...」，Guest 與登入使用者皆可能無法進入主內容。
+
+原因：本機回歸用 `.env.local` 指向 `http://127.0.0.1:54321`；`npm run deploy` 的 production rebuild 仍讀入該覆寫，導致正式 JavaScript 與 CSP 連到使用者裝置自身的 loopback。
+
+修正方式：V3.9.2 production build 改由已驗證的正式環境來源注入設定，建置前拒絕 HTTP／loopback，建置後掃描 CSP 與待部署產物並確認核准的 production Supabase origin。本版採必要更新；不回寫 V3.9.1。
+
+狀態：
+
+🟡 已修正並完成發布候選驗證，待正式部署與發布後 smoke（V3.9.2）
+
+Android 額外檔案讀取權限提示尚無證據與 BUG031 同源，待取得完整提示內容後另案追查。
+
+---
+
 ## 2026/06/30
 
 ### BUG001

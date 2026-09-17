@@ -14,6 +14,16 @@ export type VersionHistoryItem = {
 
 export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
+    version: "3.9.1",
+    date: "2026-09-17",
+    isMandatoryRelease: false,
+    notes: [
+      "跨日複製行程可直接輸入四碼時間，例如 0930 會自動整理為 09:30。",
+      "Commons 選圖加入實體範圍辨識與同名地點選擇，讓候選照片更貼近指定景點。",
+      "選取候選照片前可確認、裁切並放大檢視，所有結果仍由管理者人工採用。",
+    ],
+  },
+  {
     version: "3.9.0",
     date: "2026-09-13",
     isMandatoryRelease: false,
