@@ -2,19 +2,19 @@
 
 Travel Companion 是以 Trip 為核心的 Offline First 旅行管理 PWA，使用 React、TypeScript、Vite 與 Supabase，支援行程、清單、資訊、多人帳本、附件及外幣換算。
 
-> 已發布版本：V3.9.2
+> 已發布版本：V3.9.3
 >
 > 已完成資料庫維護：V3.5.2（無獨立 App build／Git 版本標籤）
 >
-> 最新發布：V3.9.2「正式建置環境隔離」（2026-09-17；`main`、tag、GitHub Pages、必要更新、登入 session 與 Guest smoke 已完成）
+> 最新發布：V3.9.3「系統開發者、使用紀錄與效能改善」（2026-09-18；production migration、`main`／`develop`、annotated tag `v3.9.3` 與 GitHub Pages 已完成）
 >
-> V3.9.2 採必要更新，`minimumSupportedVersion: 3.9.2`、`forceUpdate: true`；正式 CSP 與主程式均使用 production Supabase origin，BUG031 已完成向前修復。
+> V3.9.3 採一般更新，`minimumSupportedVersion: 3.9.2`、`forceUpdate: false`；正式 `app-version.json` 已確認為 3.9.3。
 >
-> V3.9.3 承接系統開發者 capability、使用紀錄、側邊欄彙總 UI、verify 腳本瘦身與冷啟動埋點；V3.9.2 僅發布 BUG031 修正。
+> V3.9.3 已發布系統開發者 capability、使用紀錄、側邊欄彙總 UI、verify 腳本瘦身與冷啟動埋點。
 >
-> V3.9.3 已完成本機發布前驗證、尚未發布；V3.9.4 照片搜尋額度與候選效率改善已立案、尚未實作。
+> V3.9.4 照片搜尋額度與候選效率改善已立案、尚未實作。
 >
-> 最後更新：2026-09-17
+> 最後更新：2026-09-18
 
 ## 優先閱讀
 
@@ -66,7 +66,7 @@ Travel Companion 是以 Trip 為核心的 Offline First 旅行管理 PWA，使�
 - [V3.9.1 Commons 精準搜尋真實矩陣報告](52_V3.9.1_Commons精準搜尋真實矩陣報告.md)
 - [V3.9.1 發布前驗證與正式環境紀錄](53_V3.9.1_發布前驗證與正式環境紀錄.md)
 - [V3.9.2 正式建置環境隔離修正與發布紀錄](54_V3.9.2_正式建置環境隔離修正與發布紀錄.md)
-- [V3.9.3 系統開發者、使用紀錄與發布前驗證](55_V3.9.3_系統開發者使用紀錄與發布前驗證.md)
+- [V3.9.3 系統開發者、使用紀錄與正式發布紀錄](55_V3.9.3_系統開發者使用紀錄與發布前驗證.md)
 - [V3.9.4 照片搜尋額度與候選效率改善計畫](56_V3.9.4_照片搜尋額度與候選效率改善計畫.md)
 - [V3.9.3／V3.10.0 使用紀錄與系統開發者權限規劃](37_V3.10.0_使用紀錄重新評估草案.md)
 - [先前方案草案：原 V3.9.0 使用者使用紀錄與開發者二次驗證](36_V3.9.0_使用者使用紀錄與開發者二次驗證規格.md)

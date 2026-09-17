@@ -2,9 +2,9 @@
 
 > 本文件只保留尚未完成或仍需驗證的工作；版本順序與範圍以《02_產品開發路線圖》為準。
 >
-> 最後更新：2026-09-17
+> 最後更新：2026-09-18
 >
-> 已發布 App 版本：V3.9.2；BUG031 已完成向前修復與正式 smoke。
+> 已發布 App 版本：V3.9.3；production migration、Git、tag 與 GitHub Pages 部署均已完成。
 
 ## V3.9.0 已發布結果
 
@@ -33,7 +33,7 @@ Google 路徑、真實照片 spike、現有架構、降級與成本模型已完�
 - [x] V3.9.0：已於 2026-09-13 正式發布；production Function version 9 為 ACTIVE，正式前端與發布後 smoke 均通過。
 - [x] V3.9.2 BUG031：正式建置隔離、建置前 URL 驗證、產物掃描、lint、完整 verify chain、production build、`main`、`v3.9.2`、GitHub Pages、必要更新與登入／Guest 正式站 smoke 均已完成。
 - [x] V3.9.3 本機發布前收斂：verify 聚合、冷啟動埋點、系統開發者 capability、使用紀錄 migration／RPC、側邊欄彙總 UI、TypeScript／lint／build、本機 Supabase 與桌面／390×844 回歸均已通過。
-- [ ] V3.9.3 正式發布：production preflight／migration／postflight、`main`、`v3.9.3` tag、GitHub Pages 與發布後 smoke，須另行授權。
+- [x] V3.9.3 正式發布：production preflight／migration／postflight、`main`／`develop`、annotated tag `v3.9.3`、GitHub Pages 與正式 metadata 均已完成；發布提交為 `3e92c22`。
 - [ ] V3.9.4：依《56》先建立照片搜尋請求成本、hit@6、零候選、去重與快取基線，再改善前置去重、解析重用、提前停止、negative cache 與續頁效率；外部矩陣、額度調整與實作均未授權。
 - [x] V3.9.1 跨日複製四碼時間輸入修正：本機程式、純函式、TypeScript、lint 與完整 build 已完成；2026-09-16 以登入管理者在桌面／390×844 完成半形與全形四碼、IME 組字延後格式化、游標、刪除不自動補回、雙欄警告、焦點陷阱與 Escape 返回驗收，並實際通過單日 Day 2 與多日 Day 2／Day 3 複製；synthetic fixture 已還原。詳見《51》。
 - [x] V3.9.1 第一優先：Commons 實體導向候選照片精準搜尋已完成本機、正式資料庫與正式 Edge 收斂。包含 fetch transport、核准 Issues User-Agent、AES-GCM token、共享快取／配額／鎖／日彙總、前端狀態、公開候選投影、同名實體描述／QID、乾淨重建、RLS／service-role-only、四次 15 例真實矩陣、production-safe smoke、桌面／390×844 互動及 loopback fixture。正式 `travel-route` 為 version 11／ACTIVE／`verify_jwt=false`；發布前停止線已達。詳見《50》、《52》與《53》。
