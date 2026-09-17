@@ -18,6 +18,13 @@
 - Product Owner 已確認 V3.9.0 同時納入 Google 搜尋候選暫態索引照與 Commons 每日卡片管理者選圖；兩軌同版但不混用來源或保存資料。桌面／390×844 UI、可見文案、跨日照片引用、正式實作與後續發布均已核准；候選 metadata 為 `minimumSupportedVersion: 3.8.2`、`forceUpdate: false`。本機 Docker 隔離 migration、Storage／RLS、額度、advisors、Edge Runtime、lint 與完整 build 已通過；production 尚未變更。
 - 版本順序與範圍唯一以 `docs/02_產品開發路線圖.md` 為準；未完成工作以 `docs/09_待辦事項_TODO.md` 為準；目前有效狀態以 `docs/14_專案現況總覽.md` 為準。
 
+## AI 助理互動與 API 呼叫安全規範 (Rate Limiting & Exponential Backoff)
+
+- 當 Cline 進行多檔案讀寫、指令執行或外部 API 互動時，必須嚴格遵守流量控制與容錯重試機制，避免觸發 Rate Limit (429) 或配額超標：
+  1. **批次操作節流 (Rate Limiting / Throttling)**：當需連續執行多個獨立的讀取、搜尋或驗證指令時，應適度交錯執行，避免零秒瞬間並發大量請求。
+  2. **指數退避重試 (Exponential Backoff)**：當遇到指令失敗、網路逾時或 API 回傳 `429 Too Many Requests` / `503 Service Unavailable` 時，絕對禁止無延遲原地無限迴圈重試；必須採用指數退避機制（例如：等待 2 秒 $\rightarrow$ 4 秒 $\rightarrow$ 8 秒，最多重試 3 次），並在日誌或回應中明確告知使用者冷卻狀態。
+  3. **靜默與平滑輸出**：在處理大量資料或跑迴圈測試時，應避免不必要的冗長輸出，保持終端機與對話紀錄的整潔。
+
 ## 開發與安全規則
 
 - 使用繁體中文溝通及撰寫 commit message。
