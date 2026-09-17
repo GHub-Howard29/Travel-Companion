@@ -11,10 +11,12 @@ export const COMMONS_PRECISION_REQUEST_TIMEOUT_MS = 3_000;
 
 const QID = /^Q[1-9][0-9]*$/;
 const FILE_TITLE = /^File:.+/;
+const WIKIDATA_SEARCH_DESCRIPTION_MAX_LENGTH = 240;
 
 export interface WikidataSearchEntity {
   qid: string;
   label: string;
+  description?: string;
   aliases: string[];
   matchedText?: string;
 }
@@ -106,10 +108,19 @@ export const parseWikidataSearchResponse = (payload: unknown): WikidataSearchEnt
       ? entry.aliases.filter((value): value is string => typeof value === "string")
         .map((value) => value.normalize("NFKC").replace(/\s+/g, " ").trim()).filter(Boolean).slice(0, 24)
       : [];
+    const description = typeof entry.description === "string"
+      ? entry.description.normalize("NFKC").replace(/\s+/g, " ").trim().slice(0, WIKIDATA_SEARCH_DESCRIPTION_MAX_LENGTH)
+      : undefined;
     const matchedText = isRecord(entry.match) && typeof entry.match.text === "string"
       ? entry.match.text.normalize("NFKC").replace(/\s+/g, " ").trim()
       : undefined;
-    return [{ qid: entry.id, label, aliases: unique(aliases), matchedText: matchedText || undefined }];
+    return [{
+      qid: entry.id,
+      label,
+      ...(description ? { description } : {}),
+      aliases: unique(aliases),
+      matchedText: matchedText || undefined,
+    }];
   });
   const uniqueEntities = new Map<string, WikidataSearchEntity>();
   for (const entity of entities) {

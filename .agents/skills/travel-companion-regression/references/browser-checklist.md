@@ -18,6 +18,16 @@ Repeat the visible layout checks at the normal desktop viewport and an explicit 
 
 Do not perform this section without External-mode authorization or a maintained local mock that is explicitly in scope.
 
+For ambiguous entity choices, prefer the maintained local fixture:
+
+1. Run `npm run regression:local:browser-ambiguous-fixture` and open the reported URL.
+2. Open `Day 1` → `管理` → the first `設定照片`, replace the query with `中山站`, and select Search.
+3. Confirm three same-label full-width options appear: short description, wrapping description, and no description. Every option must show its QID and have an accessible name containing the visible identifying fields.
+4. Select one option and confirm the scope label uses that entity while the synthetic `no-suitable-image` state does not expose another choice or send an external request.
+5. Repeat at desktop and explicit 390x844 viewports; confirm no horizontal overflow, clipping, or unreachable controls.
+
+This fixture is not evidence about Wikidata content, query precision, or real selected-QID upstream behavior. Report it separately from External mode.
+
 Validate the applicable states: unique entity, ambiguous entity choice, facility-level safe stop, next batch, last page, candidate selection, zoom, confirmation, 1:1 crop, cancel/back state retention, save lock, and failure unlock. Include keyboard order, focus trap, focus return, accessible names, and 390x844 behavior.
 
 Never reuse saved accessibility node IDs after a reload or state transition. Re-read the current accessibility tree and select by accessible name.

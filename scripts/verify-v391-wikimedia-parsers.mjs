@@ -22,7 +22,7 @@ const stringClaim = (value) => ({ mainsnak: { datavalue: { value } } });
 
 const searchPayload = {
   search: [
-    { id: "Q100", label: "第一航廈", aliases: ["第一航站"], match: { type: "alias", language: "en", text: "Terminal 1" } },
+    { id: "Q100", label: "第一航廈", description: "  國際機場的\u3000客運航廈  ", aliases: ["第一航站"], match: { type: "alias", language: "en", text: "Terminal 1" } },
     { id: "Q200", label: "第一航廈", aliases: ["First Terminal"] },
     { id: "not-a-qid", label: "第一航廈" },
     { id: "Q100", label: "duplicate" },
@@ -30,6 +30,9 @@ const searchPayload = {
 };
 const searchEntities = parseWikidataSearchResponse(searchPayload);
 assert.deepEqual(searchEntities.map(({ qid }) => qid), ["Q100", "Q200"]);
+assert.equal(searchEntities[0].description, "國際機場的 客運航廈");
+assert.equal(searchEntities[1].description, undefined);
+assert.equal(parseWikidataSearchResponse({ search: [{ id: "Q300", label: "長描述", description: "a".repeat(300) }] })[0].description.length, 240);
 assert.deepEqual(
   resolveUniqueWikidataEntity("第一航站", searchEntities, new Map(), new Set()),
   { state: "resolved", entity: searchEntities[0] },

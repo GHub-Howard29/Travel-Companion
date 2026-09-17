@@ -25,6 +25,7 @@ Run from the repository root:
 npm run regression:local:status
 npm run regression:local:prepare
 npm run regression:local:browser-bootstrap
+npm run regression:local:browser-ambiguous-fixture
 npm run regression:local:verify
 npm run regression:local:full
 ```
@@ -32,6 +33,8 @@ npm run regression:local:full
 `prepare`, `verify`, and `full` refuse non-loopback Supabase URLs. They do not reset the database, contact Wikimedia, deploy, or use production data.
 
 Before interactive browser verification, run `browser-bootstrap` after local-test authorization. It refreshes only the fixed synthetic fixture, verifies Vite and the local Edge Function, and prints the localhost URL, local publishable configuration, and synthetic sign-in fields. If the exact synthetic administrator and Trip are already active, reuse that session. Otherwise use the browser's loaded Supabase JS client to call `signInWithPassword` against the reported loopback URL, then reload the App. Do not directly write, print, copy, or persist an access token outside Supabase's browser session handling.
+
+For ambiguous-entity layout and selection regression, use `browser-ambiguous-fixture`. It verifies a loopback-only synthetic Edge response and prints a development URL that enables three same-label choices: one short description, one wrapping description, and one missing description. The fixture returns before cache, quota, lock, usage, or Wikimedia code and is unavailable when `SUPABASE_URL` is not loopback. It is a UI/contract regression only and must never be reported as a real Wikimedia integration pass.
 
 If the local stack is absent and local testing is authorized, start only the missing services using tool-managed sessions:
 

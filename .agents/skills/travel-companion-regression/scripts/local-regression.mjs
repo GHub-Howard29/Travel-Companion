@@ -5,7 +5,7 @@ import process from "node:process";
 import { createClient } from "@supabase/supabase-js";
 
 const mode = process.argv[2] ?? "status";
-const supportedModes = new Set(["status", "prepare", "browser-bootstrap", "verify", "full"]);
+const supportedModes = new Set(["status", "prepare", "browser-bootstrap", "browser-ambiguous-fixture", "verify", "full"]);
 
 if (!supportedModes.has(mode)) {
   console.error(`不支援的模式：${mode}。可用模式：${[...supportedModes].join(", ")}`);
@@ -228,6 +228,43 @@ const browserBootstrapMode = async () => {
   }, null, 2));
 };
 
+const browserAmbiguousFixtureMode = async () => {
+  await browserBootstrapMode();
+  const { apiUrl, anonKey } = getLocalConfig();
+  const user = createClient(apiUrl, anonKey, { auth: { autoRefreshToken: false, persistSession: false } });
+  const { data: authData, error: authError } = await user.auth.signInWithPassword({
+    email: "v391-admin@example.invalid",
+    password: "V391-local-test!",
+  });
+  if (authError || !authData.session) throw new Error(`本機歧義 fixture 登入失敗：${authError?.message ?? "沒有 session"}`);
+  const response = await fetch(`${apiUrl}/functions/v1/travel-route`, {
+    method: "POST",
+    headers: {
+      apikey: anonKey,
+      Authorization: `Bearer ${authData.session.access_token}`,
+      "Content-Type": "application/json",
+      "x-travel-companion-regression-fixture": "commons-entity-ambiguous",
+    },
+    body: JSON.stringify({
+      action: "commonsPrecisionSearch",
+      tripId: "group-tour-2026-10",
+      query: "中山站",
+    }),
+    signal: AbortSignal.timeout(3_000),
+  });
+  const body = await response.json();
+  if (response.status !== 200 || body.state !== "entity-ambiguous" || body.entityChoices?.length !== 3) {
+    throw new Error(`本機歧義 fixture 不符預期：${response.status} ${JSON.stringify(body)}`);
+  }
+  console.log(JSON.stringify({
+    fixtureReady: true,
+    url: "http://127.0.0.1:5173/Travel-Companion/?tcRegressionFixture=commons-entity-ambiguous",
+    query: "中山站",
+    expectedChoices: 3,
+    scope: "loopback-only synthetic Edge response; no Wikimedia, cache, usage, Storage, or production access",
+  }, null, 2));
+};
+
 const verifyMode = async () => {
   const { apiUrl, anonKey, serviceKey } = getLocalConfig();
   const admin = createClient(apiUrl, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } });
@@ -276,6 +313,7 @@ const main = async () => {
   if (mode === "status") return statusMode();
   if (mode === "prepare") return prepareMode();
   if (mode === "browser-bootstrap") return browserBootstrapMode();
+  if (mode === "browser-ambiguous-fixture") return browserAmbiguousFixtureMode();
   if (mode === "verify") return verifyMode();
   await verifyMode();
   run("npm", ["run", "lint", "--", "--ignore-pattern", "supabase/.temp/start-secrets"]);

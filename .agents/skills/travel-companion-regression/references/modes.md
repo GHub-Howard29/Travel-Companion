@@ -9,6 +9,7 @@ Choose by changed risk, not by habit.
 | Verify | Migration grants, Auth, Trip loading, `travel-route`, or V3.9.1 photo integration changed | Covered by the current local-test request | `npm run regression:local:verify` |
 | Full | Release-candidate work or a broad cross-cutting change | Covered only when the user requested complete/full regression | `npm run regression:local:full` |
 | Browser | UI behavior, responsive layout, focus, keyboard, or copy changed | Covered when the user requested UI/browser regression; use the Codex in-app browser | See `browser-checklist.md` |
+| Browser ambiguous fixture | Same-label entity descriptions, QIDs, selection, or responsive choice layout changed | Covered by local browser-test authorization; loopback synthetic response only | `npm run regression:local:browser-ambiguous-fixture` |
 | External | A real Commons/Wikimedia response is necessary | Fresh single-use authorization every run; state query set, request cap, timeout, retry, and write policy first | No generic command; use the separately approved bounded spike |
 
 ## Automatic decision rules

@@ -111,6 +111,7 @@ export interface CommonsPrecisionResponse {
 export interface CommonsPrecisionResolvedEntity {
   qid: string;
   label: string;
+  description?: string;
 }
 
 export interface CommonsPrecisionPublicCandidate {

@@ -2,7 +2,7 @@
 
 > 本文件只保留尚未完成或仍需驗證的工作；版本順序與範圍以《02_產品開發路線圖》為準。
 >
-> 最後更新：2026-09-16
+> 最後更新：2026-09-17
 >
 > 已發布 App 版本：V3.9.0。
 
@@ -32,10 +32,10 @@ Google 路徑、真實照片 spike、現有架構、降級與成本模型已完�
 
 - [x] V3.9.0：已於 2026-09-13 正式發布；production Function version 9 為 ACTIVE，正式前端與發布後 smoke 均通過。
 - [x] V3.9.1 跨日複製四碼時間輸入修正：本機程式、純函式、TypeScript、lint 與完整 build 已完成；2026-09-16 以登入管理者在桌面／390×844 完成半形與全形四碼、IME 組字延後格式化、游標、刪除不自動補回、雙欄警告、焦點陷阱與 Escape 返回驗收，並實際通過單日 Day 2 與多日 Day 2／Day 3 複製；synthetic fixture 已還原。詳見《51》。
-- [ ] V3.9.1 第一優先：Commons 實體導向候選照片精準搜尋已完成第 14–20 階段本機實作，包含 fetch transport、核准 Issues User-Agent、Edge Function action、AES-GCM token、共享快取／配額／鎖／日彙總 migration、前端狀態與公開候選投影；已補入歷史手動 schema 的 baseline migration，並補齊乾淨重建時遺漏的 `service_role`／Data API grants。`supabase start` 可從空白本機資料庫完整套用至 V3.9.1，管理者登入、Trip 載入、照片設定入口與 Edge 輸入防線均已實機通過。RLS、service-role-only、配額／鎖／容量／retention、advisors、自動契約、TypeScript、lint 與 build 已通過。四次核准的 15 例真實矩陣共 234 次請求且零寫入；第四次確認高千穗峽與同檔去重通過，第一航廈依新核准的設施級安全停止契約通過精準矩陣閘門。登入管理者桌面／390×844 的候選確認、裁切、放大、焦點與唯一實體三次續頁亦已通過；只剩末頁無 token 與真實多實體需新的單次 Wikimedia 授權，正式部署與發布不得開始。詳見《50》與《52》。
+- [ ] V3.9.1 第一優先：Commons 實體導向候選照片精準搜尋已完成第 14–20 階段本機實作，包含 fetch transport、核准 Issues User-Agent、Edge Function action、AES-GCM token、共享快取／配額／鎖／日彙總 migration、前端狀態與公開候選投影；已補入歷史手動 schema 的 baseline migration，並補齊乾淨重建時遺漏的 `service_role`／Data API grants 及四張舊表 RLS／policy。`supabase start` 可從空白本機資料庫完整套用至 V3.9.1，管理者登入、Trip 載入、照片設定入口與 Edge 輸入防線均已實機通過。RLS 角色矩陣、service-role-only、配額／鎖／容量／retention、advisors、自動契約、TypeScript、lint 與 build 已通過。四次核准的 15 例真實矩陣共 234 次請求且零寫入；第四次確認高千穗峽與同檔去重通過，第一航廈依設施級安全停止契約通過精準矩陣閘門。登入管理者桌面／390×844 的候選確認、裁切、放大與焦點已通過；後續受限 spike 已取得高千穗峽無 token 的 `inspection-limit-reached` 終態及 `中山站` 7 個真實多實體選項。正式部署與發布不得開始。詳見《50》與《52》。
 - [x] V3.9.1 精準搜尋用量治理：2026-09-14 核准 `commons_precision_usage_daily` 無 UI、無個資／行程資料的專案日彙總、13 完整月加當月保留與 service-role-only 原子讀寫；只有程式開發者取得每次單次明確授權後，Codex 等開發 AI 才可完整唯讀彙總，無資料庫／secret／寫入／搜尋觸發權。Gemini 等外部 AI 不在本項範圍。不依 Wikimedia 公開分析資料推估本 App 用量；只有連續兩完整月低於上限 50% 且無 429／503，才可另案建議放寬，禁止自動調高。詳見《50》8 節。
 - [x] V3.9.1 精準篩選視覺辨識邊界：不導入 Gemini／其他影像 AI、不傳送 Commons 圖片；本版只依可稽核中介資料排序並人工核可，不能宣稱自動辨識主體或品質。影像辨識待文字 AI 與 Commons 實測數據後另案討論。詳見《50》3.1.1 節。
-- [x] V3.9.1 精準搜尋驗證閘門：15 例矩陣已完成四次真實執行（46／64／61／63 次）。第四次確認 CDN 正規化、同檔跨證據層去重與高千穗峽均通過；桃園第一航廈 `entity-not-found` 已依核准的設施級安全停止契約驗收通過。範圍 UI 與主要管理者互動已通過；末頁／真實多實體補驗、正式部署與發布仍為獨立未完成閘門。詳見《50》6.1 節與《52》。
+- [x] V3.9.1 精準搜尋驗證閘門：15 例矩陣已完成四次真實執行（46／64／61／63 次）。第四次確認 CDN 正規化、同檔跨證據層去重與高千穗峽均通過；桃園第一航廈 `entity-not-found` 已依核准的設施級安全停止契約驗收通過。範圍 UI、主要管理者互動、高千穗峽無 token 的 `inspection-limit-reached` 終態及 `中山站` 7 個真實多實體選項均已通過；2026-09-17 已完成「名稱＋Wikidata 描述＋QID」歧義判讀介面、離線契約與 loopback-only 選定範圍 fixture。Product Owner 確認既有真實矩陣及補驗已足以作為代表性抽查，不要求逐地名測試；真實 selected-QID 僅為可選 smoke，不再阻擋停止線。詳見《50》6.1 節與《52》。
 - [x] V3.9.1 子方案 A：2026-09-15 已定案停用自動中文轉英文／自動多語擴充，避免與人工採用的單語言 Gemini 候選詞規則衝突。B 只接受原始輸入或已採用的一個 AI 候選詞；改語言須明確採用或手動換詞。
 - [x] V3.9.1 子方案 B：Commons／Pexels／Pixabay 來源切換；2026-09-14 Product Owner 已核准《49_V3.9.1_Commons_Pexels_Pixabay來源切換決策規格》八項來源策略與技術邊界，並原則同意後續申請 Pexels／Pixabay 驗證用 key。每次申請或提高額度前須先說明官方費用／額度、Supabase 間接成本、條款、隱私與安全風險；帳號、條款、CAPTCHA、信箱驗證、個人／付款資料一律由 Product Owner 手動完成。2026-09-15 已核准桌面／390×844 主要選圖流程、狀態文案與完整無障礙；真實矩陣與實作屬後續開發閘門。
 - [x] V3.9.1 子方案 B 免費額度限制：2026-09-14 Product Owner 已核准《49》6.3 節的 Pexels／Pixabay 單次 session、Trip／管理者日上限、來源速率、月內配速、圖片下載及快取限制；Pexels 以官方額度保留 20% 的內部硬停，Pixabay 10,000/month 為專案自訂保護預算。下一步進入文字式 UI 行為討論，仍不得製作 UI 或模擬圖。
@@ -55,19 +55,23 @@ Google 路徑、真實照片 spike、現有架構、降級與成本模型已完�
 - [x] V3.9.1 封面手動焦點裁切與放大檢視：2026-09-15 核准維持 76×76 正方形、確認候選後以固定 1:1 框手動平移／縮放、確認呈現區域才儲存；不採自動智慧裁切，橫直方向不影響候選排序。桌面拖曳／滑桿／加減、手機雙指／拖曳且保留加減、鍵盤方向鍵／縮放控制與讀屏名稱皆已定案；裁切座標不保存，下載 1280px 衍生縮圖後輸出 640×640 WebP（120 KiB）。候選與已保存封面可放大檢視，右下以非燒錄來源／作者／授權資訊浮層及外連呈現，只用既有 640px 資源、不下載原圖。
 - [ ] 後續版本評估：允許使用者把候選照片標為「不適合」，在手動「換一批」時僅作同一來源／查詢範圍的減分排序參考。須另案決定資料最小化、保存期、取消標記、跨裝置／Trip 範圍、是否可影響其他使用者與防濫用；V3.9.1 不記錄、不保存也不使用此類負評。
 - [x] V3.9.1 子方案 C：2026-09-15 已定案為本版停用。不得增加 Google Place Details 呼叫、以 `placeId` 取得搜尋脈絡，或把 Google Places 衍生內容傳給 Commons／Pexels／Pixabay／AI；原因為 Place Details SKU 成本及再利用條款適用性未取得明確依據。保留為後續研究，須另行確認條款、SKU、成本、attribution、保存與安全邊界後才可重啟。
-- [ ] V3.9.1 Commons 搜尋提示修正：三種分頁狀態、換詞／重開重置、末頁隱藏換批與離線停用已完成本機實作及自動契約驗證；2026-09-16 首輪單次授權已在 Codex 瀏覽器順序完成 `高千穂峡`（200、5 候選、`results`、Q2027215）、`桃園國際機場第一航廈`（200、`entity-not-found` 安全停止）與 `桃園國際機場`（200、`project-quota-reached`）三組查詢，當時本機彙總為 4 次搜尋／21 次上游請求。第二輪核准的 4 個 session 已用 `高千穂峡` 完成首批及三次續頁，依序顯示 4／4／1／1 張新候選、無可見重複，當前分鐘窗口共使用 16 次上游請求，未超過 36 次上限。第四個 session 後仍有續頁 token，故依授權上限停止；末頁與真實多實體選擇仍需新的單次授權。
-- [ ] V3.9.1 地點／照片介面：候選 `placeId` Maps 地點頁、核准文案、選圖只預填 `location` 且不自動搜尋，以及前後端每批 6 張已完成本機實作；Edge Function 直接整合回應、候選 UI、唯一實體首批與三次續頁均已完成驗收，仍待真實多實體選擇及無 token 末頁流程。
+- [x] V3.9.1 Commons 搜尋提示修正：三種分頁狀態、換詞／重開重置、末頁隱藏換批與離線停用已完成本機實作及自動契約驗證；2026-09-16 首輪單次授權已在 Codex 瀏覽器順序完成 `高千穂峡`（200、5 候選、`results`、Q2027215）、`桃園國際機場第一航廈`（200、`entity-not-found` 安全停止）與 `桃園國際機場`（200、`project-quota-reached`）三組查詢。後續受限 spike 以 6 個 session 完成：`高千穂峡` 依序為 6／4／1／1 張及 `inspection-limit-reached`／0，終態無 token；`中山站` 回傳 `entity-ambiguous` 與 7 個實體選項。完全順序、無重試，每個上游請求 3 秒、整體作業 20 秒上限；本機當日帳本在完成後累計 22 次精準搜尋／113 次上游請求，但無法由日彙總反推出本輪單獨次數。
+- [x] V3.9.1 地點／照片介面：候選 `placeId` Maps 地點頁、核准文案、選圖只預填 `location` 且不自動搜尋，以及前後端每批 6 張已完成本機實作；Edge Function 直接整合回應、候選 UI、唯一實體續頁終態與真實多實體選項均已完成驗收。同名多實體選項已改為全寬列，顯示名稱、Wikidata 描述及 QID；真實回應類別已抽查，選定行為以本機 Edge fixture 通過，不再要求逐地名外部測試。
 - [ ] V3.9.1 來源選擇、候選確認、手動裁切與放大檢視：Commons 可用且 Pexels／Pixabay 保持可見停用、選取與放大控制分離、確認頁 1:1 平移／縮放、1280px 單張下載安全檢查、640×640 WebP、固定變更聲明、焦點陷阱與舊資料相容已完成本機實作及自動契約驗證；2026-09-16 已通過登入管理者桌面與 390×844 手機的照片來源、預填、候選選取、確認／裁切與 110% 放大控制，桌面本機 WebP 儲存亦通過。回歸發現並修正搜尋完成與進入裁切頁時焦點逃出對話框，正反向焦點循環、Escape 關閉及焦點返回已於兩種 viewport 通過；更多候選終態仍待補驗。
-- [ ] V3.9.1 後續實作閘門：需 Wikimedia 上游的無 token 末頁／真實多實體 UI 互動、正式 secrets／migration、正式 Edge Function 部署、完整 smoke、版本 metadata、tag 與發布仍須依《48》至《52》的個別核准及驗收條件處理。
+- [ ] V3.9.1 正式環境／發布閘門：本機開發停止線已達；後續只在個別核准後執行正式 secrets／migration、Edge Function 部署、production-safe smoke、版本 metadata、tag 與發布。真實 selected-QID 只保留為有新風險或上游契約疑慮時的可選單次 smoke，不是正式環境前置條件。
 - [x] 2026-09-16 本機初始化與整合基線修正：新增歷史前置結構 baseline migration 及乾淨重建所需的 `service_role`／Data API grants；空白資料庫重建、管理者登入、Trip 載入、Edge Function 授權與無效 `selectedEntityQid` 400 修正訊息均通過。此項未呼叫 Wikimedia，也不代表正式 migration、secrets、部署或發布已核准。
+- [x] 2026-09-16 舊表 RLS 補正：新增 forward-only migration，為 `checklists`、`checklist_items`、`other_info_items`、`exchange_purchases` 恢復 RLS、四種操作 policy、最小 Data API grants 及缺少的 private checklist helper；本機 migration、Guest／一般使用者／Trip Editor 角色矩陣與 security advisors 均通過，synthetic 帳號與測試列已清除。
 - [x] 2026-09-16 本機瀏覽器回歸 bootstrap：`travel-companion-regression` Skill 新增 `regression:local:browser-bootstrap`，可自動刷新 synthetic 管理者與 Trip、驗證 Vite／Edge，並輸出 loopback Supabase 登入資訊。Codex 內建瀏覽器已以 Supabase client `signInWithPassword` 成功建立 session，不再手動寫入或顯示 access token；既有 session 不會因每次 bootstrap 無條件重設密碼而失效。
+- [x] 2026-09-17 同名實體本機回歸 fixture：Skill 新增 `regression:local:browser-ambiguous-fixture`，以 loopback-only synthetic Edge 回應固定驗證短描述、換行描述、無描述與 QID；回應在快取、配額、鎖、用量及 Wikimedia 流程前返回，非本機 Supabase 不可啟用。Codex 內建瀏覽器已通過三選項、讀屏名稱、選定範圍與 371×698 窄視窗零水平溢位，不能冒充真實 Wikimedia 整合結果。
+- [x] 2026-09-17 正式環境唯讀 preflight：遠端尚缺 `20260710100000`、`20260915105815`、`20260916050414`、`20260916153228` migration history；正式 secrets 尚缺 `WIKIMEDIA_CONTACT_URL` 與 `COMMONS_PRECISION_TOKEN_SECRET`，`travel-route` 維持 version 9／ACTIVE／`verify_jwt=false`。`20260710100000` 是本機乾淨重建 baseline，正式環境已有其物件且 helper 已經後續 hardening 為 `SECURITY INVOKER`，不得以 `--include-all` 重新執行；下一個 production 寫入閘門應先只將該版本標記 applied，再以普通 dry-run 確認並套用其餘三個 migration。
 
 ### V3.9.1 停止線前工作順序
 
-1. 取得新的單次 Wikimedia 上游請求授權後，因續頁 token 為不保存且有時效的當次 session 資料，需以固定 `高千穂峡` 從首批重開受限測試並續頁至無 token 終態，再用固定 `中山站` 查詢驗證真實多實體選擇；不重複已通過的候選確認、裁切、放大與焦點回歸。
-2. 延續目前已通過的乾淨重建、管理者授權與本機輸入防線，補驗實際上游回應串接的 `entity-ambiguous`、續頁 token、快取／配額／鎖與終態。
-3. 取得個別核准後，才執行正式 migration／secrets／Edge Function 部署與 production-safe smoke；不得以本機成功替代正式驗收。
-4. 完成 metadata、release build、tag、部署與發布後 smoke，才可跨過 V3.9.1 發布前停止線。
+1. [x] 固定 `高千穂峡` 已從首批續頁至無 token 的 `inspection-limit-reached` 終態；固定 `中山站` 已取得 7 個真實 `entity-ambiguous` 選項。
+2. [x] 2026-09-17 Product Owner 確認既有四輪矩陣與真實多實體補驗已足以作為代表性抽查；selected-QID 真實查詢降為按新風險執行的可選單次 smoke，不要求逐地名測試，也不阻擋停止線。
+3. [x] 乾淨重建、管理者授權、Edge action、續頁 token、快取／配額／鎖、舊表 RLS 與角色矩陣均已完成本機驗證。
+4. 取得個別核准後，才執行正式 migration／secrets／Edge Function 部署與 production-safe smoke；不得以本機成功替代正式驗收。
+5. 完成 metadata、release build、tag、部署與發布後 smoke，才可跨過 V3.9.1 發布前停止線。
 - [ ] V3.10.0：重新確認使用紀錄的必要性與最小資料範圍；原 App 查詢介面、逐次明細、Cron、獨立角色與 TOTP 預覽均標記為先前草案、尚未定案。
 - [ ] 後續版本評估：Google Maps「任意地圖落針」座標作為行程交通估算點。V3.9.1 維持確認地點後只保存 `placeId`、交由既有路線估算，因官方建議 `placeId` 通常較精準；本項若重啟，須獨立確認座標資料契約、手動落針 UI、隱私／保存期限、Routes 成本與 Google 條款。不得傳送座標給 Commons／Pexels／Pixabay／AI，也不得藉此重啟 V3.9.1 子方案 C。
 

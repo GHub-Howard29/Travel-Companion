@@ -54,12 +54,12 @@ assert.equal(publicCandidate.matchEvidence.some(({ kind }) => kind === "p18"), t
 const projected = projectCommonsPrecisionResponse({
   state: "results",
   candidates: [evaluation.candidate],
-  resolvedEntity: { qid: "Q100", label: "Terminal One" },
+  resolvedEntity: { qid: "Q100", label: "Terminal One", description: "airport terminal" },
   nextPageToken: "cp1.abcdefghijklmnop",
 });
 assert.equal(projected.contractVersion, "commons-precision-v1");
 assert.equal(projected.nextPageToken, "cp1.abcdefghijklmnop");
-assert.deepEqual(projected.resolvedEntity, { qid: "Q100", label: "Terminal One" });
+assert.deepEqual(projected.resolvedEntity, { qid: "Q100", label: "Terminal One", description: "airport terminal" });
 assert.equal("targetQid" in projected.candidates[0], false);
 assert.deepEqual(projectCommonsPrecisionResponse({ state: "no-suitable-image", candidates: [] }), {
   contractVersion: "commons-precision-v1",
@@ -83,12 +83,12 @@ assert.throws(() => projectCommonsPrecisionResponse({
 assert.deepEqual(projectCommonsPrecisionResponse({
   state: "entity-ambiguous",
   candidates: [],
-  entityChoices: [{ qid: "Q101", label: "Terminal One (airport)" }],
+  entityChoices: [{ qid: "Q101", label: "Terminal One (airport)", description: "airport terminal" }],
 }), {
   contractVersion: "commons-precision-v1",
   state: "entity-ambiguous",
   candidates: [],
-  entityChoices: [{ qid: "Q101", label: "Terminal One (airport)" }],
+  entityChoices: [{ qid: "Q101", label: "Terminal One (airport)", description: "airport terminal" }],
 });
 
 const projectRoot = resolve(import.meta.dirname, "..");

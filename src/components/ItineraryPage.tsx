@@ -80,6 +80,7 @@ import {
   getPlaceCandidatePhotos,
   searchCommonsPhotoCandidates,
   type CommonsPhotoCandidate,
+  type CommonsResolvedEntity,
   type PlaceCandidate,
   type PlaceCandidatePhoto,
 } from "../services/travelRouteService";
@@ -202,8 +203,8 @@ export const ItineraryPage = ({
   const [autoRouteError, setAutoRouteError] = useState<string | null>(null);
   const [coverTargetIndex, setCoverTargetIndex] = useState<number | null>(null);
   const [commonsQuery, setCommonsQuery] = useState("");
-  const [commonsResolvedEntity, setCommonsResolvedEntity] = useState<{ qid: string; label: string } | null>(null);
-  const [commonsEntityChoices, setCommonsEntityChoices] = useState<Array<{ qid: string; label: string }>>([]);
+  const [commonsResolvedEntity, setCommonsResolvedEntity] = useState<CommonsResolvedEntity | null>(null);
+  const [commonsEntityChoices, setCommonsEntityChoices] = useState<CommonsResolvedEntity[]>([]);
   const [commonsCandidates, setCommonsCandidates] = useState<CommonsPhotoCandidate[]>([]);
   const [commonsNextPageToken, setCommonsNextPageToken] = useState<string | null>(null);
   const [commonsSeenFileTitles, setCommonsSeenFileTitles] = useState<Set<string>>(new Set());
@@ -2046,12 +2047,13 @@ export const ItineraryPage = ({
                   <section className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3" aria-labelledby="commons-entity-choice-title" aria-live="polite">
                     <h4 id="commons-entity-choice-title" className="text-sm font-bold text-amber-900">請選擇要搜尋的地點範圍</h4>
                     <p className="mt-1 text-xs text-amber-800">選擇前不會搜尋照片；若都不正確，請修改關鍵字。</p>
-                    <div className="mt-2 flex flex-wrap gap-2">
+                    <div className="mt-2 grid gap-2">
                       {commonsEntityChoices.map((entity) => (
                         <button
                           key={entity.qid}
                           type="button"
                           disabled={isCommonsSearching}
+                          aria-label={`選擇地點範圍：${entity.label}${entity.description ? `，${entity.description}` : ""}，${entity.qid}`}
                           onClick={() => {
                             setCommonsCandidates([]);
                             setCommonsNextPageToken(null);
@@ -2060,9 +2062,13 @@ export const ItineraryPage = ({
                             setCommonsPageStatus(null);
                             void searchCommonsPhotos(commonsQuery, undefined, new Set(), entity.qid);
                           }}
-                          className="rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm font-bold text-amber-900 hover:bg-amber-100 disabled:opacity-50"
+                          className="w-full min-w-0 rounded-lg border border-amber-300 bg-white px-3 py-2 text-left text-sm text-amber-900 hover:bg-amber-100 disabled:opacity-50"
                         >
-                          {entity.label}
+                          <span className="block break-words font-bold">{entity.label}</span>
+                          {entity.description && (
+                            <span className="mt-1 block break-words text-xs font-normal leading-relaxed text-amber-800">{entity.description}</span>
+                          )}
+                          <span className="mt-1 block font-mono text-[11px] font-normal text-amber-700">{entity.qid}</span>
                         </button>
                       ))}
                     </div>

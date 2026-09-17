@@ -55,7 +55,7 @@ const ambiguousRequest = async (plan) => {
   if (url.searchParams.get("action") === "wbsearchentities") return {
     state: "ok",
     payload: { search: [
-      { id: "Q200", label: "桃園機場", aliases: [] },
+      { id: "Q200", label: "桃園機場", description: "臺灣的國際機場", aliases: [] },
       { id: "Q201", label: "桃園機場", aliases: [] },
     ] },
   };
@@ -72,11 +72,11 @@ const ambiguousRequest = async (plan) => {
 const ambiguous = await runCommonsPrecisionEngine({ query: "桃園機場", language: "zh-Hant" }, { request: ambiguousRequest, now: () => 1_000 });
 assert.equal(ambiguous.response.state, "entity-ambiguous");
 assert.deepEqual(ambiguous.response.entityChoices, [
-  { qid: "Q200", label: "桃園機場" },
+  { qid: "Q200", label: "桃園機場", description: "臺灣的國際機場" },
   { qid: "Q201", label: "桃園機場" },
 ]);
 assert.equal(ambiguous.requestCount, 2);
 const selected = await runCommonsPrecisionEngine({ query: "桃園機場", language: "zh-Hant", selectedEntityQid: "Q200" }, { request: ambiguousRequest, now: () => 1_000 });
 assert.equal(selected.qid, "Q200");
-assert.deepEqual(selected.response.resolvedEntity, { qid: "Q200", label: "桃園機場" });
+assert.deepEqual(selected.response.resolvedEntity, { qid: "Q200", label: "桃園機場", description: "臺灣的國際機場" });
 console.log("V3.9.1 Commons 精準搜尋整體協調引擎契約驗證通過。");

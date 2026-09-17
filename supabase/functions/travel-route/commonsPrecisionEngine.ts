@@ -151,7 +151,9 @@ export const runCommonsPrecisionEngine = async (
         new Map([[entity.qid, evidenceByQid.get(entity.qid)?.instanceOfQids ?? []]]),
         COMMONS_PRECISION_EXCLUDED_INSTANCE_OF_QIDS,
       );
-      return candidateResolution.state === "resolved" ? [{ qid: entity.qid, label: entity.label }] : [];
+      return candidateResolution.state === "resolved"
+        ? [{ qid: entity.qid, label: entity.label, ...(entity.description ? { description: entity.description } : {}) }]
+        : [];
     });
   }
   const resolution = input.selectedEntityQid && initialResolution.state === "entity-ambiguous"
@@ -163,7 +165,11 @@ export const runCommonsPrecisionEngine = async (
     )
     : initialResolution;
   if (resolution.state !== "resolved") return finish(resolution.state);
-  responseContext.resolvedEntity = { qid: resolution.entity.qid, label: resolution.entity.label };
+  responseContext.resolvedEntity = {
+    qid: resolution.entity.qid,
+    label: resolution.entity.label,
+    ...(resolution.entity.description ? { description: resolution.entity.description } : {}),
+  };
   const entityEvidence = evidenceByQid.get(resolution.entity.qid);
   if (!entityEvidence) return finish("entity-not-found");
   engineContext.entityEvidence = entityEvidence;

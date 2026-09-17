@@ -37,6 +37,11 @@ import {
   sealCommonsPrecisionNextPageToken,
 } from "./commonsPrecisionSession.ts";
 import type { WikidataEntityEvidence } from "./commonsPrecisionWikimedia.ts";
+import {
+  COMMONS_PRECISION_REGRESSION_FIXTURE_HEADER,
+  getCommonsPrecisionRegressionFixture,
+  isLoopbackSupabaseRuntime,
+} from "./commonsPrecisionRegressionFixture.ts";
 
 const GOOGLE_PLACES_AUTOCOMPLETE_URL =
   "https://places.googleapis.com/v1/places:autocomplete";
@@ -52,7 +57,7 @@ const MAX_COMMONS_CANDIDATES = 6;
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
-    "authorization, apikey, content-type, x-client-info, x-travel-companion-client-id",
+    "authorization, apikey, content-type, x-client-info, x-travel-companion-client-id, x-travel-companion-regression-fixture",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
@@ -438,6 +443,13 @@ Deno.serve(async (request) => {
       if (body.selectedEntityQid !== undefined && !selectedEntityQid) {
         return json({ error: "地點範圍已失效，請重新搜尋後選擇。", state: "entity-ambiguous" }, 400);
       }
+      const regressionFixture = isLoopbackSupabaseRuntime(Deno.env.get("SUPABASE_URL") ?? "")
+        ? getCommonsPrecisionRegressionFixture(
+          request.headers.get(COMMONS_PRECISION_REGRESSION_FIXTURE_HEADER),
+          selectedEntityQid,
+        )
+        : null;
+      if (regressionFixture) return json(regressionFixture);
       const queryHash = await sha256(query);
       const scopedQueryHash = await sha256(`${queryHash}:${selectedEntityQid ?? ""}`);
       const adoptedQueryHash = await hashAdoptedCommonsQuery(query);

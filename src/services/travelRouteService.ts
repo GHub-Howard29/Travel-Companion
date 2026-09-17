@@ -9,6 +9,9 @@ interface FunctionErrorBody {
   error?: string;
 }
 
+const COMMONS_PRECISION_REGRESSION_FIXTURE_HEADER = "x-travel-companion-regression-fixture";
+const COMMONS_PRECISION_AMBIGUOUS_FIXTURE = "commons-entity-ambiguous";
+
 export interface PlaceCandidate {
   placeId: string;
   displayName: string;
@@ -50,9 +53,15 @@ export interface CommonsPhotoSearchResult {
   contractVersion: "commons-precision-v1";
   state: "results" | "no-suitable-image" | "entity-not-found" | "entity-ambiguous" | "inspection-limit-reached" | "project-quota-reached" | "in-progress" | "offline" | "rate-limited" | "timeout" | "upstream-error" | "session-expired";
   candidates: CommonsPhotoCandidate[];
-  resolvedEntity?: { qid: string; label: string };
-  entityChoices?: Array<{ qid: string; label: string }>;
+  resolvedEntity?: CommonsResolvedEntity;
+  entityChoices?: CommonsResolvedEntity[];
   nextPageToken?: string;
+}
+
+export interface CommonsResolvedEntity {
+  qid: string;
+  label: string;
+  description?: string;
 }
 
 export interface RouteEstimateResult {
@@ -67,9 +76,11 @@ export interface RouteEstimateResult {
 const invokeTravelRoute = async <T>(
   supabase: SupabaseClient,
   body: Record<string, unknown>,
+  headers?: Record<string, string>,
 ): Promise<T> => {
   const { data, error } = await supabase.functions.invoke("travel-route", {
     body,
+    ...(headers ? { headers } : {}),
   });
 
   if (error) {
@@ -119,11 +130,18 @@ export const searchCommonsPhotoCandidates = async (
   query: string,
   nextPageToken?: string,
   selectedEntityQid?: string,
-): Promise<CommonsPhotoSearchResult> =>
-  invokeTravelRoute<CommonsPhotoSearchResult>(
+): Promise<CommonsPhotoSearchResult> => {
+  const fixture = import.meta.env.DEV && typeof window !== "undefined"
+    ? new URLSearchParams(window.location.search).get("tcRegressionFixture")
+    : null;
+  return invokeTravelRoute<CommonsPhotoSearchResult>(
     supabase,
     { action: "commonsPrecisionSearch", tripId, query, ...(nextPageToken ? { nextPageToken } : {}), ...(selectedEntityQid ? { selectedEntityQid } : {}) },
+    fixture === COMMONS_PRECISION_AMBIGUOUS_FIXTURE
+      ? { [COMMONS_PRECISION_REGRESSION_FIXTURE_HEADER]: fixture }
+      : undefined,
   );
+};
 
 export const getConfirmedPlace = (
   candidate: PlaceCandidate,
