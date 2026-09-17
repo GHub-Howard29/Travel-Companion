@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   DndContext,
@@ -20,6 +20,7 @@ import {
   Check,
   Copy,
   ExternalLink,
+  Eye,
   Image as ImageIcon,
   Loader2,
   MapPin,
@@ -30,10 +31,15 @@ import {
 } from "lucide-react";
 
 import type { ItineraryItem, SavedTravelEstimate, TravelMode, TripDetail } from "../types";
-import { handlePlaceBrowse, handleRouteBrowse } from "../utils/navigationUtils";
+import {
+  getGoogleMapsPlaceUrl,
+  handlePlaceBrowse,
+  handleRouteBrowse,
+} from "../utils/navigationUtils";
 import { focusAndRevealControl, releaseFocusedControl } from "../utils/viewportUtils";
 import { trimRichText } from "../utils/richText";
 import {
+  formatCompleteNumericTimeInput,
   isDepartureBeforeArrival,
   sortItineraryItemsByTime,
   validateItineraryTime,
@@ -74,6 +80,7 @@ import {
   getPlaceCandidatePhotos,
   searchCommonsPhotoCandidates,
   type CommonsPhotoCandidate,
+  type CommonsResolvedEntity,
   type PlaceCandidate,
   type PlaceCandidatePhoto,
 } from "../services/travelRouteService";
@@ -86,8 +93,18 @@ import { RichTextColorEditor } from "./RichTextColorEditor";
 import { RichTextDisplay } from "./RichTextDisplay";
 import { MaterialTravelModeIcon } from "./MaterialTravelModeIcon";
 import { SortableCard } from "./SortableCard";
+import { CoverPhotoCropEditor } from "./CoverPhotoCropEditor";
+import { CoverPhotoViewer, type CoverPhotoViewerData } from "./CoverPhotoViewer";
+import {
+  DEFAULT_ITINERARY_COVER_CROP,
+  getWikimediaDerivativeSize,
+  type ItineraryCoverCropTransform,
+} from "../utils/itineraryCoverCrop";
 
-const COMMONS_CANDIDATE_PAGE_SIZE = 8;
+
+type CommonsPageStatus = "empty-first-page" | "duplicate-page" | "exhausted" | "entity-not-found" |
+  "entity-ambiguous" | "inspection-limit-reached" | "project-quota-reached" | "rate-limited" |
+  "timeout" | "upstream-error" | "session-expired" | "in-progress";
 
 interface ItineraryPageProps {
   supabase: SupabaseClient;
@@ -140,6 +157,7 @@ export const ItineraryPage = ({
   const [copyTargetDays, setCopyTargetDays] = useState<number[]>([]);
   const [copyArrivalTime, setCopyArrivalTime] = useState("");
   const [copyDepartureTime, setCopyDepartureTime] = useState("");
+  const [copyTimeAlertErrors, setCopyTimeAlertErrors] = useState<string[] | null>(null);
   const [isCopySaving, setIsCopySaving] = useState(false);
   const [copySaveError, setCopySaveError] = useState<string | null>(null);
   const [copySuccess, setCopySuccess] = useState<string | null>(null);
@@ -185,15 +203,26 @@ export const ItineraryPage = ({
   const [autoRouteError, setAutoRouteError] = useState<string | null>(null);
   const [coverTargetIndex, setCoverTargetIndex] = useState<number | null>(null);
   const [commonsQuery, setCommonsQuery] = useState("");
+  const [commonsResolvedEntity, setCommonsResolvedEntity] = useState<CommonsResolvedEntity | null>(null);
+  const [commonsEntityChoices, setCommonsEntityChoices] = useState<CommonsResolvedEntity[]>([]);
   const [commonsCandidates, setCommonsCandidates] = useState<CommonsPhotoCandidate[]>([]);
-  const [commonsNextOffset, setCommonsNextOffset] = useState<number | null>(null);
+  const [commonsNextPageToken, setCommonsNextPageToken] = useState<string | null>(null);
   const [commonsSeenFileTitles, setCommonsSeenFileTitles] = useState<Set<string>>(new Set());
   const [selectedCommonsPhoto, setSelectedCommonsPhoto] = useState<CommonsPhotoCandidate | null>(null);
+  const [coverDialogStep, setCoverDialogStep] = useState<"search" | "confirm">("search");
+  const [coverCrop, setCoverCrop] = useState<ItineraryCoverCropTransform>(DEFAULT_ITINERARY_COVER_CROP);
+  const [photoViewer, setPhotoViewer] = useState<CoverPhotoViewerData | null>(null);
   const [isCommonsSearching, setIsCommonsSearching] = useState(false);
   const [isCoverSaving, setIsCoverSaving] = useState(false);
   const [coverPhotoError, setCoverPhotoError] = useState<string | null>(null);
+  const [commonsPageStatus, setCommonsPageStatus] = useState<CommonsPageStatus | null>(null);
   const [failedCoverPaths, setFailedCoverPaths] = useState<Set<string>>(() => new Set());
   const editingCardRef = useRef<HTMLElement | null>(null);
+  const coverDialogRef = useRef<HTMLElement | null>(null);
+  const coverDialogOpenerRef = useRef<HTMLElement | null>(null);
+  const photoViewerOpenerRef = useRef<HTMLElement | null>(null);
+  const copyTimeAlertButtonRef = useRef<HTMLButtonElement | null>(null);
+  const copyTimeCompositionRef = useRef(false);
   const orderSensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
@@ -223,9 +252,29 @@ export const ItineraryPage = ({
     };
   }, [editingIndex]);
 
+  useEffect(() => {
+    if (coverTargetIndex === null) return;
+
+    const frameId = requestAnimationFrame(() => {
+      const dialog = coverDialogRef.current;
+      if (!dialog || dialog.contains(document.activeElement)) return;
+      dialog.querySelector<HTMLElement>(
+        "a[href], input:not([disabled]), button:not([disabled]), [tabindex]:not([tabindex='-1'])",
+      )?.focus();
+    });
+
+    return () => cancelAnimationFrame(frameId);
+  }, [coverDialogStep, coverTargetIndex, isCommonsSearching]);
+
   const currentDayEvents = trip.content.daysData[String(activeDay)] || [];
   const displayedDayEvents = (isOrderMode ? orderDraft : currentDayEvents)
     .map((event, originalIndex) => ({ event, originalIndex }));
+  const selectedCommonsDerivativeSize = selectedCommonsPhoto
+    ? getWikimediaDerivativeSize(selectedCommonsPhoto.width, selectedCommonsPhoto.height)
+    : null;
+  const canSaveSelectedCrop = Boolean(
+    selectedCommonsDerivativeSize && Math.min(selectedCommonsDerivativeSize.width, selectedCommonsDerivativeSize.height) >= 640,
+  );
 
   const resetForm = () => {
     releaseFocusedControl();
@@ -263,6 +312,7 @@ export const ItineraryPage = ({
     setCopyTargetDays([]);
     setCopyArrivalTime("");
     setCopyDepartureTime("");
+    setCopyTimeAlertErrors(null);
     setCopySaveError(null);
   };
 
@@ -416,6 +466,7 @@ export const ItineraryPage = ({
     setCopyTargetDays([]);
     setCopyArrivalTime("");
     setCopyDepartureTime("");
+    setCopyTimeAlertErrors(null);
     setCopySaveError(null);
     setCopySuccess(null);
   };
@@ -436,11 +487,16 @@ export const ItineraryPage = ({
     error?: RequiredItineraryTimeError,
   ) => {
     if (error === "required") {
-      return field === "arrival" ? "請輸入抵達時間" : "請輸入離開時間";
+      return `請輸入${field === "arrival" ? "抵達" : "離開"}時間；可輸入 1400 或 14:00。`;
     }
-    if (error === "before-arrival") return "離開時間不得早於抵達時間";
-    if (error === "invalid") {
-      return `${field === "arrival" ? "抵達" : "離開"}時間格式有誤。請輸入 HH:MM，例如 08:00`;
+    if (error === "before-arrival") {
+      return "離開時間需等於或晚於抵達時間；跨午夜請分開建立行程。";
+    }
+    if (error === "invalid-range") {
+      return `${field === "arrival" ? "抵達" : "離開"}時間需介於 00:00 至 23:59；例如 1400 或 14:00。`;
+    }
+    if (error === "invalid-format") {
+      return `${field === "arrival" ? "抵達" : "離開"}時間請輸入四碼，例如 0930，或使用 H:MM／HH:MM，例如 9:30 或 09:30。`;
     }
     return undefined;
   };
@@ -454,16 +510,52 @@ export const ItineraryPage = ({
     copyTimeValidation.departureError,
   );
 
+  const updateCopyTime = (
+    field: "arrival" | "departure",
+    value: string,
+    input: HTMLInputElement,
+  ) => {
+    const previousValue = field === "arrival" ? copyArrivalTime : copyDepartureTime;
+    const removedFormattedColon = /^\d{2}:\d{2}$/.test(previousValue) &&
+      value === previousValue.replace(":", "");
+    const nextValue = copyTimeCompositionRef.current || removedFormattedColon
+      ? value
+      : formatCompleteNumericTimeInput(value);
+    if (field === "arrival") setCopyArrivalTime(nextValue);
+    else setCopyDepartureTime(nextValue);
+    if (nextValue !== value) {
+      requestAnimationFrame(() => input.setSelectionRange(nextValue.length, nextValue.length));
+    }
+  };
+
+  const finishCopyTimeComposition = (
+    field: "arrival" | "departure",
+    input: HTMLInputElement,
+  ) => {
+    copyTimeCompositionRef.current = false;
+    const nextValue = formatCompleteNumericTimeInput(input.value);
+    if (field === "arrival") setCopyArrivalTime(nextValue);
+    else setCopyDepartureTime(nextValue);
+    if (nextValue !== input.value) {
+      requestAnimationFrame(() => input.setSelectionRange(nextValue.length, nextValue.length));
+    }
+  };
+
+  const closeCopyTimeAlert = () => {
+    const focusTarget = copyTimeValidation.arrivalError
+      ? "copy-arrival-time-input"
+      : "copy-departure-time-input";
+    setCopyTimeAlertErrors(null);
+    requestAnimationFrame(() => focusAndRevealControl(focusTarget));
+  };
+
   const saveCopies = async () => {
     if (!copySource || isCopySaving) return;
     if (!copyTimeValidation.isValid) {
-      requestAnimationFrame(() => {
-        focusAndRevealControl(
-          copyTimeValidation.arrivalError
-            ? "copy-arrival-time-input"
-            : "copy-departure-time-input",
-        );
-      });
+      setCopyTimeAlertErrors(
+        [copyArrivalError, copyDepartureError].filter((message): message is string => Boolean(message)),
+      );
+      requestAnimationFrame(() => copyTimeAlertButtonRef.current?.focus());
       return;
     }
     if (copyTargetDays.length === 0) return;
@@ -623,52 +715,133 @@ export const ItineraryPage = ({
   };
 
   const openCoverPhotoDialog = (index: number, event: ItineraryItem) => {
-    const query = event.location.trim() || event.title.trim();
+    const query = event.location.trim();
+    coverDialogOpenerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     setCoverTargetIndex(index);
     setCommonsQuery(query);
+    setCommonsResolvedEntity(null);
+    setCommonsEntityChoices([]);
     setCommonsCandidates([]);
-    setCommonsNextOffset(null);
+    setCommonsNextPageToken(null);
     setCommonsSeenFileTitles(new Set());
     setSelectedCommonsPhoto(null);
+    setCoverDialogStep("search");
+    setCoverCrop(DEFAULT_ITINERARY_COVER_CROP);
     setCoverPhotoError(null);
-    void searchCommonsPhotos(query);
+    setCommonsPageStatus(null);
+    requestAnimationFrame(() => coverDialogRef.current?.querySelector<HTMLElement>("input:not([disabled]), button:not([disabled])")?.focus());
   };
 
   const closeCoverPhotoDialog = () => {
     if (isCoverSaving) return;
     setCoverTargetIndex(null);
+    setCommonsResolvedEntity(null);
+    setCommonsEntityChoices([]);
     setCommonsCandidates([]);
-    setCommonsNextOffset(null);
+    setCommonsNextPageToken(null);
     setCommonsSeenFileTitles(new Set());
     setSelectedCommonsPhoto(null);
+    setCoverDialogStep("search");
+    setCoverCrop(DEFAULT_ITINERARY_COVER_CROP);
     setCoverPhotoError(null);
+    setCommonsPageStatus(null);
+    const opener = coverDialogOpenerRef.current;
+    coverDialogOpenerRef.current = null;
+    requestAnimationFrame(() => opener?.focus());
   };
 
-  const searchCommonsPhotos = async (queryValue = commonsQuery, offset = 0) => {
+  const handleCoverDialogKeyDown = (event: ReactKeyboardEvent<HTMLElement>) => {
+    if (photoViewer) return;
+    if (event.key === "Escape") {
+      event.preventDefault();
+      closeCoverPhotoDialog();
+      return;
+    }
+    if (event.key !== "Tab") return;
+    const focusable = [...(coverDialogRef.current?.querySelectorAll<HTMLElement>(
+      "a[href], input:not([disabled]), button:not([disabled]), [tabindex]:not([tabindex='-1'])",
+    ) ?? [])];
+    if (focusable.length === 0) return;
+    const first = focusable[0];
+    const last = focusable.at(-1)!;
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  };
+
+  const openPhotoViewer = (photo: CoverPhotoViewerData, opener: HTMLElement) => {
+    photoViewerOpenerRef.current = opener;
+    setPhotoViewer(photo);
+  };
+
+  const closePhotoViewer = () => {
+    const opener = photoViewerOpenerRef.current;
+    photoViewerOpenerRef.current = null;
+    setPhotoViewer(null);
+    requestAnimationFrame(() => opener?.focus());
+  };
+
+  const startCommonsSearch = () => {
+    setCommonsCandidates([]);
+    setCommonsNextPageToken(null);
+    setCommonsSeenFileTitles(new Set());
+    setSelectedCommonsPhoto(null);
+    setCommonsPageStatus(null);
+    setCommonsResolvedEntity(null);
+    setCommonsEntityChoices([]);
+    void searchCommonsPhotos(commonsQuery, undefined, new Set());
+  };
+
+  const searchCommonsPhotos = async (
+    queryValue = commonsQuery,
+    nextPageToken: string | undefined = undefined,
+    seenFileTitles = commonsSeenFileTitles,
+    selectedEntityQid: string | undefined = undefined,
+  ) => {
     const query = queryValue.trim();
     if (query.length < 2) {
       setCoverPhotoError("請輸入至少 2 個字的照片搜尋詞。");
+      return;
+    }
+    if (!isOnline) {
+      setCoverPhotoError("目前離線，無法搜尋、換一批或儲存照片。");
       return;
     }
     setIsCommonsSearching(true);
     setCoverPhotoError(null);
     setSelectedCommonsPhoto(null);
     try {
-      const result = await searchCommonsPhotoCandidates(supabase, trip.id, query, offset);
-      const freshCandidates = result.candidates.filter((candidate) => !commonsSeenFileTitles.has(candidate.fileTitle));
-      const nextSeenFileTitles = new Set(commonsSeenFileTitles);
+      const result = await searchCommonsPhotoCandidates(supabase, trip.id, query, nextPageToken, selectedEntityQid ?? commonsResolvedEntity?.qid);
+      setCommonsResolvedEntity(result.resolvedEntity ?? (nextPageToken ? commonsResolvedEntity : null));
+      setCommonsEntityChoices(result.entityChoices ?? []);
+      const freshCandidates = result.candidates.filter((candidate) => !seenFileTitles.has(candidate.fileTitle));
+      const nextSeenFileTitles = new Set(seenFileTitles);
       result.candidates.forEach((candidate) => nextSeenFileTitles.add(candidate.fileTitle));
       setCommonsSeenFileTitles(nextSeenFileTitles);
       setCommonsCandidates(freshCandidates);
-      setCommonsNextOffset(result.nextOffset ?? (
-        result.candidates.length === COMMONS_CANDIDATE_PAGE_SIZE
-          ? offset + COMMONS_CANDIDATE_PAGE_SIZE
-          : null
-      ));
+      const nextToken = result.nextPageToken ?? null;
+      if (result.state !== "results") {
+        if (result.state === "entity-ambiguous" && result.entityChoices?.length) {
+          setCommonsCandidates([]);
+        }
+        setCommonsNextPageToken(null);
+        setCommonsPageStatus(result.state === "no-suitable-image" || result.state === "offline" ? "empty-first-page" : result.state);
+        return;
+      }
       if (freshCandidates.length === 0) {
-        setCoverPhotoError(result.nextOffset === null
-          ? "沒有更多未顯示的 Commons 照片，請調整搜尋詞。"
-          : "這一批沒有新的 Commons 照片，請再按一次換一批。");
+        setCommonsNextPageToken(nextPageToken ? nextToken : null);
+        setCommonsPageStatus(!nextPageToken
+          ? "empty-first-page"
+          : nextToken === null
+            ? "exhausted"
+            : "duplicate-page");
+      } else {
+        setCommonsNextPageToken(nextToken);
+        setCommonsPageStatus(nextToken === null ? "exhausted" : null);
       }
     } catch (error) {
       setCoverPhotoError(error instanceof Error ? error.message : "照片搜尋暫時無法使用。");
@@ -692,6 +865,7 @@ export const ItineraryPage = ({
         trip.id,
         target.id,
         selectedCommonsPhoto,
+        coverCrop,
       );
       uploadedPath = coverPhoto.storagePath;
       const nextTrip: TripDetail = {
@@ -1189,7 +1363,7 @@ export const ItineraryPage = ({
               </button>
             </div>
             <p className="mt-1 text-xs leading-relaxed text-slate-500">
-              已依輸入內容搜尋。請選擇正確地點，以取得穩定的交通估算。
+              已依輸入內容搜尋。請選擇正確地點，以取得穩定的交通估算；若結果不理想，請調整地點關鍵字後重新搜尋。
             </p>
             {isPlaceSearching && (
               <p className="mt-3 inline-flex items-center gap-2 text-xs font-bold text-emerald-700" role="status">
@@ -1235,16 +1409,14 @@ export const ItineraryPage = ({
                         ) : null}
                       </span>
                     </button>
-                    {placeCandidatePhotos[candidate.placeId]?.googleMapsUri && (
-                      <a
-                        href={placeCandidatePhotos[candidate.placeId].googleMapsUri}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="mt-1 flex justify-end text-[11px] font-semibold text-slate-500 hover:text-emerald-700"
-                      >
-                        在 Google Maps 查看照片 <ExternalLink size={10} className="ml-1" />
-                      </a>
-                    )}
+                    <a
+                      href={getGoogleMapsPlaceUrl(candidate.displayName, candidate.placeId)}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-1 flex justify-end text-[11px] font-semibold text-slate-500 hover:text-emerald-700"
+                    >
+                      在 Google Maps 查看地點資訊 <ExternalLink size={10} className="ml-1" />
+                    </a>
                   </div>
                 ))}
                 <p className="text-right text-xs font-normal text-slate-500" translate="no">Google Maps</p>
@@ -1567,15 +1739,32 @@ export const ItineraryPage = ({
               <div className={hasVisibleCover ? "relative flow-root" : ""}>
               {hasVisibleCover && event.coverPhoto && (
                 <div className="float-left mb-2 mr-3 w-[76px]">
-                  <img
-                    src={getCoverPublicUrl(event.coverPhoto.storagePath)}
-                    alt={`${event.title || "行程"}照片`}
-                    width={76}
-                    height={76}
-                    loading="lazy"
-                    className="h-[76px] w-[76px] rounded-lg bg-slate-100 object-cover"
-                    onError={() => setFailedCoverPaths((paths) => new Set(paths).add(event.coverPhoto!.storagePath))}
-                  />
+                  <button
+                    type="button"
+                    onClick={(clickEvent) => openPhotoViewer({
+                      url: getCoverPublicUrl(event.coverPhoto!.storagePath),
+                      alt: `${event.title || "行程"}照片`,
+                      sourceLabel: "Wikimedia Commons",
+                      sourcePageUrl: event.coverPhoto!.sourcePageUrl,
+                      creator: event.coverPhoto!.creator,
+                      credit: event.coverPhoto!.credit,
+                      license: event.coverPhoto!.license,
+                      licenseUrl: event.coverPhoto!.licenseUrl,
+                      transformation: event.coverPhoto!.transformation,
+                    }, clickEvent.currentTarget)}
+                    className="block rounded-lg outline-none ring-emerald-500 focus:ring-2"
+                    aria-label={`放大檢視「${event.title || "行程"}」照片`}
+                  >
+                    <img
+                      src={getCoverPublicUrl(event.coverPhoto.storagePath)}
+                      alt=""
+                      width={76}
+                      height={76}
+                      loading="lazy"
+                      className="h-[76px] w-[76px] rounded-lg bg-slate-100 object-cover"
+                      onError={() => setFailedCoverPaths((paths) => new Set(paths).add(event.coverPhoto!.storagePath))}
+                    />
+                  </button>
                   <a
                     href={event.coverPhoto.sourcePageUrl}
                     target="_blank"
@@ -1770,8 +1959,10 @@ export const ItineraryPage = ({
       )}
 
       {coverTargetIndex !== null && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/40 p-3 sm:items-center" role="presentation">
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/40 p-3 sm:items-center" role="presentation" aria-hidden={photoViewer ? true : undefined}>
           <section
+            ref={coverDialogRef}
+            onKeyDown={handleCoverDialogKeyDown}
             className="max-h-[min(46rem,calc(100dvh-1.5rem))] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-4 shadow-2xl"
             role="dialog"
             aria-modal="true"
@@ -1779,74 +1970,232 @@ export const ItineraryPage = ({
           >
             <div className="flex items-start justify-between gap-3">
               <div>
-                <h3 id="commons-photo-title" className="text-lg font-bold text-slate-800">設定照片</h3>
-                <p className="mt-1 text-xs text-slate-500">請確認照片代表正確地點，並查看作者與授權。</p>
+                <h3 id="commons-photo-title" className="text-lg font-bold text-slate-800">{coverDialogStep === "search" ? "設定照片" : "確認照片與裁切"}</h3>
+                <p className="mt-1 text-xs text-slate-500">{coverDialogStep === "search" ? "先選擇來源與候選照片；選取不會立即儲存。" : "確認照片代表正確地點，再調整正方形封面範圍。"}</p>
               </div>
               <button type="button" onClick={closeCoverPhotoDialog} disabled={isCoverSaving} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 disabled:opacity-50" aria-label="關閉照片選擇">
                 <X size={18} />
               </button>
             </div>
-            <form
-              className="mt-4 flex items-stretch gap-2"
-              onSubmit={(event) => {
-                event.preventDefault();
-                void searchCommonsPhotos(commonsQuery, commonsNextOffset ?? 0);
-              }}
-            >
-              <input
-                value={commonsQuery}
-                onChange={(event) => {
-                  setCommonsQuery(event.target.value);
-                  setCommonsNextOffset(null);
-                  setCommonsSeenFileTitles(new Set());
-                }}
-                aria-label="Commons 搜尋詞"
-                className="min-w-0 flex-1 rounded-lg border border-slate-200 px-3 py-2 text-base focus:outline-none focus:ring-2 focus:ring-emerald-500 sm:text-sm"
-              />
-              <button type="submit" disabled={isCommonsSearching || commonsQuery.trim().length < 2} className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-700 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-800 disabled:opacity-50">
-                {isCommonsSearching ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />} 搜尋
-              </button>
-            </form>
-            {coverPhotoError && <p className="mt-3 text-xs text-rose-700" role="alert">{coverPhotoError}</p>}
-            {commonsCandidates.length > 0 && (
-              <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-                {commonsCandidates.map((candidate) => {
-                  const isSelected = selectedCommonsPhoto?.fileTitle === candidate.fileTitle;
-                  return (
+            {coverDialogStep === "search" ? (
+              <>
+                <fieldset className="mt-4">
+                  <legend className="text-sm font-bold text-slate-700">照片來源</legend>
+                  <div className="mt-2 grid gap-2 sm:grid-cols-3">
+                    <label className="flex items-start gap-2 rounded-xl border border-emerald-300 bg-emerald-50 p-3 text-sm font-bold text-emerald-800">
+                      <input type="radio" name="cover-photo-source" value="wikimedia-commons" checked readOnly className="mt-0.5 accent-emerald-700" />
+                      Wikimedia Commons
+                    </label>
+                    {(["Pexels", "Pixabay"] as const).map((source) => (
+                      <label key={source} className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-400">
+                        <span className="flex items-start gap-2 font-bold"><input type="radio" name="cover-photo-source" disabled className="mt-0.5" />{source}</span>
+                        <span className="mt-1 block text-[11px] font-normal">{source}目前未啟用，可改用其他來源。</span>
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
+                <form
+                  className="mt-4 flex items-stretch gap-2"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    startCommonsSearch();
+                  }}
+                >
+                  <input
+                    value={commonsQuery}
+                    onChange={(event) => {
+                      setCommonsQuery(event.target.value);
+                      setCommonsResolvedEntity(null);
+                      setCommonsEntityChoices([]);
+                      setCommonsCandidates([]);
+                      setCommonsNextPageToken(null);
+                      setCommonsSeenFileTitles(new Set());
+                      setSelectedCommonsPhoto(null);
+                      setCommonsPageStatus(null);
+                      setCoverPhotoError(null);
+                    }}
+                    aria-label="Commons 搜尋詞"
+                    className="min-w-0 flex-1 rounded-lg border border-slate-200 px-3 py-2 text-base focus:outline-none focus:ring-2 focus:ring-emerald-500 sm:text-sm"
+                  />
+                  <button type="submit" disabled={!isOnline || isCommonsSearching || commonsQuery.trim().length < 2} className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-700 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-800 disabled:opacity-50">
+                    {isCommonsSearching ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />} 搜尋
+                  </button>
+                </form>
+                {!isOnline && <p className="mt-3 text-xs text-amber-700" aria-live="polite">目前離線，無法搜尋、換一批或儲存照片。</p>}
+                {coverPhotoError && <p className="mt-3 text-xs text-rose-700" aria-live="polite">{coverPhotoError}</p>}
+                {commonsResolvedEntity && (
+                  <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900" aria-live="polite">
+                    <span>搜尋範圍：<strong>{commonsResolvedEntity.label}</strong></span>
                     <button
-                      key={candidate.fileTitle}
                       type="button"
-                      onClick={() => setSelectedCommonsPhoto(candidate)}
-                      aria-pressed={isSelected}
-                      className={`overflow-hidden rounded-xl border text-left ${isSelected ? "border-emerald-600 ring-2 ring-emerald-100" : "border-slate-200 hover:border-emerald-300"}`}
+                      onClick={() => {
+                        setCommonsResolvedEntity(null);
+                        setCommonsCandidates([]);
+                        setCommonsNextPageToken(null);
+                        setCommonsSeenFileTitles(new Set());
+                        setSelectedCommonsPhoto(null);
+                        setCommonsPageStatus(null);
+                        requestAnimationFrame(() => coverDialogRef.current?.querySelector<HTMLInputElement>("input[aria-label='Commons 搜尋詞']")?.focus());
+                      }}
+                      className="font-bold text-emerald-800 underline hover:text-emerald-950"
                     >
-                      <img src={candidate.thumbnailUrl} alt="" loading="lazy" referrerPolicy="no-referrer" className="h-28 w-full bg-slate-100 object-cover" />
-                      <span className="block p-2">
-                        <strong className="line-clamp-2 block text-xs text-slate-800">{candidate.fileTitle.replace(/^File:/, "")}</strong>
-                        <span className="mt-1 block text-[11px] text-slate-500">{candidate.creator}</span>
-                        <span className="mt-1 block text-[11px] font-semibold text-emerald-700">{candidate.license}</span>
-                      </span>
+                      變更關鍵字
                     </button>
-                  );
-                })}
-              </div>
-            )}
-            <div className="mt-4 flex items-center gap-2 border-t border-slate-100 pt-4">
-              {commonsNextOffset !== null && commonsCandidates.length > 0 && (
-                <button type="button" onClick={() => void searchCommonsPhotos(commonsQuery, commonsNextOffset)} disabled={isCommonsSearching || isCoverSaving} className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-700 hover:bg-emerald-100 disabled:opacity-50">
-                  換一批
-                </button>
-              )}
-              <div className="ml-auto flex gap-2">
-                <button type="button" onClick={closeCoverPhotoDialog} disabled={isCoverSaving} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-50">取消</button>
-                <button type="button" onClick={() => void saveCommonsPhoto()} disabled={!selectedCommonsPhoto || isCoverSaving} className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-800 disabled:bg-slate-200 disabled:text-slate-400">
-                  {isCoverSaving ? "正在設定…" : "使用照片"}
-                </button>
-              </div>
-            </div>
+                  </div>
+                )}
+                {commonsEntityChoices.length > 0 && (
+                  <section className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3" aria-labelledby="commons-entity-choice-title" aria-live="polite">
+                    <h4 id="commons-entity-choice-title" className="text-sm font-bold text-amber-900">請選擇要搜尋的地點範圍</h4>
+                    <p className="mt-1 text-xs text-amber-800">選擇前不會搜尋照片；若都不正確，請修改關鍵字。</p>
+                    <div className="mt-2 grid gap-2">
+                      {commonsEntityChoices.map((entity) => (
+                        <button
+                          key={entity.qid}
+                          type="button"
+                          disabled={isCommonsSearching}
+                          aria-label={`選擇地點範圍：${entity.label}${entity.description ? `，${entity.description}` : ""}，${entity.qid}`}
+                          onClick={() => {
+                            setCommonsCandidates([]);
+                            setCommonsNextPageToken(null);
+                            setCommonsSeenFileTitles(new Set());
+                            setSelectedCommonsPhoto(null);
+                            setCommonsPageStatus(null);
+                            void searchCommonsPhotos(commonsQuery, undefined, new Set(), entity.qid);
+                          }}
+                          className="w-full min-w-0 rounded-lg border border-amber-300 bg-white px-3 py-2 text-left text-sm text-amber-900 hover:bg-amber-100 disabled:opacity-50"
+                        >
+                          <span className="block break-words font-bold">{entity.label}</span>
+                          {entity.description && (
+                            <span className="mt-1 block break-words text-xs font-normal leading-relaxed text-amber-800">{entity.description}</span>
+                          )}
+                          <span className="mt-1 block font-mono text-[11px] font-normal text-amber-700">{entity.qid}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </section>
+                )}
+                {commonsPageStatus && (
+                  <p className="mt-3 text-xs text-slate-600" aria-live="polite">
+                    {{
+                      "empty-first-page": "找不到符合條件的照片，請調整搜尋詞後再試。",
+                      "duplicate-page": "這一批沒有新的照片；可再換一批或調整搜尋詞。",
+                      exhausted: "已沒有更多照片；可調整搜尋詞或改用其他來源。",
+                      "entity-not-found": "找不到可精確對應的地點實體，請使用完整地點名稱或調整關鍵字後再試。",
+                      "entity-ambiguous": "搜尋詞對應多個地點，請先選擇正確範圍，或輸入更完整的地點名稱。",
+                      "inspection-limit-reached": "已達本次檢查上限；請檢視目前候選或重新調整搜尋詞。",
+                      "project-quota-reached": "今日精準搜尋額度已用完，請稍後再試。",
+                      "rate-limited": "Wikimedia Commons 暫時受限，請稍後再試。",
+                      timeout: "Wikimedia Commons 回應逾時，請稍後再試。",
+                      "upstream-error": "Wikimedia Commons 暫時無法使用，請稍後再試。",
+                      "session-expired": "照片搜尋工作階段已失效，請重新搜尋。",
+                      "in-progress": "精準照片搜尋正在處理中，請稍後由管理者重新操作。",
+                    }[commonsPageStatus]}
+                  </p>
+                )}
+                {commonsCandidates.length > 0 && (
+                  <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3" role="radiogroup" aria-label="Commons 候選照片">
+                    {commonsCandidates.map((candidate) => {
+                      const isSelected = selectedCommonsPhoto?.fileTitle === candidate.fileTitle;
+                      const name = candidate.fileTitle.replace(/^File:/, "");
+                      return (
+                        <article key={candidate.fileTitle} className={`overflow-hidden rounded-xl border ${isSelected ? "border-emerald-600 ring-2 ring-emerald-100" : "border-slate-200"}`}>
+                          <button
+                            type="button"
+                            onClick={(clickEvent) => openPhotoViewer({
+                              url: candidate.thumbnailUrl,
+                              alt: name,
+                              sourceLabel: "Wikimedia Commons",
+                              sourcePageUrl: candidate.sourcePageUrl,
+                              creator: candidate.creator,
+                              credit: candidate.credit,
+                              license: candidate.license,
+                              licenseUrl: candidate.licenseUrl,
+                            }, clickEvent.currentTarget)}
+                            className="group relative block w-full outline-none ring-inset ring-emerald-500 focus:ring-2"
+                            aria-label={`放大檢視「${name}」`}
+                          >
+                            <img src={candidate.thumbnailUrl} alt="" loading="lazy" referrerPolicy="no-referrer" className="h-28 w-full bg-slate-100 object-cover" />
+                            <span className="absolute bottom-2 right-2 rounded-full bg-slate-950/70 p-1.5 text-white"><Eye size={14} /></span>
+                          </button>
+                          <div className="p-2">
+                            <strong className="line-clamp-2 block text-xs text-slate-800">{name}</strong>
+                            <span className="mt-1 block text-[11px] text-slate-500">{candidate.creator}</span>
+                            <span className="mt-1 block text-[11px] font-semibold text-emerald-700">{candidate.license}</span>
+                            {candidate.matchEvidence && candidate.matchEvidence.length > 0 && (
+                              <span className="mt-1 block text-[11px] text-slate-600">
+                                符合依據：{candidate.matchEvidence.map((evidence) => ({
+                                  p18: "Wikidata 代表圖",
+                                  "exact-category": "直接 Commons 分類",
+                                  "structured-depicts": "結構化描繪實體",
+                                  description: "描述精確命中",
+                                  filename: "檔名命中",
+                                  "broad-association": "可驗證關聯",
+                                  "wrong-entity": "非目標實體",
+                                })[evidence.kind] ?? evidence.kind).join("、")}
+                              </span>
+                            )}
+                            <label className={`mt-2 flex w-full cursor-pointer items-center justify-center rounded-lg px-2 py-1.5 text-xs font-bold ${isSelected ? "bg-emerald-700 text-white" : "bg-emerald-50 text-emerald-700 hover:bg-emerald-100"}`}>
+                              <input
+                                type="radio"
+                                name="commons-photo-candidate"
+                                checked={isSelected}
+                                onChange={() => setSelectedCommonsPhoto(candidate)}
+                                className="sr-only"
+                              />
+                              {isSelected ? "已選取" : "選取照片"}
+                            </label>
+                          </div>
+                        </article>
+                      );
+                    })}
+                  </div>
+                )}
+                <div className="mt-4 flex flex-col gap-2 border-t border-slate-100 pt-4 sm:flex-row sm:items-center">
+                  {commonsNextPageToken !== null && (
+                    <button type="button" onClick={() => void searchCommonsPhotos(commonsQuery, commonsNextPageToken)} disabled={!isOnline || isCommonsSearching || isCoverSaving} className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-700 hover:bg-emerald-100 disabled:opacity-50">
+                      換一批
+                    </button>
+                  )}
+                  <div className="flex flex-col gap-2 sm:ml-auto sm:flex-row">
+                    <button type="button" onClick={closeCoverPhotoDialog} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50">取消</button>
+                    <button type="button" onClick={() => { setCoverCrop(DEFAULT_ITINERARY_COVER_CROP); setCoverDialogStep("confirm"); }} disabled={!selectedCommonsPhoto} className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-800 disabled:bg-slate-200 disabled:text-slate-400">
+                      確認候選照片
+                    </button>
+                  </div>
+                </div>
+              </>
+            ) : selectedCommonsPhoto ? (
+              <>
+                <div className="mt-4 grid gap-4 sm:grid-cols-[minmax(0,1fr)_15rem]">
+                  <CoverPhotoCropEditor candidate={selectedCommonsPhoto} value={coverCrop} onChange={setCoverCrop} />
+                  <aside className="rounded-xl bg-slate-50 p-3 text-xs leading-relaxed text-slate-600">
+                    <strong className="block text-sm text-slate-800">{selectedCommonsPhoto.fileTitle.replace(/^File:/, "")}</strong>
+                    <p className="mt-2">來源：Wikimedia Commons</p>
+                    <p className="mt-1">作者：{selectedCommonsPhoto.creator}</p>
+                    {selectedCommonsPhoto.credit && <p className="mt-1">Credit：{selectedCommonsPhoto.credit}</p>}
+                    <p className="mt-1">授權：{selectedCommonsPhoto.license}</p>
+                    <div className="mt-3 flex flex-col items-start gap-2">
+                      <a href={selectedCommonsPhoto.sourcePageUrl} target="_blank" rel="noreferrer" className="font-bold text-emerald-700 hover:text-emerald-800">查看來源頁 ↗</a>
+                      {selectedCommonsPhoto.licenseUrl && <a href={selectedCommonsPhoto.licenseUrl} target="_blank" rel="noreferrer" className="font-bold text-emerald-700 hover:text-emerald-800">查看授權 ↗</a>}
+                    </div>
+                    {/^CC BY(?: |$)/i.test(selectedCommonsPhoto.license) && <p className="mt-3 rounded-lg bg-white p-2">儲存後標示：已裁切、縮放並轉為 WebP</p>}
+                  </aside>
+                </div>
+                {coverPhotoError && <p className="mt-3 text-xs text-rose-700" aria-live="polite">{coverPhotoError}</p>}
+                <div className="mt-4 flex flex-col gap-2 border-t border-slate-100 pt-4 sm:flex-row sm:justify-end">
+                  <button type="button" onClick={() => { setCoverPhotoError(null); setCoverDialogStep("search"); }} disabled={isCoverSaving} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-50">返回候選</button>
+                  <button type="button" onClick={closeCoverPhotoDialog} disabled={isCoverSaving} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-50">取消</button>
+                  <button type="button" onClick={() => void saveCommonsPhoto()} disabled={!isOnline || !canSaveSelectedCrop || isCoverSaving} className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-800 disabled:bg-slate-200 disabled:text-slate-400">
+                    {isCoverSaving ? "正在設定…" : "確認裁切並儲存"}
+                  </button>
+                </div>
+              </>
+            ) : null}
           </section>
         </div>
       )}
+
+      {photoViewer && <CoverPhotoViewer photo={photoViewer} onClose={closePhotoViewer} />}
 
       {copySource && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/40 p-3 sm:items-center" role="presentation">
@@ -1855,11 +2204,7 @@ export const ItineraryPage = ({
               event.preventDefault();
               void saveCopies();
             }}
-            onKeyDown={(event) => {
-              if (event.key !== "Enter" || copyTimeValidation.isValid) return;
-              event.preventDefault();
-              void saveCopies();
-            }}
+            aria-hidden={copyTimeAlertErrors ? true : undefined}
             className="max-h-[min(42rem,calc(100dvh-1.5rem))] w-full max-w-md overflow-y-auto rounded-2xl bg-white p-4 shadow-2xl"
             role="dialog"
             aria-modal="true"
@@ -1885,51 +2230,37 @@ export const ItineraryPage = ({
             <div className="mt-4 grid grid-cols-2 gap-2">
               <label className="space-y-1">
                 <span className="text-xs font-bold text-slate-600">抵達時間（必填）</span>
+                <span className="block text-xs text-slate-500">可輸入 1400 或 14:00。</span>
                 <input
                   id="copy-arrival-time-input"
                   value={copyArrivalTime}
-                  onChange={(event) => setCopyArrivalTime(event.target.value)}
+                  type="text"
+                  onCompositionStart={() => { copyTimeCompositionRef.current = true; }}
+                  onCompositionEnd={(event) => finishCopyTimeComposition("arrival", event.currentTarget)}
+                  onChange={(event) => updateCopyTime("arrival", event.target.value, event.currentTarget)}
                   placeholder="例如 13:30"
                   inputMode="numeric"
                   autoComplete="off"
                   disabled={isCopySaving}
-                  aria-invalid={Boolean(copyArrivalError)}
-                  aria-describedby={copyArrivalError ? "copy-arrival-time-error" : undefined}
-                  className={`w-full rounded-lg border px-3 py-2 text-base focus:outline-none focus:ring-2 sm:text-sm ${
-                    copyArrivalError
-                      ? "border-rose-400 focus:ring-rose-400"
-                      : "border-slate-200 focus:ring-sky-600"
-                  }`}
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-base focus:outline-none focus:ring-2 focus:ring-sky-600 sm:text-sm"
                 />
-                {copyArrivalError && (
-                  <span id="copy-arrival-time-error" className="block text-xs leading-relaxed text-rose-700">
-                    {copyArrivalError}
-                  </span>
-                )}
               </label>
               <label className="space-y-1">
                 <span className="text-xs font-bold text-slate-600">離開時間（必填）</span>
+                <span className="block text-xs text-slate-500">可輸入 1400 或 14:00。</span>
                 <input
                   id="copy-departure-time-input"
                   value={copyDepartureTime}
-                  onChange={(event) => setCopyDepartureTime(event.target.value)}
+                  type="text"
+                  onCompositionStart={() => { copyTimeCompositionRef.current = true; }}
+                  onCompositionEnd={(event) => finishCopyTimeComposition("departure", event.currentTarget)}
+                  onChange={(event) => updateCopyTime("departure", event.target.value, event.currentTarget)}
                   placeholder="例如 15:00"
                   inputMode="numeric"
                   autoComplete="off"
                   disabled={isCopySaving}
-                  aria-invalid={Boolean(copyDepartureError)}
-                  aria-describedby={copyDepartureError ? "copy-departure-time-error" : undefined}
-                  className={`w-full rounded-lg border px-3 py-2 text-base focus:outline-none focus:ring-2 sm:text-sm ${
-                    copyDepartureError
-                      ? "border-rose-400 focus:ring-rose-400"
-                      : "border-slate-200 focus:ring-sky-600"
-                  }`}
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-base focus:outline-none focus:ring-2 focus:ring-sky-600 sm:text-sm"
                 />
-                {copyDepartureError && (
-                  <span id="copy-departure-time-error" className="block text-xs leading-relaxed text-rose-700">
-                    {copyDepartureError}
-                  </span>
-                )}
               </label>
             </div>
 
@@ -1959,9 +2290,37 @@ export const ItineraryPage = ({
             {copySaveError && <p className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700" role="alert">{copySaveError}</p>}
             <div className="mt-4 flex justify-end gap-2 border-t border-slate-100 pt-4">
               <button type="button" onClick={closeCopyDialog} disabled={isCopySaving} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-50">取消</button>
-              <button type="submit" disabled={copyTargetDays.length === 0 || !copyTimeValidation.isValid || isCopySaving} className="rounded-lg bg-sky-700 px-4 py-2 text-sm font-bold text-white hover:bg-sky-800 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400">{isCopySaving ? "正在複製…" : "複製到所選 Day"}</button>
+              <button type="submit" disabled={copyTargetDays.length === 0 || isCopySaving} className="rounded-lg bg-sky-700 px-4 py-2 text-sm font-bold text-white hover:bg-sky-800 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400">{isCopySaving ? "正在複製…" : "複製到所選 Day"}</button>
             </div>
           </form>
+          {copyTimeAlertErrors && (
+            <div className="fixed inset-0 z-[60] flex items-end justify-center bg-slate-950/50 p-3 sm:items-center" role="presentation">
+              <section
+                className="w-full max-w-sm rounded-2xl bg-white p-4 shadow-2xl"
+                role="alertdialog"
+                aria-modal="true"
+                aria-labelledby="copy-time-alert-title"
+                aria-describedby="copy-time-alert-description"
+                onKeyDown={(event) => {
+                  if (event.key === "Escape") {
+                    event.preventDefault();
+                    closeCopyTimeAlert();
+                  } else if (event.key === "Tab") {
+                    event.preventDefault();
+                    copyTimeAlertButtonRef.current?.focus();
+                  }
+                }}
+              >
+                <h4 id="copy-time-alert-title" className="text-lg font-bold text-slate-800">請檢查時間格式</h4>
+                <ul id="copy-time-alert-description" className="mt-3 list-disc space-y-2 pl-5 text-sm leading-relaxed text-slate-700">
+                  {copyTimeAlertErrors.map((message) => <li key={message}>{message}</li>)}
+                </ul>
+                <div className="mt-4 flex justify-end">
+                  <button ref={copyTimeAlertButtonRef} type="button" onClick={closeCopyTimeAlert} className="rounded-lg bg-sky-700 px-4 py-2 text-sm font-bold text-white hover:bg-sky-800">知道了</button>
+                </div>
+              </section>
+            </div>
+          )}
         </div>
       )}
 

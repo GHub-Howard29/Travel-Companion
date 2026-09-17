@@ -26,6 +26,7 @@
 - V3.5.0 所有新增或調整畫面都必須先提供模擬圖，經 Product Owner 確認後才能修改程式；未確認模擬圖不得先行實作 UI。
 - 正式 migration、已發布版本與版本歷史不可回寫；問題只以向前修復處理。
 - 不得自行合併、部署、推送或對正式 Supabase 執行 migration，除非 Product Owner 明確要求。
+- 未經 Product Owner 明確指令，不得自行建立、修改或推送 Git commit；完成修改後維持未提交狀態並回報差異。
 - 修改完成後至少執行與風險相稱的 lint、TypeScript、build 或專項測試。
 
 ## 版本與發布

@@ -2,17 +2,17 @@
 
 Travel Companion 是以 Trip 為核心的 Offline First 旅行管理 PWA，使用 React、TypeScript、Vite 與 Supabase，支援行程、清單、資訊、多人帳本、附件及外幣換算。
 
-> 已發布版本：V3.8.2
+> 已發布版本：V3.9.0
 >
 > 已完成資料庫維護：V3.5.2（無獨立 App build／Git 版本標籤）
 >
-> 最新發布：V3.8.2「跨日複製時間設定」（2026-09-11；GitHub Pages、正式 metadata、版本資訊與 Guest smoke 已完成，採一般更新）
+> 最新發布：V3.9.0「地點照片雙方案」（2026-09-13；GitHub Pages、正式 metadata、版本資訊、Guest 與 390×844 smoke 已完成，採一般更新）
 >
-> V3.8.2 發布狀態為「已發布」；`main`、帶註解標籤 `v3.8.2`、正式版本政策與新版資產均已確認，`minimumSupportedVersion: 3.8.1`、`forceUpdate: false`。
+> V3.9.0 發布狀態為「已發布」；`main`、帶註解標籤 `v3.9.0`、正式版本政策與新版資產均已確認，`minimumSupportedVersion: 3.8.2`、`forceUpdate: false`。
 >
-> 目前開發：V3.9.0「每日行程卡片地點照片」可行性驗證；正式功能、UI、文案與發布範圍尚未核准。
+> 下一版本：V3.9.1 已完成跨日四碼時間、Commons 精準搜尋 migration／乾淨重建、四次固定真實矩陣、候選／裁切／放大／焦點、桌面／390×844 主要管理者互動，以及無 token 的 `inspection-limit-reached` 終態與真實多實體清單回應。同名多實體已加入 Wikidata 描述與 QID 判讀介面，不增加外部請求，並以 loopback-only Edge fixture 完成選定流程。2026-09-17 已完成正式 migration、兩項 secrets、`travel-route` version 11、無 Wikimedia／無業務寫入的 production-safe smoke、3.9.1 metadata、完整本機回歸與 release build，已到達發布前停止線。尚未執行 `develop` 合併 `main`、`v3.9.1` tag、GitHub Pages 發布與發布後正式站 smoke。Gemini、Pexels／Pixabay 維持未接入，A 自動多語及 C Google Places 脈絡維持停用。
 >
-> 最後更新：2026-09-12
+> 最後更新：2026-09-17
 
 ## 優先閱讀
 
@@ -57,7 +57,13 @@ Travel Companion 是以 Trip 為核心的 Offline First 旅行管理 PWA，使�
 - [V3.9.0 每日行程卡片地點照片可行性報告](45_V3.9.0_每日行程卡片地點照片可行性報告.md)
 - [V3.9.0 地點照片雙方案立案範圍](46_V3.9.0_地點照片雙方案立案範圍.md)
 - [V3.9.0 正式發布操作手冊](47_V3.9.0_正式發布操作手冊.md)
-- [V3.10.0 使用紀錄重新評估草案](37_V3.10.0_使用紀錄重新評估草案.md)
+- [V3.9.1 每日行程照片來源擴充規劃草案](48_V3.9.1_每日行程照片來源擴充規劃草案.md)
+- [V3.9.1 Commons／Pexels／Pixabay 來源切換決策規格](49_V3.9.1_Commons_Pexels_Pixabay來源切換決策規格.md)
+- [V3.9.1 Commons 實體導向候選照片精準篩選決策規格](50_V3.9.1_Commons實體導向候選照片精準篩選決策規格.md)
+- [V3.9.1 跨日複製四碼時間輸入修正規格](51_V3.9.1_跨日複製四碼時間輸入修正規格.md)
+- [V3.9.1 Commons 精準搜尋真實矩陣報告](52_V3.9.1_Commons精準搜尋真實矩陣報告.md)
+- [V3.9.1 發布前驗證與正式環境紀錄](53_V3.9.1_發布前驗證與正式環境紀錄.md)
+- [V3.9.2／V3.10.0 使用紀錄與系統開發者權限規劃](37_V3.10.0_使用紀錄重新評估草案.md)
 - [先前方案草案：原 V3.9.0 使用者使用紀錄與開發者二次驗證](36_V3.9.0_使用者使用紀錄與開發者二次驗證規格.md)
 - [V3.4.1 離線同步規格](16_V3.4.1_離線狀態與OtherInfo本機優先同步規格.md)
 - [V3.5.3 前端瀏覽器安全防護驗證](17_V3.5.3_前端瀏覽器安全防護驗證.md)

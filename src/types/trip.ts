@@ -70,6 +70,7 @@ export interface ItineraryCoverPhoto {
   sourceRevisionAt?: string;
   selectedAt: string;
   modified: boolean;
+  transformation?: "cropped-resized-and-webp-transcoded";
   width: number;
   height: number;
   mime: "image/webp";

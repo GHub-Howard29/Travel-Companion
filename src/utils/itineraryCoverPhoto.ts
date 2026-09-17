@@ -21,6 +21,11 @@ export const isItineraryCoverPhoto = (
     (photo.licenseUrl === undefined || HTTPS_URL.test(photo.licenseUrl)) &&
     typeof photo.selectedAt === "string" && !Number.isNaN(Date.parse(photo.selectedAt)) &&
     photo.modified === true &&
+    (photo.transformation === undefined || photo.transformation === "cropped-resized-and-webp-transcoded") &&
+    (photo.transformation === undefined || (
+      typeof photo.credit === "string" && Boolean(photo.credit.trim()) &&
+      typeof photo.licenseUrl === "string" && HTTPS_URL.test(photo.licenseUrl)
+    )) &&
     Number.isSafeInteger(photo.width) && Number(photo.width) > 0 && Number(photo.width) <= 640 &&
     Number.isSafeInteger(photo.height) && Number(photo.height) > 0 && Number(photo.height) <= 640 &&
     photo.mime === "image/webp" &&

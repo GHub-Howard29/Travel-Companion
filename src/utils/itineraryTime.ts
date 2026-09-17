@@ -3,11 +3,15 @@ interface ItineraryTimeItem {
 }
 
 const ITINERARY_TIME_PATTERN = /^(\d{1,2})(?::|：)(\d{2})$/;
+const FOUR_DIGIT_TIME_PATTERN = /^\d{4}$/;
+
+const normalizeFullWidthDigits = (value: string): string =>
+  value.replace(/[０-９]/g, (digit) => String.fromCharCode(digit.charCodeAt(0) - 0xfee0));
 
 const parseItineraryTime = (
   value: string,
 ): { minutes: number; normalized: string } | null => {
-  const match = value.trim().match(ITINERARY_TIME_PATTERN);
+  const match = normalizeFullWidthDigits(value.trim()).match(ITINERARY_TIME_PATTERN);
   if (!match) return null;
 
   const hour = Number(match[1]);
@@ -24,7 +28,11 @@ export type ItineraryTimeValidationResult =
   | { isValid: true; normalized: string }
   | { isValid: false; normalized: string };
 
-export type RequiredItineraryTimeError = "required" | "invalid" | "before-arrival";
+export type RequiredItineraryTimeError =
+  | "required"
+  | "invalid-format"
+  | "invalid-range"
+  | "before-arrival";
 
 export interface RequiredItineraryTimeRangeValidationResult {
   isValid: boolean;
@@ -33,6 +41,37 @@ export interface RequiredItineraryTimeRangeValidationResult {
   arrivalError?: RequiredItineraryTimeError;
   departureError?: RequiredItineraryTimeError;
 }
+
+export const formatCompleteNumericTimeInput = (value: string): string => {
+  const normalizedDigits = normalizeFullWidthDigits(value);
+  if (!FOUR_DIGIT_TIME_PATTERN.test(normalizedDigits)) return value;
+
+  const hour = Number(normalizedDigits.slice(0, 2));
+  const minute = Number(normalizedDigits.slice(2));
+  if (hour >= 24 || minute >= 60) return value;
+  return `${normalizedDigits.slice(0, 2)}:${normalizedDigits.slice(2)}`;
+};
+
+const validateRequiredTime = (
+  value: string,
+): { normalized: string; error?: Exclude<RequiredItineraryTimeError, "before-arrival"> } => {
+  const trimmedValue = value.trim();
+  if (!trimmedValue) return { normalized: "", error: "required" };
+
+  const numericValue = normalizeFullWidthDigits(trimmedValue);
+  if (FOUR_DIGIT_TIME_PATTERN.test(numericValue)) {
+    const formatted = `${numericValue.slice(0, 2)}:${numericValue.slice(2)}`;
+    const result = validateItineraryTime(formatted);
+    return result.isValid
+      ? { normalized: result.normalized }
+      : { normalized: numericValue, error: "invalid-range" };
+  }
+
+  const result = validateItineraryTime(trimmedValue);
+  return result.isValid
+    ? { normalized: result.normalized }
+    : { normalized: result.normalized, error: "invalid-format" };
+};
 
 export const validateItineraryTime = (value: string): ItineraryTimeValidationResult => {
   const trimmedValue = value.trim();
@@ -60,18 +99,10 @@ export const validateRequiredItineraryTimeRange = (
   arrivalTime: string,
   departureTime: string,
 ): RequiredItineraryTimeRangeValidationResult => {
-  const arrivalResult = validateItineraryTime(arrivalTime);
-  const departureResult = validateItineraryTime(departureTime);
-  const arrivalError = !arrivalTime.trim()
-    ? "required"
-    : !arrivalResult.isValid
-      ? "invalid"
-      : undefined;
-  let departureError = !departureTime.trim()
-    ? "required"
-    : !departureResult.isValid
-      ? "invalid"
-      : undefined;
+  const arrivalResult = validateRequiredTime(arrivalTime);
+  const departureResult = validateRequiredTime(departureTime);
+  const arrivalError = arrivalResult.error;
+  let departureError: RequiredItineraryTimeError | undefined = departureResult.error;
 
   if (
     !arrivalError &&

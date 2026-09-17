@@ -9,6 +9,9 @@ interface FunctionErrorBody {
   error?: string;
 }
 
+const COMMONS_PRECISION_REGRESSION_FIXTURE_HEADER = "x-travel-companion-regression-fixture";
+const COMMONS_PRECISION_AMBIGUOUS_FIXTURE = "commons-entity-ambiguous";
+
 export interface PlaceCandidate {
   placeId: string;
   displayName: string;
@@ -18,7 +21,6 @@ export interface PlaceCandidate {
 export interface PlaceCandidatePhoto {
   placeId: string;
   photoUri: string;
-  googleMapsUri?: string;
   authorAttributions: Array<{ displayName: string; uri?: string }>;
 }
 
@@ -30,6 +32,8 @@ export interface PlaceCandidatePhotoResult {
 export interface CommonsPhotoCandidate {
   fileTitle: string;
   thumbnailUrl: string;
+  cropImageUrl: string;
+  thumbnailMime: "image/jpeg" | "image/png" | "image/webp";
   sourcePageUrl: string;
   creator: string;
   credit?: string;
@@ -39,11 +43,25 @@ export interface CommonsPhotoCandidate {
   sourceRevisionAt?: string;
   width: number;
   height: number;
+  reviewStatus?: "needs-review";
+  score?: number;
+  scoreBreakdown?: Array<{ rule: string; points: number; evidence: string }>;
+  matchEvidence?: Array<{ kind: string; category?: string; queryLanguage?: string }>;
 }
 
 export interface CommonsPhotoSearchResult {
+  contractVersion: "commons-precision-v1";
+  state: "results" | "no-suitable-image" | "entity-not-found" | "entity-ambiguous" | "inspection-limit-reached" | "project-quota-reached" | "in-progress" | "offline" | "rate-limited" | "timeout" | "upstream-error" | "session-expired";
   candidates: CommonsPhotoCandidate[];
-  nextOffset: number | null;
+  resolvedEntity?: CommonsResolvedEntity;
+  entityChoices?: CommonsResolvedEntity[];
+  nextPageToken?: string;
+}
+
+export interface CommonsResolvedEntity {
+  qid: string;
+  label: string;
+  description?: string;
 }
 
 export interface RouteEstimateResult {
@@ -58,9 +76,11 @@ export interface RouteEstimateResult {
 const invokeTravelRoute = async <T>(
   supabase: SupabaseClient,
   body: Record<string, unknown>,
+  headers?: Record<string, string>,
 ): Promise<T> => {
   const { data, error } = await supabase.functions.invoke("travel-route", {
     body,
+    ...(headers ? { headers } : {}),
   });
 
   if (error) {
@@ -108,12 +128,20 @@ export const searchCommonsPhotoCandidates = async (
   supabase: SupabaseClient,
   tripId: string,
   query: string,
-  offset = 0,
-): Promise<CommonsPhotoSearchResult> =>
-  invokeTravelRoute<CommonsPhotoSearchResult>(
+  nextPageToken?: string,
+  selectedEntityQid?: string,
+): Promise<CommonsPhotoSearchResult> => {
+  const fixture = import.meta.env.DEV && typeof window !== "undefined"
+    ? new URLSearchParams(window.location.search).get("tcRegressionFixture")
+    : null;
+  return invokeTravelRoute<CommonsPhotoSearchResult>(
     supabase,
-    { action: "commonsPhotoSearch", tripId, query, offset },
+    { action: "commonsPrecisionSearch", tripId, query, ...(nextPageToken ? { nextPageToken } : {}), ...(selectedEntityQid ? { selectedEntityQid } : {}) },
+    fixture === COMMONS_PRECISION_AMBIGUOUS_FIXTURE
+      ? { [COMMONS_PRECISION_REGRESSION_FIXTURE_HEADER]: fixture }
+      : undefined,
   );
+};
 
 export const getConfirmedPlace = (
   candidate: PlaceCandidate,
