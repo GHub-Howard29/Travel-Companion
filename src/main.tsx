@@ -1,3 +1,9 @@
+if (
+  typeof performance !== 'undefined' &&
+  performance.getEntriesByName('tc_app_bootstrap_start').length === 0
+) {
+  performance.mark('tc_app_bootstrap_start')
+}
 import React from 'react'
 import { flushSync } from 'react-dom'
 import ReactDOM from 'react-dom/client'

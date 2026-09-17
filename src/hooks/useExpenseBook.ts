@@ -720,16 +720,17 @@ useEffect(() => {
           .eq("id", removedExpense.id);
         if (error) throw error;
 
+        const removedAttachmentPath = removedExpense.attachment_path;
         if (
           isExpenseAttachmentPathForTrip(
-            removedExpense.attachment_path,
+            removedAttachmentPath,
             selectedTripId,
             String(removedExpense.id),
           )
         ) {
           const { error: attachmentDeleteError } = await supabase.storage
             .from(ATTACHMENT_BUCKET)
-            .remove([removedExpense.attachment_path]);
+            .remove([removedAttachmentPath as string]);
           if (attachmentDeleteError) {
             console.warn("Failed to remove expense attachment", attachmentDeleteError);
           }
@@ -900,16 +901,17 @@ useEffect(() => {
         return updated;
       });
       if (shouldRemoveAttachment || editAttachmentFile) {
+        const targetAttachmentPath = targetExpense.attachment_path;
         if (
           isExpenseAttachmentPathForTrip(
-            targetExpense.attachment_path,
+            targetAttachmentPath,
             selectedTripId,
             String(targetExpense.id),
           )
         ) {
           const { error: attachmentDeleteError } = await supabase.storage
             .from(ATTACHMENT_BUCKET)
-            .remove([targetExpense.attachment_path]);
+            .remove([targetAttachmentPath as string]);
           if (attachmentDeleteError) {
             console.warn("Failed to remove replaced expense attachment", attachmentDeleteError);
           }
@@ -1020,7 +1022,7 @@ useEffect(() => {
 
     const { data, error } = await supabase.storage
       .from(ATTACHMENT_BUCKET)
-      .createSignedUrl(path, ATTACHMENT_SIGNED_URL_EXPIRES_IN_SECONDS);
+      .createSignedUrl(path as string, ATTACHMENT_SIGNED_URL_EXPIRES_IN_SECONDS);
     if (error) throw error;
 
     const signedUrl = data?.signedUrl;

@@ -547,7 +547,7 @@ export class HistoricalTripLockedError extends Error {
 
 const isUniqueViolation = (error: unknown): boolean => {
   return (
-    Boolean(error) &&
+    error != null &&
     typeof error === "object" &&
     "code" in error &&
     (error as { code?: unknown }).code === "23505"

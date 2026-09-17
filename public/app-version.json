@@ -1,10 +1,11 @@
 {
-  "version": "3.9.2",
+  "version": "3.9.3",
   "minimumSupportedVersion": "3.9.2",
   "releaseDate": "2026-09-17",
   "releaseNotes": [
-    "修正 V3.9.1 更新後可能持續停在載入畫面的正式環境連線問題。",
-    "正式建置新增環境隔離與產物檢查，避免本機服務位址再次進入發布版本。"
+    "新增系統開發者能力驗證與最小化使用紀錄彙總畫面。",
+    "補上冷啟動效能量測，並整合 V3.9.1 驗證入口以縮短一般建置流程。",
+    "完成 App TypeScript 型別檢查，降低發布前才發現介面錯誤的風險。"
   ],
-  "forceUpdate": true
+  "forceUpdate": false
 }

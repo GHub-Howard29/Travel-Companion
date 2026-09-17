@@ -22,7 +22,7 @@
 
 - 當 Cline 進行多檔案讀寫、指令執行或外部 API 互動時，必須嚴格遵守流量控制與容錯重試機制，避免觸發 Rate Limit (429) 或配額超標：
   1. **批次操作節流 (Rate Limiting / Throttling)**：當需連續執行多個獨立的讀取、搜尋或驗證指令時，應適度交錯執行，避免零秒瞬間並發大量請求。
-  2. **指數退避重試 (Exponential Backoff)**：當遇到指令失敗、網路逾時或 API 回傳 `429 Too Many Requests` / `503 Service Unavailable` 時，絕對禁止無延遲原地無限迴圈重試；必須採用指數退避機制（例如：等待 2 秒 $\rightarrow$ 4 秒 $\rightarrow$ 8 秒，最多重試 3 次），並在日誌或回應中明確告知使用者冷卻狀態。
+  2. **指數退避重試 (Exponential Backoff)**：當遇到指令失敗、網路逾時或 API 回傳 `429 Too Many Requests` / `503 Service Unavailable` 時，絕對禁止無延遲原地無限迴圈重試；必須採用指數退避機制（例如：等待 10 秒 $\rightarrow$ 20 秒 $\rightarrow$ 30 秒，最多重試 3 次），並在日誌或回應中明確告知使用者冷卻狀態。
   3. **靜默與平滑輸出**：在處理大量資料或跑迴圈測試時，應避免不必要的冗長輸出，保持終端機與對話紀錄的整潔。
 
 ## 開發與安全規則
