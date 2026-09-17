@@ -14,6 +14,15 @@ export type VersionHistoryItem = {
 
 export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
+    version: "3.9.2",
+    date: "2026-09-17",
+    isMandatoryRelease: true,
+    notes: [
+      "修正 V3.9.1 更新後可能持續停在載入畫面的正式環境連線問題。",
+      "正式建置新增環境隔離與產物檢查，避免本機服務位址再次進入發布版本。",
+    ],
+  },
+  {
     version: "3.9.1",
     date: "2026-09-17",
     isMandatoryRelease: false,

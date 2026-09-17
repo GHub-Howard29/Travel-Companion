@@ -24,7 +24,9 @@ const readAll = (): Record<string, ExchangeReferenceRate> => {
   try {
     const parsed = JSON.parse(raw);
     if (!parsed || typeof parsed !== "object") return {};
-    return Object.fromEntries(Object.entries(parsed).filter(([, value]) => isReferenceRate(value)));
+    return Object.fromEntries(
+      Object.entries(parsed).filter(([, value]) => isReferenceRate(value)),
+    ) as Record<string, ExchangeReferenceRate>;
   } catch {
     return {};
   }

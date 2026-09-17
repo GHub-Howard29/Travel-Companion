@@ -1,5 +1,6 @@
 import { useCallback, useState } from "react";
 import {
+  BarChart3,
   Calendar,
   CircleDollarSign,
   CarFront,
@@ -58,6 +59,8 @@ interface AppSidebarProps {
   onSetDefaultHome: (screenId: string) => void;
   appVersion: string;
   onOpenVersionInfo: () => void;
+  isSystemDeveloper?: boolean;
+  onOpenUsageModal?: () => void;
 }
 
 const renderSidebarIcon = (item: SidebarItemConfig, tripMode?: TripMode) => {
@@ -114,6 +117,8 @@ export default function AppSidebar({
   onSetDefaultHome,
   appVersion,
   onOpenVersionInfo,
+  isSystemDeveloper,
+  onOpenUsageModal,
 }: AppSidebarProps) {
   const [isShareOpen, setIsShareOpen] = useState(false);
   const closeSidebar = useCallback(() => {
@@ -316,6 +321,26 @@ export default function AppSidebar({
                 <LogIn size={14} /> 使用 Google 登入
               </button>
             </div>
+          )}
+
+          {isSystemDeveloper && (
+            <button
+              data-system-usage-trigger
+              type="button"
+              onClick={() => {
+                closeSidebar();
+                onOpenUsageModal?.();
+              }}
+              className="mt-3 flex w-full items-center justify-between rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-left text-amber-800 hover:bg-amber-100 transition-colors shadow-xs"
+            >
+              <span className="inline-flex items-center gap-1.5 font-bold">
+                <BarChart3 size={13} />
+                使用紀錄
+              </span>
+              <span className="text-[10px] font-bold bg-amber-200 text-amber-900 px-1.5 py-0.5 rounded">
+                進入時驗證
+              </span>
+            </button>
           )}
 
           <button

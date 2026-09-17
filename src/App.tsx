@@ -24,9 +24,11 @@ import { UpdatePrompt } from "./components/UpdatePrompt";
 import { VersionInfoModal } from "./components/VersionInfoModal";
 import { InstallAppPrompt } from "./components/InstallAppPrompt";
 import { LoginSafetyModal } from "./components/LoginSafetyModal";
+import { UsageSummaryModal } from "./components/UsageSummaryModal";
 import useExpenseBook from "./hooks/useExpenseBook";
 import { useAppUpdate } from "./hooks/useAppUpdate";
 import useTripWorkspace from "./hooks/useTripWorkspace";
+import useSystemUsage from "./hooks/useSystemUsage";
 import { useTripDataRevision } from "./hooks/useTripDataRevision";
 import { AppContext } from "./app/context/AppContext";
 import { ROLE } from "./permissions/roles";
@@ -116,6 +118,7 @@ const supabase =
         },
       })
     : null;
+type ConfiguredSupabaseClient = NonNullable<typeof supabase>;
 
 const isIosStandalonePwa = () => {
   const navigatorWithStandalone = navigator as Navigator & {
@@ -140,6 +143,26 @@ const finishAppLaunch = () => {
     appBackgroundColor,
   );
   document.getElementById("app-launch-screen")?.remove();
+
+  if (
+    typeof performance !== "undefined" &&
+    performance.getEntriesByName("tc_app_bootstrap_duration").length === 0
+  ) {
+    try {
+      performance.mark("tc_app_bootstrap_end");
+      performance.measure(
+        "tc_app_bootstrap_duration",
+        "tc_app_bootstrap_start",
+        "tc_app_bootstrap_end",
+      );
+      const duration = performance.getEntriesByName("tc_app_bootstrap_duration")[0]?.duration;
+      if (duration !== undefined) {
+        console.info(`[Travel Companion Performance] tc_app_bootstrap_duration=${duration.toFixed(2)}ms`);
+      }
+    } catch {
+      console.warn("App bootstrap performance measurement is unavailable");
+    }
+  }
 };
 
 const AppLaunchReady = () => {
@@ -182,7 +205,7 @@ export default function App() {
 function ConfiguredApp({
   supabaseClient: supabase,
 }: {
-  supabaseClient: NonNullable<typeof supabase>;
+  supabaseClient: ConfiguredSupabaseClient;
 }) {
   const {
     updateAvailable,
@@ -248,6 +271,16 @@ function ConfiguredApp({
     defaultParticipantProfiles,
     refreshDefaultParticipantProfiles,
   } = useTripWorkspace({ supabase });
+  const {
+    isSystemDeveloper,
+    isUsageModalOpen,
+    isUsageLoading,
+    usageSummary,
+    usageError,
+    openUsageModal,
+    closeUsageModal,
+    refreshUsageSummary,
+  } = useSystemUsage({ supabase, userId, userEmail, isOnline });
   const [historicalEvaluationTime, setHistoricalEvaluationTime] = useState(
     () => new Date(),
   );
@@ -991,6 +1024,15 @@ function ConfiguredApp({
       isMandatoryRelease={IS_MANDATORY_RELEASE}
       onClose={() => setIsVersionInfoOpen(false)}
     />
+    <UsageSummaryModal
+      isOpen={isUsageModalOpen}
+      onClose={closeUsageModal}
+      onRetry={() => void refreshUsageSummary()}
+      isLoading={isUsageLoading}
+      summary={usageSummary}
+      error={usageError}
+    />
+
     <div className="min-h-screen bg-slate-50 text-slate-800 font-sans antialiased overflow-x-hidden">
       <AppSidebar
         isMenuOpen={isMenuOpen}
@@ -1045,6 +1087,8 @@ function ConfiguredApp({
         }}
         appVersion={currentVersion}
         onOpenVersionInfo={() => setIsVersionInfoOpen(true)}
+        isSystemDeveloper={isSystemDeveloper}
+        onOpenUsageModal={openUsageModal}
       />
 
       {isTripEditorOpen &&
@@ -1205,12 +1249,12 @@ function ConfiguredApp({
             )}
 
             {/* 3. 純文字/備忘錄模組 */}
-            {currentScreenType === "text" && (
+            {currentScreenType === "text" && currentTrip && (
               <TextInfoPage content={currentTrip.content.custom_tab_1} />
             )}
 
             {/* 4. 其他資訊模組 */}
-            {currentScreenType === "otherInfo" && (
+            {currentScreenType === "otherInfo" && currentTrip && (
               <OtherInfoPage
                 key={`${selectedTripId}-${currentScreen}`}
                 tripId={selectedTripId}
