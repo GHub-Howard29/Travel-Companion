@@ -207,6 +207,8 @@ export const ItineraryPage = ({
   const [commonsEntityChoices, setCommonsEntityChoices] = useState<CommonsResolvedEntity[]>([]);
   const [commonsCandidates, setCommonsCandidates] = useState<CommonsPhotoCandidate[]>([]);
   const [commonsNextPageToken, setCommonsNextPageToken] = useState<string | null>(null);
+  const [commonsExtendedCandidates, setCommonsExtendedCandidates] = useState<CommonsPhotoCandidate[]>([]);
+  const [commonsExtensionPageToken, setCommonsExtensionPageToken] = useState<string | null>(null);
   const [commonsSeenFileTitles, setCommonsSeenFileTitles] = useState<Set<string>>(new Set());
   const [selectedCommonsPhoto, setSelectedCommonsPhoto] = useState<CommonsPhotoCandidate | null>(null);
   const [coverDialogStep, setCoverDialogStep] = useState<"search" | "confirm">("search");
@@ -223,6 +225,8 @@ export const ItineraryPage = ({
   const photoViewerOpenerRef = useRef<HTMLElement | null>(null);
   const copyTimeAlertButtonRef = useRef<HTMLButtonElement | null>(null);
   const copyTimeCompositionRef = useRef(false);
+  const itineraryTimeCompositionRef = useRef(false);
+  const timeAdjustmentCompositionRef = useRef(false);
   const orderSensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
@@ -334,13 +338,26 @@ export const ItineraryPage = ({
     }));
   };
 
-  const updateArrivalTime = (value: string) => {
-    updateDraft({ time: value });
+  const formatTimeInput = (value: string, previousValue: string, isComposing: boolean) => {
+    const removedFormattedColon = /^\d{2}:\d{2}$/.test(previousValue) && value === previousValue.replace(":", "");
+    return isComposing || removedFormattedColon ? value : formatCompleteNumericTimeInput(value);
+  };
+
+  const restoreTimeCaret = (input: HTMLInputElement, nextValue: string) => {
+    requestAnimationFrame(() => input.setSelectionRange(nextValue.length, nextValue.length));
+  };
+
+  const updateArrivalTime = (value: string, input?: HTMLInputElement) => {
+    const nextValue = formatTimeInput(value, draft.time, itineraryTimeCompositionRef.current);
+    updateDraft({ time: nextValue });
+    if (input && nextValue !== value) restoreTimeCaret(input, nextValue);
     setTimeErrors((current) => ({ ...current, arrival: undefined }));
   };
 
-  const updateDepartureTime = (value: string) => {
-    updateDraft({ departureTime: value });
+  const updateDepartureTime = (value: string, input?: HTMLInputElement) => {
+    const nextValue = formatTimeInput(value, draft.departureTime ?? "", itineraryTimeCompositionRef.current);
+    updateDraft({ departureTime: nextValue });
+    if (input && nextValue !== value) restoreTimeCaret(input, nextValue);
     setTimeErrors((current) => ({ ...current, departure: undefined }));
   };
 
@@ -723,6 +740,8 @@ export const ItineraryPage = ({
     setCommonsEntityChoices([]);
     setCommonsCandidates([]);
     setCommonsNextPageToken(null);
+    setCommonsExtendedCandidates([]);
+    setCommonsExtensionPageToken(null);
     setCommonsSeenFileTitles(new Set());
     setSelectedCommonsPhoto(null);
     setCoverDialogStep("search");
@@ -739,6 +758,8 @@ export const ItineraryPage = ({
     setCommonsEntityChoices([]);
     setCommonsCandidates([]);
     setCommonsNextPageToken(null);
+    setCommonsExtendedCandidates([]);
+    setCommonsExtensionPageToken(null);
     setCommonsSeenFileTitles(new Set());
     setSelectedCommonsPhoto(null);
     setCoverDialogStep("search");
@@ -788,6 +809,8 @@ export const ItineraryPage = ({
   const startCommonsSearch = () => {
     setCommonsCandidates([]);
     setCommonsNextPageToken(null);
+    setCommonsExtendedCandidates([]);
+    setCommonsExtensionPageToken(null);
     setCommonsSeenFileTitles(new Set());
     setSelectedCommonsPhoto(null);
     setCommonsPageStatus(null);
@@ -801,6 +824,7 @@ export const ItineraryPage = ({
     nextPageToken: string | undefined = undefined,
     seenFileTitles = commonsSeenFileTitles,
     selectedEntityQid: string | undefined = undefined,
+    candidateTier: "exact" | "extended" = "exact",
   ) => {
     const query = queryValue.trim();
     if (query.length < 2) {
@@ -822,16 +846,34 @@ export const ItineraryPage = ({
       const nextSeenFileTitles = new Set(seenFileTitles);
       result.candidates.forEach((candidate) => nextSeenFileTitles.add(candidate.fileTitle));
       setCommonsSeenFileTitles(nextSeenFileTitles);
-      setCommonsCandidates(freshCandidates);
       const nextToken = result.nextPageToken ?? null;
+      const nextExtensionToken = result.extensionPageToken ?? null;
+      if (candidateTier === "extended") {
+        setCommonsExtendedCandidates(freshCandidates.slice(0, 6));
+        setCommonsExtensionPageToken(nextExtensionToken);
+        setCommonsPageStatus(freshCandidates.length > 0
+          ? nextExtensionToken ? null : "exhausted"
+          : nextExtensionToken ? "duplicate-page" : "exhausted");
+        return;
+      }
+      setCommonsExtensionPageToken(nextExtensionToken);
       if (result.state !== "results") {
         if (result.state === "entity-ambiguous" && result.entityChoices?.length) {
           setCommonsCandidates([]);
         }
-        setCommonsNextPageToken(null);
+        if (result.state === "no-suitable-image" && !nextPageToken && nextToken) {
+          setCommonsNextPageToken(nextToken);
+          setCommonsPageStatus("empty-first-page");
+          await searchCommonsPhotos(query, nextToken, nextSeenFileTitles);
+          return;
+        }
+        setCommonsNextPageToken(nextToken);
         setCommonsPageStatus(result.state === "no-suitable-image" || result.state === "offline" ? "empty-first-page" : result.state);
         return;
       }
+      setCommonsCandidates(nextPageToken
+        ? [...commonsCandidates, ...freshCandidates].slice(-12)
+        : freshCandidates);
       if (freshCandidates.length === 0) {
         setCommonsNextPageToken(nextPageToken ? nextToken : null);
         setCommonsPageStatus(!nextPageToken
@@ -1039,13 +1081,13 @@ export const ItineraryPage = ({
       ...(!arrivalResult.isValid
         ? {
             arrival:
-              "到達時間格式有誤。請輸入HH:MM，例如 08:00",
+              "到達時間格式有誤。請輸入 H:MM、HH:MM 或四碼數字，例如 8:00、08:00、0800。",
           }
         : {}),
       ...(!departureResult.isValid
         ? {
             departure:
-              "離開時間格式有誤。請輸入HH:MM，例如 08:00",
+              "離開時間格式有誤。請輸入 H:MM、HH:MM 或四碼數字，例如 8:00、08:00、0800。",
           }
         : {}),
     };
@@ -1094,6 +1136,10 @@ export const ItineraryPage = ({
       desc: trimRichText(draft.desc),
       location: draft.location.trim(),
     };
+    if (nextEvent.travelKind === "flight") {
+      delete nextEvent.travelToNext;
+      delete nextEvent.travelModeToNext;
+    }
     const nextEvents =
       editingIndex === null
         ? [...currentEvents, nextEvent]
@@ -1224,8 +1270,15 @@ export const ItineraryPage = ({
             <input
               id="itinerary-arrival-time-input"
               value={draft.time}
-              onChange={(event) => updateArrivalTime(event.target.value)}
-              placeholder="例如 08:00"
+              type="text"
+              inputMode="numeric"
+              onCompositionStart={() => { itineraryTimeCompositionRef.current = true; }}
+              onCompositionEnd={(event) => {
+                itineraryTimeCompositionRef.current = false;
+                updateArrivalTime(event.currentTarget.value, event.currentTarget);
+              }}
+              onChange={(event) => updateArrivalTime(event.target.value, event.currentTarget)}
+              placeholder="例如 08:00 或 0800"
               aria-invalid={Boolean(timeErrors.arrival)}
               aria-describedby={timeErrors.arrival ? `${errorIdPrefix}-arrival-time-error` : undefined}
               className={`w-full rounded-lg border px-3 py-2 text-base focus:outline-none focus:ring-2 sm:text-sm ${
@@ -1245,8 +1298,15 @@ export const ItineraryPage = ({
             <input
               id="itinerary-departure-time-input"
               value={draft.departureTime ?? ""}
-              onChange={(event) => updateDepartureTime(event.target.value)}
-              placeholder="例如 12:20"
+              type="text"
+              inputMode="numeric"
+              onCompositionStart={() => { itineraryTimeCompositionRef.current = true; }}
+              onCompositionEnd={(event) => {
+                itineraryTimeCompositionRef.current = false;
+                updateDepartureTime(event.currentTarget.value, event.currentTarget);
+              }}
+              onChange={(event) => updateDepartureTime(event.target.value, event.currentTarget)}
+              placeholder="例如 12:20 或 1220"
               aria-invalid={Boolean(timeErrors.departure)}
               aria-describedby={timeErrors.departure ? `${errorIdPrefix}-departure-time-error` : undefined}
               className={`w-full rounded-lg border px-3 py-2 text-base focus:outline-none focus:ring-2 sm:text-sm ${
@@ -1622,8 +1682,23 @@ export const ItineraryPage = ({
                     <input
                       id="time-adjustment-departure"
                       value={timeAdjustmentDeparture}
-                      onChange={(event) => { setTimeAdjustmentDeparture(event.target.value); setTimeAdjustmentResult(null); }}
-                      placeholder="例如 10:30"
+                      type="text"
+                      inputMode="numeric"
+                      onCompositionStart={() => { timeAdjustmentCompositionRef.current = true; }}
+                      onCompositionEnd={(event) => {
+                        timeAdjustmentCompositionRef.current = false;
+                        const nextValue = formatTimeInput(event.currentTarget.value, timeAdjustmentDeparture, false);
+                        setTimeAdjustmentDeparture(nextValue);
+                        setTimeAdjustmentResult(null);
+                        if (nextValue !== event.currentTarget.value) restoreTimeCaret(event.currentTarget, nextValue);
+                      }}
+                      onChange={(event) => {
+                        const nextValue = formatTimeInput(event.target.value, timeAdjustmentDeparture, timeAdjustmentCompositionRef.current);
+                        setTimeAdjustmentDeparture(nextValue);
+                        setTimeAdjustmentResult(null);
+                        if (nextValue !== event.target.value) restoreTimeCaret(event.currentTarget, nextValue);
+                      }}
+                      placeholder="例如 10:30 或 1030"
                       className="w-full rounded-lg border border-emerald-200 bg-white px-3 py-2 text-base focus:outline-none focus:ring-2 focus:ring-emerald-500 sm:text-sm"
                     />
                   </label>
@@ -2009,6 +2084,8 @@ export const ItineraryPage = ({
                       setCommonsEntityChoices([]);
                       setCommonsCandidates([]);
                       setCommonsNextPageToken(null);
+                      setCommonsExtendedCandidates([]);
+                      setCommonsExtensionPageToken(null);
                       setCommonsSeenFileTitles(new Set());
                       setSelectedCommonsPhoto(null);
                       setCommonsPageStatus(null);
@@ -2025,22 +2102,8 @@ export const ItineraryPage = ({
                 {coverPhotoError && <p className="mt-3 text-xs text-rose-700" aria-live="polite">{coverPhotoError}</p>}
                 {commonsResolvedEntity && (
                   <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900" aria-live="polite">
-                    <span>搜尋範圍：<strong>{commonsResolvedEntity.label}</strong></span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setCommonsResolvedEntity(null);
-                        setCommonsCandidates([]);
-                        setCommonsNextPageToken(null);
-                        setCommonsSeenFileTitles(new Set());
-                        setSelectedCommonsPhoto(null);
-                        setCommonsPageStatus(null);
-                        requestAnimationFrame(() => coverDialogRef.current?.querySelector<HTMLInputElement>("input[aria-label='Commons 搜尋詞']")?.focus());
-                      }}
-                      className="font-bold text-emerald-800 underline hover:text-emerald-950"
-                    >
-                      變更關鍵字
-                    </button>
+                    <span>已辨識搜尋範圍：<strong>{commonsResolvedEntity.label}</strong></span>
+                    <span>修改上方搜尋詞可重新判定範圍。</span>
                   </div>
                 )}
                 {commonsEntityChoices.length > 0 && (
@@ -2057,6 +2120,8 @@ export const ItineraryPage = ({
                           onClick={() => {
                             setCommonsCandidates([]);
                             setCommonsNextPageToken(null);
+                            setCommonsExtendedCandidates([]);
+                            setCommonsExtensionPageToken(null);
                             setCommonsSeenFileTitles(new Set());
                             setSelectedCommonsPhoto(null);
                             setCommonsPageStatus(null);
@@ -2077,7 +2142,7 @@ export const ItineraryPage = ({
                 {commonsPageStatus && (
                   <p className="mt-3 text-xs text-slate-600" aria-live="polite">
                     {{
-                      "empty-first-page": "找不到符合條件的照片，請調整搜尋詞後再試。",
+                      "empty-first-page": "第一批沒有符合條件的照片，系統已自動再查一批；之後可手動換一批或調整搜尋詞。",
                       "duplicate-page": "這一批沒有新的照片；可再換一批或調整搜尋詞。",
                       exhausted: "已沒有更多照片；可調整搜尋詞或改用其他來源。",
                       "entity-not-found": "找不到可精確對應的地點實體，請使用完整地點名稱或調整關鍵字後再試。",
@@ -2126,6 +2191,7 @@ export const ItineraryPage = ({
                                 符合依據：{candidate.matchEvidence.map((evidence) => ({
                                   p18: "Wikidata 代表圖",
                                   "exact-category": "直接 Commons 分類",
+                                  "related-category": "一層相關 Commons 分類",
                                   "structured-depicts": "結構化描繪實體",
                                   description: "描述精確命中",
                                   filename: "檔名命中",
@@ -2150,10 +2216,58 @@ export const ItineraryPage = ({
                     })}
                   </div>
                 )}
+                {commonsExtendedCandidates.length > 0 && (
+                  <section className="mt-5 border-t border-slate-200 pt-4" aria-labelledby="commons-extended-title">
+                    <h4 id="commons-extended-title" className="text-sm font-bold text-slate-800">延伸候選</h4>
+                    <p className="mt-1 text-xs leading-relaxed text-slate-600">來自一層已驗證相關分類；請人工確認整體建築、景觀或可辨識的內部場景是否適合作為代表照片。</p>
+                    <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3" role="radiogroup" aria-label="Commons 延伸候選照片">
+                      {commonsExtendedCandidates.map((candidate) => {
+                        const isSelected = selectedCommonsPhoto?.fileTitle === candidate.fileTitle;
+                        const name = candidate.fileTitle.replace(/^File:/, "");
+                        return (
+                          <article key={candidate.fileTitle} className={`overflow-hidden rounded-xl border ${isSelected ? "border-emerald-600 ring-2 ring-emerald-100" : "border-slate-200"}`}>
+                            <button
+                              type="button"
+                              onClick={(clickEvent) => openPhotoViewer({
+                                url: candidate.thumbnailUrl,
+                                alt: name,
+                                sourceLabel: "Wikimedia Commons",
+                                sourcePageUrl: candidate.sourcePageUrl,
+                                creator: candidate.creator,
+                                credit: candidate.credit,
+                                license: candidate.license,
+                                licenseUrl: candidate.licenseUrl,
+                              }, clickEvent.currentTarget)}
+                              className="group relative block w-full outline-none ring-inset ring-emerald-500 focus:ring-2"
+                              aria-label={`放大檢視延伸候選「${name}」`}
+                            >
+                              <img src={candidate.thumbnailUrl} alt="" loading="lazy" referrerPolicy="no-referrer" className="h-28 w-full bg-slate-100 object-cover" />
+                              <span className="absolute bottom-2 right-2 rounded-full bg-slate-950/70 p-1.5 text-white"><Eye size={14} /></span>
+                            </button>
+                            <div className="p-2">
+                              <strong className="line-clamp-2 block text-xs text-slate-800">{name}</strong>
+                              <span className="mt-1 block text-[11px] text-slate-500">{candidate.creator}</span>
+                              <span className="mt-1 block text-[11px] font-semibold text-emerald-700">{candidate.license}</span>
+                              <label className={`mt-2 flex w-full cursor-pointer items-center justify-center rounded-lg px-2 py-1.5 text-xs font-bold ${isSelected ? "bg-emerald-700 text-white" : "bg-emerald-50 text-emerald-700 hover:bg-emerald-100"}`}>
+                                <input type="radio" name="commons-photo-candidate" checked={isSelected} onChange={() => setSelectedCommonsPhoto(candidate)} className="sr-only" />
+                                {isSelected ? "已選取" : "選取照片"}
+                              </label>
+                            </div>
+                          </article>
+                        );
+                      })}
+                    </div>
+                  </section>
+                )}
                 <div className="mt-4 flex flex-col gap-2 border-t border-slate-100 pt-4 sm:flex-row sm:items-center">
                   {commonsNextPageToken !== null && (
                     <button type="button" onClick={() => void searchCommonsPhotos(commonsQuery, commonsNextPageToken)} disabled={!isOnline || isCommonsSearching || isCoverSaving} className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-700 hover:bg-emerald-100 disabled:opacity-50">
                       換一批
+                    </button>
+                  )}
+                  {commonsNextPageToken === null && commonsExtensionPageToken !== null && (
+                    <button type="button" onClick={() => void searchCommonsPhotos(commonsQuery, commonsExtensionPageToken, commonsSeenFileTitles, undefined, "extended")} disabled={!isOnline || isCommonsSearching || isCoverSaving} className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-sm font-bold text-sky-700 hover:bg-sky-100 disabled:opacity-50">
+                      {commonsExtendedCandidates.length > 0 ? "換一批延伸候選" : "載入延伸候選"}
                     </button>
                   )}
                   <div className="flex flex-col gap-2 sm:ml-auto sm:flex-row">

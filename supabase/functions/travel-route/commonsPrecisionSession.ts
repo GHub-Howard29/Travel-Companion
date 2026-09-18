@@ -1,6 +1,8 @@
 import {
   COMMONS_PRECISION_CONTRACT_VERSION,
   COMMONS_PRECISION_MAX_INSPECTED,
+  COMMONS_PRECISION_MAX_DURATION_MS,
+  COMMONS_PRECISION_MAX_REQUESTS,
 } from "./commonsPrecision.ts";
 import type { CommonsPrecisionRequestLayer } from "./commonsPrecisionWikimedia.ts";
 
@@ -9,18 +11,23 @@ export const COMMONS_PRECISION_TOKEN_MAX_BYTES = 4_096;
 
 const QID = /^Q[1-9][0-9]*$/;
 const SHA256 = /^[a-f0-9]{64}$/;
-const CONTINUABLE_LAYER = new Set<CommonsPrecisionRequestLayer>([
+type CommonsPrecisionSessionLayer = Extract<CommonsPrecisionRequestLayer, "read-category-files" | "search-adopted-text"> | "read-related-category-files";
+const CONTINUABLE_LAYER = new Set<CommonsPrecisionSessionLayer>([
   "read-category-files",
   "search-adopted-text",
+  "read-related-category-files",
 ]);
 
 export interface CommonsPrecisionSessionPayload {
   contractVersion: typeof COMMONS_PRECISION_CONTRACT_VERSION;
   qid: string;
   adoptedQueryHash: string;
-  layer: Extract<CommonsPrecisionRequestLayer, "read-category-files" | "search-adopted-text">;
+  layer: CommonsPrecisionSessionLayer;
   continuation: string;
   seenPageIds: number[];
+  requestCount: number;
+  durationMs: number;
+  extensionCategory?: string;
   issuedAtMs: number;
   expiresAtMs: number;
 }
@@ -59,6 +66,9 @@ const isValidSessionPayload = (value: unknown): value is CommonsPrecisionSession
     typeof candidate.continuation === "string" && candidate.continuation.length > 0 && candidate.continuation.length <= 1_000 &&
     Array.isArray(candidate.seenPageIds) && candidate.seenPageIds.length <= COMMONS_PRECISION_MAX_INSPECTED &&
     candidate.seenPageIds.every((pageId) => Number.isSafeInteger(pageId) && pageId > 0) &&
+    typeof candidate.requestCount === "number" && Number.isSafeInteger(candidate.requestCount) && candidate.requestCount >= 0 && candidate.requestCount <= COMMONS_PRECISION_MAX_REQUESTS &&
+    typeof candidate.durationMs === "number" && Number.isSafeInteger(candidate.durationMs) && candidate.durationMs >= 0 && candidate.durationMs <= COMMONS_PRECISION_MAX_DURATION_MS &&
+    (candidate.extensionCategory === undefined || (typeof candidate.extensionCategory === "string" && candidate.extensionCategory.length > 0 && candidate.extensionCategory.length <= 200)) &&
     typeof candidate.issuedAtMs === "number" && Number.isSafeInteger(candidate.issuedAtMs) &&
     typeof candidate.expiresAtMs === "number" && Number.isSafeInteger(candidate.expiresAtMs) &&
     candidate.expiresAtMs > candidate.issuedAtMs &&
@@ -84,6 +94,9 @@ export const sealCommonsPrecisionNextPageToken = async (
     layer: CommonsPrecisionSessionPayload["layer"];
     continuation: string;
     seenPageIds: readonly number[];
+    requestCount?: number;
+    durationMs?: number;
+    extensionCategory?: string;
   },
   key: CryptoKey,
   nowMs: number,
@@ -92,6 +105,11 @@ export const sealCommonsPrecisionNextPageToken = async (
   if (!QID.test(input.qid) || !SHA256.test(input.adoptedQueryHash) || !CONTINUABLE_LAYER.has(input.layer) ||
     !input.continuation || input.continuation.length > 1_000) {
     throw new RangeError("候選 session token 內容不正確");
+  }
+  if (!Number.isSafeInteger(input.requestCount ?? 0) || (input.requestCount ?? 0) < 0 || (input.requestCount ?? 0) > COMMONS_PRECISION_MAX_REQUESTS ||
+    !Number.isSafeInteger(input.durationMs ?? 0) || (input.durationMs ?? 0) < 0 || (input.durationMs ?? 0) > COMMONS_PRECISION_MAX_DURATION_MS ||
+    (input.extensionCategory !== undefined && (!input.extensionCategory.trim() || input.extensionCategory.length > 200))) {
+    throw new RangeError("候選 session 預算或延伸分類不正確");
   }
   if (!Number.isSafeInteger(nowMs) || nowMs < 0) throw new RangeError("token 時間不正確");
   const seenPageIds = [...new Set(input.seenPageIds)].filter((pageId) => Number.isSafeInteger(pageId) && pageId > 0).slice(0, COMMONS_PRECISION_MAX_INSPECTED);
@@ -102,6 +120,9 @@ export const sealCommonsPrecisionNextPageToken = async (
     layer: input.layer,
     continuation: input.continuation,
     seenPageIds,
+    requestCount: input.requestCount ?? 0,
+    durationMs: input.durationMs ?? 0,
+    ...(input.extensionCategory ? { extensionCategory: input.extensionCategory } : {}),
     issuedAtMs: nowMs,
     expiresAtMs: nowMs + COMMONS_PRECISION_SESSION_TTL_MS,
   };

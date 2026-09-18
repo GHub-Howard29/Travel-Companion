@@ -43,14 +43,19 @@ export interface CommonsCategoryPage {
   continuation?: string;
 }
 
+export interface CommonsRelatedCategoryPage {
+  categories: string[];
+}
+
 export interface CommonsFileEvidenceSeed extends CommonsFileSeed {
   directP18: boolean;
   exactCategories: string[];
+  relatedCategories?: string[];
   fromAdoptedTextSearch: boolean;
 }
 
 export interface CommonsFileEvidenceInput extends CommonsFileSeed {
-  kind: "p18" | "exact-category" | "adopted-text";
+  kind: "p18" | "exact-category" | "related-category" | "adopted-text";
   category?: string;
 }
 
@@ -209,6 +214,18 @@ export const parseCommonsCategoryMembersResponse = (payload: unknown): CommonsCa
   };
 };
 
+export const parseCommonsRelatedCategoriesResponse = (payload: unknown): CommonsRelatedCategoryPage => {
+  const members = isRecord(payload) && isRecord(payload.query) && Array.isArray(payload.query.categorymembers)
+    ? payload.query.categorymembers
+    : [];
+  const categories = members.flatMap((member) => {
+    if (!isRecord(member) || member.ns !== 14 || typeof member.title !== "string") return [];
+    const category = member.title.replace(/^Category:/i, "").normalize("NFKC").replace(/\s+/g, " ").trim();
+    return category && category.length <= 200 ? [category] : [];
+  });
+  return { categories: unique(categories).slice(0, 3) };
+};
+
 export const parseCommonsDepictsResponse = (
   payload: unknown,
   pageIds: readonly number[],
@@ -241,6 +258,9 @@ export const mergeCommonsFileEvidence = (
     if (input.kind === "exact-category" && input.category?.trim()) {
       current.exactCategories = unique([...current.exactCategories, input.category.trim()]);
     }
+    if (input.kind === "related-category" && input.category?.trim()) {
+      current.relatedCategories = unique([...(current.relatedCategories ?? []), input.category.trim()]);
+    }
     if (input.kind === "adopted-text") current.fromAdoptedTextSearch = true;
     merged.set(key, current);
   }
@@ -252,6 +272,7 @@ export type CommonsPrecisionRequestLayer =
   | "read-entity-evidence"
   | "read-p18-files"
   | "read-category-files"
+  | "read-related-categories"
   | "read-structured-data"
   | "search-adopted-text";
 

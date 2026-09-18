@@ -34,7 +34,8 @@ Google 路徑、真實照片 spike、現有架構、降級與成本模型已完�
 - [x] V3.9.2 BUG031：正式建置隔離、建置前 URL 驗證、產物掃描、lint、完整 verify chain、production build、`main`、`v3.9.2`、GitHub Pages、必要更新與登入／Guest 正式站 smoke 均已完成。
 - [x] V3.9.3 本機發布前收斂：verify 聚合、冷啟動埋點、系統開發者 capability、使用紀錄 migration／RPC、側邊欄彙總 UI、TypeScript／lint／build、本機 Supabase 與桌面／390×844 回歸均已通過。
 - [x] V3.9.3 正式發布：production preflight／migration／postflight、`main`／`develop`、annotated tag `v3.9.3`、GitHub Pages 與正式 metadata 均已完成；發布提交為 `3e92c22`。
-- [ ] V3.9.4：依《56》先建立照片搜尋請求成本、hit@6、零候選、去重與快取基線，再改善前置去重、解析重用、提前停止、negative cache 與續頁效率；外部矩陣、額度調整與實作均未授權。
+- [ ] V3.9.4：完成 Commons 精確搜尋零候選自動續頁、session 12／30 秒／40 檔累積上限、12 張精確候選、一層相關分類延伸候選與搜尋範圍純狀態提示的本機驗證；Pexels 只待管理者設定 server-side key 後執行隔離命中矩陣，不寫 production；Pixabay 維持停用。
+- [ ] V3.9.5：完成航班卡片排除下一站地面交通，以及每日到達／離開／時間調整四碼、全形、IME 輸入規格的本機驗證；詳見《57》。
 - [ ] V3.9.6：在已另行規劃的 V3.9.5 之後，先建立完整 build 各驗證群組、TypeScript 與 Vite build 的耗時基線；再依領域整併驗證套件與失敗報告。完整發布驗證不得縮減，快速日常檢查不得取代 release build；不含功能、資料庫、Edge、CI、版本 metadata 或部署變更。
 - [ ] V3.9.7：在 V3.9.6 完成後，量測離線刷新約 30 秒載入既有資料的分段原因，再決定是否修正。只在本機記錄 Service Worker／navigation、session、Trip 快取、localStorage、IndexedDB 與首個可操作畫面耗時；不得上傳資料或破壞 Offline First、墓碑、pending 與同步安全。V3.6.5 的更新後載入改善與 V3.9.3 的冷啟動總埋點不重複安排。
 - [ ] V3.9.8：在 V3.9.7 的離線回歸可重現後，建立零費用本機 Playwright E2E，使用 loopback Supabase、合成帳號與 fixture 驗證桌面／390×844 的核心流程、離線快取、可及性、水平溢位與 Commons 歧義狀態；不使用 production、外部 API、付費雲端實機或長期憑證。Android／iOS PWA、OAuth、相機與原生行為仍列人工實機補驗。

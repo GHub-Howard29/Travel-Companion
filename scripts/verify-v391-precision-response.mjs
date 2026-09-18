@@ -56,9 +56,11 @@ const projected = projectCommonsPrecisionResponse({
   candidates: [evaluation.candidate],
   resolvedEntity: { qid: "Q100", label: "Terminal One", description: "airport terminal" },
   nextPageToken: "cp1.abcdefghijklmnop",
+  extensionPageToken: "cp1.ponmlkjihgfedcba",
 });
 assert.equal(projected.contractVersion, "commons-precision-v1");
 assert.equal(projected.nextPageToken, "cp1.abcdefghijklmnop");
+assert.equal(projected.extensionPageToken, "cp1.ponmlkjihgfedcba");
 assert.deepEqual(projected.resolvedEntity, { qid: "Q100", label: "Terminal One", description: "airport terminal" });
 assert.equal("targetQid" in projected.candidates[0], false);
 assert.deepEqual(projectCommonsPrecisionResponse({ state: "no-suitable-image", candidates: [] }), {

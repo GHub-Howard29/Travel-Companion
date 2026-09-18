@@ -1,8 +1,8 @@
 export const COMMONS_PRECISION_MIN_SCORE = 25;
 export const COMMONS_PRECISION_PAGE_SIZE = 6;
-export const COMMONS_PRECISION_MAX_REQUESTS = 9;
-export const COMMONS_PRECISION_MAX_DURATION_MS = 20_000;
-export const COMMONS_PRECISION_MAX_INSPECTED = 30;
+export const COMMONS_PRECISION_MAX_REQUESTS = 12;
+export const COMMONS_PRECISION_MAX_DURATION_MS = 30_000;
+export const COMMONS_PRECISION_MAX_INSPECTED = 40;
 export const COMMONS_PRECISION_CONTRACT_VERSION = "commons-precision-v1";
 
 export type CommonsPrecisionState =
@@ -22,6 +22,7 @@ export type CommonsPrecisionState =
 export type CommonsPrecisionEvidenceKind =
   | "p18"
   | "exact-category"
+  | "related-category"
   | "structured-depicts"
   | "description"
   | "filename"
@@ -57,6 +58,7 @@ export interface CommonsPrecisionRawCandidate {
   targetNames: CommonsPrecisionName[];
   directP18?: boolean;
   exactCategories?: string[];
+  relatedCategories?: string[];
   depictsQids?: string[];
   reliableCapturedAt?: string;
   currentAppearanceVerified?: boolean;
@@ -106,6 +108,7 @@ export interface CommonsPrecisionResponse {
   resolvedEntity?: CommonsPrecisionResolvedEntity;
   entityChoices?: CommonsPrecisionResolvedEntity[];
   nextPageToken?: string;
+  extensionPageToken?: string;
 }
 
 export interface CommonsPrecisionResolvedEntity {
@@ -143,6 +146,7 @@ export interface CommonsPrecisionPublicResponse {
   resolvedEntity?: CommonsPrecisionResolvedEntity;
   entityChoices?: CommonsPrecisionResolvedEntity[];
   nextPageToken?: string;
+  extensionPageToken?: string;
 }
 
 export const projectCommonsPrecisionCandidate = (
@@ -177,14 +181,19 @@ export const projectCommonsPrecisionResponse = (input: {
   resolvedEntity?: CommonsPrecisionResolvedEntity;
   entityChoices?: CommonsPrecisionResolvedEntity[];
   nextPageToken?: string;
+  extensionPageToken?: string;
 }): CommonsPrecisionPublicResponse => {
   if (input.candidates.length > COMMONS_PRECISION_PAGE_SIZE ||
     new Set(input.candidates.map((candidate) => candidate.fileTitle)).size !== input.candidates.length) {
     throw new RangeError("候選回應數量或去重契約不正確");
   }
   if (input.nextPageToken !== undefined &&
-    (input.state !== "results" || !OPAQUE_NEXT_PAGE_TOKEN.test(input.nextPageToken))) {
+    (!["results", "no-suitable-image"].includes(input.state) || !OPAQUE_NEXT_PAGE_TOKEN.test(input.nextPageToken))) {
     throw new RangeError("nextPageToken 必須為同一 session 的不透明 token");
+  }
+  if (input.extensionPageToken !== undefined &&
+    (!["results", "no-suitable-image"].includes(input.state) || !OPAQUE_NEXT_PAGE_TOKEN.test(input.extensionPageToken))) {
+    throw new RangeError("extensionPageToken 必須為同一 session 的不透明 token");
   }
   return {
     contractVersion: COMMONS_PRECISION_CONTRACT_VERSION,
@@ -192,7 +201,8 @@ export const projectCommonsPrecisionResponse = (input: {
     candidates: input.candidates.map(projectCommonsPrecisionCandidate),
     ...(input.resolvedEntity ? { resolvedEntity: { ...input.resolvedEntity } } : {}),
     ...(input.entityChoices?.length ? { entityChoices: input.entityChoices.map((entity) => ({ ...entity })) } : {}),
-    ...(input.state === "results" && input.nextPageToken !== undefined ? { nextPageToken: input.nextPageToken } : {}),
+    ...(input.nextPageToken !== undefined ? { nextPageToken: input.nextPageToken } : {}),
+    ...(input.extensionPageToken !== undefined ? { extensionPageToken: input.extensionPageToken } : {}),
   };
 };
 
@@ -318,6 +328,15 @@ export const evaluateCommonsPrecisionCandidate = (
       category,
     })));
   }
+  const relatedCategories = [...new Set(input.relatedCategories?.map((category) => category.trim()).filter(Boolean) ?? [])].slice(0, 10);
+  if (relatedCategories.length > 0) {
+    scoreBreakdown.push({ rule: "related-category", points: 25, evidence: relatedCategories.join(" | ") });
+    matchEvidence.push(...relatedCategories.map((category) => ({
+      kind: "related-category" as const,
+      qid: input.targetQid,
+      category,
+    })));
+  }
   if (depictsTarget) {
     scoreBreakdown.push({ rule: "structured-depicts", points: 25, evidence: input.targetQid });
     matchEvidence.push({ kind: "structured-depicts", qid: input.targetQid });
@@ -344,7 +363,7 @@ export const evaluateCommonsPrecisionCandidate = (
   }
 
   const strongEvidence = matchEvidence.some((evidence) =>
-    ["p18", "exact-category", "structured-depicts", "description"].includes(evidence.kind));
+    ["p18", "exact-category", "related-category", "structured-depicts", "description"].includes(evidence.kind));
   if (!strongEvidence) return { accepted: false, reason: "no-strong-evidence" };
   const score = scoreBreakdown.reduce((total, item) => total + item.points, 0);
   if (score < COMMONS_PRECISION_MIN_SCORE) return { accepted: false, reason: "score-below-threshold" };
@@ -404,8 +423,8 @@ export const validateCommonsPrecisionResponse = (response: CommonsPrecisionRespo
   if (new Set(response.candidates.map((candidate) => candidate.fileTitle)).size !== response.candidates.length) return false;
   if (response.candidates.some((candidate) => candidate.reviewStatus !== "needs-review" || candidate.score < COMMONS_PRECISION_MIN_SCORE)) return false;
   if (response.state === "results") return response.candidates.length > 0;
-  if (EMPTY_ONLY_STATES.has(response.state)) return response.candidates.length === 0 && response.nextPageToken === undefined;
-  if (PARTIAL_STATES.has(response.state)) return response.nextPageToken === undefined;
+  if (EMPTY_ONLY_STATES.has(response.state)) return response.candidates.length === 0;
+  if (PARTIAL_STATES.has(response.state)) return response.nextPageToken === undefined && response.extensionPageToken === undefined;
   return false;
 };
 

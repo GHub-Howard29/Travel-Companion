@@ -29,6 +29,9 @@ assert.equal(new URL(p18Plan.url).searchParams.get("iiurlwidth"), "640");
 
 const categoryPlan = planCommonsPrecisionRequest({ layer: "read-category-files", category: "Airport terminals", continuation: "opaque|next" });
 assert.equal(new URL(categoryPlan.url).searchParams.get("cmtype"), "file");
+const relatedCategoryPlan = planCommonsPrecisionRequest({ layer: "read-related-categories", category: "Taiwan Taoyuan International Airport" });
+assert.equal(new URL(relatedCategoryPlan.url).searchParams.get("cmtype"), "subcat");
+assert.equal(new URL(relatedCategoryPlan.url).searchParams.get("cmnamespace"), "14");
 assert.equal(new URL(categoryPlan.url).searchParams.get("cmnamespace"), "6");
 assert.equal(new URL(categoryPlan.url).searchParams.get("cmcontinue"), "opaque|next");
 

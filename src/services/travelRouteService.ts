@@ -56,6 +56,7 @@ export interface CommonsPhotoSearchResult {
   resolvedEntity?: CommonsResolvedEntity;
   entityChoices?: CommonsResolvedEntity[];
   nextPageToken?: string;
+  extensionPageToken?: string;
 }
 
 export interface CommonsResolvedEntity {

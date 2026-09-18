@@ -121,6 +121,18 @@ export const buildCommonsCategoryMembersParams = (
   return params;
 };
 
+export const buildCommonsRelatedCategoriesParams = (rawCategory: string): URLSearchParams => {
+  const category = rawCategory.normalize("NFKC").replace(/^Category:/i, "").replace(/\s+/g, " ").trim();
+  if (!category || category.length > 200) throw new RangeError("Commons 分類名稱須為 1 至 200 個字元");
+  const params = baseParams();
+  params.set("list", "categorymembers");
+  params.set("cmtitle", `Category:${category}`);
+  params.set("cmtype", "subcat");
+  params.set("cmnamespace", "14");
+  params.set("cmlimit", "6");
+  return params;
+};
+
 export const buildCommonsDepictsParams = (pageIds: readonly number[]): URLSearchParams => {
   const ids = unique(pageIds.filter((pageId) => Number.isSafeInteger(pageId) && pageId > 0)).slice(0, MAX_PAGE_IDS_PER_REQUEST);
   if (ids.length === 0) throw new RangeError("至少需要一筆有效 Commons page ID");
@@ -368,6 +380,7 @@ export const composeCommonsPrecisionCandidates = (input: {
       targetNames: input.entityEvidence.names as CommonsPrecisionName[],
       directP18: seed.directP18,
       exactCategories: seed.exactCategories,
+      relatedCategories: seed.relatedCategories,
       depictsQids: [...(input.depictsByPageId.get(file.pageId) ?? [])],
     }];
   });

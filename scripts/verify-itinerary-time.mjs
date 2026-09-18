@@ -26,6 +26,8 @@ assert.equal(formatCompleteNumericTimeInput("14-00"), "14-00");
 assert.equal(getItineraryTimeValue("08:00"), 8 * 60);
 assert.equal(getItineraryTimeValue("8:00"), 8 * 60);
 assert.equal(getItineraryTimeValue("08：00"), 8 * 60);
+assert.equal(getItineraryTimeValue("0800"), 8 * 60);
+assert.equal(getItineraryTimeValue("０８００"), 8 * 60);
 assert.equal(getItineraryTimeValue("08 : 00"), null);
 assert.equal(getItineraryTimeValue("08 ： 00"), null);
 assert.equal(getItineraryTimeValue("24:00"), null);
@@ -33,6 +35,7 @@ assert.equal(getItineraryTimeValue("08:60"), null);
 assert.equal(getItineraryTimeValue(""), null);
 
 assert.equal(normalizeItineraryTime("8：00"), "08:00");
+assert.equal(normalizeItineraryTime("0800"), "08:00");
 assert.equal(normalizeItineraryTime(" 08:00 "), "08:00");
 assert.equal(normalizeItineraryTime("08 : 00"), "08 : 00");
 assert.equal(isDepartureBeforeArrival("08:00", "06:00"), true);
@@ -45,6 +48,8 @@ assert.equal(isDepartureBeforeArrival("格式錯誤", "06:00"), false);
 assert.deepEqual(validateItineraryTime(""), { isValid: true, normalized: "" });
 assert.deepEqual(validateItineraryTime("  "), { isValid: true, normalized: "" });
 assert.deepEqual(validateItineraryTime("8：00"), { isValid: true, normalized: "08:00" });
+assert.deepEqual(validateItineraryTime("0800"), { isValid: true, normalized: "08:00" });
+assert.deepEqual(validateItineraryTime("０８００"), { isValid: true, normalized: "08:00" });
 assert.deepEqual(validateItineraryTime("08 : 00"), {
   isValid: false,
   normalized: "08 : 00",
@@ -88,6 +93,9 @@ assert.equal(validateRequiredItineraryTimeRange("09:00", "09:00").isValid, true)
 
 assert.match(itineraryPage, /id="copy-arrival-time-input"[\s\S]{0,500}type="text"[\s\S]{0,500}inputMode="numeric"/);
 assert.match(itineraryPage, /id="copy-departure-time-input"[\s\S]{0,500}type="text"[\s\S]{0,500}inputMode="numeric"/);
+assert.match(itineraryPage, /id="itinerary-arrival-time-input"[\s\S]{0,500}type="text"[\s\S]{0,500}inputMode="numeric"/);
+assert.match(itineraryPage, /id="itinerary-departure-time-input"[\s\S]{0,500}type="text"[\s\S]{0,500}inputMode="numeric"/);
+assert.match(itineraryPage, /id="time-adjustment-departure"[\s\S]{0,700}inputMode="numeric"/);
 assert.match(itineraryPage, /formatCompleteNumericTimeInput/);
 assert.match(itineraryPage, /onCompositionStart/);
 assert.match(itineraryPage, /onCompositionEnd/);

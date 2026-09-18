@@ -22,6 +22,7 @@ import {
 import {
   mergeCommonsFileEvidence,
   parseCommonsCategoryMembersResponse,
+  parseCommonsRelatedCategoriesResponse,
   parseCommonsDepictsResponse,
   parseWikidataEntityEvidenceResponse,
   parseWikidataSearchResponse,
@@ -49,12 +50,15 @@ export interface CommonsPrecisionEngineResult {
   response: CommonsPrecisionResponse;
   qid?: string;
   requestCount: number;
+  sessionRequestCount: number;
+  sessionDurationMs: number;
   inspectedCount: number;
   durationMs: number;
   upstreamStatus?: 429 | 503;
   allCandidatesRejected: boolean;
   entityEvidence?: WikidataEntityEvidence;
-  continuation?: { layer: "read-category-files" | "search-adopted-text"; value: string };
+  continuation?: { layer: "read-category-files" | "search-adopted-text" | "read-related-category-files"; value: string };
+  extensionContinuation?: { layer: "read-related-category-files"; value: string };
   seenPageIds: number[];
   rejectedByReason: Record<string, number>;
 }
@@ -102,12 +106,17 @@ export const runCommonsPrecisionEngine = async (
     response: { contractVersion: COMMONS_PRECISION_CONTRACT_VERSION, state, candidates, ...responseContext },
     qid,
     requestCount,
+    sessionRequestCount: requestCount,
+    sessionDurationMs: Math.min(COMMONS_PRECISION_MAX_DURATION_MS, Math.max(0, now() - startedAtMs)),
     inspectedCount,
     durationMs: Math.min(COMMONS_PRECISION_MAX_DURATION_MS, Math.max(0, now() - startedAtMs)),
     upstreamStatus,
     allCandidatesRejected: state === "no-suitable-image" && inspectedCount > 0,
     entityEvidence: engineContext.entityEvidence,
     continuation: nextContinuation,
+    ...(!nextContinuation && engineContext.entityEvidence?.p373Categories[0]
+      ? { extensionContinuation: { layer: "read-related-category-files" as const, value: JSON.stringify({ parentCategory: engineContext.entityEvidence.p373Categories[0] }) } }
+      : {}),
     seenPageIds: evidenceInputs.map((item) => item.pageId).slice(0, COMMONS_PRECISION_MAX_INSPECTED),
     rejectedByReason,
   });
@@ -237,20 +246,25 @@ export const runCommonsPrecisionContinuationEngine = async (
   input: {
     query: string;
     entityEvidence: WikidataEntityEvidence;
-    layer: "read-category-files" | "search-adopted-text";
+    layer: "read-category-files" | "search-adopted-text" | "read-related-category-files";
     continuation: string;
     seenPageIds: readonly number[];
+    initialRequestCount?: number;
+    initialDurationMs?: number;
+    extensionCategory?: string;
   },
   dependencies: CommonsPrecisionEngineDependencies,
 ): Promise<CommonsPrecisionEngineResult> => {
   const now = dependencies.now ?? Date.now;
   const startedAtMs = now();
   let requestCount = 0;
+  const initialRequestCount = input.initialRequestCount ?? 0;
+  const initialDurationMs = input.initialDurationMs ?? 0;
   let upstreamStatus: 429 | 503 | undefined;
   let nextContinuation: CommonsPrecisionEngineResult["continuation"];
   let rejectedByReason: Record<string, number> = {};
   const request = async (plan: CommonsPrecisionPlannedRequest): Promise<{ payload?: unknown; stopped?: CommonsPrecisionState }> => {
-    if (requestCount >= COMMONS_PRECISION_MAX_REQUESTS || now() - startedAtMs >= COMMONS_PRECISION_MAX_DURATION_MS) return { stopped: "inspection-limit-reached" };
+    if (initialRequestCount + requestCount >= COMMONS_PRECISION_MAX_REQUESTS || initialDurationMs + now() - startedAtMs >= COMMONS_PRECISION_MAX_DURATION_MS) return { stopped: "inspection-limit-reached" };
     requestCount += 1;
     const result = await dependencies.request(plan);
     if (result.status === 429 || result.status === 503) upstreamStatus = result.status;
@@ -260,12 +274,17 @@ export const runCommonsPrecisionContinuationEngine = async (
     response: { contractVersion: COMMONS_PRECISION_CONTRACT_VERSION, state, candidates },
     qid: input.entityEvidence.qid,
     requestCount,
+    sessionRequestCount: initialRequestCount + requestCount,
+    sessionDurationMs: Math.min(COMMONS_PRECISION_MAX_DURATION_MS, initialDurationMs + Math.max(0, now() - startedAtMs)),
     inspectedCount,
     durationMs: Math.min(COMMONS_PRECISION_MAX_DURATION_MS, Math.max(0, now() - startedAtMs)),
     upstreamStatus,
     allCandidatesRejected: state === "no-suitable-image" && inspectedCount > 0,
     entityEvidence: input.entityEvidence,
     continuation: nextContinuation,
+    ...(!nextContinuation && input.layer !== "read-related-category-files" && input.extensionCategory
+      ? { extensionContinuation: { layer: "read-related-category-files" as const, value: JSON.stringify({ parentCategory: input.extensionCategory }) } }
+      : {}),
     seenPageIds: [...new Set(input.seenPageIds)].slice(0, COMMONS_PRECISION_MAX_INSPECTED),
     rejectedByReason,
   });
@@ -285,7 +304,7 @@ export const runCommonsPrecisionContinuationEngine = async (
       if (metadata.stopped) return finish(metadata.stopped);
       metadataPayload = metadata.payload;
     }
-  } else {
+  } else if (input.layer === "search-adopted-text") {
     const offset = Number(input.continuation);
     if (!Number.isSafeInteger(offset) || offset < 0) return finish("session-expired");
     const text = await request(planCommonsPrecisionRequest({ layer: "search-adopted-text", query: input.query, offset }));
@@ -296,10 +315,53 @@ export const runCommonsPrecisionContinuationEngine = async (
       const nextOffset = Number(text.payload.continue.gsroffset);
       if (Number.isSafeInteger(nextOffset) && nextOffset >= 0) nextContinuation = { layer: "search-adopted-text", value: String(nextOffset) };
     }
+  } else {
+    let context: {
+      parentCategory?: unknown;
+      relatedCategories?: unknown;
+      categoryIndex?: unknown;
+      cursor?: unknown;
+    };
+    try { context = JSON.parse(input.continuation); } catch { return finish("session-expired"); }
+    if (typeof context.parentCategory !== "string" || !context.parentCategory.trim()) return finish("session-expired");
+    let relatedCategories = Array.isArray(context.relatedCategories)
+      ? context.relatedCategories.filter((value): value is string => typeof value === "string" && value.trim().length > 0 && value.length <= 200).slice(0, 3)
+      : [];
+    if (relatedCategories.length === 0) {
+      const related = await request(planCommonsPrecisionRequest({ layer: "read-related-categories", category: context.parentCategory }));
+      if (related.stopped) return finish(related.stopped);
+      relatedCategories = parseCommonsRelatedCategoriesResponse(related.payload).categories;
+    }
+    const categoryIndex = Number.isSafeInteger(context.categoryIndex) && Number(context.categoryIndex) >= 0
+      ? Number(context.categoryIndex)
+      : 0;
+    const category = relatedCategories[categoryIndex];
+    if (!category) return finish("no-suitable-image");
+    const cursor = typeof context.cursor === "string" && context.cursor ? context.cursor : undefined;
+    const pageResult = await request(planCommonsPrecisionRequest({ layer: "read-category-files", category, ...(cursor ? { continuation: cursor } : {}) }));
+    if (pageResult.stopped) return finish(pageResult.stopped);
+    const page = parseCommonsCategoryMembersResponse(pageResult.payload);
+    for (const file of page.files) inputs.push({ ...file, kind: "related-category", category });
+    if (page.continuation) {
+      nextContinuation = {
+        layer: "read-related-category-files",
+        value: JSON.stringify({ parentCategory: context.parentCategory, relatedCategories, categoryIndex, cursor: page.continuation }),
+      };
+    } else if (categoryIndex + 1 < relatedCategories.length) {
+      nextContinuation = {
+        layer: "read-related-category-files",
+        value: JSON.stringify({ parentCategory: context.parentCategory, relatedCategories, categoryIndex: categoryIndex + 1 }),
+      };
+    }
+    if (inputs.length > 0) {
+      const metadata = await request(planCommonsPrecisionRequest({ layer: "read-p18-files", fileTitles: inputs.map((item) => item.fileTitle) }));
+      if (metadata.stopped) return finish(metadata.stopped);
+      metadataPayload = metadata.payload;
+    }
   }
   const seen = new Set(input.seenPageIds);
   const seeds = mergeCommonsFileEvidence(inputs).filter((seed) => !seen.has(seed.pageId)).slice(0, COMMONS_PRECISION_MAX_INSPECTED - seen.size);
-  if (seeds.length === 0 || !metadataPayload) return finish(nextContinuation ? "inspection-limit-reached" : "no-suitable-image");
+  if (seeds.length === 0 || !metadataPayload) return finish("no-suitable-image");
   const depicts = await request(planCommonsPrecisionRequest({ layer: "read-structured-data", pageIds: seeds.map((seed) => seed.pageId) }));
   if (depicts.stopped) return finish(depicts.stopped, [], seeds.length);
   const composed = composeCommonsPrecisionCandidates({
@@ -311,6 +373,6 @@ export const runCommonsPrecisionContinuationEngine = async (
   rejectedByReason = countRejectedReasons(composed.rejected);
   const candidates = composed.candidates.slice(0, 6);
   const allSeen = [...new Set([...input.seenPageIds, ...seeds.map((seed) => seed.pageId)])].slice(0, COMMONS_PRECISION_MAX_INSPECTED);
-  const result = finish(candidates.length > 0 ? "results" : nextContinuation ? "inspection-limit-reached" : "no-suitable-image", candidates, seeds.length);
+  const result = finish(candidates.length > 0 ? "results" : "no-suitable-image", candidates, seeds.length);
   return { ...result, seenPageIds: allSeen };
 };

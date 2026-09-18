@@ -39,8 +39,10 @@ export const getPreferredTravelMode = (
 export const isFlightConnection = (
   origin: ItineraryItem,
   destination: ItineraryItem,
-): boolean =>
-  origin.travelKind === "flight" && destination.travelKind === "flight";
+): boolean => {
+  void destination;
+  return origin.travelKind === "flight";
+};
 
 export const hasDistinctConfirmedPlaces = (
   origin: ItineraryItem,
@@ -104,6 +106,7 @@ export const getTravelTimeWarning = (
   destination: ItineraryItem,
   estimate: SavedTravelEstimate | null,
 ): TravelTimeWarning => {
+  if (isFlightConnection(origin, destination)) return null;
   const departure = getItineraryTimeValue(origin.departureTime || origin.time);
   const arrival = getItineraryTimeValue(destination.time);
   if (departure === null || arrival === null) return null;

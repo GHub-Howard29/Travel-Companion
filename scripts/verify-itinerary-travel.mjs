@@ -89,8 +89,17 @@ assert.equal(
 );
 assert.equal(isFlightConnection(
   { ...origin, travelKind: "flight" },
-  { ...destination, travelKind: "flight" },
+  destination,
 ), true);
+assert.equal(getSavedTravelEstimate({ ...origin, travelKind: "flight" }, destination), null);
+assert.equal(getTravelTimeWarning({ ...origin, travelKind: "flight" }, destination, validEstimate), null);
+assert.deepEqual(
+  getAdjacentTravelOriginIndexesNeedingEstimate([
+    { ...origin, travelKind: "flight", travelToNext: undefined },
+    destination,
+  ], 0),
+  [],
+);
 assert.equal(formatTravelDuration(21 * 60), "21 分鐘");
 assert.equal(formatTravelDuration(90 * 60), "1 小時 30 分鐘");
 assert.equal(formatTravelDistance(800), "800 公尺");

@@ -95,7 +95,7 @@ assert.match(page, /searchCommonsPhotos\(commonsQuery, commonsNextPageToken\)/);
 assert.match(client, /action: "commonsPrecisionSearch"/);
 assert.match(client, /nextPageToken/);
 assert.match(page, /setCommonsNextPageToken/);
-assert.match(page, /找不到符合條件的照片，請調整搜尋詞後再試。/);
+assert.match(page, /第一批沒有符合條件的照片，系統已自動再查一批/);
 assert.match(page, /這一批沒有新的照片；可再換一批或調整搜尋詞。/);
 assert.match(page, /已沒有更多照片；可調整搜尋詞或改用其他來源。/);
 assert.doesNotMatch(page, /void searchCommonsPhotos\(query\)/);

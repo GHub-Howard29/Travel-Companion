@@ -6,6 +6,7 @@ import {
 import {
   getPreferredTravelMode,
   getTravelModeLabel,
+  isFlightConnection,
 } from "./itineraryTravel.ts";
 
 export interface TimeAdjustmentSegment {
@@ -70,6 +71,18 @@ export const calculateTimeAdjustment = async (
     const originDeparture = getItineraryTimeValue(origin.departureTime || origin.time);
     if (originDeparture === null) {
       return { items: sourceItems, segments, blocker: { index: originIndex, message: `「${origin.title || "此站"}」缺少有效的離開時間。`, focusTarget: "departure" } };
+    }
+
+    if (isFlightConnection(origin, destination)) {
+      return {
+        items: sourceItems,
+        segments,
+        blocker: {
+          index: originIndex,
+          message: `「${origin.title || "此站"}」已標示為航班，不會規劃到下一站的地面交通。`,
+          focusTarget: "route",
+        },
+      };
     }
 
     const originalArrival = getItineraryTimeValue(destination.time);
