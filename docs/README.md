@@ -12,7 +12,7 @@ Travel Companion 是以 Trip 為核心的 Offline First 旅行管理 PWA，使�
 >
 > V3.9.3 已發布系統開發者 capability、使用紀錄、側邊欄彙總 UI、verify 腳本瘦身與冷啟動埋點。
 >
-> V3.9.4 與 V3.9.5 正在本機實作與驗證，尚未發布；未執行新的外部照片來源請求或 production 變更。
+> V3.9.4 與 V3.9.5 正在本機實作與驗證，尚未發布；Pexels 隔離 metadata 矩陣已依單次授權完成，自行上傳與新版裁切尚未實作，未執行 production 變更。
 >
 > 最後更新：2026-09-18
 
@@ -60,7 +60,7 @@ Travel Companion 是以 Trip 為核心的 Offline First 旅行管理 PWA，使�
 - [V3.9.0 地點照片雙方案立案範圍](46_V3.9.0_地點照片雙方案立案範圍.md)
 - [V3.9.0 正式發布操作手冊](47_V3.9.0_正式發布操作手冊.md)
 - [V3.9.1 每日行程照片來源擴充規劃草案](48_V3.9.1_每日行程照片來源擴充規劃草案.md)
-- [V3.9.1 Commons／Pexels／Pixabay 來源切換決策規格](49_V3.9.1_Commons_Pexels_Pixabay來源切換決策規格.md)
+- [先前方案草案：V3.9.1 Commons／Pexels／Pixabay 來源切換](49_V3.9.1_Commons_Pexels_Pixabay來源切換決策規格.md)
 - [V3.9.1 Commons 實體導向候選照片精準篩選決策規格](50_V3.9.1_Commons實體導向候選照片精準篩選決策規格.md)
 - [V3.9.1 跨日複製四碼時間輸入修正規格](51_V3.9.1_跨日複製四碼時間輸入修正規格.md)
 - [V3.9.1 Commons 精準搜尋真實矩陣報告](52_V3.9.1_Commons精準搜尋真實矩陣報告.md)
