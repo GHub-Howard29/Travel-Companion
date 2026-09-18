@@ -14,6 +14,16 @@ export type VersionHistoryItem = {
 
 export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
+    version: "3.9.3",
+    date: "2026-09-18",
+    isMandatoryRelease: false,
+    notes: [
+      "新增系統開發者能力驗證與最小化使用紀錄彙總畫面。",
+      "補上冷啟動效能量測，並整合 V3.9.1 驗證入口以縮短一般建置流程。",
+      "完成 App TypeScript 型別檢查，降低發布前才發現介面錯誤的風險。",
+    ],
+  },
+  {
     version: "3.9.2",
     date: "2026-09-17",
     isMandatoryRelease: true,

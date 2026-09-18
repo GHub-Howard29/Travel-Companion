@@ -1,18 +1,18 @@
 /** App 發布版本設定；須與 public/app-version.json 保持一致。 */
-export const APP_VERSION = "3.9.3";
+export const APP_VERSION = "3.9.5";
 
 /**
  * 最近一次已發布版本；此版本必須存在於 versionHistory.ts。
  * production build 會驗證這個規則，避免升版後遺漏版本歷史。
  */
-export const PREVIOUS_RELEASE_VERSION = "3.9.2";
+export const PREVIOUS_RELEASE_VERSION = "3.9.3";
 
-export const RELEASE_DATE = "2026-09-17";
+export const RELEASE_DATE = "2026-09-18";
 
 export const RELEASE_NOTES = [
-  "新增系統開發者能力驗證與最小化使用紀錄彙總畫面。",
-  "補上冷啟動效能量測，並整合 V3.9.1 驗證入口以縮短一般建置流程。",
-  "完成 App TypeScript 型別檢查，降低發布前才發現介面錯誤的風險。",
+  "改善 Commons 搜尋續頁與候選累積，並提供一層相關分類的延伸候選。",
+  "每日行程照片新增拍照與自行上傳，可在 100%～250% 間調整並以同圖模糊背景補足卡片。",
+  "航班卡片不再規劃下一站地面交通；每日到達與離開時間可直接輸入四碼或全形數字。",
 ];
 
 /** 目前版本發布時保存的更新政策；不隨執行中客戶端是否已達最低版本而改變。 */

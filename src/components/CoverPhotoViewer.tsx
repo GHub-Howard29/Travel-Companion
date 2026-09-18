@@ -5,12 +5,12 @@ export interface CoverPhotoViewerData {
   url: string;
   alt: string;
   sourceLabel: string;
-  sourcePageUrl: string;
-  creator: string;
+  sourcePageUrl?: string;
+  creator?: string;
   credit?: string;
-  license: string;
+  license?: string;
   licenseUrl?: string;
-  transformation?: "cropped-resized-and-webp-transcoded";
+  transformation?: "cropped-resized-and-webp-transcoded" | "blurred-background-resized-and-webp-transcoded";
 }
 
 interface CoverPhotoViewerProps {
@@ -67,19 +67,20 @@ export const CoverPhotoViewer = ({ photo, onClose }: CoverPhotoViewerProps) => {
         <div className="flex min-h-52 flex-col items-center justify-center overflow-hidden rounded-xl bg-black p-2">
           <img src={photo.url} alt={photo.alt} referrerPolicy="no-referrer" className="max-h-[calc(100dvh-8rem)] max-w-full object-contain" />
           <div className="mt-2 max-w-[min(28rem,100%)] self-end rounded-lg bg-slate-800/90 p-3 text-xs leading-relaxed text-white backdrop-blur-sm">
-            <p>{photo.sourceLabel} · {photo.creator}{photo.credit ? ` · ${photo.credit}` : ""}</p>
-            <p className="mt-1">{photo.license}</p>
-            {photo.transformation && <p className="mt-1">已裁切、縮放並轉為 WebP</p>}
-            <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
-              <a href={photo.sourcePageUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-bold text-emerald-300 hover:text-emerald-200">
+            <p>{photo.sourceLabel}{photo.creator ? ` · ${photo.creator}` : ""}{photo.credit ? ` · ${photo.credit}` : ""}</p>
+            {photo.license && <p className="mt-1">{photo.license}</p>}
+            {photo.transformation === "cropped-resized-and-webp-transcoded" && <p className="mt-1">已裁切、縮放並轉為 WebP</p>}
+            {photo.transformation === "blurred-background-resized-and-webp-transcoded" && <p className="mt-1">已調整位置、縮放、加入同圖模糊背景並轉為 WebP</p>}
+            {(photo.sourcePageUrl || photo.licenseUrl) && <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
+              {photo.sourcePageUrl && <a href={photo.sourcePageUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-bold text-emerald-300 hover:text-emerald-200">
                 查看來源頁 <ExternalLink size={11} />
-              </a>
+              </a>}
               {photo.licenseUrl && (
                 <a href={photo.licenseUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-bold text-emerald-300 hover:text-emerald-200">
                   查看授權 <ExternalLink size={11} />
                 </a>
               )}
-            </div>
+            </div>}
           </div>
         </div>
         <button type="button" onClick={onClose} className="mt-3 w-full rounded-lg border border-white/30 px-4 py-2 text-sm font-bold text-white hover:bg-white/10 sm:w-auto">

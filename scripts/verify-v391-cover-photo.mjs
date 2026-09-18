@@ -5,6 +5,7 @@ import { resolve } from "node:path";
 import {
   clampItineraryCoverCrop,
   getItineraryCoverCropMaxZoom,
+  getItineraryCoverPlacement,
   getItineraryCoverCropRect,
   getWikimediaDerivativeSize,
 } from "../src/utils/itineraryCoverCrop.ts";
@@ -14,7 +15,13 @@ const projectRoot = resolve(import.meta.dirname, "..");
 const read = (path) => readFileSync(resolve(projectRoot, path), "utf8");
 
 assert.deepEqual(getWikimediaDerivativeSize(2400, 1600), { width: 1280, height: 853 });
-assert.equal(getItineraryCoverCropMaxZoom(1280, 960), 1.5);
+assert.equal(getItineraryCoverCropMaxZoom(1280, 960), 2.5);
+assert.deepEqual(getItineraryCoverPlacement(1280, 960, { zoom: 1, offsetX: 0, offsetY: 0 }), {
+  x: 0,
+  y: 80,
+  width: 640,
+  height: 480,
+});
 assert.deepEqual(getItineraryCoverCropRect(1280, 960, { zoom: 1, offsetX: 0, offsetY: 0 }), {
   x: 160,
   y: 0,
@@ -48,6 +55,7 @@ const oldCoverPhoto = {
 };
 assert.equal(isItineraryCoverPhoto(oldCoverPhoto), true, "既有封面缺少變更聲明仍須可讀");
 assert.equal(isItineraryCoverPhoto({ ...oldCoverPhoto, credit: "Photographer", transformation: "cropped-resized-and-webp-transcoded", width: 640, height: 640 }), true);
+assert.equal(isItineraryCoverPhoto({ ...oldCoverPhoto, credit: "Photographer", transformation: "blurred-background-resized-and-webp-transcoded", width: 640, height: 640 }), true);
 assert.equal(isItineraryCoverPhoto({ ...oldCoverPhoto, transformation: "cropped-resized-and-webp-transcoded", width: 640, height: 640 }), false);
 assert.equal(isItineraryCoverPhoto({ ...oldCoverPhoto, transformation: "free-text" }), false);
 
@@ -64,10 +72,10 @@ assert.doesNotMatch(edge, /CC BY\(\?:-SA\)/);
 assert.match(service, /candidate\.cropImageUrl/);
 assert.match(service, /responseUrl\.hostname !== "upload\.wikimedia\.org"/);
 assert.match(service, /MAX_SOURCE_PHOTO_BYTES/);
-assert.match(service, /source\.size < MAX_ITINERARY_COVER_EDGE/);
-assert.match(service, /cropped-resized-and-webp-transcoded/);
-assert.match(page, /\{source\}目前未啟用，可改用其他來源。/);
-assert.match(page, /\["Pexels", "Pixabay"\]/);
+assert.match(service, /compressUserCoverPhoto/);
+assert.match(service, /blurred-background-resized-and-webp-transcoded/);
+assert.match(page, /value="user-upload"/);
+assert.doesNotMatch(page, /\["Pexels", "Pixabay"\]/);
 assert.match(page, /確認候選照片/);
 assert.match(page, /確認裁切並儲存/);
 assert.match(page, /role="radiogroup"/);
