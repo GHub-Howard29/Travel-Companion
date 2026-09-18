@@ -2,9 +2,9 @@
 
 > 本文件只保留尚未完成或仍需驗證的工作；版本順序與範圍以《02_產品開發路線圖》為準。
 >
-> 最後更新：2026-09-17
+> 最後更新：2026-09-18
 >
-> 已發布 App 版本：V3.9.2；BUG031 已完成向前修復與正式 smoke。
+> 已發布 App 版本：V3.9.3；production migration、Git、tag 與 GitHub Pages 部署均已完成。
 
 ## V3.9.0 已發布結果
 
@@ -12,7 +12,7 @@ Google 路徑、真實照片 spike、現有架構、降級與成本模型已完�
 
 - [x] 地點搜尋候選索引照片：契約與真實 Google spike 均通過；5 組搜尋共 10 個候選，10／10 有照片且成功載入，實際使用 10／25 次核准照片請求，暫時性 Edge Function 已刪除並確認 404。
 - [x] 免費公開來源 spike：Commons／Openverse 以 12 地點、24 次查詢完成；知名景點與桃機／飯店 hit@3 為 7／12，租車點與四家餐廳未命中，不能自動採第一張。
-- [ ] 後續研究候選：取得 API key 後，以相同代表性地點矩陣補測 Pexels、Pixabay；此項不阻擋已核准的 Google／Commons 雙方案。Unsplash 只評估 hotlink，不下載保存。
+- [x] 外部來源研究結案：Pexels 已完成 24 次隔離 metadata 矩陣但不接入 App；Pixabay 永久取消且不再補測。正式來源改為 Commons 與自行上傳；舊 Pexels／Pixabay 方案只保留歷史紀錄。
 - [x] Product Owner 確認 V3.9.0 同時納入 Google 搜尋候選暫態索引照與 Commons 每日卡片管理者選圖；兩軌不混用來源或保存資料。
 - [x] Commons 補充 spike：中文／英文 14 組查詢中 12 組有圖片；7 張人工確認樣本的授權 metadata 7／7 完整，但 640px 平均約 239.8 KiB，必須壓縮後保存。
 - [x] 完成兩方案桌面與 390×844 模擬圖並經 Product Owner 確認；每日卡片採與「選擇正確地點」一致的左圖、中間文字、右側操作緊湊橫列，不使用大幅封面。
@@ -33,17 +33,22 @@ Google 路徑、真實照片 spike、現有架構、降級與成本模型已完�
 - [x] V3.9.0：已於 2026-09-13 正式發布；production Function version 9 為 ACTIVE，正式前端與發布後 smoke 均通過。
 - [x] V3.9.2 BUG031：正式建置隔離、建置前 URL 驗證、產物掃描、lint、完整 verify chain、production build、`main`、`v3.9.2`、GitHub Pages、必要更新與登入／Guest 正式站 smoke 均已完成。
 - [x] V3.9.3 本機發布前收斂：verify 聚合、冷啟動埋點、系統開發者 capability、使用紀錄 migration／RPC、側邊欄彙總 UI、TypeScript／lint／build、本機 Supabase 與桌面／390×844 回歸均已通過。
-- [ ] V3.9.3 正式發布：production preflight／migration／postflight、`main`、`v3.9.3` tag、GitHub Pages 與發布後 smoke，須另行授權。
-- [ ] V3.9.4：依《56》先建立照片搜尋請求成本、hit@6、零候選、去重與快取基線，再改善前置去重、解析重用、提前停止、negative cache 與續頁效率；外部矩陣、額度調整與實作均未授權。
+- [x] V3.9.3 正式發布：production preflight／migration／postflight、`main`／`develop`、annotated tag `v3.9.3`、GitHub Pages 與正式 metadata 均已完成；發布提交為 `3e92c22`。
+- [x] 原 V3.9.4 發布前程式收斂：Commons 改善、自行上傳的拍照／原生選檔入口、紅色侵權提醒、76×76 預覽、完整原圖 `100%`、最大 `250%`、同圖模糊背景與 640×640 WebP 均已完成；完整非互動本機回歸及 production build 通過。此內容併入 V3.9.5 發布候選，V3.9.4 不獨立發布。Pexels 不接入，Pixabay 永久取消。
+- [x] V3.9.5 合併發布候選：航班卡片排除下一站地面交通，以及每日到達／離開／時間調整四碼、全形、IME 輸入均完成契約、型別、lint、完整本機回歸及 production build；合併原 V3.9.4。依 2026-09-18 決定不執行互動驗證，詳見《57》《58》。
+- [ ] V3.9.6：在已另行規劃的 V3.9.5 之後，先建立完整 build 各驗證群組、TypeScript 與 Vite build 的耗時基線；再依領域整併驗證套件與失敗報告。完整發布驗證不得縮減，快速日常檢查不得取代 release build；不含功能、資料庫、Edge、CI、版本 metadata 或部署變更。
+- [ ] V3.9.7：在 V3.9.6 完成後，量測離線刷新約 30 秒載入既有資料的分段原因，再決定是否修正。只在本機記錄 Service Worker／navigation、session、Trip 快取、localStorage、IndexedDB 與首個可操作畫面耗時；不得上傳資料或破壞 Offline First、墓碑、pending 與同步安全。V3.6.5 的更新後載入改善與 V3.9.3 的冷啟動總埋點不重複安排。
+- [ ] V3.9.8：在 V3.9.7 的離線回歸可重現後，建立零費用本機 Playwright E2E，使用 loopback Supabase、合成帳號與 fixture 驗證桌面／390×844 的核心流程、離線快取、可及性、水平溢位與 Commons 歧義狀態；不使用 production、外部 API、付費雲端實機或長期憑證。Android／iOS PWA、OAuth、相機與原生行為仍列人工實機補驗。
+- [ ] V3.9.9：以 V3.9.8 E2E 為回歸護欄，先量測 bundle／import graph，再模組化照片搜尋、候選、裁切與放大檢視，並只在照片管理流程按需載入。保留既有頁面 lazy loading 與 Excel 動態載入，不改 Edge API、快取／配額、資料契約或 secret 邊界。
 - [x] V3.9.1 跨日複製四碼時間輸入修正：本機程式、純函式、TypeScript、lint 與完整 build 已完成；2026-09-16 以登入管理者在桌面／390×844 完成半形與全形四碼、IME 組字延後格式化、游標、刪除不自動補回、雙欄警告、焦點陷阱與 Escape 返回驗收，並實際通過單日 Day 2 與多日 Day 2／Day 3 複製；synthetic fixture 已還原。詳見《51》。
 - [x] V3.9.1 第一優先：Commons 實體導向候選照片精準搜尋已完成本機、正式資料庫與正式 Edge 收斂。包含 fetch transport、核准 Issues User-Agent、AES-GCM token、共享快取／配額／鎖／日彙總、前端狀態、公開候選投影、同名實體描述／QID、乾淨重建、RLS／service-role-only、四次 15 例真實矩陣、production-safe smoke、桌面／390×844 互動及 loopback fixture。正式 `travel-route` 為 version 11／ACTIVE／`verify_jwt=false`；發布前停止線已達。詳見《50》、《52》與《53》。
 - [x] V3.9.1 精準搜尋用量治理：2026-09-14 核准 `commons_precision_usage_daily` 無 UI、無個資／行程資料的專案日彙總、13 完整月加當月保留與 service-role-only 原子讀寫；只有程式開發者取得每次單次明確授權後，Codex 等開發 AI 才可完整唯讀彙總，無資料庫／secret／寫入／搜尋觸發權。Gemini 等外部 AI 不在本項範圍。不依 Wikimedia 公開分析資料推估本 App 用量；只有連續兩完整月低於上限 50% 且無 429／503，才可另案建議放寬，禁止自動調高。詳見《50》8 節。
 - [x] V3.9.1 精準篩選視覺辨識邊界：不導入 Gemini／其他影像 AI、不傳送 Commons 圖片；本版只依可稽核中介資料排序並人工核可，不能宣稱自動辨識主體或品質。影像辨識待文字 AI 與 Commons 實測數據後另案討論。詳見《50》3.1.1 節。
 - [x] V3.9.1 精準搜尋驗證閘門：15 例矩陣已完成四次真實執行（46／64／61／63 次）。第四次確認 CDN 正規化、同檔跨證據層去重與高千穗峽均通過；桃園第一航廈 `entity-not-found` 已依核准的設施級安全停止契約驗收通過。範圍 UI、主要管理者互動、高千穗峽無 token 的 `inspection-limit-reached` 終態及 `中山站` 7 個真實多實體選項均已通過；2026-09-17 已完成「名稱＋Wikidata 描述＋QID」歧義判讀介面、離線契約與 loopback-only 選定範圍 fixture。Product Owner 確認既有真實矩陣及補驗已足以作為代表性抽查，不要求逐地名測試；真實 selected-QID 僅為可選 smoke，不再阻擋停止線。詳見《50》6.1 節與《52》。
 - [x] V3.9.1 子方案 A：2026-09-15 已定案停用自動中文轉英文／自動多語擴充，避免與人工採用的單語言 Gemini 候選詞規則衝突。B 只接受原始輸入或已採用的一個 AI 候選詞；改語言須明確採用或手動換詞。
-- [x] V3.9.1 子方案 B：Commons／Pexels／Pixabay 來源切換；2026-09-14 Product Owner 已核准《49_V3.9.1_Commons_Pexels_Pixabay來源切換決策規格》八項來源策略與技術邊界，並原則同意後續申請 Pexels／Pixabay 驗證用 key。每次申請或提高額度前須先說明官方費用／額度、Supabase 間接成本、條款、隱私與安全風險；帳號、條款、CAPTCHA、信箱驗證、個人／付款資料一律由 Product Owner 手動完成。2026-09-15 已核准桌面／390×844 主要選圖流程、狀態文案與完整無障礙；真實矩陣與實作屬後續開發閘門。
-- [x] V3.9.1 子方案 B 免費額度限制：2026-09-14 Product Owner 已核准《49》6.3 節的 Pexels／Pixabay 單次 session、Trip／管理者日上限、來源速率、月內配速、圖片下載及快取限制；Pexels 以官方額度保留 20% 的內部硬停，Pixabay 10,000/month 為專案自訂保護預算。下一步進入文字式 UI 行為討論，仍不得製作 UI 或模擬圖。
-- [x] V3.9.1 子方案 B 搜尋起點與 UI：A、C 均已於 2026-09-15 定案停用；Commons 手動原始搜尋、桌面／390×844 來源與候選直向全寬列、狀態文字及完整無障礙已實作驗收。Gemini、Pexels／Pixabay仍未接入，若日後重啟仍須各自的 key、條款、成本、實作與發布授權；詳見《49》5.1.2 節。
+- [x] V3.9.1 子方案 B（歷史）：2026-09-14 曾核准 Commons／Pexels／Pixabay 來源切換研究與技術邊界；2026-09-18 已由 V3.9.4 定案取代。Pexels 不接入 App，Pixabay 永久取消，《49》改列先前方案草案。
+- [x] V3.9.1 子方案 B 額度（歷史）：原 Pexels／Pixabay 額度與快取限制只保留研究紀錄，不再是待實作項目。
+- [x] V3.9.1 子方案 B UI（歷史）：既有 Commons 互動已實作；停用的 Pexels／Pixabay UI 將由 V3.9.4 移除並改成自行上傳入口。
 - [x] V3.9.1 AI 測試期來源與上限：2026-09-14 核准 Gemini 免費層作測試磨合期，不作 production 依賴；每日專案硬停 100 次、實際取官方授予的 RPM／TPM／RPD 較小值。禁止自動重試、平行／跨供應商降級與 Google grounding；公開地點文字可供產品改進的條款已接受。測試 key、實作與正式啟用仍待個別核准。
 - [x] V3.9.1 AI 候選契約與本機快取：每組最多 3 個、每個 1–80 字元，只含搜尋詞、BCP 47 語言代碼與生成類型；禁止圖片、連結、地址、座標、外部來源、模型推理及未驗證正式名稱。初始集後可手動換詞最多 2 次；每次最多帶回 6 個既有候選詞排除重複，仍計每日 AI 額度且不自動發起。快取僅同裝置，以正規化原文、目標語言、契約／模型／提示詞版本及候選集序號的 SHA-256 索引；保存候選詞與語言／類型、不存原文，30 日有效、最多 100 組候選集／約 300 筆、LRU 淘汰；版本變更、過期或手動清除即失效，命中仍須人工採用且不得自動搜尋、同步、分析或送出照片請求。換詞失敗保留既有集、不重試。
 - [x] V3.9.1 AI 候選 JSON：2026-09-15 核准嚴格 `ai-search-candidates/v1`；根層僅 `contractVersion`、`candidates`，候選僅 `query`／`languageTag`／`kind`，可為空陣列；非 JSON、額外欄位或任一候選不合規即整批拒絕。提示詞版本化、低隨機性，禁止搜尋／grounding／Maps；模型名、溫度、輸出 token 與實際免費額度待 key 前依官方當期資訊另案核准。
@@ -96,6 +101,5 @@ Google 路徑、真實照片 spike、現有架構、降級與成本模型已完�
 ## 跨版本改善候選
 
 - [ ] 只在實際使用證明有需要時，重新排程排序後全日時間預覽、路線批次重查、跨午夜與 API 成本控制；不再占用 V3.8.1。
-- [ ] 先量測離線刷新約 30 秒才載入既有資料的原因，再決定是否開發效能改善。
 - [ ] 收集帳本附件管理的具體操作問題與頻率，再決定功能範圍。
 - [ ] 依資料特性評估將保守聯集合併導入其他資訊及外幣換算，不共用單一合併策略。

@@ -4,6 +4,7 @@ import {
 } from "./commonsPrecisionWikimedia.ts";
 import {
   buildCommonsCategoryMembersParams,
+  buildCommonsRelatedCategoriesParams,
   buildCommonsDepictsParams,
   buildCommonsFileMetadataParams,
   buildCommonsTextSearchParams,
@@ -51,6 +52,7 @@ export type CommonsPrecisionPlanInput =
   | { layer: "read-entity-evidence"; qids: readonly string[]; targetLanguage: string }
   | { layer: "read-p18-files"; fileTitles: readonly string[] }
   | { layer: "read-category-files"; category: string; continuation?: string }
+  | { layer: "read-related-categories"; category: string }
   | { layer: "read-structured-data"; pageIds: readonly number[] }
   | { layer: "search-adopted-text"; query: string; offset?: number };
 
@@ -65,6 +67,8 @@ export const planCommonsPrecisionRequest = (input: CommonsPrecisionPlanInput): C
     case "read-category-files":
       if (!isSafeContinuation(input.continuation)) throw new RangeError("Category continuation 格式不正確");
       return toPlannedRequest(input.layer, COMMONS_API_URL, buildCommonsCategoryMembersParams(input.category, input.continuation));
+    case "read-related-categories":
+      return toPlannedRequest(input.layer, COMMONS_API_URL, buildCommonsRelatedCategoriesParams(input.category));
     case "read-structured-data":
       return toPlannedRequest(input.layer, COMMONS_API_URL, buildCommonsDepictsParams(requirePageIds(input.pageIds)));
     case "search-adopted-text":

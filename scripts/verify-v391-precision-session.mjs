@@ -23,6 +23,9 @@ const token = await sealCommonsPrecisionNextPageToken({
   layer: "read-category-files",
   continuation,
   seenPageIds: [10, 10, 11],
+  requestCount: 8,
+  durationMs: 12_500,
+  extensionCategory: "Taiwan Taoyuan International Airport",
 }, key, 1_000, new Uint8Array(12).fill(3));
 assert.match(token, /^cp1\.[A-Za-z0-9_-]+$/);
 assert.equal(token.includes(continuation), false, "原始 continuation 不得出現在 token");
@@ -37,6 +40,9 @@ if (opened.status === "valid") {
   assert.equal(opened.session.layer, "read-category-files");
   assert.equal(opened.session.continuation, continuation);
   assert.deepEqual(opened.session.seenPageIds, [10, 11]);
+  assert.equal(opened.session.requestCount, 8);
+  assert.equal(opened.session.durationMs, 12_500);
+  assert.equal(opened.session.extensionCategory, "Taiwan Taoyuan International Airport");
   assert.equal(opened.session.contractVersion, "commons-precision-v1");
 }
 assert.deepEqual(await openCommonsPrecisionNextPageToken(token, key, {
@@ -70,6 +76,15 @@ await assert.rejects(() => sealCommonsPrecisionNextPageToken({
   continuation: "",
   seenPageIds: [],
 }, key, 1_000), /內容不正確/);
+await assert.rejects(() => sealCommonsPrecisionNextPageToken({
+  qid: "Q100",
+  adoptedQueryHash: hash,
+  layer: "read-related-category-files",
+  continuation: JSON.stringify({ parentCategory: "Taiwan Taoyuan International Airport" }),
+  seenPageIds: [],
+  requestCount: 13,
+  durationMs: 1,
+}, key, 1_000), /預算/);
 
 const projectRoot = resolve(import.meta.dirname, "..");
 const source = readFileSync(resolve(projectRoot, "supabase/functions/travel-route/commonsPrecisionSession.ts"), "utf8");

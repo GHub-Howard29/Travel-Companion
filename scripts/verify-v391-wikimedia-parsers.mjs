@@ -158,8 +158,8 @@ assert.equal(
   completeCommonsPrecisionRequest(timed.state, COMMONS_PRECISION_REQUEST_TIMEOUT_MS, {}).terminalState,
   "timeout",
 );
-assert.equal(beginNextCommonsPrecisionRequest({ ...createCommonsPrecisionOperation(0), requestCount: 9 }, 1).state.terminalState, "inspection-limit-reached");
-assert.equal(beginNextCommonsPrecisionRequest(createCommonsPrecisionOperation(0), 20_000).state.terminalState, "inspection-limit-reached");
+assert.equal(beginNextCommonsPrecisionRequest({ ...createCommonsPrecisionOperation(0), requestCount: 12 }, 1).state.terminalState, "inspection-limit-reached");
+assert.equal(beginNextCommonsPrecisionRequest(createCommonsPrecisionOperation(0), 30_000).state.terminalState, "inspection-limit-reached");
 assert.equal(skipCommonsPrecisionLayer(createCommonsPrecisionOperation(0)).layerIndex, 0, "不得跳過唯一 QID 解析");
 
 const failing = beginNextCommonsPrecisionRequest(createCommonsPrecisionOperation(0), 0);

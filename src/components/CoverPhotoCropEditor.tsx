@@ -1,17 +1,21 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 import { Minus, Plus } from "lucide-react";
 
-import type { CommonsPhotoCandidate } from "../services/travelRouteService";
 import {
   clampItineraryCoverCrop,
   getItineraryCoverCropMaxZoom,
-  getItineraryCoverCropRect,
-  getWikimediaDerivativeSize,
   type ItineraryCoverCropTransform,
 } from "../utils/itineraryCoverCrop";
+import { drawItineraryCover } from "../utils/itineraryCoverRenderer";
+
+export interface CoverPhotoCropSource {
+  url: string;
+  width: number;
+  height: number;
+}
 
 interface CoverPhotoCropEditorProps {
-  candidate: CommonsPhotoCandidate;
+  source: CoverPhotoCropSource;
   value: ItineraryCoverCropTransform;
   onChange: (value: ItineraryCoverCropTransform) => void;
 }
@@ -23,27 +27,19 @@ const drawPreview = (
 ) => {
   const context = canvas.getContext("2d");
   if (!context) return;
-  const crop = getItineraryCoverCropRect(image.naturalWidth, image.naturalHeight, transform);
-  context.clearRect(0, 0, canvas.width, canvas.height);
-  context.drawImage(image, crop.x, crop.y, crop.size, crop.size, 0, 0, canvas.width, canvas.height);
+  drawItineraryCover(context, image, image.naturalWidth, image.naturalHeight, transform);
 };
 
-export const CoverPhotoCropEditor = ({ candidate, value, onChange }: CoverPhotoCropEditorProps) => {
+export const CoverPhotoCropEditor = ({ source, value, onChange }: CoverPhotoCropEditorProps) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const cardPreviewRef = useRef<HTMLCanvasElement | null>(null);
   const imageRef = useRef<HTMLImageElement | null>(null);
   const valueRef = useRef(value);
   const pointersRef = useRef(new Map<number, { x: number; y: number }>());
   const gestureRef = useRef<{ distance: number; zoom: number } | null>(null);
   const dragRef = useRef<{ x: number; y: number; offsetX: number; offsetY: number } | null>(null);
   const [loadedUrl, setLoadedUrl] = useState("");
-  const derivativeSize = useMemo(
-    () => getWikimediaDerivativeSize(candidate.width, candidate.height),
-    [candidate.height, candidate.width],
-  );
-  const canPreserveQuality = Math.min(derivativeSize.width, derivativeSize.height) >= 640;
-  const maxZoom = canPreserveQuality
-    ? getItineraryCoverCropMaxZoom(derivativeSize.width, derivativeSize.height)
-    : 1;
+  const maxZoom = useMemo(() => getItineraryCoverCropMaxZoom(source.width, source.height), [source.height, source.width]);
 
   useEffect(() => {
     valueRef.current = value;
@@ -55,18 +51,20 @@ export const CoverPhotoCropEditor = ({ candidate, value, onChange }: CoverPhotoC
     image.referrerPolicy = "no-referrer";
     image.onload = () => {
       imageRef.current = image;
-      setLoadedUrl(candidate.thumbnailUrl);
+      setLoadedUrl(source.url);
       if (canvasRef.current) drawPreview(canvasRef.current, image, valueRef.current);
+      if (cardPreviewRef.current) drawPreview(cardPreviewRef.current, image, valueRef.current);
     };
-    image.src = candidate.thumbnailUrl;
+    image.src = source.url;
     return () => {
       imageRef.current = null;
       image.src = "";
     };
-  }, [candidate.thumbnailUrl]);
+  }, [source.url]);
 
   useEffect(() => {
     if (canvasRef.current && imageRef.current) drawPreview(canvasRef.current, imageRef.current, value);
+    if (cardPreviewRef.current && imageRef.current) drawPreview(cardPreviewRef.current, imageRef.current, value);
   }, [value]);
 
   const update = (next: ItineraryCoverCropTransform) => onChange(clampItineraryCoverCrop(next, maxZoom));
@@ -140,12 +138,7 @@ export const CoverPhotoCropEditor = ({ candidate, value, onChange }: CoverPhotoC
         onPointerCancel={endPointer}
         className="aspect-square w-full touch-none rounded-xl bg-slate-100 object-cover outline-none ring-emerald-500 focus:ring-2"
       />
-      {loadedUrl !== candidate.thumbnailUrl && <p className="mt-2 text-xs text-slate-500" aria-live="polite">正在載入裁切預覽…</p>}
-      {!canPreserveQuality && (
-        <p className="mt-2 text-xs font-semibold text-rose-700" role="alert">
-          這張照片的 1280px 衍生圖短邊不足 640px，無法在不失真的情況下儲存，請改選其他照片。
-        </p>
-      )}
+      {loadedUrl !== source.url && <p className="mt-2 text-xs text-slate-500" aria-live="polite">正在載入裁切預覽…</p>}
       <div className="mt-3 flex items-center gap-3">
         <button type="button" onClick={() => nudgeZoom(-0.1)} disabled={value.zoom <= 1} className="rounded-lg border border-slate-200 p-2 disabled:opacity-40" aria-label="縮小照片">
           <Minus size={16} />
@@ -167,7 +160,11 @@ export const CoverPhotoCropEditor = ({ candidate, value, onChange }: CoverPhotoC
           <Plus size={16} />
         </button>
       </div>
-      <p className="mt-2 text-xs text-slate-500">拖曳調整位置；手機可拖曳或雙指縮放，鍵盤可使用方向鍵與加減鍵。</p>
+      <div className="mt-3 flex items-center gap-3 rounded-xl bg-slate-50 p-3">
+        <canvas ref={cardPreviewRef} width={76} height={76} className="h-[76px] w-[76px] rounded-lg" aria-label="76×76 卡片預覽" role="img" />
+        <p className="text-xs leading-relaxed text-slate-600"><strong className="block text-slate-800">76×76 卡片預覽</strong>100% 顯示完整原圖，非正方形空間使用同一照片的模糊背景。</p>
+      </div>
+      <p className="mt-2 text-xs text-slate-500">拖曳調整位置；手機可拖曳或雙指縮放，鍵盤可使用方向鍵與加減鍵。縮放範圍為 100%～250%。</p>
     </div>
   );
 };

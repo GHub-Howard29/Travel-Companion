@@ -11,7 +11,11 @@ const normalizeFullWidthDigits = (value: string): string =>
 const parseItineraryTime = (
   value: string,
 ): { minutes: number; normalized: string } | null => {
-  const match = normalizeFullWidthDigits(value.trim()).match(ITINERARY_TIME_PATTERN);
+  const normalizedInput = normalizeFullWidthDigits(value.trim());
+  const input = FOUR_DIGIT_TIME_PATTERN.test(normalizedInput)
+    ? `${normalizedInput.slice(0, 2)}:${normalizedInput.slice(2)}`
+    : normalizedInput;
+  const match = input.match(ITINERARY_TIME_PATTERN);
   if (!match) return null;
 
   const hour = Number(match[1]);

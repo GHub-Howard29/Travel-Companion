@@ -57,9 +57,18 @@ export interface SavedTravelEstimate {
   transitVehicle?: TransitVehicle;
 }
 
-export interface ItineraryCoverPhoto {
-  source: "wikimedia-commons";
+interface ItineraryCoverPhotoBase {
   storagePath: string;
+  selectedAt: string;
+  modified: true;
+  width: number;
+  height: number;
+  mime: "image/webp";
+  size: number;
+}
+
+export interface WikimediaItineraryCoverPhoto extends ItineraryCoverPhotoBase {
+  source: "wikimedia-commons";
   fileTitle: string;
   sourcePageUrl: string;
   creator: string;
@@ -68,14 +77,17 @@ export interface ItineraryCoverPhoto {
   licenseUrl?: string;
   sourceSha1?: string;
   sourceRevisionAt?: string;
-  selectedAt: string;
-  modified: boolean;
-  transformation?: "cropped-resized-and-webp-transcoded";
-  width: number;
-  height: number;
-  mime: "image/webp";
-  size: number;
+  transformation?:
+    | "cropped-resized-and-webp-transcoded"
+    | "blurred-background-resized-and-webp-transcoded";
 }
+
+export interface UserUploadItineraryCoverPhoto extends ItineraryCoverPhotoBase {
+  source: "user-upload";
+  transformation: "blurred-background-resized-and-webp-transcoded";
+}
+
+export type ItineraryCoverPhoto = WikimediaItineraryCoverPhoto | UserUploadItineraryCoverPhoto;
 
 // 2. 對應詳細行程中的單一時間軸項目
 export interface ItineraryItem {
@@ -98,7 +110,7 @@ export interface ItineraryItem {
   travelModeToNext?: TravelMode;
   /** 由本卡片前往下一張相鄰卡片的最後儲存交通結果。 */
   travelToNext?: SavedTravelEstimate;
-  /** 管理者自 Wikimedia Commons 選定並保存至專案 Storage 的卡片照片。 */
+  /** 管理者自 Wikimedia Commons 選定或自行上傳並保存至專案 Storage 的卡片照片。 */
   coverPhoto?: ItineraryCoverPhoto;
 }
 

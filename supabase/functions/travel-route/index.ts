@@ -10,7 +10,13 @@ import {
 } from "./validation.ts";
 import { runCommonsPrecisionContinuationEngine, runCommonsPrecisionEngine } from "./commonsPrecisionEngine.ts";
 import { executeCommonsPrecisionRequest } from "./commonsPrecisionFetch.ts";
-import { projectCommonsPrecisionResponse, type CommonsPrecisionPublicResponse } from "./commonsPrecision.ts";
+import {
+  COMMONS_PRECISION_MAX_DURATION_MS,
+  COMMONS_PRECISION_MAX_INSPECTED,
+  COMMONS_PRECISION_MAX_REQUESTS,
+  projectCommonsPrecisionResponse,
+  type CommonsPrecisionPublicResponse,
+} from "./commonsPrecision.ts";
 import {
   COMMONS_PRECISION_CANDIDATE_CACHE_TTL_MS,
   COMMONS_PRECISION_ENTITY_CACHE_TTL_MS,
@@ -495,9 +501,11 @@ Deno.serve(async (request) => {
           },
         };
         let result;
+        let isExtensionRequest = false;
         if (nextPageToken) {
           const opened = await openCommonsPrecisionNextPageToken(nextPageToken, tokenKey, { nowMs: Date.now(), adoptedQueryHash });
           if (opened.status !== "valid") return json({ error: "照片搜尋 session 已失效，請重新搜尋。", state: "session-expired" }, 400);
+          isExtensionRequest = opened.session.layer === "read-related-category-files";
           const entityEvidence = await readCommonsPrecisionCache<WikidataEntityEvidence>(clients.admin, createCommonsPrecisionEntityCacheKey(opened.session.qid), "entity-evidence");
           if (!entityEvidence) return json({ error: "照片搜尋 session 已失效，請重新搜尋。", state: "session-expired" }, 400);
           result = await runCommonsPrecisionContinuationEngine({
@@ -506,6 +514,9 @@ Deno.serve(async (request) => {
             layer: opened.session.layer,
             continuation: opened.session.continuation,
             seenPageIds: opened.session.seenPageIds,
+            initialRequestCount: opened.session.requestCount,
+            initialDurationMs: opened.session.durationMs,
+            extensionCategory: opened.session.extensionCategory,
           }, transport);
         } else {
           result = await runCommonsPrecisionEngine({ query, language, selectedEntityQid }, transport);
@@ -516,22 +527,45 @@ Deno.serve(async (request) => {
             });
           }
         }
-        const sealedNextPageToken = result.response.state === "results" && result.continuation && result.qid
+        const hasSessionBudget = result.sessionRequestCount < COMMONS_PRECISION_MAX_REQUESTS &&
+          result.sessionDurationMs < COMMONS_PRECISION_MAX_DURATION_MS &&
+          result.seenPageIds.length < COMMONS_PRECISION_MAX_INSPECTED;
+        const sealedNextPageToken = hasSessionBudget && ["results", "no-suitable-image"].includes(result.response.state) && result.continuation && result.qid
           ? await sealCommonsPrecisionNextPageToken({
               qid: result.qid,
               adoptedQueryHash,
               layer: result.continuation.layer,
               continuation: result.continuation.value,
               seenPageIds: result.seenPageIds,
+              requestCount: result.sessionRequestCount,
+              durationMs: result.sessionDurationMs,
+              ...(result.entityEvidence?.p373Categories[0] ? { extensionCategory: result.entityEvidence.p373Categories[0] } : {}),
             }, tokenKey, Date.now())
           : undefined;
-        const response = projectCommonsPrecisionResponse({ ...result.response, nextPageToken: sealedNextPageToken });
-        if (!nextPageToken && !result.continuation && response.state === "results") {
+        const extensionPageToken = isExtensionRequest
+          ? sealedNextPageToken
+          : hasSessionBudget && !result.continuation && result.extensionContinuation && result.qid
+          ? await sealCommonsPrecisionNextPageToken({
+              qid: result.qid,
+              adoptedQueryHash,
+              layer: result.extensionContinuation.layer,
+              continuation: result.extensionContinuation.value,
+              seenPageIds: result.seenPageIds,
+              requestCount: result.sessionRequestCount,
+              durationMs: result.sessionDurationMs,
+            }, tokenKey, Date.now())
+          : undefined;
+        const response = projectCommonsPrecisionResponse({
+          ...result.response,
+          ...(!isExtensionRequest ? { nextPageToken: sealedNextPageToken } : {}),
+          extensionPageToken,
+        });
+        if (!nextPageToken && !result.continuation && !response.extensionPageToken && response.state === "results") {
           await writeCommonsPrecisionCache(clients.admin, {
             key: candidateKey, kind: "candidate-results", payload: response,
             expiresAt: new Date(Date.now() + COMMONS_PRECISION_CANDIDATE_CACHE_TTL_MS),
           });
-        } else if (!nextPageToken && response.state === "no-suitable-image") {
+        } else if (!nextPageToken && response.state === "no-suitable-image" && !response.nextPageToken && !response.extensionPageToken) {
           await writeCommonsPrecisionCache(clients.admin, {
             key: noSuitableKey, kind: "no-suitable-image", payload: response,
             expiresAt: new Date(Date.now() + COMMONS_PRECISION_CANDIDATE_CACHE_TTL_MS),

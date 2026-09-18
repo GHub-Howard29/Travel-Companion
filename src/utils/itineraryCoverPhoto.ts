@@ -12,24 +12,31 @@ export const isItineraryCoverPhoto = (
 ): value is ItineraryCoverPhoto => {
   if (!value || typeof value !== "object") return false;
   const photo = value as Partial<ItineraryCoverPhoto>;
-  return photo.source === "wikimedia-commons" &&
+  const commonValid =
     typeof photo.storagePath === "string" && STORAGE_PATH.test(photo.storagePath) &&
-    typeof photo.fileTitle === "string" && photo.fileTitle.startsWith("File:") &&
-    typeof photo.sourcePageUrl === "string" && HTTPS_URL.test(photo.sourcePageUrl) &&
-    typeof photo.creator === "string" && Boolean(photo.creator.trim()) &&
-    typeof photo.license === "string" && Boolean(photo.license.trim()) &&
-    (photo.licenseUrl === undefined || HTTPS_URL.test(photo.licenseUrl)) &&
     typeof photo.selectedAt === "string" && !Number.isNaN(Date.parse(photo.selectedAt)) &&
     photo.modified === true &&
-    (photo.transformation === undefined || photo.transformation === "cropped-resized-and-webp-transcoded") &&
-    (photo.transformation === undefined || (
-      typeof photo.credit === "string" && Boolean(photo.credit.trim()) &&
-      typeof photo.licenseUrl === "string" && HTTPS_URL.test(photo.licenseUrl)
-    )) &&
     Number.isSafeInteger(photo.width) && Number(photo.width) > 0 && Number(photo.width) <= 640 &&
     Number.isSafeInteger(photo.height) && Number(photo.height) > 0 && Number(photo.height) <= 640 &&
     photo.mime === "image/webp" &&
     Number.isSafeInteger(photo.size) && Number(photo.size) > 0 && Number(photo.size) <= MAX_ITINERARY_COVER_BYTES;
+  if (!commonValid) return false;
+  if (photo.source === "user-upload") {
+    return photo.transformation === "blurred-background-resized-and-webp-transcoded";
+  }
+  if (photo.source !== "wikimedia-commons") return false;
+  return typeof photo.fileTitle === "string" && photo.fileTitle.startsWith("File:") &&
+    typeof photo.sourcePageUrl === "string" && HTTPS_URL.test(photo.sourcePageUrl) &&
+    typeof photo.creator === "string" && Boolean(photo.creator.trim()) &&
+    typeof photo.license === "string" && Boolean(photo.license.trim()) &&
+    (photo.licenseUrl === undefined || HTTPS_URL.test(photo.licenseUrl)) &&
+    (photo.transformation === undefined ||
+      photo.transformation === "cropped-resized-and-webp-transcoded" ||
+      photo.transformation === "blurred-background-resized-and-webp-transcoded") &&
+    (photo.transformation === undefined || (
+      typeof photo.credit === "string" && Boolean(photo.credit.trim()) &&
+      typeof photo.licenseUrl === "string" && HTTPS_URL.test(photo.licenseUrl)
+    ));
 };
 
 export const sanitizeItineraryCoverPhotos = (
