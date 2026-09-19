@@ -1,4 +1,9 @@
-import { corsHeaders } from "npm:@supabase/supabase-js@2.108.2/cors";
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers":
+    "authorization, apikey, content-type, x-client-info, x-travel-companion-client-id",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
 
 const SOURCE_URL = "https://rate.bot.com.tw/xrt/flcsv/0/day";
 const SOURCE_PAGE_URL = "https://rate.bot.com.tw/xrt?Lang=zh-TW";
