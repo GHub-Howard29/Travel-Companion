@@ -2,7 +2,8 @@
 
 ## 目前狀態
 
-- 已發布版本：V3.8.2。
+- 已發布版本：V3.9.5。
+- V3.9.5「航班交通、每日時間輸入與照片功能改善」（合併原 V3.9.4 照片搜尋／自行上傳與原 V3.9.5 航班／時間輸入）已於 2026-09-18 完成合併至 `main`、建立 annotated tag `v3.9.5` 並部署 GitHub Pages；採一般更新，`minimumSupportedVersion: 3.9.2`、`forceUpdate: false`。
 - V3.5.2「Supabase 資料庫權限函式硬化」已完成；正式 migration、advisors 與角色回歸通過，Product Owner 確認不建立獨立 App build／tag，App 顯示版本維持 V3.5.1。
 - V3.6.0「地點間預估移動資訊」已於 2026-08-30 合併、建立 `v3.6.0` tag 並部署；正式 Supabase、Google Cloud 與 GitHub Pages 已驗證。完整角色矩陣、正式站 OAuth 自動化登入及 Android／iOS 實機仍保留發布後補驗證。
 - V3.6.1「Android 記帳金額欄位與 PWA 更新流程修正」已於 2026-09-01 合併至 `main`、建立 `v3.6.1` tag 並部署。Android 手機已驗證更新提示一次點擊即可完成，記帳金額輸入欄位不再變形或超出畫面；更新後介面顯示偏慢已由 V3.6.5 正式版完成改善。

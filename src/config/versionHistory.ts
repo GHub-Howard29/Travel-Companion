@@ -14,6 +14,16 @@ export type VersionHistoryItem = {
 
 export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
+    version: "3.9.5",
+    date: "2026-09-18",
+    isMandatoryRelease: false,
+    notes: [
+      "改善 Commons 搜尋續頁與候選累積，並提供一層相關分類的延伸候選。",
+      "每日行程照片新增拍照與自行上傳，可在 100%～250% 間調整並以同圖模糊背景補足卡片。",
+      "航班卡片不再規劃下一站地面交通；每日到達與離開時間可直接輸入四碼或全形數字。",
+    ],
+  },
+  {
     version: "3.9.3",
     date: "2026-09-18",
     isMandatoryRelease: false,
