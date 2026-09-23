@@ -57,6 +57,7 @@
     "verify:v365-performance": "node --experimental-strip-types --no-warnings scripts/verify-v365-performance.mjs",
     "verify:update-policy": "node --experimental-strip-types --no-warnings scripts/verify-update-policy.mjs",
     "verify:release-history": "node scripts/verify-release-history.mjs",
+    "verify:docs-links": "node scripts/verify-doc-links.mjs",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
     "predeploy": "npm run build",

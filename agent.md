@@ -2,22 +2,9 @@
 
 ## 目前狀態
 
-- 已發布版本：V3.9.5。
-- V3.9.5「航班交通、每日時間輸入與照片功能改善」（合併原 V3.9.4 照片搜尋／自行上傳與原 V3.9.5 航班／時間輸入）已於 2026-09-18 完成合併至 `main`、建立 annotated tag `v3.9.5` 並部署 GitHub Pages；採一般更新，`minimumSupportedVersion: 3.9.2`、`forceUpdate: false`。
-- V3.5.2「Supabase 資料庫權限函式硬化」已完成；正式 migration、advisors 與角色回歸通過，Product Owner 確認不建立獨立 App build／tag，App 顯示版本維持 V3.5.1。
-- V3.6.0「地點間預估移動資訊」已於 2026-08-30 合併、建立 `v3.6.0` tag 並部署；正式 Supabase、Google Cloud 與 GitHub Pages 已驗證。完整角色矩陣、正式站 OAuth 自動化登入及 Android／iOS 實機仍保留發布後補驗證。
-- V3.6.1「Android 記帳金額欄位與 PWA 更新流程修正」已於 2026-09-01 合併至 `main`、建立 `v3.6.1` tag 並部署。Android 手機已驗證更新提示一次點擊即可完成，記帳金額輸入欄位不再變形或超出畫面；更新後介面顯示偏慢已由 V3.6.5 正式版完成改善。
-- V3.6.3「V3.6.2 發布後前端修正」已於 2026-09-03 合併至 `main`、建立 `v3.6.3` tag 並部署；採一般更新，正式 metadata 與主程式資產已驗證。桌面、Android 實機及登入後管理者流程均通過；僅 iOS Safari／standalone PWA 的更新提示、版本資訊、交通圖示及縮短天數雙階段確認保留發布後補驗。
-- V3.6.4「歷史唯讀參與者與跨裝置資料變動提醒」已於 2026-09-07 完成 production logical backup、migration、兩階段 GitHub Pages 部署與正式站登入 smoke；採必要更新。iOS、Android 與兩台實體裝置指定流程保留發布後補驗。
-- V3.6.5「PWA 更新後介面顯示效能改善」已於 2026-09-08 完成同機 V3.6.4／V3.6.5 各五次桌面量測、全部自動驗證、`v3.6.5` 與 GitHub Pages 部署；正式 metadata／資產與登入 smoke 通過，採一般更新。Android、iOS 與兩台實體裝置保留發布後補驗。
-- V3.7.0「當日後續行程時間連動調整」已於 2026-09-08 完成全部自動驗證、`v3.7.0` 與 GitHub Pages 部署；正式 `app-version.json` 與首頁新版資產已確認，採一般更新。桌面、Android、iOS、實際大眾運輸、離線快取及跨裝置競態指定流程保留發布後補驗。
-- V3.7.1「Day 日期顯示修正」已於 2026-09-08 完成 Day 2、跨年、閏年與無效日期專項、全部自動驗證、`v3.7.1` 與 GitHub Pages 部署；正式 `app-version.json` 與首頁新版資產已確認，採一般更新。
-- V3.7.2「農曆日期與 Day 配色」已於 2026-09-08 完成全部自動驗證、`v3.7.2` 與 GitHub Pages 部署；正式 `app-version.json` 與首頁新版資產已確認，採一般更新。
-- V3.8.0「每日行程排序與跨日複製」已於 2026-09-10 完成 `main` 合併、帶註解標籤 `v3.8.0` 與 GitHub Pages 部署；正式 metadata、主程式及行程功能資產已驗證，採必要更新，`minimumSupportedVersion: 3.8.0`、`forceUpdate: true`。登入角色、歷史行程、離線阻擋、跨裝置版本衝突與實機更新流程仍保留發布後補驗。
-- V3.8.1「Trip 刪除墓碑與唯一識別」已完成正式發布：production migration `20260910140949`、完整驗證、`main` 合併、annotated tag `v3.8.1`、GitHub Pages 與正式站 smoke 均已完成；發布提交為 `da0b87d`，目前已切回 `develop`。正式 metadata 為 `minimumSupportedVersion: 3.8.1`、`forceUpdate: true`。Android／iOS 實體裝置、PWA 冷啟動離線及舊版實機必要更新提示列為發布後補驗。`free-travel-2026-01` 與 `group-tour-2026-10` 可編輯但前端／資料庫均不得刪除；目前 Trip 被刪除後不顯示提示，依既有規則切換至預設 Trip 的每日詳細行程及適合 Day。
-- V3.8.2「跨日複製時間設定」已於 2026-09-11 完成實作、驗證、annotated tag `v3.8.2` 與 GitHub Pages 部署；採一般更新，`minimumSupportedVersion: 3.8.1`、`forceUpdate: false`。副本抵達／離開時間預設空白且必填，多個 Day 共用一組時間，依新抵達時間插入但不重排既有卡片。
-- Product Owner 已確認 V3.9.0 同時納入 Google 搜尋候選暫態索引照與 Commons 每日卡片管理者選圖；兩軌同版但不混用來源或保存資料。桌面／390×844 UI、可見文案、跨日照片引用、正式實作與後續發布均已核准；候選 metadata 為 `minimumSupportedVersion: 3.8.2`、`forceUpdate: false`。本機 Docker 隔離 migration、Storage／RLS、額度、advisors、Edge Runtime、lint 與完整 build 已通過；production 尚未變更。
-- 版本順序與範圍唯一以 `docs/02_產品開發路線圖.md` 為準；未完成工作以 `docs/09_待辦事項_TODO.md` 為準；目前有效狀態以 `docs/14_專案現況總覽.md` 為準。
+- 目前版本、部署／發布狀態與目前開發目標，唯一以 `docs/14_專案現況總覽.md` 為準。
+- 未來版本順序與範圍見 `docs/02_產品開發路線圖.md`；未完成工作見 `docs/09_待辦事項_TODO.md`。
+- 已發布版本的完整帳冊與專屬文件位於 `docs/archive/`，不是預設必讀範圍。
 
 ## AI 助理互動與 API 呼叫安全規範 (Rate Limiting & Exponential Backoff)
 
@@ -48,11 +35,22 @@
 ## 文件責任
 
 - `docs/README.md`：文件入口與專案簡介。
-- `docs/02_產品開發路線圖.md`：未來版本順序、編號與範圍；不再追加已發布版本的實作流水帳。
-- `docs/07_版本更新紀錄.md`：精簡的已發布版本帳冊。
+- `docs/02_產品開發路線圖.md`：未來版本順序、編號與範圍；已發布版本只保留精簡索引。
+- `docs/archive/07_版本更新紀錄.md`：完整的已發布版本帳冊。
+- `docs/03_Bug修正紀錄.md`：未修正、待補驗與近期修正；已結案詳細紀錄搬入 `docs/archive/bug-history/`。
 - `docs/09_待辦事項_TODO.md`：只記錄未完成工作；完成項應移出，不長期累積 `[x]` 歷史。
-- `docs/14_專案現況總覽.md`：只記錄目前正式版、有效能力、當前開發與下一步；不得保留過期的「最新版本」章節。
+- `docs/14_專案現況總覽.md`：目前部署版本、正式發布狀態、目前開發目標與必要風險的唯一權威來源。
+- `docs/archive/README.md`：版本文件搬遷索引與歸檔門檻。
 - 每次文件整理前先依上述責任去重；同一事實只指定一個權威來源，其他文件以連結引用，不複製整段內容。
 - 尚未排入近期實作的方案與預覽一律標示「草案／尚未定案」；需求或範圍改變時，舊預覽改標「先前方案草案」，不得繼續當作核准依據。
 - 版本專項測試在行為穩定後應改為領域名稱或合併至固定測試套件，不得讓 `build` 永久累積每個版號的驗證腳本。
 - 架構、資料庫、權限與當前專屬功能規格分別留在對應文件；歷史細節由 Git 與版本更新紀錄保存，不再建立累積式「新對話交接文件」。
+
+## 文件維護觸發與強制 Checklist
+
+- 使用者說「整理文件」或明確同義指令時，AI 必須盤點權威來源、待搬文件、斷鏈與未完成 Checklist，並逐項回報。
+- 進入「發布前停止線」時，必須預檢版本號、發布候選文件、連結映射、路線圖狀態、權威狀態欄與 archive 目標；未發布文件不得歸檔。
+- 使用者回報「已發布」或「已部署」時，必須驗證版本檔、`main` 合併、annotated tag、部署結果與發布後 smoke；證據不全時只能標示待補。
+- 發布後必須更新 `14_專案現況總覽`、將路線圖版本移入精簡索引、更新 archive 帳冊，再以 `git mv` 搬遷該版本專屬文件。
+- 搬檔後必須執行 `npm run verify:docs-links`、`git diff --check`、檔案數量／位置比對，並在全數通過後才能回報文件整理完成。
+- 文件觸發只授權文件盤點與維護，不授權 commit、push、合併、部署或正式 Supabase 操作。

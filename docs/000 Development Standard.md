@@ -332,8 +332,8 @@ Build 成功：
 
 - 平常實作功能、修 Bug、重構時，先專注在程式碼、驗證與 Build。
 - 不因每個小 Step 主動同步更新文件。
-- 只有 Product Owner 明確要求時，才集中整理文件。
-- Product Owner 的明確要求包含：整理文件、整理交接文件、更新 README、準備 Commit、要求 Commit、或其他直接指定文件維護的指令。
+- 集中整理文件的觸發包含：Product Owner 要求「整理文件」或同義指令、開發進入發布前停止線、以及 Product Owner 回報已部署／已發布。
+- 觸發後必須依 `08_開發規範.md` 執行文件維護 Checklist；文件維護不授權 Commit、push、合併或部署。
 - 若程式修改會讓既有文件中的定案規則明顯誤導後續開發，AI 應先提醒 Product Owner，再由 Product Owner 決定是否立即更新文件。
 
 集中整理文件時，依實際影響更新：
@@ -569,11 +569,11 @@ AI 不得將：
 需驗證功能
 
 【文件整理】
-僅在 Product Owner 要求整理文件、整理交接文件、準備 Commit、要求 Commit，或本次修改會讓文件明顯誤導後續開發時提供。
+在 Product Owner 要求整理文件、進入發布前停止線、回報已部署／已發布，或本次修改會讓文件明顯誤導後續開發時提供。
 
 【Git Commit】
 （繁體中文）
-完成文件或程式修改並驗證通過後，直接建立 Commit，並回報實際使用的中文 Commit 訊息。
+完成文件或程式修改並驗證通過後，只在 Product Owner 明確要求時建立 Commit，並回報實際使用的中文 Commit 訊息。
 ```
 
 ---
