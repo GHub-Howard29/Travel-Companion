@@ -88,7 +88,7 @@ import {
   type PlaceCandidatePhoto,
 } from "../services/travelRouteService";
 import {
-  removeItineraryCoverPaths,
+  scheduleItineraryCoverDeletion,
   uploadItineraryCoverPhoto,
   uploadUserItineraryCoverPhoto,
   MAX_USER_COVER_SOURCE_BYTES,
@@ -1013,7 +1013,7 @@ export const ItineraryPage = ({
       clearUserCoverSelection();
     } catch (error) {
       if (uploadedPath) {
-        try { await removeItineraryCoverPaths(supabase, [uploadedPath]); } catch { /* 保留待後續清理。 */ }
+        try { await scheduleItineraryCoverDeletion(supabase, [uploadedPath]); } catch { /* 保留待後續清理。 */ }
       }
       setCoverPhotoError(error instanceof Error ? error.message : "照片設定失敗，行程尚未變更。");
     } finally {

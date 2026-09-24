@@ -33,6 +33,7 @@ import {
 } from "../utils/browserSecurity";
 import { getExportFileNameXlsx } from "../utils/exportUtils";
 import { getExpenseRecorderAlias } from "../utils/participantUtils";
+import { scheduleStorageDeletion } from "../services/deferredStorageDeletionService";
 import type { EditExpenseDraft, ExpenseItem, LocalAttachmentRecord } from "../types";
 
 interface UseExpenseBookOptions {
@@ -728,10 +729,9 @@ useEffect(() => {
             String(removedExpense.id),
           )
         ) {
-          const { error: attachmentDeleteError } = await supabase.storage
-            .from(ATTACHMENT_BUCKET)
-            .remove([removedAttachmentPath as string]);
-          if (attachmentDeleteError) {
+          try {
+            await scheduleStorageDeletion(supabase, ATTACHMENT_BUCKET, [removedAttachmentPath]);
+          } catch (attachmentDeleteError) {
             console.warn("Failed to remove expense attachment", attachmentDeleteError);
           }
         }
@@ -909,10 +909,9 @@ useEffect(() => {
             String(targetExpense.id),
           )
         ) {
-          const { error: attachmentDeleteError } = await supabase.storage
-            .from(ATTACHMENT_BUCKET)
-            .remove([targetAttachmentPath as string]);
-          if (attachmentDeleteError) {
+          try {
+            await scheduleStorageDeletion(supabase, ATTACHMENT_BUCKET, [targetAttachmentPath]);
+          } catch (attachmentDeleteError) {
             console.warn("Failed to remove replaced expense attachment", attachmentDeleteError);
           }
         }

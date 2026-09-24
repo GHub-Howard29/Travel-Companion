@@ -50,7 +50,7 @@ import {
 import { decideTripReconciliation } from "../services/tripReconciliation";
 import { clearSharedTripDataAfterAccessLoss } from "../storage/sharedTripDataStorage";
 import { getUnusedItineraryCoverPaths } from "../utils/itineraryCoverPhoto";
-import { removeItineraryCoverPaths } from "../services/itineraryCoverPhotoService";
+import { scheduleItineraryCoverDeletion } from "../services/itineraryCoverPhotoService";
 import {
   consumeExternalReturnDay,
   getExternalReturnTripId,
@@ -565,7 +565,7 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
 
       await saveTripRecordWithCloudSync(supabase, record);
       try {
-        await removeItineraryCoverPaths(
+        await scheduleItineraryCoverDeletion(
           supabase,
           getUnusedItineraryCoverPaths(currentTrip, record.detail),
         );
@@ -666,7 +666,7 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
       );
       if (currentTrip) {
         try {
-          await removeItineraryCoverPaths(
+          await scheduleItineraryCoverDeletion(
             supabase,
             getUnusedItineraryCoverPaths(currentTrip, record.detail),
           );
