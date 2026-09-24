@@ -62,18 +62,134 @@ export const parseTargetTrip = (rawValue, tripId = DEFAULT_TRIP_ID) => {
       cardCount: items.length,
       titles: items.map((item) => typeof item?.title === "string" ? item.title : "（無標題）"),
     }));
-  const payload = {
-    tripId,
-    title: record.meta?.title ?? record.detail?.title ?? "",
-    departureDate: record.meta?.departureDate ?? record.detail?.departureDate ?? "",
-    localUpdatedAt: record.updatedAt ?? null,
-    cloudUpdatedAt: record.cloudUpdatedAt ?? null,
-    daysData,
-  };
   return {
-    payload,
+    record,
     summary,
     daysDataSha256: sha256(Buffer.from(JSON.stringify(daysData), "utf8")),
     sourceValueSha256: sha256(Buffer.from(rawValue, "utf8")),
+  };
+};
+
+const readJson = (value) => {
+  try {
+    return JSON.parse(value);
+  } catch {
+    return undefined;
+  }
+};
+
+const captureEntry = (entry) => {
+  const parsed = readJson(entry.value);
+  return {
+    sourceKey: entry.key,
+    valueSha256: sha256(Buffer.from(entry.value, "utf8")),
+    valueFormat: parsed === undefined ? "text" : "json",
+    value: parsed === undefined ? entry.value : parsed,
+  };
+};
+
+const captureMany = (entries, predicate) => entries
+  .filter(predicate)
+  .map(captureEntry)
+  .sort((left, right) => left.sourceKey.localeCompare(right.sourceKey));
+
+/**
+ * 只從同一 Chromium storage partition 的 Local Storage 取出目標 Trip 資料。
+ * 登入 session、Supabase token 與其他 Trip 一律不放進救援檔。
+ */
+export const buildFullTripRescue = (entries, candidate, tripId = DEFAULT_TRIP_ID) => {
+  const inPartition = entries.filter((entry) => entry.storageKey === candidate.storageKey);
+  const byKey = new Map(inPartition.map((entry) => [entry.key, entry]));
+  const one = (key) => {
+    const entry = byKey.get(key);
+    return entry ? captureEntry(entry) : null;
+  };
+  const prefix = (keyPrefix) => captureMany(inPartition, (entry) => entry.key.startsWith(keyPrefix));
+  const parsed = parseTargetTrip(candidate.value, tripId);
+  if (!parsed) return null;
+
+  const cachedExpensePrefix = `cached_expenses_${tripId}`;
+  const offlineExpenses = one("offline_expenses");
+  let targetOfflineExpenses = null;
+  if (offlineExpenses) {
+    if (offlineExpenses.valueFormat !== "json" || !Array.isArray(offlineExpenses.value)) {
+      throw new Error("Local Storage Key「offline_expenses」不是陣列");
+    }
+    targetOfflineExpenses = {
+      ...offlineExpenses,
+      sourceKey: offlineExpenses.sourceKey,
+      originalItemCount: offlineExpenses.value.length,
+      value: offlineExpenses.value.filter((item) => item?.trip_id === tripId),
+    };
+  }
+
+  const knownPrefixes = [
+    `travel_companion_user_shared_checklist_${tripId}_`,
+    `travel_companion_private_checklist_${tripId}_`,
+    `travel_companion_pending_private_checklist_${tripId}_`,
+    `travel_companion_pending_shared_checklist_order_${tripId}_`,
+    `travel_companion_pending_shared_checklist_progress_${tripId}_`,
+  ];
+  const allowlistedKeys = new Set([
+    TRIP_STORAGE_KEY,
+    `travel_companion_other_info_${tripId}`,
+    `travel_companion_folders_${tripId}`,
+    `travel_companion_checklist_${tripId}`,
+    `travel_companion_exchange_rate_local_${tripId}`,
+    `travel_companion_exchange_rate_cloud_${tripId}`,
+    `travel_companion_exchange_rate_cloud_initialized_${tripId}`,
+    `travel_companion_other_info_sync_${tripId}`,
+    `admin_profile_${tripId}`,
+    `attachment_last_sync_${tripId}`,
+    "offline_expenses",
+  ]);
+  const includedKeys = inPartition
+    .filter((entry) => allowlistedKeys.has(entry.key) || entry.key === cachedExpensePrefix || entry.key.startsWith(`${cachedExpensePrefix}::personal::`) || knownPrefixes.some((item) => entry.key.startsWith(item)))
+    .map((entry) => entry.key)
+    .sort();
+  const excludedSensitiveKeyCount = inPartition.filter((entry) => /^(auth_|sb-|supabase\.)/i.test(entry.key)).length;
+
+  return {
+    trip: {
+      tripId,
+      record: parsed.record,
+      recordSha256: parsed.sourceValueSha256,
+      daysDataSha256: parsed.daysDataSha256,
+      summary: parsed.summary,
+    },
+    data: {
+      otherInfoItems: one(`travel_companion_other_info_${tripId}`),
+      folders: one(`travel_companion_folders_${tripId}`),
+      sharedChecklistProgress: one(`travel_companion_checklist_${tripId}`),
+      userSharedChecklists: prefix(`travel_companion_user_shared_checklist_${tripId}_`),
+      privateChecklists: prefix(`travel_companion_private_checklist_${tripId}_`),
+      exchangePurchases: {
+        local: one(`travel_companion_exchange_rate_local_${tripId}`),
+        cloud: one(`travel_companion_exchange_rate_cloud_${tripId}`),
+        cloudInitialized: one(`travel_companion_exchange_rate_cloud_initialized_${tripId}`),
+      },
+      expenseCache: {
+        books: captureMany(inPartition, (entry) => entry.key === cachedExpensePrefix || entry.key.startsWith(`${cachedExpensePrefix}::personal::`)),
+        offlineQueueForTrip: targetOfflineExpenses,
+        attachmentLastSync: one(`attachment_last_sync_${tripId}`),
+      },
+      pendingSyncDiagnostics: {
+        otherInfo: one(`travel_companion_other_info_sync_${tripId}`),
+        privateChecklists: prefix(`travel_companion_pending_private_checklist_${tripId}_`),
+        sharedChecklistOrder: prefix(`travel_companion_pending_shared_checklist_order_${tripId}_`),
+        sharedChecklistProgress: prefix(`travel_companion_pending_shared_checklist_progress_${tripId}_`),
+      },
+      permissionCacheDiagnostic: one(`admin_profile_${tripId}`),
+    },
+    integrity: {
+      includedStorageKeys: includedKeys,
+      excludedSensitiveKeyCount,
+      limitations: [
+        "未匯出 auth_、sb-、supabase. 開頭的登入或工作階段資料。",
+        "未匯出其他 Trip 的資料。",
+        "未匯出 IndexedDB 的未同步附件二進位檔、Cache Storage 或僅存在雲端的資料。",
+        "pendingSyncDiagnostics 與 permissionCacheDiagnostic 僅供鑑識，不應直接匯入。",
+      ],
+    },
   };
 };

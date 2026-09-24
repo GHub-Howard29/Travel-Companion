@@ -17,13 +17,13 @@ import { stdin, stdout } from "node:process";
 import { ClassicLevel } from "classic-level";
 import {
   DEFAULT_TRIP_ID,
+  buildFullTripRescue,
   parseChromiumLocalStorageEntry,
-  parseTargetTrip,
   TARGET_ORIGIN,
   TRIP_STORAGE_KEY,
 } from "./rescue-core.mjs";
 
-const TOOL_VERSION = "1.0.0";
+const TOOL_VERSION = "1.1.0";
 const WINDOWS_BROWSER_ROOTS = [
   ["Chrome", join(process.env.LOCALAPPDATA ?? "", "Google", "Chrome", "User Data")],
   ["Edge", join(process.env.LOCALAPPDATA ?? "", "Microsoft", "Edge", "User Data")],
@@ -123,10 +123,7 @@ const readTripStorageValues = async (snapshotDir) => {
     await db.open();
     for await (const [rawKey, rawValue] of db.iterator()) {
       const entry = parseChromiumLocalStorageEntry(rawKey, rawValue);
-      if (
-        entry && entry.key === TRIP_STORAGE_KEY &&
-        (entry.storageKey === TARGET_ORIGIN || entry.storageKey.startsWith(`${TARGET_ORIGIN}^`))
-      ) {
+      if (entry && (entry.storageKey === TARGET_ORIGIN || entry.storageKey.startsWith(`${TARGET_ORIGIN}^`))) {
         values.push(entry);
       }
     }
@@ -136,11 +133,11 @@ const readTripStorageValues = async (snapshotDir) => {
   return values;
 };
 
-const exportCandidate = (candidate, profile, outputRoot, sourceFingerprint) => {
+const exportCandidate = (candidate, fullExport, profile, outputRoot, sourceFingerprint) => {
   const createdAt = new Date().toISOString();
   const document = {
-    format: "travel-companion-itinerary-rescue",
-    formatVersion: 1,
+    format: "travel-companion-full-local-rescue",
+    formatVersion: 2,
     toolVersion: TOOL_VERSION,
     exportedAt: createdAt,
     source: {
@@ -149,16 +146,14 @@ const exportCandidate = (candidate, profile, outputRoot, sourceFingerprint) => {
       origin: TARGET_ORIGIN,
       storagePartition: candidate.storageKey,
       leveldbSha256: sourceFingerprint,
-      localStorageValueSha256: candidate.parsed.sourceValueSha256,
+      localStorageValueSha256: fullExport.trip.recordSha256,
     },
-    trip: candidate.parsed.payload,
-    daysDataSha256: candidate.parsed.daysDataSha256,
-    summary: candidate.parsed.summary,
+    ...fullExport,
   };
   const partitionSuffix = candidate.storageKey === TARGET_ORIGIN
     ? ""
     : `-${createHash("sha256").update(candidate.storageKey).digest("hex").slice(0, 8)}`;
-  const fileName = `${safeName(profile.browser)}-${safeName(profile.profile)}-${safeName(candidate.parsed.payload.tripId)}${partitionSuffix}.json`;
+  const fileName = `${safeName(profile.browser)}-${safeName(profile.profile)}-${safeName(fullExport.trip.tripId)}${partitionSuffix}.json`;
   const path = join(outputRoot, fileName);
   writeFileSync(path, `${JSON.stringify(document, null, 2)}\n`, { encoding: "utf8", flag: "wx" });
   return { path, document };
@@ -167,9 +162,9 @@ const exportCandidate = (candidate, profile, outputRoot, sourceFingerprint) => {
 const main = async () => {
   const options = parseArguments();
   assertSafeTripId(options.tripId);
-  console.log("Travel Companion 每日行程離線救援工具");
+  console.log("Travel Companion 完整資料離線救援工具");
   console.log(`工具版本：${TOOL_VERSION}`);
-  console.log("本工具沒有網路功能，且只會讀取 Chrome／Edge 本機資料。\n");
+  console.log("本工具沒有網路功能，且只會讀取 Chrome／Edge Local Storage。\n");
 
   if (!options.leveldbDir && process.env.TRAVEL_COMPANION_RESCUE_TEST !== "1") {
     const running = runningBrowsers();
@@ -202,13 +197,13 @@ const main = async () => {
       const fingerprint = copyStableSnapshot(profile.leveldbDir, snapshotDir);
       const values = await readTripStorageValues(snapshotDir);
       let found = false;
-      for (const entry of values) {
-        const parsed = parseTargetTrip(entry.value, options.tripId);
-        if (!parsed) continue;
+      for (const entry of values.filter((item) => item.key === TRIP_STORAGE_KEY)) {
+        const fullExport = buildFullTripRescue(values, entry, options.tripId);
+        if (!fullExport) continue;
         found = true;
-        const exported = exportCandidate({ ...entry, parsed }, profile, outputRoot, fingerprint);
+        const exported = exportCandidate(entry, fullExport, profile, outputRoot, fingerprint);
         exports.push(exported);
-        report.push(`${profile.browser} / ${profile.profile}：已匯出 ${exported.document.trip.title}，Day 卡片數 ${exported.document.summary.map((day) => `${day.day}:${day.cardCount}`).join("、")}`);
+        report.push(`${profile.browser} / ${profile.profile}：已匯出 ${exported.document.trip.record.meta?.title ?? exported.document.trip.record.detail?.title ?? options.tripId}，Day 卡片數 ${exported.document.trip.summary.map((day) => `${day.day}:${day.cardCount}`).join("、")}，Local Storage 資料鍵 ${exported.document.integrity.includedStorageKeys.length} 個`);
       }
       if (!found) report.push(`${profile.browser} / ${profile.profile}：未找到目標 Trip`);
     } catch (error) {
@@ -221,14 +216,14 @@ const main = async () => {
   writeFileSync(
     join(outputRoot, "救援報告.txt"),
     [
-      "Travel Companion 每日行程離線救援報告",
+      "Travel Companion 完整資料離線救援報告",
       `產生時間：${new Date().toISOString()}`,
       `目標 Trip：${options.tripId}`,
       "",
       ...report,
       "",
       `成功匯出：${exports.length} 份`,
-      "此工具未修改瀏覽器資料，也未連接任何網路服務。",
+      "此工具未修改瀏覽器資料，也未連接任何網路服務。匯出不包含登入憑證與 IndexedDB 附件檔案。",
     ].join("\r\n"),
     { encoding: "utf8", flag: "wx" },
   );

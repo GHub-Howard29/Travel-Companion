@@ -9,7 +9,7 @@ if (process.platform !== "win32" || process.arch !== "x64") {
 
 const source = dirname(fileURLToPath(import.meta.url));
 const releaseRoot = resolve(source, "..", "..", ".release");
-const packageName = "TravelCompanion-Itinerary-Rescue-v1.0.0-win-x64";
+const packageName = "TravelCompanion-Itinerary-Rescue-v1.1.0-win-x64";
 const staging = join(releaseRoot, packageName);
 const zipPath = join(releaseRoot, `${packageName}.zip`);
 const runtimeModules = join(source, "node_modules");
