@@ -14,6 +14,16 @@ export type VersionHistoryItem = {
 
 export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
+    version: "3.9.8",
+    date: "2026-09-24",
+    isMandatoryRelease: false,
+    notes: [
+      "統一每日行程有／無照片卡片的管理按鈕位置。",
+      "其他資訊分類捷徑可直接選擇並開啟。",
+      "修正行程說明單次換行與儲存時誤判版本衝突的問題。",
+    ],
+  },
+  {
     version: "3.9.7",
     date: "2026-09-24",
     isMandatoryRelease: false,

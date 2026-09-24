@@ -252,6 +252,24 @@ export const getCloudTripRecordsStrict = async (
     .filter((record): record is StoredTripRecord => Boolean(record));
 };
 
+export const getCloudTripRecord = async (
+  supabase: SupabaseClient,
+  tripId: string,
+): Promise<StoredTripRecord | null> => {
+  if (!navigator.onLine) return null;
+
+  const { data, error } = await supabase
+    .from("trips")
+    .select(
+      "id, title, departure_date, participants, currency_config, sidebar_config, content, updated_at",
+    )
+    .eq("id", tripId)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data ? toTripRecord(data as CloudTripRow) : null;
+};
+
 export const getTripDeletionTombstones = async (
   supabase: SupabaseClient,
 ): Promise<TripDeletionTombstone[]> => {
