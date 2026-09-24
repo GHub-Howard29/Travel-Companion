@@ -50,7 +50,12 @@ import {
 import { decideTripReconciliation } from "../services/tripReconciliation";
 import { clearSharedTripDataAfterAccessLoss } from "../storage/sharedTripDataStorage";
 import { getUnusedItineraryCoverPaths } from "../utils/itineraryCoverPhoto";
-import { removeItineraryCoverPaths } from "../services/itineraryCoverPhotoService";
+import { scheduleItineraryCoverDeletion } from "../services/itineraryCoverPhotoService";
+import {
+  consumeExternalReturnDay,
+  getExternalReturnTripId,
+  rememberExternalReturnContext,
+} from "../utils/externalReturnContext";
 
 interface UseTripWorkspaceOptions {
   supabase: SupabaseClient;
@@ -88,6 +93,20 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
     selectedTripIdRef.current = selectedTripId;
     userEmailRef.current = userEmail;
   }, [selectedTripId, userEmail]);
+
+  useEffect(() => {
+    const remember = () => rememberExternalReturnContext(selectedTripIdRef.current, activeDay);
+    const rememberFromLink = (event: MouseEvent) => {
+      const target = event.target;
+      if (target instanceof Element && target.closest('a[target="_blank"]')) remember();
+    };
+    window.addEventListener("travel-companion:external-link-opening", remember);
+    document.addEventListener("click", rememberFromLink);
+    return () => {
+      window.removeEventListener("travel-companion:external-link-opening", remember);
+      document.removeEventListener("click", rememberFromLink);
+    };
+  }, [activeDay]);
 
   const selectedTripMeta = tripOptions.find((trip) => trip.id === selectedTripId);
   const currentMembers = useMemo(
@@ -236,7 +255,9 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
 
       setTripOptions(nextTrips);
       if (selectedTripWasRemoved || !currentSelectedTripId) {
-        const nextTrip = findDefaultTrip(nextTrips) ?? nextTrips[0] ?? null;
+        const returnTripId = getExternalReturnTripId(nextTrips.map((trip) => trip.id));
+        const nextTrip = nextTrips.find((trip) => trip.id === returnTripId) ??
+          findDefaultTrip(nextTrips) ?? nextTrips[0] ?? null;
         tripLoadRevisionRef.current += 1;
         initialCloudRecordsRef.current = cloudRecords.filter(
           (record) => !tombstoneIds.has(record.meta.id),
@@ -271,7 +292,9 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
       if (!isActive) return;
       setTripOptions(sortedTrips);
       if (sortedTrips.length > 0) {
-        const defaultTrip = findDefaultTrip(sortedTrips) ?? sortedTrips[0];
+        const returnTripId = getExternalReturnTripId(sortedTrips.map((trip) => trip.id));
+        const defaultTrip = sortedTrips.find((trip) => trip.id === returnTripId) ??
+          findDefaultTrip(sortedTrips) ?? sortedTrips[0];
         setSelectedTripId(defaultTrip.id);
       } else {
         setIsLoading(false);
@@ -329,7 +352,10 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
         );
         if (tripData && tripLoadRevisionRef.current === loadRevision) {
           setCurrentTrip(tripData);
-          setActiveDay(getDefaultActiveDay(tripData.departureDate, tripData.content.days));
+          setActiveDay(
+            consumeExternalReturnDay(tripData.id, tripData.content.days) ??
+              getDefaultActiveDay(tripData.departureDate, tripData.content.days),
+          );
 
           if (tripData.sidebarConfig?.length > 0) {
             const validScreenIds = [
@@ -539,7 +565,7 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
 
       await saveTripRecordWithCloudSync(supabase, record);
       try {
-        await removeItineraryCoverPaths(
+        await scheduleItineraryCoverDeletion(
           supabase,
           getUnusedItineraryCoverPaths(currentTrip, record.detail),
         );
@@ -640,7 +666,7 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
       );
       if (currentTrip) {
         try {
-          await removeItineraryCoverPaths(
+          await scheduleItineraryCoverDeletion(
             supabase,
             getUnusedItineraryCoverPaths(currentTrip, record.detail),
           );

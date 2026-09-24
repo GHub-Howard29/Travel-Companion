@@ -41,9 +41,9 @@ import {
   TripVersionConflictError,
 } from "./services/tripRepository";
 import { syncCloudOtherInfoItems } from "./services/otherInfoCloudService";
+import { getFolders } from "./services/otherInfoService";
 import { syncPrivateChecklistWithCloud } from "./services/privateChecklistCloudService";
 import { syncCloudSharedChecklistSeedItems } from "./services/sharedChecklistCloudService";
-import { upsertCloudTripRecord } from "./services/tripCloudService";
 import { writeStoredOtherInfoItems } from "./storage/otherInfoStorage";
 import { readStoredTripRecords } from "./storage/tripStorage";
 import {
@@ -61,6 +61,7 @@ import {
   resolveTravelToolType,
 } from "./utils/travelToolRegistry";
 import { mergeSharedChecklistItems } from "./utils/checklistMerge";
+import { isOtherInfoItemVisibleToRole } from "./utils/otherInfoUtils";
 import {
   formatTripDate,
   getMillisecondsUntilNextTaipeiDay,
@@ -325,6 +326,7 @@ function ConfiguredApp({
   const [isSharedDataManageMode, setIsSharedDataManageMode] = useState(false);
   const [isVersionInfoOpen, setIsVersionInfoOpen] = useState(false);
   const [isLoginSafetyOpen, setIsLoginSafetyOpen] = useState(false);
+  const [requestedOtherInfoFolderId, setRequestedOtherInfoFolderId] = useState<string | null>(null);
   const [otherInfoSyncStatus, setOtherInfoSyncStatus] = useState<
     OtherInfoSyncStatus | "syncing" | null
   >(null);
@@ -538,6 +540,7 @@ function ConfiguredApp({
       setIsMenuOpen(false);
       return;
     }
+    setRequestedOtherInfoFolderId(null);
     setCurrentScreen(item.id);
     if (item.type === "expense") {
       setActiveCurrency("ALL");
@@ -740,11 +743,9 @@ function ConfiguredApp({
           items.filter((item) => !item.isDeleted),
           items.filter((item) => item.isDeleted).map((item) => item.id),
         );
-        const syncedTrip = didSyncItems
-          ? await upsertCloudTripRecord(supabase, record)
-          : null;
-
-        if (!didSyncItems || !syncedTrip) {
+        // Other Info 已有獨立資料表；不得再以本機快取整筆 upsert trips，
+        // 否則舊分頁的待同步狀態可能把較新的 daysData 一併覆寫。
+        if (!didSyncItems) {
           markOtherInfoSyncFailed(
             tripId,
             pending.revision,
@@ -1182,6 +1183,22 @@ function ConfiguredApp({
                 hasEditPermission={canEditTripMaster}
                 isOnline={isOnline}
                 onActiveDayChange={setActiveDay}
+                otherInfoFolders={getFolders(selectedTripId).filter((folder) => {
+                  const folderItems = (currentTrip.content.otherInfoItems ?? []).filter(
+                    (item) => item.folderId === folder.id && !item.isDeleted,
+                  );
+                  return folderItems.length === 0 || folderItems.some(
+                    (item) => isOtherInfoItemVisibleToRole(item, role),
+                  );
+                })}
+                onOpenOtherInfoFolder={(folderId) => {
+                  const screen = currentTrip.sidebarConfig.find(
+                    (item) => item.type === "otherInfo" && !isSpecialInfoSidebarItem(item),
+                  );
+                  if (!screen) return;
+                  setRequestedOtherInfoFolderId(folderId);
+                  setCurrentScreen(screen.id);
+                }}
                 onSaveTripDetail={async (trip) => {
                   if (!canEditTripMaster) return;
                   if (await checkForRemoteTripChange()) {
@@ -1265,6 +1282,7 @@ function ConfiguredApp({
                 pageTitle={currentSidebarItem?.title}
                 isSpecialInfoPage={isSpecialInfoPage}
                 specialFolderId={specialInfoFolderId}
+                requestedFolderId={requestedOtherInfoFolderId}
                 syncStatus={otherInfoSyncStatus}
                 onRetrySync={retryOtherInfoSync}
                 onManageModeChange={handleSharedDataManageModeChange}

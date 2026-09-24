@@ -8,6 +8,7 @@ import {
 } from "../constants/appConstants";
 import { clampItineraryCoverCrop, getItineraryCoverCropMaxZoom, type ItineraryCoverCropTransform } from "../utils/itineraryCoverCrop";
 import { drawItineraryCover } from "../utils/itineraryCoverRenderer";
+import { scheduleStorageDeletion } from "./deferredStorageDeletionService";
 
 const MAX_SOURCE_PHOTO_BYTES = 2 * 1024 * 1024;
 export const MAX_USER_COVER_SOURCE_BYTES = 20 * 1024 * 1024;
@@ -172,12 +173,9 @@ export const uploadUserItineraryCoverPhoto = async (
   };
 };
 
-export const removeItineraryCoverPaths = async (
+export const scheduleItineraryCoverDeletion = async (
   supabase: SupabaseClient,
   paths: Iterable<string>,
 ): Promise<void> => {
-  const uniquePaths = [...new Set(paths)];
-  if (uniquePaths.length === 0) return;
-  const { error } = await supabase.storage.from(ITINERARY_COVER_BUCKET).remove(uniquePaths);
-  if (error) throw error;
+  await scheduleStorageDeletion(supabase, ITINERARY_COVER_BUCKET, paths);
 };

@@ -112,6 +112,8 @@ export interface ItineraryItem {
   travelToNext?: SavedTravelEstimate;
   /** 管理者自 Wikimedia Commons 選定或自行上傳並保存至專案 Storage 的卡片照片。 */
   coverPhoto?: ItineraryCoverPhoto;
+  /** 點擊後直接開啟「其他資訊」中的指定子分類。 */
+  otherInfoFolderId?: string;
 }
 
 // 3. 對應詳細行程中的行前檢查清單項目

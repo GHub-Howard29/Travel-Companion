@@ -14,6 +14,14 @@ export type VersionHistoryItem = {
 
 export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
+    version: "3.9.6",
+    date: "2026-09-19",
+    isMandatoryRelease: false,
+    notes: [
+      "修正臺灣銀行牌告參考匯率無法連線載入的問題。",
+    ],
+  },
+  {
     version: "3.9.5",
     date: "2026-09-18",
     isMandatoryRelease: false,

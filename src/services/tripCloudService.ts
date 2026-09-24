@@ -6,6 +6,7 @@ import { ITINERARY_COVER_BUCKET } from "../constants/appConstants";
 import { isExpenseAttachmentPathForTrip } from "../utils/attachmentUtils";
 import { removeExpiredTravelEstimates } from "../utils/itineraryTravel";
 import { sanitizeItineraryCoverPhotos } from "../utils/itineraryCoverPhoto";
+import { scheduleStorageDeletion } from "./deferredStorageDeletionService";
 
 interface CloudTripRow {
   id: string;
@@ -88,7 +89,7 @@ const getCloudPaths = async (
   return [...files, ...nestedPaths.flat()];
 };
 
-const removeCloudAttachmentsForTrip = async (
+const scheduleCloudAttachmentsForTripDeletion = async (
   supabase: SupabaseClient,
   tripId: string,
 ): Promise<void> => {
@@ -96,26 +97,16 @@ const removeCloudAttachmentsForTrip = async (
     (path) => isExpenseAttachmentPathForTrip(path, tripId),
   );
 
-  for (let index = 0; index < paths.length; index += STORAGE_REMOVE_BATCH_SIZE) {
-    const { error } = await supabase.storage
-      .from(ATTACHMENT_BUCKET)
-      .remove(paths.slice(index, index + STORAGE_REMOVE_BATCH_SIZE));
-    if (error) throw error;
-  }
+  await scheduleStorageDeletion(supabase, ATTACHMENT_BUCKET, paths);
 };
 
-const removeCloudItineraryCoversForTrip = async (
+const scheduleCloudItineraryCoversForTripDeletion = async (
   supabase: SupabaseClient,
   tripId: string,
 ): Promise<void> => {
   const folderPath = `s_${Array.from(new TextEncoder().encode(tripId), (byte) => byte.toString(16).padStart(2, "0")).join("")}`;
   const paths = await getCloudPaths(supabase, ITINERARY_COVER_BUCKET, folderPath);
-  for (let index = 0; index < paths.length; index += STORAGE_REMOVE_BATCH_SIZE) {
-    const { error } = await supabase.storage
-      .from(ITINERARY_COVER_BUCKET)
-      .remove(paths.slice(index, index + STORAGE_REMOVE_BATCH_SIZE));
-    if (error) throw error;
-  }
+  await scheduleStorageDeletion(supabase, ITINERARY_COVER_BUCKET, paths);
 };
 
 const isCurrencyConfig = (
@@ -398,10 +389,10 @@ export const deleteCloudTripRecord = async (
   if (!navigator.onLine) return false;
 
   try {
-    // Keep the trip editor permission intact until Storage is cleaned. The
-    // storage delete policy checks the trip id from the attachment path.
-    await removeCloudAttachmentsForTrip(supabase, tripId);
-    await removeCloudItineraryCoversForTrip(supabase, tripId);
+    // Keep editor permission until all files have been queued. The RPC checks
+    // the path scope before placing the eight-day deferred-cleanup request.
+    await scheduleCloudAttachmentsForTripDeletion(supabase, tripId);
+    await scheduleCloudItineraryCoversForTripDeletion(supabase, tripId);
   } catch (error) {
     console.warn("Failed to remove trip attachments", error);
     return false;

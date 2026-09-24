@@ -55,6 +55,7 @@ interface OtherInfoPageProps {
   pageTitle?: string;
   isSpecialInfoPage?: boolean;
   specialFolderId?: string;
+  requestedFolderId?: string | null;
   syncStatus?: OtherInfoSyncStatus | "syncing" | null;
   onRetrySync?: () => void;
   onManageModeChange?: (isManaging: boolean) => void;
@@ -121,13 +122,17 @@ export const OtherInfoPage = ({
   pageTitle = "旅行資訊",
   isSpecialInfoPage = false,
   specialFolderId,
+  requestedFolderId,
   syncStatus,
   onRetrySync,
   onManageModeChange,
 }: OtherInfoPageProps) => {
   const folders = useMemo<Folder[]>(() => getFolders(tripId), [tripId]);
   const initialFolderId =
-    isSpecialInfoPage && specialFolderId ? specialFolderId : folders[0]?.id || "";
+    (requestedFolderId && folders.some((folder) => folder.id === requestedFolderId)
+      ? requestedFolderId
+      : null) ??
+    (isSpecialInfoPage && specialFolderId ? specialFolderId : folders[0]?.id || "");
   const [localItems, setLocalItems] = useState<OtherInfoItem[]>(() => getItems(tripId));
   const [optimisticItems, setOptimisticItems] = useState<OtherInfoItem[] | null>(null);
   const pendingOrderItemsRef = useRef<OtherInfoItem[] | null>(null);
