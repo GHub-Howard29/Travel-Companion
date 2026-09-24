@@ -1452,14 +1452,14 @@ export const ItineraryPage = ({
         />
 
         <label className="block space-y-1">
-          <span className="text-xs font-bold text-slate-600">其他資訊子分類捷徑</span>
+          <span className="text-xs font-bold text-slate-600">其他資訊分類捷徑</span>
           <select
             value={draft.otherInfoFolderId ?? ""}
             onChange={(event) => updateDraft({ otherInfoFolderId: event.target.value || undefined })}
             className="w-full rounded-lg border border-slate-200 px-3 py-2 text-base focus:outline-none focus:ring-2 focus:ring-emerald-500 sm:text-sm"
           >
             <option value="">不顯示捷徑</option>
-            {otherInfoFolders.filter((folder) => folder.parentId !== null).map((folder) => (
+            {otherInfoFolders.map((folder) => (
               <option key={folder.id} value={folder.id}>{folder.title}</option>
             ))}
           </select>
@@ -1864,7 +1864,7 @@ export const ItineraryPage = ({
             );
             const linkedOtherInfoFolder = event.otherInfoFolderId
               ? otherInfoFolders.find(
-                (folder) => folder.id === event.otherInfoFolderId && folder.parentId !== null,
+                (folder) => folder.id === event.otherInfoFolderId,
               )
               : undefined;
 
@@ -1958,7 +1958,7 @@ export const ItineraryPage = ({
                   ) : <span className="mt-1 block text-[11px] font-semibold text-slate-500">自行上傳</span>}
                 </div>
               )}
-              <div className={`min-w-0 ${hasVisibleCover && canManageItinerary && isManageMode && !isOrderMode ? "sm:pr-28" : ""}`}>
+              <div className="min-w-0">
               <div className="flex justify-between items-center gap-3 mb-2">
                 {event.time ? (
                   <div className="flex min-w-0 items-center gap-2 text-sm font-bold text-slate-500">
@@ -2014,7 +2014,7 @@ export const ItineraryPage = ({
               )}
               </div>
               {canManageItinerary && isManageMode && !isOrderMode && (
-                <div className={`mt-3 flex flex-wrap justify-end gap-2 border-t border-slate-100 pt-3 ${hasVisibleCover ? "clear-both sm:absolute sm:right-0 sm:top-0 sm:mt-0 sm:w-24 sm:flex-col sm:border-0 sm:pt-0" : ""}`}>
+                <div className="clear-both mt-3 flex flex-wrap justify-end gap-2 border-t border-slate-100 pt-3">
                   <button
                     type="button"
                     onClick={() => openCoverPhotoDialog(originalIndex, event)}

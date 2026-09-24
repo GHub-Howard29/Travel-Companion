@@ -50,11 +50,18 @@ const readEditorDocument = (root: HTMLElement) => {
       return;
     }
 
+    const isBlockElement = node.tagName === "DIV" || node.tagName === "P";
+    // Chromium 會將行內文字後的 Enter 表示為 `文字<div>下一行</div>`。
+    // 先補上區塊前界線，避免最後一個 DIV 的尾端換行被 trim 後兩行黏回一起。
+    if (isBlockElement && text.length > 0 && !text.endsWith("\n")) {
+      appendText("\n");
+    }
+
     const startLength = text.length;
     node.childNodes.forEach(walk);
     if (
       node !== root &&
-      (node.tagName === "DIV" || node.tagName === "P") &&
+      isBlockElement &&
       text.length > startLength &&
       !text.endsWith("\n")
     ) {
