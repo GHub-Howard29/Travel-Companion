@@ -6,10 +6,11 @@
 
 ## 後續候選版本
 
-- [ ] V3.9.9：建立完整 build 的驗證群組與耗時基線，整併驗證入口與失敗報告，不縮減 release build；既有 V3.9.3 總啟動量測已確認存在，本版不重複新增程式內埋點。
-- [ ] V3.9.10：沿用既有總啟動量測，分段量測離線冷啟動約 30 秒的 Service Worker、navigation、session、Trip 快取、localStorage、IndexedDB 與首個可操作畫面瓶頸，再依證據決定是否修正；不新增遠端 telemetry。
-- [ ] V3.9.11：以 loopback fixture 與瀏覽器／viewport 模擬建立零費用 Playwright 響應式回歸基礎。
-- [ ] V3.9.12：整理照片功能模組、型別邊界與按需載入，不新增圖庫來源。
+- [ ] V3.9.9：修復 V3.9.8 前既有錯誤 `cloudUpdatedAt`；僅在 Trip 本體與最新雲端一致時安全重試一次，真正跨裝置修改仍阻擋。
+- [ ] V3.9.10：建立完整 build 的驗證群組與耗時基線，整併驗證入口與失敗報告，不縮減 release build；既有 V3.9.3 總啟動量測已確認存在，本版不重複新增程式內埋點。
+- [ ] V3.9.11：沿用既有總啟動量測，分段量測離線冷啟動約 30 秒的 Service Worker、navigation、session、Trip 快取、localStorage、IndexedDB 與首個可操作畫面瓶頸，再依證據決定是否修正；不新增遠端 telemetry。
+- [ ] V3.9.12：以 loopback fixture 與瀏覽器／viewport 模擬建立零費用 Playwright 響應式回歸基礎。
+- [ ] V3.9.13：整理照片功能模組、型別邊界與按需載入，不新增圖庫來源。
 - [ ] V3.11.0：只在需求證據足夠時重新評估使用紀錄；原逐次明細、Cron、獨立角色與 TOTP 仍為先前草案。
 
 ## 已發布版本待補驗
