@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 const migration = read("supabase/migrations/20260924091852_v397_full_application_snapshots.sql");
+const attachmentCompatibilityMigration = read("supabase/migrations/20260924105959_v397_expense_attachment_bucket_compat.sql");
 const cleanupMigration = read("supabase/migrations/20260924110000_v397_deferred_storage_cleanup.sql");
 const tool = read("scripts/application-snapshot-admin.mjs");
 const deferredDeletionService = read("src/services/deferredStorageDeletionService.ts");
@@ -32,5 +33,8 @@ assert.match(cleanupMigration, /delete from storage\.objects/);
 assert.match(cleanupMigration, /drop policy if exists expense_attachments_delete_v351/);
 assert.match(cleanupMigration, /drop policy if exists itinerary_covers_delete_v390/);
 assert.match(deferredDeletionService, /tc_schedule_storage_deletion/);
+assert.match(attachmentCompatibilityMigration, /add column if not exists attachment_bucket/);
+assert.match(attachmentCompatibilityMigration, /add column if not exists attachment_path/);
+assert.match(attachmentCompatibilityMigration, /expense-attachments/);
 
 console.log("V3.9.7 完整應用資料快照靜態契約通過。");
