@@ -21,6 +21,7 @@ import {
   Check,
   Copy,
   ExternalLink,
+  FolderOpen,
   Eye,
   Image as ImageIcon,
   Loader2,
@@ -32,7 +33,7 @@ import {
   X,
 } from "lucide-react";
 
-import type { ItineraryItem, SavedTravelEstimate, TravelMode, TripDetail } from "../types";
+import type { Folder, ItineraryItem, SavedTravelEstimate, TravelMode, TripDetail } from "../types";
 import {
   getGoogleMapsPlaceUrl,
   handlePlaceBrowse,
@@ -126,6 +127,8 @@ interface ItineraryPageProps {
   isOnline: boolean;
   onActiveDayChange: (day: number) => void;
   onSaveTripDetail: (trip: TripDetail) => Promise<void>;
+  otherInfoFolders: Folder[];
+  onOpenOtherInfoFolder: (folderId: string) => void;
   onManageModeChange?: (isManaging: boolean) => void;
 }
 
@@ -156,6 +159,8 @@ export const ItineraryPage = ({
   isOnline,
   onActiveDayChange,
   onSaveTripDetail,
+  otherInfoFolders,
+  onOpenOtherInfoFolder,
   onManageModeChange,
 }: ItineraryPageProps) => {
   const [isManageMode, setIsManageMode] = useState(false);
@@ -1446,6 +1451,20 @@ export const ItineraryPage = ({
           textSizeClassName="text-base sm:text-sm"
         />
 
+        <label className="block space-y-1">
+          <span className="text-xs font-bold text-slate-600">其他資訊子分類捷徑</span>
+          <select
+            value={draft.otherInfoFolderId ?? ""}
+            onChange={(event) => updateDraft({ otherInfoFolderId: event.target.value || undefined })}
+            className="w-full rounded-lg border border-slate-200 px-3 py-2 text-base focus:outline-none focus:ring-2 focus:ring-emerald-500 sm:text-sm"
+          >
+            <option value="">不顯示捷徑</option>
+            {otherInfoFolders.filter((folder) => folder.parentId !== null).map((folder) => (
+              <option key={folder.id} value={folder.id}>{folder.title}</option>
+            ))}
+          </select>
+        </label>
+
         <div className="flex items-stretch gap-2">
           <input
             value={draft.location}
@@ -1843,6 +1862,11 @@ export const ItineraryPage = ({
             const hasVisibleCover = Boolean(
               event.coverPhoto && !failedCoverPaths.has(event.coverPhoto.storagePath),
             );
+            const linkedOtherInfoFolder = event.otherInfoFolderId
+              ? otherInfoFolders.find(
+                (folder) => folder.id === event.otherInfoFolderId && folder.parentId !== null,
+              )
+              : undefined;
 
             return (
             <Fragment key={sortableId}>
@@ -1957,7 +1981,7 @@ export const ItineraryPage = ({
                   <RichTextDisplay value={event.desc} />
                 </p>
               )}
-              {(event.location || (hasVisibleCover && event.coverPhoto)) && (
+              {(event.location || linkedOtherInfoFolder || (hasVisibleCover && event.coverPhoto)) && (
                 <div className="flex items-start justify-between gap-3 border-t border-slate-100 pt-2">
                   {hasVisibleCover && event.coverPhoto ? (
                     <p className="text-[11px] leading-relaxed text-slate-500">
@@ -1966,15 +1990,26 @@ export const ItineraryPage = ({
                         : "自行上傳"}
                     </p>
                   ) : <span />}
-                  {event.location && (
-                    <button
-                      onClick={() => handlePlaceBrowse(event.location!, event.place)}
-                      className="flex shrink-0 items-center gap-1.5 rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600 transition-colors hover:bg-emerald-50 hover:text-emerald-700"
-                    >
-                      <MapPin size={14} className="text-emerald-600" /> 在地圖中查看{" "}
-                      <ExternalLink size={10} />
-                    </button>
-                  )}
+                  <div className="ml-auto flex flex-wrap justify-end gap-2">
+                    {linkedOtherInfoFolder && (
+                      <button
+                        type="button"
+                        onClick={() => onOpenOtherInfoFolder(linkedOtherInfoFolder.id)}
+                        className="flex shrink-0 items-center gap-1.5 rounded-lg bg-sky-50 px-3 py-1.5 text-xs font-bold text-sky-700 transition-colors hover:bg-sky-100"
+                      >
+                        <FolderOpen size={14} /> {linkedOtherInfoFolder.title}
+                      </button>
+                    )}
+                    {event.location && (
+                      <button
+                        type="button"
+                        onClick={() => handlePlaceBrowse(event.location!, event.place)}
+                        className="flex shrink-0 items-center gap-1.5 rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600 transition-colors hover:bg-emerald-50 hover:text-emerald-700"
+                      >
+                        <MapPin size={14} className="text-emerald-600" /> 查看地圖 <ExternalLink size={10} />
+                      </button>
+                    )}
+                  </div>
                 </div>
               )}
               </div>

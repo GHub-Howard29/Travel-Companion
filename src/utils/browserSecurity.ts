@@ -49,6 +49,8 @@ export const openExternalUrl = (value: string): void => {
   const trustedUrl = getTrustedHttpUrl(value);
   if (!trustedUrl) return;
 
+  window.dispatchEvent(new Event("travel-companion:external-link-opening"));
+
   // Use a real external anchor instead of an in-app navigation. Installed
   // PWAs hand this target back to the operating system, which also lets
   // Google Maps universal URLs open the dedicated Maps app when available.

@@ -1,0 +1,12 @@
+{
+  "name": "travel-companion-offline-itinerary-rescue",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "classic-level": "3.0.0"
+  }
+}
