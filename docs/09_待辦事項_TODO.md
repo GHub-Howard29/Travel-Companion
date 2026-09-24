@@ -6,7 +6,6 @@
 
 ## 後續候選版本
 
-- [ ] V3.9.7：保留給後續確認的新增小功能與 BUG 修正；尚未定義具體實作範圍。
 - [ ] V3.9.8：建立完整 build 的驗證群組與耗時基線，整併驗證入口與失敗報告，不縮減 release build；既有 V3.9.3 總啟動量測已確認存在，本版不重複新增程式內埋點。
 - [ ] V3.9.9：沿用既有總啟動量測，分段量測離線冷啟動約 30 秒的 Service Worker、navigation、session、Trip 快取、localStorage、IndexedDB 與首個可操作畫面瓶頸，再依證據決定是否修正；不新增遠端 telemetry。
 - [ ] V3.9.10：以 loopback fixture 與瀏覽器／viewport 模擬建立零費用 Playwright 響應式回歸基礎。
