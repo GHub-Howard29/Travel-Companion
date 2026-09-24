@@ -26,6 +26,15 @@ const options = {
 };
 
 const fail = (message) => { throw new Error(message); };
+const formatError = (error) => {
+  if (error instanceof Error) return error.message;
+  if (error && typeof error === "object") {
+    const details = [error.message, error.code && `code=${error.code}`, error.details && `details=${error.details}`, error.hint && `hint=${error.hint}`].filter(Boolean);
+    if (details.length > 0) return details.join(" | ");
+    try { return JSON.stringify(error); } catch { return String(error); }
+  }
+  return String(error);
+};
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 const cleanPromptValue = (value) => value.trim().replace(/^"(.*)"$/, "$1");
 let promptInterface;
@@ -133,19 +142,19 @@ const toOtherInfoRow = (tripId, item) => ({
 });
 const fetchCurrent = async (supabase, tripId) => {
   const { data: authData, error: authError } = await supabase.auth.getUser(options.accessToken);
-  if (authError) throw authError;
+  if (authError) throw new Error(`驗證 access token 失敗：${formatError(authError)}`);
   const [{ data: trip, error: tripError }, { data: items, error: itemsError }, { data: exchange, error: exchangeError }, { data: checklists, error: checklistError }, { data: expenses, error: expenseError }] = await Promise.all([
     supabase.from("trips").select(TRIP_SELECT).eq("id", tripId).maybeSingle(),
     supabase.from("other_info_items").select("id, client_item_id, trip_id, folder_id, title, content, allowed_roles, sort_order, created_at, updated_at, deleted_at").eq("trip_id", tripId),
     supabase.from("exchange_purchases").select("client_item_id, trip_id, foreign_currency, purchase_date, twd_amount, foreign_amount, created_at, updated_at").eq("trip_id", tripId),
     supabase.from("checklists").select("id, scope, owner_user_id, updated_at").eq("trip_id", tripId),
-    supabase.from("expenses").select("id, trip_id, client_item_id, title, amount, payer, currency, expense_date, attachment_bucket, attachment_path, attachment_name, attachment_mime, attachment_size, attachment_status, attachment_uploaded_at, attachment_uploaded_by, attachment_last_error, local_attachment_id, created_at, updated_at, deleted_at, owner_user_id, recorded_by_email").eq("trip_id", tripId),
+    supabase.from("expenses").select("id, trip_id, client_item_id, title, amount, payer, currency, expense_date, created_at, updated_at, deleted_at, owner_user_id, recorded_by_email").eq("trip_id", tripId),
   ]);
-  if (tripError) throw tripError;
-  if (itemsError) throw itemsError;
-  if (exchangeError) throw exchangeError;
-  if (checklistError) throw checklistError;
-  if (expenseError) throw expenseError;
+  if (tripError) throw new Error(`讀取 trips 失敗：${formatError(tripError)}`);
+  if (itemsError) throw new Error(`讀取 other_info_items 失敗：${formatError(itemsError)}`);
+  if (exchangeError) throw new Error(`讀取 exchange_purchases 失敗：${formatError(exchangeError)}`);
+  if (checklistError) throw new Error(`讀取 checklists 失敗：${formatError(checklistError)}`);
+  if (expenseError) throw new Error(`讀取 expenses 失敗：${formatError(expenseError)}`);
   if (!trip) fail(`找不到雲端 Trip：${tripId}`);
   return { trip, otherInfoItems: items ?? [], exchangePurchases: exchange ?? [], checklists: checklists ?? [], expenses: expenses ?? [], user: authData.user };
 };
@@ -179,16 +188,6 @@ const makePlan = (document, current) => {
     payer: item.payer ?? "",
     currency: item.currency ?? "JPY",
     expense_date: item.expense_date ?? null,
-    attachment_bucket: item.attachment_bucket ?? null,
-    attachment_path: item.attachment_path ?? null,
-    attachment_name: item.attachment_name ?? null,
-    attachment_mime: item.attachment_mime ?? null,
-    attachment_size: item.attachment_size ?? null,
-    attachment_status: item.attachment_status ?? "none",
-    attachment_uploaded_at: item.attachment_uploaded_at ?? null,
-    attachment_uploaded_by: item.attachment_uploaded_by ?? null,
-    attachment_last_error: item.attachment_last_error ?? null,
-    local_attachment_id: item.local_attachment_id ?? null,
     created_at: item.created_at ?? undefined,
     updated_at: item.updated_at ?? undefined,
     deleted_at: item.deleted_at ?? null,
@@ -309,4 +308,4 @@ const main = async () => {
   console.log(`復原完成。pre_restore 快照：${preRestorePath}`);
 };
 
-await main().catch((error) => { console.error(`\n受控復原工具停止：${error instanceof Error ? error.message : String(error)}`); process.exitCode = 1; }).finally(closePrompt);
+await main().catch((error) => { console.error(`\n受控復原工具停止：${formatError(error)}`); process.exitCode = 1; }).finally(closePrompt);
