@@ -14,6 +14,16 @@ export type VersionHistoryItem = {
 
 export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
+    version: "3.9.7",
+    date: "2026-09-24",
+    isMandatoryRelease: false,
+    notes: [
+      "修正從外部連結返回 PWA 時跳回預設 Day 的問題。",
+      "每日行程卡片可直接開啟指定的其他資訊子分類。",
+      "新增每日行程版本歷程與受控復原工具，降低舊資料覆寫風險。",
+    ],
+  },
+  {
     version: "3.9.6",
     date: "2026-09-19",
     isMandatoryRelease: false,

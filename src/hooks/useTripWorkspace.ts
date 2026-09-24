@@ -699,7 +699,16 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
         nextTrip,
         currentTripEditorEmails,
       );
-      saveTripRecord(record);
+      const currentStoredRecord = readStoredTripRecords().find(
+        (item) => item.meta.id === record.meta.id,
+      );
+      // Other Info 採獨立同步時只更新本機 Trip 快取；必須保留最後成功
+      // 的雲端版本，否則下一次行程儲存會拿本機時間做樂觀鎖比對而誤判衝突。
+      saveTripRecord({
+        ...record,
+        cloudUpdatedAt:
+          currentStoredRecord?.cloudUpdatedAt ?? currentStoredRecord?.updatedAt,
+      });
       setCurrentTrip(record.detail);
       setIsLoading(false);
       return record;
