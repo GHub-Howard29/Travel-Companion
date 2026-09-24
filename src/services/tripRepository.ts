@@ -19,8 +19,10 @@ import {
   cloudTripExists,
   cloudTripTombstoneExists,
   deleteCloudTripRecord,
+  getCloudTripRecord,
   getCloudTripRecords,
   insertCloudTripRecord,
+  TripVersionConflictError,
   updateCloudTripRecord,
   upsertCloudTripRecord,
 } from "./tripCloudService";
@@ -32,6 +34,7 @@ import { normalizeOtherInfoItems } from "../utils/otherInfoUtils";
 import { loadInitialWorkspaceSnapshot } from "./tripInitialization";
 import { isProtectedSeedTripId } from "../constants/appConstants";
 import { createTripId } from "../utils/tripIdentity";
+import { updateTripWithVersionRecovery } from "../utils/tripVersionRecovery";
 export { createTripId } from "../utils/tripIdentity";
 
 const SPECIAL_INFO_SCREEN_ID = "trip_special_info";
@@ -763,11 +766,16 @@ export const saveTripRecordWithCloudSync = async (
     throw new Error("找不到行程版本，無法安全儲存");
   }
 
-  const syncedRecord = await updateCloudTripRecord(
-    supabase,
-    record,
-    currentUpdatedAt,
-  );
+  // V3.9.8 之前 Other Info 本機寫入可能以本機 updatedAt 冒充雲端版本。
+  // 只在 Trip 本體沒有任何雲端差異時，用剛讀到的雲端版本安全重試一次；
+  // 真正的跨裝置行程修改仍會保留衝突阻擋。
+  const syncedRecord = await updateTripWithVersionRecovery({
+    currentStoredRecord,
+    expectedUpdatedAt: currentUpdatedAt,
+    update: (version) => updateCloudTripRecord(supabase, record, version),
+    loadLatestCloudRecord: () => getCloudTripRecord(supabase, record.meta.id),
+    isVersionConflict: (error) => error instanceof TripVersionConflictError,
+  });
   upsertStoredTripRecord({
     ...syncedRecord,
     editorEmails: record.editorEmails,
