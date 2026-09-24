@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 import { createInterface } from "node:readline/promises";
 import { stdin, stdout } from "node:process";
 import { createClient } from "@supabase/supabase-js";
@@ -44,6 +44,29 @@ const collectInteractiveOptions = async () => {
   if (!options.url) options.url = await ask("請貼上 Supabase URL：");
   if (!options.key) options.key = await ask("請貼上 publishable／anon key：");
   if (!options.accessToken) options.accessToken = await ask("請貼上目前登入 access token：");
+};
+const resolveInputPath = async () => {
+  const candidate = resolve(options.input);
+  if (!existsSync(candidate)) fail(`找不到救援檔或資料夾：${candidate}`);
+  if (!statSync(candidate).isDirectory()) {
+    options.input = candidate;
+    return;
+  }
+  const jsonFiles = readdirSync(candidate, { withFileTypes: true })
+    .filter((entry) => entry.isFile() && entry.name.toLowerCase().endsWith(".json"))
+    .map((entry) => entry.name)
+    .sort();
+  if (jsonFiles.length === 0) fail("指定資料夾內找不到 JSON 救援檔");
+  if (jsonFiles.length === 1) {
+    options.input = join(candidate, jsonFiles[0]);
+    return;
+  }
+  console.log("\n指定資料夾內有多份 JSON，請選擇：");
+  jsonFiles.forEach((name, index) => console.log(`${index + 1}. ${name}`));
+  const selected = await ask("請輸入編號：");
+  const index = Number(selected) - 1;
+  if (!Number.isInteger(index) || !jsonFiles[index]) fail("選擇無效，已停止");
+  options.input = join(candidate, jsonFiles[index]);
 };
 const maskSecret = (value) => {
   if (!value) return "（未提供）";
@@ -260,6 +283,7 @@ const applyPlan = async (supabase, plan, document, currentUserId) => {
 
 const main = async () => {
   await collectInteractiveOptions();
+  await resolveInputPath();
   await confirmInteractiveOptions();
   const document = readRescue();
   assertRescue(document);

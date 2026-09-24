@@ -11,6 +11,8 @@ Travel Companion 受控救援復原工具
   從專案根目錄雙擊 `tools\trip-rescue-import\START-RESTORE.cmd`。
   依提示貼上救援 JSON 路徑、Supabase URL、publishable／anon key、access token，
   工具會先顯示預覽，再詢問是否執行（Y/N），最後要求輸入 `RESTORE TRIP`。
+  救援檔欄位可直接貼上 `救援匯出_時間` 資料夾路徑；資料夾內只有一份 JSON 時會自動選取，
+  若有多份 JSON，工具會列出清單讓你選擇，不必手動輸入檔名。
 
 只驗證救援檔格式（不需要網路或金鑰）：
   node restore-trip.mjs --input <救援JSON> --validate-only
