@@ -15,6 +15,7 @@
 ## 已發布版本待補驗
 
 - [ ] V3.9.11：Android／iOS 實機確認 Commons 候選分層、既有排列與 PWA 更新；自行上傳實際選檔驗證依 Product Owner 指示不列入本次發布門檻。桌面與 390×844 本機瀏覽器候選版、loopback Edge、完整 build 及單次外部矩陣已通過。
+- [ ] V3.9.11 backend hotfix：正式資料庫已套用 `20260925140400_v3911_commons_precision_lock_v2.sql`，待 Product Owner 以正式登入手動搜尋照片確認 v2 lock key 修正生效。
 
 - [ ] V3.9.10：Android／iOS 實機確認照片卡片只顯示來源原處連結、其他資訊捷徑緊鄰「查看地圖」且整組靠右，以及 PWA 由既有 Service Worker 更新至 V3.9.10；桌面與 390×844 本機瀏覽器候選版已通過。
 - [ ] V3.9.9：Android／iOS 實機以 V3.9.8 前既有快取確認卡片可安全儲存，並以第二台裝置真正修改 Trip 本體時確認仍會阻擋覆蓋；loopback 合成 fixture 的舊時間戳自癒與衝突保護已通過。
