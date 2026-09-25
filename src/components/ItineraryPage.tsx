@@ -959,6 +959,7 @@ export const ItineraryPage = ({
     queryValue = commonsQuery,
     nextPageToken: string | undefined = undefined,
     seenFileTitles = commonsSeenFileTitles,
+    retryDepth = 0,
   ) => {
     const query = queryValue.trim();
     if (query.length < 2) {
@@ -987,6 +988,12 @@ export const ItineraryPage = ({
           result.state === "entity-not-found" || result.state === "entity-ambiguous"
           ? "empty-first-page"
           : result.state);
+        return;
+      }
+      // Wikimedia 分類頁可能整頁都是已看過或被規則淘汰的檔案；自動跳過
+      // 至多兩個空續頁，避免使用者看到空白視窗後還要手動重複按「換一批」。
+      if (freshCandidates.length === 0 && nextToken && retryDepth < 2) {
+        await searchCommonsPhotos(queryValue, nextToken, nextSeenFileTitles, retryDepth + 1);
         return;
       }
       setCommonsCandidates(freshCandidates.slice(0, 6));
@@ -2245,7 +2252,7 @@ export const ItineraryPage = ({
                       "duplicate-page": "這一批沒有新的照片；請調整搜尋詞或改用其他來源。",
                       "available-complete": `已列出目前可用的 ${commonsCandidates.length} 張照片；可選擇照片或調整搜尋詞。`,
                       "inspection-limit-reached": "已達本次檢查上限；請檢視目前候選或重新調整搜尋詞。",
-                      "project-quota-reached": "今日精準搜尋額度已用完，請稍後再試。",
+                      "project-quota-reached": "精準搜尋目前達到短時間請求上限，請稍後再試。",
                       "rate-limited": "Wikimedia Commons 暫時受限，請稍後再試。",
                       timeout: "Wikimedia Commons 回應逾時，請稍後再試。",
                       "upstream-error": "Wikimedia Commons 暫時無法使用，請稍後再試。",
