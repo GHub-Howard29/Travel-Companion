@@ -115,7 +115,9 @@ export const buildCommonsCategoryMembersParams = (
   params.set("cmtitle", `Category:${category}`);
   params.set("cmtype", "file");
   params.set("cmnamespace", "6");
-  params.set("cmlimit", "6");
+  // 續頁一次多取樣，避免目前 6 筆剛好全是已看過或被精準規則淘汰，
+  // 導致「換一批」直接變成空頁。最終仍由引擎的 inspected 上限與候選頁大小裁切。
+  params.set("cmlimit", "50");
   if (continuation) params.set("cmcontinue", continuation);
   return params;
 };
@@ -128,7 +130,7 @@ export const buildCommonsRelatedCategoriesParams = (rawCategory: string): URLSea
   params.set("cmtitle", `Category:${category}`);
   params.set("cmtype", "subcat");
   params.set("cmnamespace", "14");
-  params.set("cmlimit", "6");
+  params.set("cmlimit", "50");
   return params;
 };
 
@@ -150,9 +152,16 @@ export const buildCommonsTextSearchParams = (query: string, offset?: number): UR
   }
   const params = baseParams();
   params.set("generator", "search");
-  params.set("gsrsearch", `${requireQuery(query)} filetype:bitmap`);
+  const normalizedQuery = requireQuery(query);
+  // Commons 的全文索引對中文空白與頓號切詞不穩定；同時送出緊縮變體，
+  // 讓「熊本 上通商店街」與「熊本上通商店街」能命中同一批檔案。
+  const compactQuery = normalizedQuery.replace(/[\s、，,]+/g, "");
+  const adoptedQuery = compactQuery !== normalizedQuery
+    ? `(${normalizedQuery} OR ${compactQuery})`
+    : normalizedQuery;
+  params.set("gsrsearch", `${adoptedQuery} filetype:bitmap`);
   params.set("gsrnamespace", "6");
-  params.set("gsrlimit", "6");
+  params.set("gsrlimit", "50");
   params.set("prop", "imageinfo");
   params.set("iiprop", "url|mime|mediatype|size|sha1|timestamp|extmetadata");
   params.set("iiurlwidth", String(COMMONS_THUMB_WIDTH));
