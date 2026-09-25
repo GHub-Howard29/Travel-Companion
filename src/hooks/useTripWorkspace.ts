@@ -88,11 +88,18 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
   const reconciliationPromiseRef = useRef<Promise<boolean> | null>(null);
   const selectedTripIdRef = useRef(selectedTripId);
   const userEmailRef = useRef(userEmail);
+  const activeDayRef = useRef(activeDay);
+  const currentTripIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     selectedTripIdRef.current = selectedTripId;
     userEmailRef.current = userEmail;
   }, [selectedTripId, userEmail]);
+
+  useEffect(() => {
+    activeDayRef.current = activeDay;
+    currentTripIdRef.current = currentTrip?.id ?? null;
+  }, [activeDay, currentTrip?.id]);
 
   useEffect(() => {
     const remember = () => rememberExternalReturnContext(selectedTripIdRef.current, activeDay);
@@ -351,10 +358,16 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
           initialCloudRecords ?? undefined,
         );
         if (tripData && tripLoadRevisionRef.current === loadRevision) {
+          const rememberedDay = consumeExternalReturnDay(tripData.id, tripData.content.days);
+          const canPreserveActiveDay =
+            currentTripIdRef.current === tripData.id &&
+            tripData.content.days.includes(activeDayRef.current);
           setCurrentTrip(tripData);
           setActiveDay(
-            consumeExternalReturnDay(tripData.id, tripData.content.days) ??
-              getDefaultActiveDay(tripData.departureDate, tripData.content.days),
+            rememberedDay ??
+              (canPreserveActiveDay
+                ? activeDayRef.current
+                : getDefaultActiveDay(tripData.departureDate, tripData.content.days)),
           );
 
           if (tripData.sidebarConfig?.length > 0) {

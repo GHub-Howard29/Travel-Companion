@@ -1,11 +1,9 @@
 {
-  "version": "3.9.11",
+  "version": "3.9.12",
   "minimumSupportedVersion": "3.9.2",
   "releaseDate": "2026-09-25",
   "releaseNotes": [
-    "Commons 候選照片分為精準與需人工確認兩層，增加可選照片並保留既有排列。",
-    "移除 QID 範圍選擇，模糊搜尋限制為點陣媒體，少於六張時不提供換批。",
-    "修正自行上傳載入生命週期誤報，並移除每日行程卡片照片備註。"
+    "修正每日行程卡片照片挑選方式。"
   ],
   "forceUpdate": false
 }

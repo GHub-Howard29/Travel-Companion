@@ -8,46 +8,6 @@ import {
   parseDurationSeconds,
   resolveSupabaseRuntimeKey,
 } from "./validation.ts";
-import { runCommonsPrecisionContinuationEngine, runCommonsPrecisionEngine } from "./commonsPrecisionEngine.ts";
-import { executeCommonsPrecisionRequest } from "./commonsPrecisionFetch.ts";
-import {
-  COMMONS_PRECISION_MAX_DURATION_MS,
-  COMMONS_PRECISION_MAX_INSPECTED,
-  COMMONS_PRECISION_MAX_REQUESTS,
-  projectCommonsPrecisionResponse,
-  type CommonsPrecisionPublicResponse,
-} from "./commonsPrecision.ts";
-import {
-  COMMONS_PRECISION_CANDIDATE_CACHE_TTL_MS,
-  COMMONS_PRECISION_ENTITY_CACHE_TTL_MS,
-  createCommonsPrecisionCandidateCacheKey,
-  createCommonsPrecisionEntityCacheKey,
-  createCommonsPrecisionNoSuitableCacheKey,
-} from "./commonsPrecisionCache.ts";
-import {
-  acquireCommonsPrecisionOperationLock,
-  acquireCommonsPrecisionUpstreamLock,
-  claimCommonsPrecisionUpstreamSlot,
-  readCommonsPrecisionCache,
-  recordCommonsPrecisionUsage,
-  releaseCommonsPrecisionOperationLock,
-  releaseCommonsPrecisionUpstreamLock,
-  writeCommonsPrecisionCache,
-} from "./commonsPrecisionDatabase.ts";
-import { getCommonsPrecisionTaipeiDateKey } from "./commonsPrecisionQuota.ts";
-import { createCommonsPrecisionUsageDelta } from "./commonsPrecisionUsage.ts";
-import {
-  hashAdoptedCommonsQuery,
-  importCommonsPrecisionTokenKey,
-  openCommonsPrecisionNextPageToken,
-  sealCommonsPrecisionNextPageToken,
-} from "./commonsPrecisionSession.ts";
-import type { WikidataEntityEvidence } from "./commonsPrecisionWikimedia.ts";
-import {
-  COMMONS_PRECISION_REGRESSION_FIXTURE_HEADER,
-  getCommonsPrecisionRegressionFixture,
-  isLoopbackSupabaseRuntime,
-} from "./commonsPrecisionRegressionFixture.ts";
 
 const GOOGLE_PLACES_AUTOCOMPLETE_URL =
   "https://places.googleapis.com/v1/places:autocomplete";
@@ -58,7 +18,7 @@ const COMMONS_API_URL = "https://commons.wikimedia.org/w/api.php";
 const ROUTE_DAILY_LIMIT = 100;
 const PLACE_PHOTO_MONTHLY_LIMIT = 1_000;
 const MAX_PLACE_PHOTO_CANDIDATES = 5;
-const MAX_COMMONS_CANDIDATES = 6;
+const COMMONS_BATCH_SIZE = 24;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -136,6 +96,100 @@ const getCommonsDerivativeUrl = (value: string, width: number): string | undefin
   if (url.hostname !== "upload.wikimedia.org" || !/\/\d+px-[^/]+$/.test(url.pathname)) return undefined;
   url.pathname = url.pathname.replace(/\/\d+px-([^/]+)$/, `/${width}px-$1`);
   return url.toString();
+};
+
+const toCommonsPhotoCandidate = (page: unknown) => {
+  if (!isRecord(page) || typeof page.title !== "string" || !page.title.startsWith("File:") ||
+    !Array.isArray(page.imageinfo) || !isRecord(page.imageinfo[0])) return null;
+  const info = page.imageinfo[0];
+  const metadata = isRecord(info.extmetadata) ? info.extmetadata : {};
+  const license = metadataValue(metadata, "LicenseShortName") ?? metadataValue(metadata, "UsageTerms");
+  const creator = metadataValue(metadata, "Artist");
+  const credit = metadataValue(metadata, "Credit")?.slice(0, 500);
+  const restrictions = metadataValue(metadata, "Restrictions");
+  const licenseUrl = metadataValue(metadata, "LicenseUrl");
+  const isPublicDomain = license?.toLowerCase() === "public domain" || license?.toLowerCase().startsWith("cc0");
+  const isCcBy = /^CC BY (?:1\.0|2\.0|2\.5|3\.0|4\.0)$/i.test(license ?? "");
+  const cropImageUrl = typeof info.thumburl === "string" ? getCommonsDerivativeUrl(info.thumburl, 1280) : undefined;
+  if (info.mediatype !== "BITMAP" || !["image/jpeg", "image/png", "image/webp"].includes(String(info.thumbmime)) ||
+    !license || !creator || !isAllowedCommonsLicense(license) || restrictions ||
+    !isHttpsUrl(info.thumburl) || !cropImageUrl || !isHttpsUrl(info.descriptionurl) ||
+    (!isPublicDomain && !isHttpsUrl(licenseUrl)) || (isCcBy && !credit)) return null;
+  return {
+    fileTitle: page.title,
+    thumbnailUrl: normalizeCommonsThumbnailUrl(info.thumburl),
+    cropImageUrl,
+    thumbnailMime: info.thumbmime,
+    sourcePageUrl: info.descriptionurl,
+    creator: creator.slice(0, 500),
+    credit,
+    license: license.slice(0, 100),
+    licenseUrl: isHttpsUrl(licenseUrl) ? licenseUrl : undefined,
+    sourceSha1: typeof info.sha1 === "string" ? info.sha1 : undefined,
+    sourceRevisionAt: typeof info.timestamp === "string" ? info.timestamp : undefined,
+    width: typeof info.width === "number" ? info.width : 0,
+    height: typeof info.height === "number" ? info.height : 0,
+  };
+};
+
+const getCommonsImageInfo = async (titles: string[]) => {
+  if (titles.length === 0) return [];
+  const params = new URLSearchParams({
+    action: "query", titles: titles.join("|"), prop: "imageinfo",
+    iiprop: "url|mime|thumbmime|mediatype|size|sha1|timestamp|extmetadata",
+    iiurlwidth: "640", iiextmetadatalanguage: "en",
+    iiextmetadatafilter: "Artist|Credit|LicenseShortName|LicenseUrl|UsageTerms|AttributionRequired|Restrictions",
+    format: "json", origin: "*",
+  });
+  const response = await fetch(`${COMMONS_API_URL}?${params}`, {
+    headers: { "User-Agent": "Travel-Companion/3.9.12 (Wikimedia Commons photo selector)" }, signal: AbortSignal.timeout(12_000),
+  });
+  if (response.status === 429) throw new Error("照片來源目前忙碌，請稍後再試。");
+  if (!response.ok) throw new Error("照片搜尋暫時無法使用。");
+  const payload = await response.json();
+  const pages = isRecord(payload) && isRecord(payload.query) && isRecord(payload.query.pages)
+    ? Object.values(payload.query.pages) : [];
+  const byTitle = new Map(pages.map((page) => {
+    const candidate = toCommonsPhotoCandidate(page);
+    return candidate ? [candidate.fileTitle, candidate] : ["", null];
+  }));
+  return titles.flatMap((title) => {
+    const candidate = byTitle.get(title);
+    return candidate ? [candidate] : [];
+  });
+};
+
+const getCategoryChineseLabels = async (names: string[]): Promise<Map<string, string>> => {
+  const uniqueNames = [...new Set(names)].slice(0, 80);
+  if (uniqueNames.length === 0) return new Map();
+  const pagesParams = new URLSearchParams({ action: "query", titles: uniqueNames.map((name) => `Category:${name}`).join("|"), prop: "pageprops", format: "json", origin: "*" });
+  const pagesResponse = await fetch(`${COMMONS_API_URL}?${pagesParams}`, { signal: AbortSignal.timeout(12_000) });
+  if (!pagesResponse.ok) return new Map();
+  const pagesPayload = await pagesResponse.json();
+  const pageEntries = isRecord(pagesPayload) && isRecord(pagesPayload.query) && isRecord(pagesPayload.query.pages)
+    ? Object.values(pagesPayload.query.pages) : [];
+  const qidByName = new Map<string, string>();
+  for (const page of pageEntries) {
+    if (!isRecord(page) || typeof page.title !== "string" || !isRecord(page.pageprops) || typeof page.pageprops.wikibase_item !== "string") continue;
+    qidByName.set(page.title.replace(/^Category:/i, ""), page.pageprops.wikibase_item);
+  }
+  const qids = [...new Set(qidByName.values())];
+  if (qids.length === 0) return new Map();
+  const labelsParams = new URLSearchParams({ action: "wbgetentities", ids: qids.join("|"), props: "labels", languages: "zh-hant|zh", format: "json", origin: "*" });
+  const labelsResponse = await fetch(`https://www.wikidata.org/w/api.php?${labelsParams}`, { signal: AbortSignal.timeout(12_000) });
+  if (!labelsResponse.ok) return new Map();
+  const labelsPayload = await labelsResponse.json();
+  const entities = isRecord(labelsPayload) && isRecord(labelsPayload.entities) ? labelsPayload.entities : {};
+  const labelByQid = new Map<string, string>();
+  for (const [qid, entity] of Object.entries(entities)) {
+    if (!isRecord(entity) || !isRecord(entity.labels)) continue;
+    const label = entity.labels["zh-hant"] ?? entity.labels.zh;
+    if (isRecord(label) && typeof label.value === "string") labelByQid.set(qid, label.value);
+  }
+  return new Map([...qidByName].flatMap(([name, qid]) => {
+    const label = labelByQid.get(qid);
+    return label ? [[name, label]] : [];
+  }));
 };
 
 const getTransitVehicle = (route: Record<string, unknown>): string => {
@@ -366,7 +420,7 @@ Deno.serve(async (request) => {
         generator: "search",
         gsrsearch: body.query.trim(),
         gsrnamespace: "6",
-        gsrlimit: String(MAX_COMMONS_CANDIDATES),
+        gsrlimit: String(COMMONS_BATCH_SIZE),
         prop: "imageinfo",
         iiprop: "url|mime|thumbmime|mediatype|size|sha1|timestamp|extmetadata",
         iiurlwidth: "640",
@@ -390,38 +444,9 @@ Deno.serve(async (request) => {
         ? Object.values(payload.query.pages)
         : [];
       const candidates = pages.flatMap((page) => {
-        if (!isRecord(page) || typeof page.title !== "string" || !page.title.startsWith("File:") ||
-          !Array.isArray(page.imageinfo) || !isRecord(page.imageinfo[0])) return [];
-        const info = page.imageinfo[0];
-        const metadata = isRecord(info.extmetadata) ? info.extmetadata : {};
-        const license = metadataValue(metadata, "LicenseShortName") ?? metadataValue(metadata, "UsageTerms");
-        const creator = metadataValue(metadata, "Artist");
-        const credit = metadataValue(metadata, "Credit")?.slice(0, 500);
-        const restrictions = metadataValue(metadata, "Restrictions");
-        const licenseUrl = metadataValue(metadata, "LicenseUrl");
-        const isPublicDomain = license?.toLowerCase() === "public domain" || license?.toLowerCase().startsWith("cc0");
-        const isCcBy = /^CC BY (?:1\.0|2\.0|2\.5|3\.0|4\.0)$/i.test(license ?? "");
-        const cropImageUrl = typeof info.thumburl === "string" ? getCommonsDerivativeUrl(info.thumburl, 1280) : undefined;
-        if (info.mediatype !== "BITMAP" || !["image/jpeg", "image/png", "image/webp"].includes(String(info.thumbmime)) ||
-          !license || !creator || !isAllowedCommonsLicense(license) || restrictions ||
-          !isHttpsUrl(info.thumburl) || !cropImageUrl || !isHttpsUrl(info.descriptionurl) ||
-          (!isPublicDomain && !isHttpsUrl(licenseUrl)) || (isCcBy && !credit)) return [];
-        return [{
-          fileTitle: page.title,
-          thumbnailUrl: normalizeCommonsThumbnailUrl(info.thumburl),
-          cropImageUrl,
-          thumbnailMime: info.thumbmime,
-          sourcePageUrl: info.descriptionurl,
-          creator: creator.slice(0, 500),
-          credit,
-          license: license.slice(0, 100),
-          licenseUrl: isHttpsUrl(licenseUrl) ? licenseUrl : undefined,
-          sourceSha1: typeof info.sha1 === "string" ? info.sha1 : undefined,
-          sourceRevisionAt: typeof info.timestamp === "string" ? info.timestamp : undefined,
-          width: typeof info.width === "number" ? info.width : 0,
-          height: typeof info.height === "number" ? info.height : 0,
-        }];
-      }).slice(0, MAX_COMMONS_CANDIDATES);
+        const candidate = toCommonsPhotoCandidate(page);
+        return candidate ? [candidate] : [];
+      }).slice(0, COMMONS_BATCH_SIZE);
       const rawNextOffset = isRecord(payload) && isRecord(payload.continue)
         ? payload.continue.gsroffset
         : null;
@@ -429,12 +454,62 @@ Deno.serve(async (request) => {
           Number.isInteger(Number(rawNextOffset)) && Number(rawNextOffset) >= 0
         ? Number(rawNextOffset)
         : null;
-      const nextOffset = parsedNextOffset ?? (candidates.length === MAX_COMMONS_CANDIDATES && Number(offset) < 10_000
-        ? Number(offset) + MAX_COMMONS_CANDIDATES
+      const nextOffset = parsedNextOffset ?? (candidates.length === COMMONS_BATCH_SIZE && Number(offset) < 10_000
+        ? Number(offset) + COMMONS_BATCH_SIZE
         : null);
       return json({ candidates, nextOffset });
     }
 
+    if (body.action === "commonsPhotoCategories") {
+      if (typeof body.fileTitle !== "string" || !/^File:.{1,240}$/u.test(body.fileTitle.trim())) {
+        return json({ error: "照片識別資訊無效。" }, 400);
+      }
+      const params = new URLSearchParams({
+        action: "query", titles: body.fileTitle.trim(), prop: "categories|pageprops",
+        cllimit: "max", clshow: "!hidden", format: "json", origin: "*",
+      });
+      const response = await fetch(`${COMMONS_API_URL}?${params}`, {
+        headers: { "User-Agent": "Travel-Companion/3.9.12 (Wikimedia Commons category selector)" }, signal: AbortSignal.timeout(12_000),
+      });
+      if (!response.ok) return json({ error: "照片類別暫時無法使用。" }, 502);
+      const payload = await response.json();
+      const pages = isRecord(payload) && isRecord(payload.query) && isRecord(payload.query.pages)
+        ? Object.values(payload.query.pages) : [];
+      const categories = pages.flatMap((page) => isRecord(page) && Array.isArray(page.categories)
+        ? page.categories.flatMap((category) => isRecord(category) && typeof category.title === "string" && category.title.startsWith("Category:")
+          ? [{ name: category.title.slice("Category:".length) }] : []) : []);
+      const visibleCategories = categories.slice(0, 80);
+      const chineseLabels = await getCategoryChineseLabels(visibleCategories.map((category) => category.name));
+      return json({ categories: visibleCategories.map((category) => ({ ...category, chineseLabel: chineseLabels.get(category.name) })) });
+    }
+
+    if (body.action === "commonsCategoryPhotos") {
+      if (typeof body.category !== "string" || body.category.trim().length < 1 || body.category.trim().length > 240) {
+        return json({ error: "照片類別資訊無效。" }, 400);
+      }
+      const continuation = typeof body.continuation === "string" && body.continuation.length <= 500
+        ? body.continuation : undefined;
+      const params = new URLSearchParams({
+        action: "query", list: "categorymembers", cmtitle: `Category:${body.category.trim().replace(/^Category:/i, "")}`,
+        cmtype: "file", cmlimit: String(COMMONS_BATCH_SIZE), format: "json", origin: "*",
+      });
+      if (continuation) params.set("cmcontinue", continuation);
+      const response = await fetch(`${COMMONS_API_URL}?${params}`, {
+        headers: { "User-Agent": "Travel-Companion/3.9.12 (Wikimedia Commons category selector)" }, signal: AbortSignal.timeout(12_000),
+      });
+      if (!response.ok) return json({ error: "類別照片暫時無法使用。" }, 502);
+      const payload = await response.json();
+      const members = isRecord(payload) && isRecord(payload.query) && Array.isArray(payload.query.categorymembers)
+        ? payload.query.categorymembers : [];
+      const titles = members.flatMap((member) => isRecord(member) && typeof member.title === "string" && member.title.startsWith("File:")
+        ? [member.title] : []);
+      const candidates = await getCommonsImageInfo(titles);
+      const rawContinuation = isRecord(payload) && isRecord(payload.continue) ? payload.continue.cmcontinue : null;
+      return json({ candidates, continuation: typeof rawContinuation === "string" ? rawContinuation : null });
+    }
+
+    if (body.action === "commonsPrecisionSearch") return json({ error: "精準自動篩選已停用，請使用三階段照片流程。" }, 410);
+    /* 已由 V3.9.12 三階段流程取代的精準搜尋實作：
     if (body.action === "commonsPrecisionSearch") {
       if (typeof body.query !== "string" || body.query.trim().length < 2 || body.query.trim().length > 120) {
         return json({ error: "請輸入 2 至 120 個字的照片搜尋詞。" }, 400);
@@ -565,6 +640,7 @@ Deno.serve(async (request) => {
       }
     }
 
+    */
     if (body.action !== "routeEstimate" || !isPlace(body.origin) || !isPlace(body.destination) ||
       !["drive", "walk", "transit"].includes(String(body.mode))) {
       return json({ error: "路線查詢資料格式不正確。" }, 400);

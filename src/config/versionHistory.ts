@@ -14,6 +14,15 @@ export type VersionHistoryItem = {
 
 export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
+    version: "3.9.11",
+    date: "2026-09-25",
+    isMandatoryRelease: false,
+    notes: [
+      "Commons 候選照片分為精準與需人工確認兩層，並完成照片選取、裁切與來源資訊流程。",
+      "發布後修正 Commons v2 lock／cache key 契約與搜尋續頁問題。",
+    ],
+  },
+  {
     version: "3.9.10",
     date: "2026-09-25",
     isMandatoryRelease: false,

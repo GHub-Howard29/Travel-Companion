@@ -1,18 +1,16 @@
 /** App 發布版本設定；須與 public/app-version.json 保持一致。 */
-export const APP_VERSION = "3.9.11";
+export const APP_VERSION = "3.9.12";
 
 /**
  * 最近一次已發布版本；此版本必須存在於 versionHistory.ts。
  * production build 會驗證這個規則，避免升版後遺漏版本歷史。
  */
-export const PREVIOUS_RELEASE_VERSION = "3.9.10";
+export const PREVIOUS_RELEASE_VERSION = "3.9.11";
 
 export const RELEASE_DATE = "2026-09-25";
 
 export const RELEASE_NOTES = [
-  "Commons 候選照片分為精準與需人工確認兩層，增加可選照片並保留既有排列。",
-  "移除 QID 範圍選擇，模糊搜尋限制為點陣媒體，少於六張時不提供換批。",
-  "修正自行上傳載入生命週期誤報，並移除每日行程卡片照片備註。",
+  "修正每日行程卡片照片挑選方式。",
 ];
 
 /** 目前版本發布時保存的更新政策；不隨執行中客戶端是否已達最低版本而改變。 */
