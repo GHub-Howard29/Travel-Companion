@@ -26,6 +26,7 @@ import {
 } from "./commonsPrecisionCache.ts";
 import {
   acquireCommonsPrecisionOperationLock,
+  claimCommonsAiCandidateSlot,
   acquireCommonsPrecisionUpstreamLock,
   claimCommonsPrecisionUpstreamSlot,
   readCommonsPrecisionCache,
@@ -35,6 +36,7 @@ import {
   writeCommonsPrecisionCache,
 } from "./commonsPrecisionDatabase.ts";
 import { getCommonsPrecisionTaipeiDateKey } from "./commonsPrecisionQuota.ts";
+import { requestCommonsAiCandidates, type CommonsAiLanguage } from "./commonsAiCandidates.ts";
 import { createCommonsPrecisionUsageDelta } from "./commonsPrecisionUsage.ts";
 import {
   hashAdoptedCommonsQuery,
@@ -351,6 +353,29 @@ Deno.serve(async (request) => {
         }
       }))).filter((photo) => photo !== null);
       return json({ photos, limitReached: false });
+    }
+
+    if (body.action === "commonsSuggestSearchTerms") {
+      if (typeof body.rawInput !== "string" || body.rawInput.trim().length < 2 || body.rawInput.trim().length > 240) {
+        return json({ error: "請輸入 2 至 240 個字的公開地點文字。", state: "ai-invalid-response" }, 400);
+      }
+      const targetLanguage = body.targetLanguage === "en" || body.targetLanguage === "ja" || body.targetLanguage === "zh-Hant"
+        ? body.targetLanguage as CommonsAiLanguage : "zh-Hant";
+      const excludedQueries = Array.isArray(body.excludedQueries)
+        ? body.excludedQueries.filter((value): value is string => typeof value === "string").slice(0, 6)
+        : [];
+      const apiKey = requiredEnv("GEMINI_API_KEY");
+      if (!await claimCommonsAiCandidateSlot(clients.admin)) {
+        return json({ error: "今日候選詞額度已用完，可直接搜尋原始輸入。", state: "ai-quota-reached" }, 429);
+      }
+      try {
+        const candidates = await requestCommonsAiCandidates({ rawInput: body.rawInput, targetLanguage, excludedQueries, apiKey });
+        return json({ state: candidates.length > 0 ? "results" : "no-ai-candidate", candidates });
+      } catch (error) {
+        const state = error instanceof Error && ["ai-quota-reached", "ai-invalid-response", "ai-unavailable"].includes(error.message)
+          ? error.message : "ai-unavailable";
+        return json({ error: state === "ai-invalid-response" ? "候選詞回應格式不正確，可直接搜尋原始輸入。" : "候選詞暫時無法使用，可直接搜尋原始輸入。", state }, state === "ai-quota-reached" ? 429 : 502);
+      }
     }
 
     if (body.action === "commonsPhotoSearch") {

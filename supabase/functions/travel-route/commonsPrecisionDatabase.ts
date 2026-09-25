@@ -79,3 +79,9 @@ export const recordCommonsPrecisionUsage = async (
   throwDatabaseError(error);
   if (data !== true) throw new Error("精準搜尋用量彙總未寫入");
 };
+
+export const claimCommonsAiCandidateSlot = async (admin: SupabaseClient): Promise<boolean> => {
+  const { data, error } = await admin.rpc("tc_claim_commons_ai_candidate_slot", { maximum_per_day: 100 });
+  throwDatabaseError(error);
+  return data === true;
+};

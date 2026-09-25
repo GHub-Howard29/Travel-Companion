@@ -115,7 +115,9 @@ export const runCommonsPrecisionEngine = async (
   });
 
   const perform = async (plan: CommonsPrecisionPlannedRequest): Promise<{ payload?: unknown; stopped?: CommonsPrecisionEngineResult }> => {
-    if (requestCount >= COMMONS_PRECISION_MAX_REQUESTS || now() - startedAtMs >= COMMONS_PRECISION_MAX_DURATION_MS || inspectedCount >= COMMONS_PRECISION_MAX_INSPECTED) {
+    // inspectedCount 等於上限時仍需允許一次 metadata／structured-data 請求，
+    // 否則剛好取滿 40 筆 seed 會在候選組裝前被誤判為 inspection-limit-reached。
+    if (requestCount >= COMMONS_PRECISION_MAX_REQUESTS || now() - startedAtMs >= COMMONS_PRECISION_MAX_DURATION_MS || inspectedCount > COMMONS_PRECISION_MAX_INSPECTED) {
       return { stopped: finish("inspection-limit-reached") };
     }
     requestCount += 1;

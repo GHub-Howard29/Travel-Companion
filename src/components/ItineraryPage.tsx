@@ -82,6 +82,8 @@ import {
   searchPlaceCandidates,
   getPlaceCandidatePhotos,
   searchCommonsPhotoCandidates,
+  suggestCommonsSearchTerms,
+  type CommonsAiSearchTerm,
   type CommonsPhotoCandidate,
   type PlaceCandidate,
   type PlaceCandidatePhoto,
@@ -234,6 +236,10 @@ export const ItineraryPage = ({
   const [isCoverSaving, setIsCoverSaving] = useState(false);
   const [coverPhotoError, setCoverPhotoError] = useState<string | null>(null);
   const [commonsPageStatus, setCommonsPageStatus] = useState<CommonsPageStatus | null>(null);
+  const [commonsAiLanguage, setCommonsAiLanguage] = useState<CommonsAiSearchTerm["languageTag"]>("en");
+  const [commonsAiCandidates, setCommonsAiCandidates] = useState<CommonsAiSearchTerm[]>([]);
+  const [isCommonsAiLoading, setIsCommonsAiLoading] = useState(false);
+  const [commonsAiStatus, setCommonsAiStatus] = useState<string | null>(null);
   const [failedCoverPaths, setFailedCoverPaths] = useState<Set<string>>(() => new Set());
   const editingCardRef = useRef<HTMLElement | null>(null);
   const coverDialogRef = useRef<HTMLElement | null>(null);
@@ -955,11 +961,36 @@ export const ItineraryPage = ({
     void searchCommonsPhotos(commonsQuery, undefined, new Set());
   };
 
+  const generateCommonsSearchTerms = async () => {
+    const rawInput = commonsQuery.trim();
+    if (rawInput.length < 2 || isCommonsAiLoading || !isOnline) return;
+    setIsCommonsAiLoading(true);
+    setCommonsAiStatus(null);
+    try {
+      const result = await suggestCommonsSearchTerms(supabase, trip.id, rawInput, commonsAiLanguage, commonsAiCandidates.map((candidate) => candidate.query));
+      setCommonsAiCandidates(result.candidates);
+      setCommonsAiStatus(result.candidates.length > 0 ? "可選擇一個候選詞，再明確搜尋照片。" : "找不到可用候選詞，可直接搜尋原始輸入。");
+    } catch (error) {
+      setCommonsAiStatus(error instanceof Error ? error.message : "候選詞暫時無法使用，可直接搜尋原始輸入。");
+    } finally {
+      setIsCommonsAiLoading(false);
+    }
+  };
+
+  const adoptCommonsSearchTerm = (candidate: CommonsAiSearchTerm) => {
+    setCommonsQuery(candidate.query);
+    setCommonsCandidates([]);
+    setCommonsNextPageToken(null);
+    setCommonsSeenFileTitles(new Set());
+    setSelectedCommonsPhoto(null);
+    setCommonsPageStatus(null);
+    setCoverPhotoError(null);
+  };
+
   const searchCommonsPhotos = async (
     queryValue = commonsQuery,
     nextPageToken: string | undefined = undefined,
     seenFileTitles = commonsSeenFileTitles,
-    retryDepth = 0,
   ) => {
     const query = queryValue.trim();
     if (query.length < 2) {
@@ -988,12 +1019,6 @@ export const ItineraryPage = ({
           result.state === "entity-not-found" || result.state === "entity-ambiguous"
           ? "empty-first-page"
           : result.state);
-        return;
-      }
-      // Wikimedia 分類頁可能整頁都是已看過或被規則淘汰的檔案；自動跳過
-      // 至多兩個空續頁，避免使用者看到空白視窗後還要手動重複按「換一批」。
-      if (freshCandidates.length === 0 && nextToken && retryDepth < 2) {
-        await searchCommonsPhotos(queryValue, nextToken, nextSeenFileTitles, retryDepth + 1);
         return;
       }
       setCommonsCandidates(freshCandidates.slice(0, 6));
@@ -2212,6 +2237,29 @@ export const ItineraryPage = ({
                   </div>
                 </fieldset>
                 {coverPhotoSource === "wikimedia-commons" ? <>
+                <section className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3" aria-labelledby="commons-ai-title">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <h4 id="commons-ai-title" className="text-sm font-bold text-slate-700">AI 候選詞（可選）</h4>
+                      <p className="mt-1 text-xs text-slate-500">只傳送公開地點文字；產生後仍須由管理者選擇，再按搜尋。</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <label className="sr-only" htmlFor="commons-ai-language">候選語言</label>
+                      <select id="commons-ai-language" value={commonsAiLanguage} onChange={(event) => setCommonsAiLanguage(event.target.value as CommonsAiSearchTerm["languageTag"])} className="rounded-lg border border-slate-200 bg-white px-2 py-2 text-xs">
+                        <option value="zh-Hant">繁體中文</option><option value="en">English</option><option value="ja">日本語</option>
+                      </select>
+                      <button type="button" onClick={() => void generateCommonsSearchTerms()} disabled={!isOnline || isCommonsAiLoading || commonsQuery.trim().length < 2} className="rounded-lg border border-violet-200 bg-white px-3 py-2 text-xs font-bold text-violet-700 disabled:opacity-50">
+                        {isCommonsAiLoading ? <Loader2 size={13} className="mr-1 inline animate-spin" /> : null}產生候選詞
+                      </button>
+                    </div>
+                  </div>
+                  {commonsAiStatus && <p className="mt-2 text-xs text-slate-600" aria-live="polite">{commonsAiStatus}</p>}
+                  {commonsAiCandidates.length > 0 && <div className="mt-3 grid gap-2 sm:grid-cols-3" role="radiogroup" aria-label="AI 候選搜尋詞">
+                    {commonsAiCandidates.map((candidate) => <button key={`${candidate.languageTag}-${candidate.query}`} type="button" onClick={() => adoptCommonsSearchTerm(candidate)} className={`rounded-lg border px-3 py-2 text-left text-xs ${commonsQuery === candidate.query ? "border-violet-400 bg-violet-50 text-violet-800" : "border-slate-200 bg-white text-slate-700"}`}>
+                      <span className="block font-bold">{candidate.query}</span><span className="mt-1 block text-[11px] text-slate-500">{candidate.kind === "translation" ? "翻譯" : candidate.kind === "transliteration" ? "轉寫" : "原文整理"}</span>
+                    </button>)}
+                  </div>}
+                </section>
                 <form
                   className="mt-4 flex items-stretch gap-2"
                   onSubmit={(event) => {

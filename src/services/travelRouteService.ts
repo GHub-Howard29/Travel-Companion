@@ -61,6 +61,23 @@ export interface CommonsPhotoSearchResult {
   nextPageToken?: string;
 }
 
+export interface CommonsAiSearchTerm {
+  query: string;
+  languageTag: "zh-Hant" | "en" | "ja";
+  kind: "original" | "translation" | "transliteration";
+}
+
+export const suggestCommonsSearchTerms = async (
+  supabase: SupabaseClient,
+  tripId: string,
+  rawInput: string,
+  targetLanguage: CommonsAiSearchTerm["languageTag"],
+  excludedQueries: string[] = [],
+): Promise<{ state: string; candidates: CommonsAiSearchTerm[] }> => invokeTravelRoute(
+  supabase,
+  { action: "commonsSuggestSearchTerms", tripId, rawInput, targetLanguage, excludedQueries },
+);
+
 export interface RouteEstimateResult {
   durationSeconds: number;
   distanceMeters: number;
