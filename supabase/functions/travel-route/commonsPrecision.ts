@@ -3,7 +3,7 @@ export const COMMONS_PRECISION_PAGE_SIZE = 6;
 export const COMMONS_PRECISION_MAX_REQUESTS = 12;
 export const COMMONS_PRECISION_MAX_DURATION_MS = 30_000;
 export const COMMONS_PRECISION_MAX_INSPECTED = 40;
-export const COMMONS_PRECISION_CONTRACT_VERSION = "commons-precision-v1";
+export const COMMONS_PRECISION_CONTRACT_VERSION = "commons-precision-v2";
 
 export type CommonsPrecisionState =
   | "results"
@@ -28,6 +28,8 @@ export type CommonsPrecisionEvidenceKind =
   | "filename"
   | "broad-association"
   | "wrong-entity";
+
+export type CommonsPrecisionCandidateTier = "precise" | "manual-review";
 
 export type CommonsPrecisionVerifiedExclusion =
   | "wrong-entity"
@@ -54,8 +56,10 @@ export interface CommonsPrecisionRawCandidate {
   descriptionWasTruncated?: boolean;
   sourceSha1?: string;
   sourceRevisionAt?: string;
-  targetQid: string;
+  targetQid?: string;
   targetNames: CommonsPrecisionName[];
+  fromTextSearch?: boolean;
+  forceManualReview?: boolean;
   directP18?: boolean;
   exactCategories?: string[];
   relatedCategories?: string[];
@@ -81,6 +85,7 @@ export interface CommonsPrecisionMatchEvidence {
 }
 
 export interface CommonsPrecisionCandidate extends CommonsPrecisionRawCandidate {
+  tier: CommonsPrecisionCandidateTier;
   reviewStatus: "needs-review";
   score: number;
   scoreBreakdown: CommonsPrecisionScoreItem[];
@@ -105,10 +110,8 @@ export interface CommonsPrecisionResponse {
   contractVersion: typeof COMMONS_PRECISION_CONTRACT_VERSION;
   state: CommonsPrecisionState;
   candidates: CommonsPrecisionCandidate[];
-  resolvedEntity?: CommonsPrecisionResolvedEntity;
-  entityChoices?: CommonsPrecisionResolvedEntity[];
+  searchMode: "entity-guided" | "broad";
   nextPageToken?: string;
-  extensionPageToken?: string;
 }
 
 export interface CommonsPrecisionResolvedEntity {
@@ -133,6 +136,7 @@ export interface CommonsPrecisionPublicCandidate {
   descriptionWasTruncated?: boolean;
   sourceSha1?: string;
   sourceRevisionAt?: string;
+  tier: CommonsPrecisionCandidateTier;
   reviewStatus: "needs-review";
   score: number;
   scoreBreakdown: CommonsPrecisionScoreItem[];
@@ -143,10 +147,8 @@ export interface CommonsPrecisionPublicResponse {
   contractVersion: typeof COMMONS_PRECISION_CONTRACT_VERSION;
   state: CommonsPrecisionState;
   candidates: CommonsPrecisionPublicCandidate[];
-  resolvedEntity?: CommonsPrecisionResolvedEntity;
-  entityChoices?: CommonsPrecisionResolvedEntity[];
+  searchMode: "entity-guided" | "broad";
   nextPageToken?: string;
-  extensionPageToken?: string;
 }
 
 export const projectCommonsPrecisionCandidate = (
@@ -167,42 +169,35 @@ export const projectCommonsPrecisionCandidate = (
   descriptionWasTruncated: candidate.descriptionWasTruncated,
   sourceSha1: candidate.sourceSha1,
   sourceRevisionAt: candidate.sourceRevisionAt,
+  tier: candidate.tier,
   reviewStatus: candidate.reviewStatus,
   score: candidate.score,
   scoreBreakdown: candidate.scoreBreakdown.map((item) => ({ ...item })),
   matchEvidence: candidate.matchEvidence.map((item) => ({ ...item })),
 });
 
-const OPAQUE_NEXT_PAGE_TOKEN = /^cp1\.[A-Za-z0-9_-]{16,4096}$/;
+const OPAQUE_NEXT_PAGE_TOKEN = /^cp2\.[A-Za-z0-9_-]{16,4096}$/;
 
 export const projectCommonsPrecisionResponse = (input: {
   state: CommonsPrecisionState;
   candidates: readonly CommonsPrecisionCandidate[];
-  resolvedEntity?: CommonsPrecisionResolvedEntity;
-  entityChoices?: CommonsPrecisionResolvedEntity[];
+  searchMode: "entity-guided" | "broad";
   nextPageToken?: string;
-  extensionPageToken?: string;
 }): CommonsPrecisionPublicResponse => {
   if (input.candidates.length > COMMONS_PRECISION_PAGE_SIZE ||
     new Set(input.candidates.map((candidate) => candidate.fileTitle)).size !== input.candidates.length) {
     throw new RangeError("候選回應數量或去重契約不正確");
   }
   if (input.nextPageToken !== undefined &&
-    (!["results", "no-suitable-image"].includes(input.state) || !OPAQUE_NEXT_PAGE_TOKEN.test(input.nextPageToken))) {
+    (input.state !== "results" || input.candidates.length !== COMMONS_PRECISION_PAGE_SIZE || !OPAQUE_NEXT_PAGE_TOKEN.test(input.nextPageToken))) {
     throw new RangeError("nextPageToken 必須為同一 session 的不透明 token");
-  }
-  if (input.extensionPageToken !== undefined &&
-    (!["results", "no-suitable-image"].includes(input.state) || !OPAQUE_NEXT_PAGE_TOKEN.test(input.extensionPageToken))) {
-    throw new RangeError("extensionPageToken 必須為同一 session 的不透明 token");
   }
   return {
     contractVersion: COMMONS_PRECISION_CONTRACT_VERSION,
     state: input.state,
     candidates: input.candidates.map(projectCommonsPrecisionCandidate),
-    ...(input.resolvedEntity ? { resolvedEntity: { ...input.resolvedEntity } } : {}),
-    ...(input.entityChoices?.length ? { entityChoices: input.entityChoices.map((entity) => ({ ...entity })) } : {}),
+    searchMode: input.searchMode,
     ...(input.nextPageToken !== undefined ? { nextPageToken: input.nextPageToken } : {}),
-    ...(input.extensionPageToken !== undefined ? { extensionPageToken: input.extensionPageToken } : {}),
   };
 };
 
@@ -293,7 +288,7 @@ export const evaluateCommonsPrecisionCandidate = (
     !isHttpsHost(input.cropImageUrl, "upload.wikimedia.org")) {
     return { accepted: false, reason: "source-not-allowed" };
   }
-  if (!input.fileTitle.startsWith("File:") || !/^Q[1-9][0-9]*$/.test(input.targetQid)) {
+  if (!input.fileTitle.startsWith("File:") || (input.targetQid !== undefined && !/^Q[1-9][0-9]*$/.test(input.targetQid))) {
     return { accepted: false, reason: "source-not-allowed" };
   }
   if (!Number.isFinite(input.width) || !Number.isFinite(input.height) || Math.min(input.width, input.height) < 1200) {
@@ -313,10 +308,10 @@ export const evaluateCommonsPrecisionCandidate = (
     ? names.find((name) => containsWholeName(input.description!, name.value))
     : undefined;
   const filenameName = names.find((name) => containsWholeName(getFilenameText(input.fileTitle), name.value));
-  const depictsTarget = input.depictsQids?.includes(input.targetQid) ?? false;
+  const depictsTarget = input.targetQid ? input.depictsQids?.includes(input.targetQid) ?? false : false;
 
   if (input.directP18) {
-    scoreBreakdown.push({ rule: "direct-p18", points: 45, evidence: input.targetQid });
+    scoreBreakdown.push({ rule: "direct-p18", points: 45, evidence: input.targetQid ?? "entity" });
     matchEvidence.push({ kind: "p18", qid: input.targetQid });
   }
   const exactCategories = [...new Set(input.exactCategories?.map((category) => category.trim()).filter(Boolean) ?? [])].slice(0, 10);
@@ -338,7 +333,7 @@ export const evaluateCommonsPrecisionCandidate = (
     })));
   }
   if (depictsTarget) {
-    scoreBreakdown.push({ rule: "structured-depicts", points: 25, evidence: input.targetQid });
+    scoreBreakdown.push({ rule: "structured-depicts", points: 25, evidence: input.targetQid ?? "entity" });
     matchEvidence.push({ kind: "structured-depicts", qid: input.targetQid });
   } else if (descriptionName) {
     scoreBreakdown.push({ rule: "exact-description", points: 25, evidence: descriptionName.value });
@@ -358,20 +353,23 @@ export const evaluateCommonsPrecisionCandidate = (
     scoreBreakdown.push({ rule: "verified-interior-fragment", points: -25, evidence: "metadata" });
   }
   if (input.verifiedBroadAssociation) {
-    scoreBreakdown.push({ rule: "broad-association", points: -30, evidence: input.targetQid });
+    scoreBreakdown.push({ rule: "broad-association", points: -30, evidence: input.targetQid ?? "broad-search" });
     matchEvidence.push({ kind: "broad-association", qid: input.targetQid });
   }
 
-  const strongEvidence = matchEvidence.some((evidence) =>
-    ["p18", "exact-category", "related-category", "structured-depicts", "description"].includes(evidence.kind));
-  if (!strongEvidence) return { accepted: false, reason: "no-strong-evidence" };
+  const preciseEvidence = !input.forceManualReview && matchEvidence.some((evidence) =>
+    ["p18", "exact-category", "structured-depicts", "description"].includes(evidence.kind));
+  const manualEvidence = input.forceManualReview || input.fromTextSearch || matchEvidence.some((evidence) =>
+    ["related-category", "broad-association"].includes(evidence.kind));
+  if (!preciseEvidence && !manualEvidence) return { accepted: false, reason: "no-strong-evidence" };
   const score = scoreBreakdown.reduce((total, item) => total + item.points, 0);
-  if (score < COMMONS_PRECISION_MIN_SCORE) return { accepted: false, reason: "score-below-threshold" };
+  if (preciseEvidence && score < COMMONS_PRECISION_MIN_SCORE) return { accepted: false, reason: "score-below-threshold" };
 
   return {
     accepted: true,
     candidate: {
       ...input,
+      tier: preciseEvidence ? "precise" : "manual-review",
       reviewStatus: "needs-review",
       score,
       scoreBreakdown,
@@ -393,6 +391,7 @@ export const rankCommonsPrecisionCandidates = (
   const verifiedDate = (candidate: CommonsPrecisionCandidate): number =>
     candidate.currentAppearanceVerified ? (Date.parse(candidate.reliableCapturedAt ?? "") || 0) : 0;
   accepted.sort((left, right) =>
+    (left.tier === right.tier ? 0 : left.tier === "precise" ? -1 : 1) ||
     right.score - left.score ||
     getStrongEvidenceRank(right) - getStrongEvidenceRank(left) ||
     Math.min(right.width, right.height) - Math.min(left.width, left.height) ||
@@ -421,10 +420,12 @@ export const validateCommonsPrecisionResponse = (response: CommonsPrecisionRespo
   if (response.contractVersion !== COMMONS_PRECISION_CONTRACT_VERSION) return false;
   if (response.candidates.length > COMMONS_PRECISION_PAGE_SIZE) return false;
   if (new Set(response.candidates.map((candidate) => candidate.fileTitle)).size !== response.candidates.length) return false;
-  if (response.candidates.some((candidate) => candidate.reviewStatus !== "needs-review" || candidate.score < COMMONS_PRECISION_MIN_SCORE)) return false;
+  if (response.candidates.some((candidate) => candidate.reviewStatus !== "needs-review" ||
+    !["precise", "manual-review"].includes(candidate.tier) ||
+    (candidate.tier === "precise" && candidate.score < COMMONS_PRECISION_MIN_SCORE))) return false;
   if (response.state === "results") return response.candidates.length > 0;
   if (EMPTY_ONLY_STATES.has(response.state)) return response.candidates.length === 0;
-  if (PARTIAL_STATES.has(response.state)) return response.nextPageToken === undefined && response.extensionPageToken === undefined;
+  if (PARTIAL_STATES.has(response.state)) return response.nextPageToken === undefined;
   return false;
 };
 

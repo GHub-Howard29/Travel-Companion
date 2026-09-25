@@ -18,15 +18,17 @@ Repeat the visible layout checks at the normal desktop viewport and an explicit 
 
 Do not perform this section without External-mode authorization or a maintained local mock that is explicitly in scope.
 
-For ambiguous entity choices, prefer the maintained local fixture:
+For ambiguous-name fallback, prefer the maintained local fixture:
 
-1. Run `npm run regression:local:browser-ambiguous-fixture` and open the reported URL.
+1. Run `npm run regression:local:browser-broad-fixture` and open the reported URL.
 2. Open `Day 1` → `管理` → the first `設定照片`, replace the query with `中山站`, and select Search.
-3. Confirm three same-label full-width options appear: short description, wrapping description, and no description. Every option must show its QID and have an accessible name containing the visible identifying fields.
-4. Select one option and confirm the scope label uses that entity while the synthetic `no-suitable-image` state does not expose another choice or send an external request.
+3. Confirm the ambiguous-name warning appears, no QID choices appear, and all six candidates are under `需人工確認`.
+4. Confirm `精準候選` is absent, the six candidates retain the existing card/grid style, and no next-batch action appears because the fixture has no next token.
 5. Repeat at desktop and explicit 390x844 viewports; confirm no horizontal overflow, clipping, or unreachable controls.
 
-This fixture is not evidence about Wikidata content, query precision, or real selected-QID upstream behavior. Report it separately from External mode.
+For candidate shortage, run `npm run regression:local:browser-insufficient-fixture` and repeat the search. Confirm two cards appear under `精準候選`, two under `需人工確認`, the status says four photos are currently available, and no next-batch action appears.
+
+These fixtures are not evidence about Wikidata content, query precision, or real upstream behavior. Report them separately from External mode.
 
 Validate the applicable states: unique entity, ambiguous entity choice, facility-level safe stop, next batch, last page, candidate selection, zoom, confirmation, 1:1 crop, cancel/back state retention, save lock, and failure unlock. Include keyboard order, focus trap, focus return, accessible names, and 390x844 behavior.
 

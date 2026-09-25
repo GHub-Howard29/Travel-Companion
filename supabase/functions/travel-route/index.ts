@@ -443,21 +443,14 @@ Deno.serve(async (request) => {
         ? body.language.trim()
         : "zh-Hant";
       const query = body.query.normalize("NFKC").replace(/\s+/g, " ").trim();
-      const selectedEntityQid = typeof body.selectedEntityQid === "string" && /^Q[1-9][0-9]*$/.test(body.selectedEntityQid)
-        ? body.selectedEntityQid
-        : undefined;
-      if (body.selectedEntityQid !== undefined && !selectedEntityQid) {
-        return json({ error: "地點範圍已失效，請重新搜尋後選擇。", state: "entity-ambiguous" }, 400);
-      }
       const regressionFixture = isLoopbackSupabaseRuntime(Deno.env.get("SUPABASE_URL") ?? "")
         ? getCommonsPrecisionRegressionFixture(
           request.headers.get(COMMONS_PRECISION_REGRESSION_FIXTURE_HEADER),
-          selectedEntityQid,
         )
         : null;
       if (regressionFixture) return json(regressionFixture);
       const queryHash = await sha256(query);
-      const scopedQueryHash = await sha256(`${queryHash}:${selectedEntityQid ?? ""}`);
+      const scopedQueryHash = queryHash;
       const adoptedQueryHash = await hashAdoptedCommonsQuery(query);
       const nextPageToken = typeof body.nextPageToken === "string" ? body.nextPageToken : undefined;
       if (body.nextPageToken !== undefined && (!nextPageToken || nextPageToken.length > 4096)) {
@@ -465,7 +458,7 @@ Deno.serve(async (request) => {
       }
       const candidateKey = createCommonsPrecisionCandidateCacheKey({ queryHash: scopedQueryHash, language });
       const noSuitableKey = createCommonsPrecisionNoSuitableCacheKey({ queryHash: scopedQueryHash, language });
-      const lockKey = `lock:commons-precision-v1:${await sha256(`${scopedQueryHash}:${language.toLowerCase()}`)}`;
+      const lockKey = `lock:commons-precision-v2:${await sha256(`${scopedQueryHash}:${language.toLowerCase()}`)}`;
       const startedAtMs = Date.now();
       const cached = nextPageToken ? null : await readCommonsPrecisionCache<CommonsPrecisionPublicResponse>(clients.admin, candidateKey, "candidate-results");
       if (cached) {
@@ -501,25 +494,25 @@ Deno.serve(async (request) => {
           },
         };
         let result;
-        let isExtensionRequest = false;
         if (nextPageToken) {
           const opened = await openCommonsPrecisionNextPageToken(nextPageToken, tokenKey, { nowMs: Date.now(), adoptedQueryHash });
           if (opened.status !== "valid") return json({ error: "照片搜尋 session 已失效，請重新搜尋。", state: "session-expired" }, 400);
-          isExtensionRequest = opened.session.layer === "read-related-category-files";
-          const entityEvidence = await readCommonsPrecisionCache<WikidataEntityEvidence>(clients.admin, createCommonsPrecisionEntityCacheKey(opened.session.qid), "entity-evidence");
-          if (!entityEvidence) return json({ error: "照片搜尋 session 已失效，請重新搜尋。", state: "session-expired" }, 400);
+          const entityEvidence = opened.session.qid
+            ? await readCommonsPrecisionCache<WikidataEntityEvidence>(clients.admin, createCommonsPrecisionEntityCacheKey(opened.session.qid), "entity-evidence")
+            : undefined;
+          if (opened.session.qid && !entityEvidence) return json({ error: "照片搜尋 session 已失效，請重新搜尋。", state: "session-expired" }, 400);
           result = await runCommonsPrecisionContinuationEngine({
             query,
             entityEvidence,
+            tier: opened.session.tier,
             layer: opened.session.layer,
             continuation: opened.session.continuation,
             seenPageIds: opened.session.seenPageIds,
             initialRequestCount: opened.session.requestCount,
             initialDurationMs: opened.session.durationMs,
-            extensionCategory: opened.session.extensionCategory,
           }, transport);
         } else {
-          result = await runCommonsPrecisionEngine({ query, language, selectedEntityQid }, transport);
+          result = await runCommonsPrecisionEngine({ query, language }, transport);
           if (result.entityEvidence) {
             await writeCommonsPrecisionCache(clients.admin, {
               key: createCommonsPrecisionEntityCacheKey(result.entityEvidence.qid), kind: "entity-evidence", payload: result.entityEvidence,
@@ -530,26 +523,14 @@ Deno.serve(async (request) => {
         const hasSessionBudget = result.sessionRequestCount < COMMONS_PRECISION_MAX_REQUESTS &&
           result.sessionDurationMs < COMMONS_PRECISION_MAX_DURATION_MS &&
           result.seenPageIds.length < COMMONS_PRECISION_MAX_INSPECTED;
-        const sealedNextPageToken = hasSessionBudget && ["results", "no-suitable-image"].includes(result.response.state) && result.continuation && result.qid
+        const sealedNextPageToken = hasSessionBudget && result.response.state === "results" &&
+          result.response.candidates.length === 6 && result.continuation
           ? await sealCommonsPrecisionNextPageToken({
-              qid: result.qid,
+              ...(result.qid ? { qid: result.qid } : {}),
+              tier: result.continuation.tier,
               adoptedQueryHash,
               layer: result.continuation.layer,
               continuation: result.continuation.value,
-              seenPageIds: result.seenPageIds,
-              requestCount: result.sessionRequestCount,
-              durationMs: result.sessionDurationMs,
-              ...(result.entityEvidence?.p373Categories[0] ? { extensionCategory: result.entityEvidence.p373Categories[0] } : {}),
-            }, tokenKey, Date.now())
-          : undefined;
-        const extensionPageToken = isExtensionRequest
-          ? sealedNextPageToken
-          : hasSessionBudget && !result.continuation && result.extensionContinuation && result.qid
-          ? await sealCommonsPrecisionNextPageToken({
-              qid: result.qid,
-              adoptedQueryHash,
-              layer: result.extensionContinuation.layer,
-              continuation: result.extensionContinuation.value,
               seenPageIds: result.seenPageIds,
               requestCount: result.sessionRequestCount,
               durationMs: result.sessionDurationMs,
@@ -557,15 +538,14 @@ Deno.serve(async (request) => {
           : undefined;
         const response = projectCommonsPrecisionResponse({
           ...result.response,
-          ...(!isExtensionRequest ? { nextPageToken: sealedNextPageToken } : {}),
-          extensionPageToken,
+          nextPageToken: sealedNextPageToken,
         });
-        if (!nextPageToken && !result.continuation && !response.extensionPageToken && response.state === "results") {
+        if (!nextPageToken && !response.nextPageToken && response.state === "results") {
           await writeCommonsPrecisionCache(clients.admin, {
             key: candidateKey, kind: "candidate-results", payload: response,
             expiresAt: new Date(Date.now() + COMMONS_PRECISION_CANDIDATE_CACHE_TTL_MS),
           });
-        } else if (!nextPageToken && response.state === "no-suitable-image" && !response.nextPageToken && !response.extensionPageToken) {
+        } else if (!nextPageToken && response.state === "no-suitable-image" && !response.nextPageToken) {
           await writeCommonsPrecisionCache(clients.admin, {
             key: noSuitableKey, kind: "no-suitable-image", payload: response,
             expiresAt: new Date(Date.now() + COMMONS_PRECISION_CANDIDATE_CACHE_TTL_MS),

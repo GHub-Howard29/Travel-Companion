@@ -4,7 +4,7 @@ import {
   COMMONS_PRECISION_MAX_DURATION_MS,
   COMMONS_PRECISION_MAX_INSPECTED,
   COMMONS_PRECISION_MAX_REQUESTS,
-  type CommonsPrecisionResolvedEntity,
+  type CommonsPrecisionCandidateTier,
   type CommonsPrecisionResponse,
   type CommonsPrecisionState,
 } from "./commonsPrecision.ts";
@@ -57,8 +57,7 @@ export interface CommonsPrecisionEngineResult {
   upstreamStatus?: 429 | 503;
   allCandidatesRejected: boolean;
   entityEvidence?: WikidataEntityEvidence;
-  continuation?: { layer: "read-category-files" | "search-adopted-text" | "read-related-category-files"; value: string };
-  extensionContinuation?: { layer: "read-related-category-files"; value: string };
+  continuation?: { layer: "read-category-files" | "search-adopted-text" | "read-related-category-files"; value: string; tier: CommonsPrecisionCandidateTier };
   seenPageIds: number[];
   rejectedByReason: Record<string, number>;
 }
@@ -84,7 +83,7 @@ const mapTransportState = (state: CommonsPrecisionTransportResult["state"]): Ext
     : "upstream-error";
 
 export const runCommonsPrecisionEngine = async (
-  input: { query: string; language: string; selectedEntityQid?: string },
+  input: { query: string; language: string },
   dependencies: CommonsPrecisionEngineDependencies,
 ): Promise<CommonsPrecisionEngineResult> => {
   const now = dependencies.now ?? Date.now;
@@ -95,15 +94,12 @@ export const runCommonsPrecisionEngine = async (
   const metadataPayloads: unknown[] = [];
   const evidenceInputs: CommonsFileEvidenceInput[] = [];
   let rejectedByReason: Record<string, number> = {};
-  const responseContext: {
-    resolvedEntity?: CommonsPrecisionResolvedEntity;
-    entityChoices?: CommonsPrecisionResolvedEntity[];
-  } = {};
+  let searchMode: CommonsPrecisionResponse["searchMode"] = "broad";
 
   let nextContinuation: CommonsPrecisionEngineResult["continuation"];
   const engineContext: { entityEvidence?: WikidataEntityEvidence } = {};
   const finish = (state: CommonsPrecisionState, candidates: CommonsPrecisionResponse["candidates"] = [], qid?: string): CommonsPrecisionEngineResult => ({
-    response: { contractVersion: COMMONS_PRECISION_CONTRACT_VERSION, state, candidates, ...responseContext },
+    response: { contractVersion: COMMONS_PRECISION_CONTRACT_VERSION, state, candidates, searchMode },
     qid,
     requestCount,
     sessionRequestCount: requestCount,
@@ -114,9 +110,6 @@ export const runCommonsPrecisionEngine = async (
     allCandidatesRejected: state === "no-suitable-image" && inspectedCount > 0,
     entityEvidence: engineContext.entityEvidence,
     continuation: nextContinuation,
-    ...(!nextContinuation && engineContext.entityEvidence?.p373Categories[0]
-      ? { extensionContinuation: { layer: "read-related-category-files" as const, value: JSON.stringify({ parentCategory: engineContext.entityEvidence.p373Categories[0] }) } }
-      : {}),
     seenPageIds: evidenceInputs.map((item) => item.pageId).slice(0, COMMONS_PRECISION_MAX_INSPECTED),
     rejectedByReason,
   });
@@ -134,10 +127,39 @@ export const runCommonsPrecisionEngine = async (
     return { payload: result.payload };
   };
 
+  const runBroadSearch = async (names: Array<{ value: string; languageTag: string }>): Promise<CommonsPrecisionEngineResult> => {
+    searchMode = "broad";
+    const text = await perform(planCommonsPrecisionRequest({ layer: "search-adopted-text", query: input.query }));
+    if (text.stopped) return text.stopped;
+    metadataPayloads.push(text.payload);
+    for (const file of parseCommonsFileMetadataResponse(text.payload).files) {
+      evidenceInputs.push({ pageId: file.pageId, fileTitle: file.fileTitle, kind: "adopted-text" });
+    }
+    if (isRecord(text.payload) && isRecord(text.payload.continue)) {
+      const offset = Number(text.payload.continue.gsroffset);
+      if (Number.isSafeInteger(offset) && offset >= 0) {
+        nextContinuation = { layer: "search-adopted-text", value: String(offset), tier: "manual-review" };
+      }
+    }
+    const seeds = mergeCommonsFileEvidence(evidenceInputs).slice(0, COMMONS_PRECISION_MAX_INSPECTED);
+    inspectedCount = seeds.length;
+    const composed = composeCommonsPrecisionCandidates({
+      metadataPayload: combineMetadataPayloads(metadataPayloads),
+      seeds,
+      depictsByPageId: new Map(),
+      entityEvidence: { names },
+      allowManualReview: true,
+      forceManualReview: true,
+    });
+    rejectedByReason = countRejectedReasons(composed.rejected);
+    const candidates = composed.candidates.slice(0, 6);
+    return finish(candidates.length > 0 ? "results" : "no-suitable-image", candidates);
+  };
+
   const search = await perform(planCommonsPrecisionRequest({ layer: "resolve-entity", query: input.query, language: input.language }));
   if (search.stopped) return search.stopped;
   const entities = parseWikidataSearchResponse(search.payload);
-  if (entities.length === 0) return finish("entity-not-found");
+  if (entities.length === 0) return runBroadSearch([{ value: input.query, languageTag: input.language }]);
 
   const evidenceRequest = await perform(planCommonsPrecisionRequest({ layer: "read-entity-evidence", qids: entities.map((entity) => entity.qid), targetLanguage: input.language }));
   if (evidenceRequest.stopped) return evidenceRequest.stopped;
@@ -146,41 +168,24 @@ export const runCommonsPrecisionEngine = async (
     const evidence = parseWikidataEntityEvidenceResponse(evidenceRequest.payload, entity.qid, input.language);
     if (evidence) evidenceByQid.set(entity.qid, evidence);
   }
-  const initialResolution = resolveUniqueWikidataEntity(
+  const resolution = resolveUniqueWikidataEntity(
     input.query,
     entities,
     new Map([...evidenceByQid].map(([qid, evidence]) => [qid, evidence.instanceOfQids])),
     COMMONS_PRECISION_EXCLUDED_INSTANCE_OF_QIDS,
   );
-  if (initialResolution.state === "entity-ambiguous") {
-    responseContext.entityChoices = entities.flatMap((entity) => {
-      const candidateResolution = resolveUniqueWikidataEntity(
-        input.query,
-        [entity],
-        new Map([[entity.qid, evidenceByQid.get(entity.qid)?.instanceOfQids ?? []]]),
-        COMMONS_PRECISION_EXCLUDED_INSTANCE_OF_QIDS,
-      );
-      return candidateResolution.state === "resolved"
-        ? [{ qid: entity.qid, label: entity.label, ...(entity.description ? { description: entity.description } : {}) }]
-        : [];
-    });
+  if (resolution.state !== "resolved") {
+    const broadNames = [
+      { value: input.query, languageTag: input.language },
+      ...entities.flatMap((entity) => [entity.label, ...entity.aliases].map((value) => ({ value, languageTag: input.language }))),
+      ...[...evidenceByQid.values()].flatMap((evidence) => evidence.names),
+    ];
+    const uniqueNames = [...new Map(broadNames.map((name) => [name.value.normalize("NFKC").toLocaleLowerCase("en"), name])).values()].slice(0, 24);
+    return runBroadSearch(uniqueNames);
   }
-  const resolution = input.selectedEntityQid && initialResolution.state === "entity-ambiguous"
-    ? resolveUniqueWikidataEntity(
-      input.query,
-      entities.filter((entity) => entity.qid === input.selectedEntityQid),
-      new Map([[input.selectedEntityQid, evidenceByQid.get(input.selectedEntityQid)?.instanceOfQids ?? []]]),
-      COMMONS_PRECISION_EXCLUDED_INSTANCE_OF_QIDS,
-    )
-    : initialResolution;
-  if (resolution.state !== "resolved") return finish(resolution.state);
-  responseContext.resolvedEntity = {
-    qid: resolution.entity.qid,
-    label: resolution.entity.label,
-    ...(resolution.entity.description ? { description: resolution.entity.description } : {}),
-  };
+  searchMode = "entity-guided";
   const entityEvidence = evidenceByQid.get(resolution.entity.qid);
-  if (!entityEvidence) return finish("entity-not-found");
+  if (!entityEvidence) return runBroadSearch([{ value: input.query, languageTag: input.language }]);
   engineContext.entityEvidence = entityEvidence;
 
   if (entityEvidence.p18FileTitles.length > 0) {
@@ -195,7 +200,7 @@ export const runCommonsPrecisionEngine = async (
     if (categoryResult.stopped) return categoryResult.stopped;
     const page = parseCommonsCategoryMembersResponse(categoryResult.payload);
     if (!nextContinuation && page.continuation) {
-      nextContinuation = { layer: "read-category-files", value: JSON.stringify({ category, cursor: page.continuation }) };
+      nextContinuation = { layer: "read-category-files", value: JSON.stringify({ category, cursor: page.continuation }), tier: "precise" };
     }
     for (const file of page.files) evidenceInputs.push({ ...file, kind: "exact-category", category });
   }
@@ -207,7 +212,33 @@ export const runCommonsPrecisionEngine = async (
   if (!nextContinuation && isRecord(text.payload) && isRecord(text.payload.continue) &&
     (typeof text.payload.continue.gsroffset === "string" || typeof text.payload.continue.gsroffset === "number")) {
     const offset = Number(text.payload.continue.gsroffset);
-    if (Number.isSafeInteger(offset) && offset >= 0) nextContinuation = { layer: "search-adopted-text", value: String(offset) };
+    if (Number.isSafeInteger(offset) && offset >= 0) nextContinuation = { layer: "search-adopted-text", value: String(offset), tier: "manual-review" };
+  }
+
+  const parentCategory = entityEvidence.p373Categories[0];
+  if (parentCategory) {
+    const related = await perform(planCommonsPrecisionRequest({ layer: "read-related-categories", category: parentCategory }));
+    if (related.stopped) return related.stopped;
+    const relatedCategories = parseCommonsRelatedCategoriesResponse(related.payload).categories;
+    const category = relatedCategories[0];
+    if (category) {
+      const relatedFiles = await perform(planCommonsPrecisionRequest({ layer: "read-category-files", category }));
+      if (relatedFiles.stopped) return relatedFiles.stopped;
+      const page = parseCommonsCategoryMembersResponse(relatedFiles.payload);
+      for (const file of page.files) evidenceInputs.push({ ...file, kind: "related-category", category });
+      if (!nextContinuation && (page.continuation || relatedCategories.length > 1)) {
+        nextContinuation = {
+          layer: "read-related-category-files",
+          value: JSON.stringify({
+            parentCategory,
+            relatedCategories,
+            categoryIndex: page.continuation ? 0 : 1,
+            ...(page.continuation ? { cursor: page.continuation } : {}),
+          }),
+          tier: "manual-review",
+        };
+      }
+    }
   }
 
   const seeds = mergeCommonsFileEvidence(evidenceInputs).slice(0, COMMONS_PRECISION_MAX_INSPECTED);
@@ -236,6 +267,7 @@ export const runCommonsPrecisionEngine = async (
     seeds,
     depictsByPageId,
     entityEvidence,
+    allowManualReview: true,
   });
   rejectedByReason = countRejectedReasons(composed.rejected);
   const candidates = composed.candidates.slice(0, 6);
@@ -245,13 +277,13 @@ export const runCommonsPrecisionEngine = async (
 export const runCommonsPrecisionContinuationEngine = async (
   input: {
     query: string;
-    entityEvidence: WikidataEntityEvidence;
+    entityEvidence?: WikidataEntityEvidence;
+    tier: CommonsPrecisionCandidateTier;
     layer: "read-category-files" | "search-adopted-text" | "read-related-category-files";
     continuation: string;
     seenPageIds: readonly number[];
     initialRequestCount?: number;
     initialDurationMs?: number;
-    extensionCategory?: string;
   },
   dependencies: CommonsPrecisionEngineDependencies,
 ): Promise<CommonsPrecisionEngineResult> => {
@@ -271,8 +303,8 @@ export const runCommonsPrecisionContinuationEngine = async (
     return result.state === "ok" ? { payload: result.payload } : { stopped: mapTransportState(result.state) };
   };
   const finish = (state: CommonsPrecisionState, candidates: CommonsPrecisionResponse["candidates"] = [], inspectedCount = 0): CommonsPrecisionEngineResult => ({
-    response: { contractVersion: COMMONS_PRECISION_CONTRACT_VERSION, state, candidates },
-    qid: input.entityEvidence.qid,
+    response: { contractVersion: COMMONS_PRECISION_CONTRACT_VERSION, state, candidates, searchMode: input.entityEvidence ? "entity-guided" : "broad" },
+    qid: input.entityEvidence?.qid,
     requestCount,
     sessionRequestCount: initialRequestCount + requestCount,
     sessionDurationMs: Math.min(COMMONS_PRECISION_MAX_DURATION_MS, initialDurationMs + Math.max(0, now() - startedAtMs)),
@@ -282,9 +314,6 @@ export const runCommonsPrecisionContinuationEngine = async (
     allCandidatesRejected: state === "no-suitable-image" && inspectedCount > 0,
     entityEvidence: input.entityEvidence,
     continuation: nextContinuation,
-    ...(!nextContinuation && input.layer !== "read-related-category-files" && input.extensionCategory
-      ? { extensionContinuation: { layer: "read-related-category-files" as const, value: JSON.stringify({ parentCategory: input.extensionCategory }) } }
-      : {}),
     seenPageIds: [...new Set(input.seenPageIds)].slice(0, COMMONS_PRECISION_MAX_INSPECTED),
     rejectedByReason,
   });
@@ -298,7 +327,7 @@ export const runCommonsPrecisionContinuationEngine = async (
     if (pageResult.stopped) return finish(pageResult.stopped);
     const page = parseCommonsCategoryMembersResponse(pageResult.payload);
     for (const file of page.files) inputs.push({ ...file, kind: "exact-category", category: context.category });
-    if (page.continuation) nextContinuation = { layer: "read-category-files", value: JSON.stringify({ category: context.category, cursor: page.continuation }) };
+    if (page.continuation) nextContinuation = { layer: "read-category-files", value: JSON.stringify({ category: context.category, cursor: page.continuation }), tier: input.tier };
     if (inputs.length > 0) {
       const metadata = await request(planCommonsPrecisionRequest({ layer: "read-p18-files", fileTitles: inputs.map((item) => item.fileTitle) }));
       if (metadata.stopped) return finish(metadata.stopped);
@@ -313,7 +342,7 @@ export const runCommonsPrecisionContinuationEngine = async (
     for (const file of parseCommonsFileMetadataResponse(text.payload).files) inputs.push({ pageId: file.pageId, fileTitle: file.fileTitle, kind: "adopted-text" });
     if (isRecord(text.payload) && isRecord(text.payload.continue)) {
       const nextOffset = Number(text.payload.continue.gsroffset);
-      if (Number.isSafeInteger(nextOffset) && nextOffset >= 0) nextContinuation = { layer: "search-adopted-text", value: String(nextOffset) };
+      if (Number.isSafeInteger(nextOffset) && nextOffset >= 0) nextContinuation = { layer: "search-adopted-text", value: String(nextOffset), tier: "manual-review" };
     }
   } else {
     let context: {
@@ -346,11 +375,13 @@ export const runCommonsPrecisionContinuationEngine = async (
       nextContinuation = {
         layer: "read-related-category-files",
         value: JSON.stringify({ parentCategory: context.parentCategory, relatedCategories, categoryIndex, cursor: page.continuation }),
+        tier: "manual-review",
       };
     } else if (categoryIndex + 1 < relatedCategories.length) {
       nextContinuation = {
         layer: "read-related-category-files",
         value: JSON.stringify({ parentCategory: context.parentCategory, relatedCategories, categoryIndex: categoryIndex + 1 }),
+        tier: "manual-review",
       };
     }
     if (inputs.length > 0) {
@@ -362,13 +393,19 @@ export const runCommonsPrecisionContinuationEngine = async (
   const seen = new Set(input.seenPageIds);
   const seeds = mergeCommonsFileEvidence(inputs).filter((seed) => !seen.has(seed.pageId)).slice(0, COMMONS_PRECISION_MAX_INSPECTED - seen.size);
   if (seeds.length === 0 || !metadataPayload) return finish("no-suitable-image");
-  const depicts = await request(planCommonsPrecisionRequest({ layer: "read-structured-data", pageIds: seeds.map((seed) => seed.pageId) }));
-  if (depicts.stopped) return finish(depicts.stopped, [], seeds.length);
+  let depictsByPageId = new Map<number, string[]>();
+  if (input.entityEvidence && input.tier === "precise") {
+    const depicts = await request(planCommonsPrecisionRequest({ layer: "read-structured-data", pageIds: seeds.map((seed) => seed.pageId) }));
+    if (depicts.stopped) return finish(depicts.stopped, [], seeds.length);
+    depictsByPageId = parseCommonsDepictsResponse(depicts.payload, seeds.map((seed) => seed.pageId));
+  }
   const composed = composeCommonsPrecisionCandidates({
     metadataPayload,
     seeds,
-    depictsByPageId: parseCommonsDepictsResponse(depicts.payload, seeds.map((seed) => seed.pageId)),
-    entityEvidence: input.entityEvidence,
+    depictsByPageId,
+    entityEvidence: input.entityEvidence ?? { names: [{ value: input.query, languageTag: "und" }] },
+    allowManualReview: true,
+    forceManualReview: input.tier === "manual-review",
   });
   rejectedByReason = countRejectedReasons(composed.rejected);
   const candidates = composed.candidates.slice(0, 6);

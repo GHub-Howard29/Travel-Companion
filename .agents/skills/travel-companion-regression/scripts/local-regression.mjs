@@ -5,7 +5,15 @@ import process from "node:process";
 import { createClient } from "@supabase/supabase-js";
 
 const mode = process.argv[2] ?? "status";
-const supportedModes = new Set(["status", "prepare", "browser-bootstrap", "browser-ambiguous-fixture", "verify", "full"]);
+const supportedModes = new Set([
+  "status",
+  "prepare",
+  "browser-bootstrap",
+  "browser-broad-fixture",
+  "browser-insufficient-fixture",
+  "verify",
+  "full",
+]);
 
 if (!supportedModes.has(mode)) {
   console.error(`不支援的模式：${mode}。可用模式：${[...supportedModes].join(", ")}`);
@@ -228,7 +236,7 @@ const browserBootstrapMode = async () => {
   }, null, 2));
 };
 
-const browserAmbiguousFixtureMode = async () => {
+const verifyBrowserFixture = async ({ fixture, expectedCount, expectedMode, url }) => {
   await browserBootstrapMode();
   const { apiUrl, anonKey } = getLocalConfig();
   const user = createClient(apiUrl, anonKey, { auth: { autoRefreshToken: false, persistSession: false } });
@@ -236,14 +244,14 @@ const browserAmbiguousFixtureMode = async () => {
     email: "v391-admin@example.invalid",
     password: "V391-local-test!",
   });
-  if (authError || !authData.session) throw new Error(`本機歧義 fixture 登入失敗：${authError?.message ?? "沒有 session"}`);
+  if (authError || !authData.session) throw new Error(`本機照片 fixture 登入失敗：${authError?.message ?? "沒有 session"}`);
   const response = await fetch(`${apiUrl}/functions/v1/travel-route`, {
     method: "POST",
     headers: {
       apikey: anonKey,
       Authorization: `Bearer ${authData.session.access_token}`,
       "Content-Type": "application/json",
-      "x-travel-companion-regression-fixture": "commons-entity-ambiguous",
+      "x-travel-companion-regression-fixture": fixture,
     },
     body: JSON.stringify({
       action: "commonsPrecisionSearch",
@@ -253,17 +261,34 @@ const browserAmbiguousFixtureMode = async () => {
     signal: AbortSignal.timeout(3_000),
   });
   const body = await response.json();
-  if (response.status !== 200 || body.state !== "entity-ambiguous" || body.entityChoices?.length !== 3) {
-    throw new Error(`本機歧義 fixture 不符預期：${response.status} ${JSON.stringify(body)}`);
+  if (response.status !== 200 || body.contractVersion !== "commons-precision-v2" ||
+    body.state !== "results" || body.searchMode !== expectedMode || body.candidates?.length !== expectedCount ||
+    body.nextPageToken !== undefined) {
+    throw new Error(`本機照片 fixture 不符預期：${response.status} ${JSON.stringify(body)}`);
   }
   console.log(JSON.stringify({
     fixtureReady: true,
-    url: "http://127.0.0.1:5173/Travel-Companion/?tcRegressionFixture=commons-entity-ambiguous",
+    url,
     query: "中山站",
-    expectedChoices: 3,
+    expectedCount,
+    expectedMode,
     scope: "loopback-only synthetic Edge response; no Wikimedia, cache, usage, Storage, or production access",
   }, null, 2));
 };
+
+const browserBroadFixtureMode = () => verifyBrowserFixture({
+  fixture: "commons-broad-manual",
+  expectedCount: 6,
+  expectedMode: "broad",
+  url: "http://127.0.0.1:5173/Travel-Companion/?tcRegressionFixture=commons-broad-manual",
+});
+
+const browserInsufficientFixtureMode = () => verifyBrowserFixture({
+  fixture: "commons-insufficient",
+  expectedCount: 4,
+  expectedMode: "entity-guided",
+  url: "http://127.0.0.1:5173/Travel-Companion/?tcRegressionFixture=commons-insufficient",
+});
 
 const verifyMode = async () => {
   const { apiUrl, anonKey, serviceKey } = getLocalConfig();
@@ -290,30 +315,32 @@ const verifyMode = async () => {
       apikey: anonKey,
       Authorization: `Bearer ${authData.session.access_token}`,
       "Content-Type": "application/json",
+      "x-travel-companion-regression-fixture": "commons-broad-manual",
     },
     body: JSON.stringify({
       action: "commonsPrecisionSearch",
       tripId: "group-tour-2026-10",
-      query: "桃園國際機場",
-      selectedEntityQid: "QINVALID",
+      query: "中山站",
     }),
     signal: AbortSignal.timeout(3_000),
   });
   const edgeBody = await edgeResponse.json();
-  if (edgeResponse.status !== 400 || edgeBody.state !== "entity-ambiguous") {
-    throw new Error(`Edge 輸入防線不符預期：${edgeResponse.status} ${JSON.stringify(edgeBody)}`);
+  if (edgeResponse.status !== 200 || edgeBody.contractVersion !== "commons-precision-v2" ||
+    edgeBody.state !== "results" || edgeBody.searchMode !== "broad" || edgeBody.candidates?.length !== 6) {
+    throw new Error(`Edge 廣泛候選 fixture 不符預期：${edgeResponse.status} ${JSON.stringify(edgeBody)}`);
   }
 
   run("npm", ["run", "verify:v391-precision-database"]);
   run("npm", ["run", "verify:v391-precision-integration"]);
-  console.log("本機 Supabase grants、管理者登入、Trip 載入、Edge 輸入防線與 V3.9.1 整合契約均通過；未送出 Wikimedia 請求。");
+  console.log("本機 Supabase grants、管理者登入、Trip 載入、V3.9.11 Edge 廣泛候選 fixture 與整合契約均通過；未送出 Wikimedia 請求。");
 };
 
 const main = async () => {
   if (mode === "status") return statusMode();
   if (mode === "prepare") return prepareMode();
   if (mode === "browser-bootstrap") return browserBootstrapMode();
-  if (mode === "browser-ambiguous-fixture") return browserAmbiguousFixtureMode();
+  if (mode === "browser-broad-fixture") return browserBroadFixtureMode();
+  if (mode === "browser-insufficient-fixture") return browserInsufficientFixtureMode();
   if (mode === "verify") return verifyMode();
   await verifyMode();
   run("npm", ["run", "lint", "--", "--ignore-pattern", "supabase/.temp/start-secrets"]);

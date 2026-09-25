@@ -3,6 +3,7 @@ import {
   COMMONS_PRECISION_MAX_INSPECTED,
   COMMONS_PRECISION_MAX_DURATION_MS,
   COMMONS_PRECISION_MAX_REQUESTS,
+  type CommonsPrecisionCandidateTier,
 } from "./commonsPrecision.ts";
 import type { CommonsPrecisionRequestLayer } from "./commonsPrecisionWikimedia.ts";
 
@@ -20,7 +21,8 @@ const CONTINUABLE_LAYER = new Set<CommonsPrecisionSessionLayer>([
 
 export interface CommonsPrecisionSessionPayload {
   contractVersion: typeof COMMONS_PRECISION_CONTRACT_VERSION;
-  qid: string;
+  qid?: string;
+  tier: CommonsPrecisionCandidateTier;
   adoptedQueryHash: string;
   layer: CommonsPrecisionSessionLayer;
   continuation: string;
@@ -60,7 +62,8 @@ const isValidSessionPayload = (value: unknown): value is CommonsPrecisionSession
   if (!value || typeof value !== "object") return false;
   const candidate = value as Partial<CommonsPrecisionSessionPayload>;
   return candidate.contractVersion === COMMONS_PRECISION_CONTRACT_VERSION &&
-    typeof candidate.qid === "string" && QID.test(candidate.qid) &&
+    (candidate.qid === undefined || (typeof candidate.qid === "string" && QID.test(candidate.qid))) &&
+    (candidate.tier === "precise" || candidate.tier === "manual-review") &&
     typeof candidate.adoptedQueryHash === "string" && SHA256.test(candidate.adoptedQueryHash) &&
     typeof candidate.layer === "string" && CONTINUABLE_LAYER.has(candidate.layer) &&
     typeof candidate.continuation === "string" && candidate.continuation.length > 0 && candidate.continuation.length <= 1_000 &&
@@ -89,7 +92,8 @@ export const importCommonsPrecisionTokenKey = async (secret: Uint8Array): Promis
 
 export const sealCommonsPrecisionNextPageToken = async (
   input: {
-    qid: string;
+    qid?: string;
+    tier?: CommonsPrecisionCandidateTier;
     adoptedQueryHash: string;
     layer: CommonsPrecisionSessionPayload["layer"];
     continuation: string;
@@ -102,7 +106,9 @@ export const sealCommonsPrecisionNextPageToken = async (
   nowMs: number,
   nonce?: Uint8Array,
 ): Promise<string> => {
-  if (!QID.test(input.qid) || !SHA256.test(input.adoptedQueryHash) || !CONTINUABLE_LAYER.has(input.layer) ||
+  const tier = input.tier ?? "precise";
+  if ((input.qid !== undefined && !QID.test(input.qid)) || !["precise", "manual-review"].includes(tier) ||
+    !SHA256.test(input.adoptedQueryHash) || !CONTINUABLE_LAYER.has(input.layer) ||
     !input.continuation || input.continuation.length > 1_000) {
     throw new RangeError("候選 session token 內容不正確");
   }
@@ -115,7 +121,8 @@ export const sealCommonsPrecisionNextPageToken = async (
   const seenPageIds = [...new Set(input.seenPageIds)].filter((pageId) => Number.isSafeInteger(pageId) && pageId > 0).slice(0, COMMONS_PRECISION_MAX_INSPECTED);
   const payload: CommonsPrecisionSessionPayload = {
     contractVersion: COMMONS_PRECISION_CONTRACT_VERSION,
-    qid: input.qid,
+    ...(input.qid ? { qid: input.qid } : {}),
+    tier,
     adoptedQueryHash: input.adoptedQueryHash,
     layer: input.layer,
     continuation: input.continuation,
@@ -137,7 +144,7 @@ export const sealCommonsPrecisionNextPageToken = async (
   tokenBytes.set(iv);
   tokenBytes.set(new Uint8Array(ciphertext), iv.length);
   if (tokenBytes.length > COMMONS_PRECISION_TOKEN_MAX_BYTES) throw new RangeError("候選 session token 超過長度限制");
-  return `cp1.${toBase64Url(tokenBytes)}`;
+  return `cp2.${toBase64Url(tokenBytes)}`;
 };
 
 export const openCommonsPrecisionNextPageToken = async (
@@ -148,7 +155,7 @@ export const openCommonsPrecisionNextPageToken = async (
   if (!Number.isSafeInteger(input.nowMs) || input.nowMs < 0 || (input.qid !== undefined && !QID.test(input.qid)) || !SHA256.test(input.adoptedQueryHash)) {
     return { status: "session-expired" };
   }
-  if (typeof token !== "string" || !token.startsWith("cp1.")) return { status: "session-expired" };
+  if (typeof token !== "string" || !token.startsWith("cp2.")) return { status: "session-expired" };
   const tokenBytes = fromBase64Url(token.slice(4));
   if (!tokenBytes || tokenBytes.length < 13 || tokenBytes.length > COMMONS_PRECISION_TOKEN_MAX_BYTES) {
     return { status: "session-expired" };

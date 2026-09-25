@@ -25,7 +25,8 @@ Run from the repository root:
 npm run regression:local:status
 npm run regression:local:prepare
 npm run regression:local:browser-bootstrap
-npm run regression:local:browser-ambiguous-fixture
+npm run regression:local:browser-broad-fixture
+npm run regression:local:browser-insufficient-fixture
 npm run regression:local:verify
 npm run regression:local:full
 ```
@@ -34,7 +35,7 @@ npm run regression:local:full
 
 Before interactive browser verification, run `browser-bootstrap` after local-test authorization. It refreshes only the fixed synthetic fixture, verifies Vite and the local Edge Function, and prints the localhost URL, local publishable configuration, and synthetic sign-in fields. If the exact synthetic administrator and Trip are already active, reuse that session. Otherwise use the browser's loaded Supabase JS client to call `signInWithPassword` against the reported loopback URL, then reload the App. Do not directly write, print, copy, or persist an access token outside Supabase's browser session handling.
 
-For ambiguous-entity layout and selection regression, use `browser-ambiguous-fixture`. It verifies a loopback-only synthetic Edge response and prints a development URL that enables three same-label choices: one short description, one wrapping description, and one missing description. The fixture returns before cache, quota, lock, usage, or Wikimedia code and is unavailable when `SUPABASE_URL` is not loopback. It is a UI/contract regression only and must never be reported as a real Wikimedia integration pass.
+For the V3.9.11 ambiguous-name fallback, use `browser-broad-fixture`. It verifies a loopback-only synthetic Edge response and prints a development URL that returns six `manual-review` candidates without asking the user to choose a QID. Use `browser-insufficient-fixture` to return two precise and two manual-review candidates with no next-page token, so the UI can verify that the batch-change action stays hidden. Both fixtures return before cache, quota, lock, usage, or Wikimedia code and are unavailable when `SUPABASE_URL` is not loopback. They are UI/contract regressions only and must never be reported as a real Wikimedia integration pass.
 
 If the local stack is absent and local testing is authorized, start only the missing services using tool-managed sessions:
 

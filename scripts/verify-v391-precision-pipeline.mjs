@@ -40,7 +40,7 @@ assert.equal(depictsParams.get("ids"), "M10|M11");
 assert.equal(depictsParams.get("props"), "claims");
 
 const textParams = buildCommonsTextSearchParams("第一航廈", 6);
-assert.equal(textParams.get("gsrsearch"), "第一航廈");
+assert.equal(textParams.get("gsrsearch"), "第一航廈 filetype:bitmap");
 assert.equal(textParams.get("gsrnamespace"), "6");
 assert.equal(textParams.get("gsroffset"), "6");
 assert.throws(() => buildCommonsTextSearchParams("x"), /2 至 120/);
