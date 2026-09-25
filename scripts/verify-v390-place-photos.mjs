@@ -101,8 +101,10 @@ assert.match(page, /已沒有更多照片；可調整搜尋詞或改用其他來
 assert.doesNotMatch(page, /void searchCommonsPhotos\(query\)/);
 assert.match(page, /float-left mb-2 mr-3 w-\[76px\]/);
 assert.doesNotMatch(page, /grid-cols-\[76px_minmax\(0,1fr\)\]/);
-assert.match(page, /flex items-start justify-between gap-3 border-t border-slate-100 pt-2/);
-assert.doesNotMatch(page, /mt-2 text-\[11px\] leading-relaxed text-slate-500/);
+assert.match(page, /flex flex-wrap items-center justify-end gap-2 border-t border-slate-100 pt-2/);
+assert.doesNotMatch(page, /event\.coverPhoto\.creator} ·/);
+assert.match(page, /<FolderOpen size=\{14\} \/> \{linkedOtherInfoFolder\.title\}[\s\S]{0,900}<MapPin size=\{14\} className="text-emerald-600" \/> 查看地圖/);
+assert.doesNotMatch(page, /查看地圖 <ExternalLink size=\{10\} \/>/);
 assert.match(migration, /public\.tc_can_write_shared_trip/);
 assert.match(migration, /revoke all on table public\.place_photo_monthly_usage from public, anon, authenticated/);
 assert.match(viteConfig, /https:\/\/\*\.googleusercontent\.com/);

@@ -1981,35 +1981,26 @@ export const ItineraryPage = ({
                   <RichTextDisplay value={event.desc} />
                 </p>
               )}
-              {(event.location || linkedOtherInfoFolder || (hasVisibleCover && event.coverPhoto)) && (
-                <div className="flex items-start justify-between gap-3 border-t border-slate-100 pt-2">
-                  {hasVisibleCover && event.coverPhoto ? (
-                    <p className="text-[11px] leading-relaxed text-slate-500">
-                      {event.coverPhoto.source === "wikimedia-commons"
-                        ? `${event.coverPhoto.creator} · ${event.coverPhoto.license}`
-                        : "自行上傳"}
-                    </p>
-                  ) : <span />}
-                  <div className="ml-auto flex flex-wrap justify-end gap-2">
-                    {linkedOtherInfoFolder && (
-                      <button
-                        type="button"
-                        onClick={() => onOpenOtherInfoFolder(linkedOtherInfoFolder.id)}
-                        className="flex shrink-0 items-center gap-1.5 rounded-lg bg-sky-50 px-3 py-1.5 text-xs font-bold text-sky-700 transition-colors hover:bg-sky-100"
-                      >
-                        <FolderOpen size={14} /> {linkedOtherInfoFolder.title}
-                      </button>
-                    )}
-                    {event.location && (
-                      <button
-                        type="button"
-                        onClick={() => handlePlaceBrowse(event.location!, event.place)}
-                        className="flex shrink-0 items-center gap-1.5 rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600 transition-colors hover:bg-emerald-50 hover:text-emerald-700"
-                      >
-                        <MapPin size={14} className="text-emerald-600" /> 查看地圖 <ExternalLink size={10} />
-                      </button>
-                    )}
-                  </div>
+              {(event.location || linkedOtherInfoFolder) && (
+                <div className="flex flex-wrap items-center justify-end gap-2 border-t border-slate-100 pt-2">
+                  {linkedOtherInfoFolder && (
+                    <button
+                      type="button"
+                      onClick={() => onOpenOtherInfoFolder(linkedOtherInfoFolder.id)}
+                      className="flex shrink-0 items-center gap-1.5 rounded-lg bg-sky-50 px-3 py-1.5 text-xs font-bold text-sky-700 transition-colors hover:bg-sky-100"
+                    >
+                      <FolderOpen size={14} /> {linkedOtherInfoFolder.title}
+                    </button>
+                  )}
+                  {event.location && (
+                    <button
+                      type="button"
+                      onClick={() => handlePlaceBrowse(event.location!, event.place)}
+                      className="flex shrink-0 items-center gap-1.5 rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600 transition-colors hover:bg-emerald-50 hover:text-emerald-700"
+                    >
+                      <MapPin size={14} className="text-emerald-600" /> 查看地圖
+                    </button>
+                  )}
                 </div>
               )}
               </div>
