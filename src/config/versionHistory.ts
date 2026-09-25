@@ -14,6 +14,16 @@ export type VersionHistoryItem = {
 
 export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
+    version: "3.9.9",
+    date: "2026-09-24",
+    isMandatoryRelease: false,
+    notes: [
+      "修正舊版 Trip 雲端版本時間戳污染造成的卡片儲存衝突。",
+      "只有在行程本體一致時才自動校正版本並重試一次。",
+      "真正的跨裝置 Trip 修改仍會維持阻擋。",
+    ],
+  },
+  {
     version: "3.9.8",
     date: "2026-09-24",
     isMandatoryRelease: false,
