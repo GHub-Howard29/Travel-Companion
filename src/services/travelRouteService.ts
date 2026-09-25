@@ -9,12 +9,6 @@ interface FunctionErrorBody {
   error?: string;
 }
 
-const COMMONS_PRECISION_REGRESSION_FIXTURE_HEADER = "x-travel-companion-regression-fixture";
-const COMMONS_PRECISION_REGRESSION_FIXTURES = new Set([
-  "commons-broad-manual",
-  "commons-insufficient",
-]);
-
 export interface PlaceCandidate {
   placeId: string;
   displayName: string;
@@ -46,37 +40,22 @@ export interface CommonsPhotoCandidate {
   sourceRevisionAt?: string;
   width: number;
   height: number;
-  tier: "precise" | "manual-review";
-  reviewStatus?: "needs-review";
-  score?: number;
-  scoreBreakdown?: Array<{ rule: string; points: number; evidence: string }>;
-  matchEvidence?: Array<{ kind: string; category?: string; queryLanguage?: string }>;
 }
 
-export interface CommonsPhotoSearchResult {
-  contractVersion: "commons-precision-v2";
-  state: "results" | "no-suitable-image" | "entity-not-found" | "entity-ambiguous" | "inspection-limit-reached" | "project-quota-reached" | "in-progress" | "offline" | "rate-limited" | "timeout" | "upstream-error" | "session-expired";
+export interface CommonsPhotoBatch {
   candidates: CommonsPhotoCandidate[];
-  searchMode: "entity-guided" | "broad";
-  nextPageToken?: string;
+  nextOffset: number | null;
 }
 
-export interface CommonsAiSearchTerm {
-  query: string;
-  languageTag: "zh-Hant" | "en" | "ja";
-  kind: "original" | "translation" | "transliteration";
+export interface CommonsPhotoCategory {
+  name: string;
+  chineseLabel?: string;
 }
 
-export const suggestCommonsSearchTerms = async (
-  supabase: SupabaseClient,
-  tripId: string,
-  rawInput: string,
-  targetLanguage: CommonsAiSearchTerm["languageTag"],
-  excludedQueries: string[] = [],
-): Promise<{ state: string; candidates: CommonsAiSearchTerm[] }> => invokeTravelRoute(
-  supabase,
-  { action: "commonsSuggestSearchTerms", tripId, rawInput, targetLanguage, excludedQueries },
-);
+export interface CommonsCategoryPhotoBatch {
+  candidates: CommonsPhotoCandidate[];
+  continuation: string | null;
+}
 
 export interface RouteEstimateResult {
   durationSeconds: number;
@@ -142,19 +121,30 @@ export const searchCommonsPhotoCandidates = async (
   supabase: SupabaseClient,
   tripId: string,
   query: string,
-  nextPageToken?: string,
-): Promise<CommonsPhotoSearchResult> => {
-  const fixture = import.meta.env.DEV && typeof window !== "undefined"
-    ? new URLSearchParams(window.location.search).get("tcRegressionFixture")
-    : null;
-  return invokeTravelRoute<CommonsPhotoSearchResult>(
-    supabase,
-    { action: "commonsPrecisionSearch", tripId, query, ...(nextPageToken ? { nextPageToken } : {}) },
-    fixture && COMMONS_PRECISION_REGRESSION_FIXTURES.has(fixture)
-      ? { [COMMONS_PRECISION_REGRESSION_FIXTURE_HEADER]: fixture }
-      : undefined,
+  offset = 0,
+): Promise<CommonsPhotoBatch> => invokeTravelRoute<CommonsPhotoBatch>(
+  supabase, { action: "commonsPhotoSearch", tripId, query, offset },
+);
+
+export const getCommonsPhotoCategories = async (
+  supabase: SupabaseClient,
+  tripId: string,
+  fileTitle: string,
+): Promise<CommonsPhotoCategory[]> => {
+  const result = await invokeTravelRoute<{ categories: CommonsPhotoCategory[] }>(
+    supabase, { action: "commonsPhotoCategories", tripId, fileTitle },
   );
+  return result.categories;
 };
+
+export const getCommonsCategoryPhotos = async (
+  supabase: SupabaseClient,
+  tripId: string,
+  category: string,
+  continuation?: string,
+): Promise<CommonsCategoryPhotoBatch> => invokeTravelRoute<CommonsCategoryPhotoBatch>(
+  supabase, { action: "commonsCategoryPhotos", tripId, category, ...(continuation ? { continuation } : {}) },
+);
 
 export const getConfirmedPlace = (
   candidate: PlaceCandidate,
