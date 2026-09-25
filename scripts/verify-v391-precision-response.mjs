@@ -42,56 +42,55 @@ const publicCandidate = projectCommonsPrecisionCandidate(evaluation.candidate);
 assert.deepEqual(Object.keys(publicCandidate).sort(), [
   "creator", "credit", "cropImageUrl", "description", "descriptionWasTruncated", "fileTitle",
   "height", "license", "licenseUrl", "matchEvidence", "reviewStatus", "score", "scoreBreakdown",
-  "sourcePageUrl", "sourceRevisionAt", "sourceSha1", "thumbnailMime", "thumbnailUrl", "width",
+  "sourcePageUrl", "sourceRevisionAt", "sourceSha1", "thumbnailMime", "thumbnailUrl", "tier", "width",
 ].sort());
 assert.equal("targetQid" in publicCandidate, false);
 assert.equal("targetNames" in publicCandidate, false);
 assert.equal("directP18" in publicCandidate, false);
 assert.equal("exactCategories" in publicCandidate, false);
 assert.equal(publicCandidate.reviewStatus, "needs-review");
+assert.equal(publicCandidate.tier, "precise");
 assert.equal(publicCandidate.matchEvidence.some(({ kind }) => kind === "p18"), true);
 
+const pageCandidates = Array.from({ length: 6 }, (_, index) => ({
+  ...evaluation.candidate,
+  fileTitle: `File:Terminal One ${index + 1}.jpg`,
+}));
 const projected = projectCommonsPrecisionResponse({
   state: "results",
-  candidates: [evaluation.candidate],
-  resolvedEntity: { qid: "Q100", label: "Terminal One", description: "airport terminal" },
-  nextPageToken: "cp1.abcdefghijklmnop",
-  extensionPageToken: "cp1.ponmlkjihgfedcba",
+  candidates: pageCandidates,
+  searchMode: "entity-guided",
+  nextPageToken: "cp2.abcdefghijklmnop",
 });
-assert.equal(projected.contractVersion, "commons-precision-v1");
-assert.equal(projected.nextPageToken, "cp1.abcdefghijklmnop");
-assert.equal(projected.extensionPageToken, "cp1.ponmlkjihgfedcba");
-assert.deepEqual(projected.resolvedEntity, { qid: "Q100", label: "Terminal One", description: "airport terminal" });
+assert.equal(projected.contractVersion, "commons-precision-v2");
+assert.equal(projected.nextPageToken, "cp2.abcdefghijklmnop");
+assert.equal(projected.searchMode, "entity-guided");
+assert.equal("resolvedEntity" in projected, false);
+assert.equal("entityChoices" in projected, false);
 assert.equal("targetQid" in projected.candidates[0], false);
-assert.deepEqual(projectCommonsPrecisionResponse({ state: "no-suitable-image", candidates: [] }), {
-  contractVersion: "commons-precision-v1",
+assert.deepEqual(projectCommonsPrecisionResponse({ state: "no-suitable-image", candidates: [], searchMode: "broad" }), {
+  contractVersion: "commons-precision-v2",
   state: "no-suitable-image",
   candidates: [],
+  searchMode: "broad",
 });
 assert.throws(() => projectCommonsPrecisionResponse({
   state: "timeout",
   candidates: [evaluation.candidate],
-  nextPageToken: "cp1.abcdefghijklmnop",
+  searchMode: "entity-guided",
+  nextPageToken: "cp2.abcdefghijklmnop",
 }), /nextPageToken/);
 assert.throws(() => projectCommonsPrecisionResponse({
   state: "results",
   candidates: [evaluation.candidate, evaluation.candidate],
+  searchMode: "entity-guided",
 }), /數量或去重/);
 assert.throws(() => projectCommonsPrecisionResponse({
   state: "results",
   candidates: [evaluation.candidate],
+  searchMode: "entity-guided",
   nextPageToken: "raw-continuation",
 }), /不透明 token/);
-assert.deepEqual(projectCommonsPrecisionResponse({
-  state: "entity-ambiguous",
-  candidates: [],
-  entityChoices: [{ qid: "Q101", label: "Terminal One (airport)", description: "airport terminal" }],
-}), {
-  contractVersion: "commons-precision-v1",
-  state: "entity-ambiguous",
-  candidates: [],
-  entityChoices: [{ qid: "Q101", label: "Terminal One (airport)", description: "airport terminal" }],
-});
 
 const projectRoot = resolve(import.meta.dirname, "..");
 const source = readFileSync(resolve(projectRoot, "supabase/functions/travel-route/commonsPrecision.ts"), "utf8");

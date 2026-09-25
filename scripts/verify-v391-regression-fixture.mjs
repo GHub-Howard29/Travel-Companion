@@ -3,7 +3,8 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import {
-  COMMONS_PRECISION_AMBIGUOUS_FIXTURE,
+  COMMONS_PRECISION_BROAD_FIXTURE,
+  COMMONS_PRECISION_INSUFFICIENT_FIXTURE,
   getCommonsPrecisionRegressionFixture,
   isLoopbackSupabaseRuntime,
 } from "../supabase/functions/travel-route/commonsPrecisionRegressionFixture.ts";
@@ -14,23 +15,28 @@ assert.equal(isLoopbackSupabaseRuntime("http://kong:8000"), true);
 assert.equal(isLoopbackSupabaseRuntime("https://project.supabase.co"), false);
 assert.equal(isLoopbackSupabaseRuntime("not-a-url"), false);
 
-const ambiguous = getCommonsPrecisionRegressionFixture(COMMONS_PRECISION_AMBIGUOUS_FIXTURE);
-assert.ok(ambiguous);
-assert.equal(ambiguous.state, "entity-ambiguous");
-assert.equal(ambiguous.candidates.length, 0);
-assert.equal(ambiguous.entityChoices?.length, 3);
-assert.equal(ambiguous.entityChoices?.[0].description, "本機回歸資料：都會捷運車站");
-assert.equal(ambiguous.entityChoices?.[2].description, undefined);
+const broad = getCommonsPrecisionRegressionFixture(COMMONS_PRECISION_BROAD_FIXTURE);
+assert.ok(broad);
+assert.equal(broad.contractVersion, "commons-precision-v2");
+assert.equal(broad.state, "results");
+assert.equal(broad.searchMode, "broad");
+assert.equal(broad.candidates.length, 6);
+assert.ok(broad.candidates.every((candidate) => candidate.tier === "manual-review"));
+assert.equal(broad.nextPageToken, undefined);
 
-const selected = getCommonsPrecisionRegressionFixture(COMMONS_PRECISION_AMBIGUOUS_FIXTURE, "Q90000001");
-assert.ok(selected);
-assert.equal(selected.state, "no-suitable-image");
-assert.deepEqual(selected.resolvedEntity, {
-  qid: "Q90000001",
-  label: "中山站",
-  description: "本機回歸資料：都會捷運車站",
-});
-assert.equal(getCommonsPrecisionRegressionFixture(COMMONS_PRECISION_AMBIGUOUS_FIXTURE, "Q1"), null);
+const insufficient = getCommonsPrecisionRegressionFixture(COMMONS_PRECISION_INSUFFICIENT_FIXTURE);
+assert.ok(insufficient);
+assert.equal(insufficient.contractVersion, "commons-precision-v2");
+assert.equal(insufficient.state, "results");
+assert.equal(insufficient.searchMode, "entity-guided");
+assert.equal(insufficient.candidates.length, 4);
+assert.deepEqual(insufficient.candidates.map((candidate) => candidate.tier), [
+  "precise",
+  "precise",
+  "manual-review",
+  "manual-review",
+]);
+assert.equal(insufficient.nextPageToken, undefined);
 assert.equal(getCommonsPrecisionRegressionFixture("unknown"), null);
 
 const root = resolve(import.meta.dirname, "..");
@@ -40,5 +46,7 @@ assert.match(edge, /isLoopbackSupabaseRuntime\(Deno\.env\.get\("SUPABASE_URL"\)/
 assert.match(edge, /if \(regressionFixture\) return json\(regressionFixture\)/);
 assert.match(client, /import\.meta\.env\.DEV/);
 assert.match(client, /tcRegressionFixture/);
+assert.match(client, /commons-broad-manual/);
+assert.match(client, /commons-insufficient/);
 
-console.log("V3.9.1 本機多實體瀏覽器 fixture、loopback 限制與正式環境防線驗證通過。");
+console.log("V3.9.11 本機廣泛候選、候選不足 fixture、loopback 限制與正式環境防線驗證通過。");

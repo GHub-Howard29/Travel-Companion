@@ -4,24 +4,14 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 
 const CONTACT_URL = "https://github.com/GHub-Howard29/Travel-Companion/issues";
-const MAX_TOTAL_REQUESTS = 135;
-const OUTPUT_PATH = process.env.V391_SPIKE_OUTPUT_PATH ?? "supabase/.temp/v391-commons-precision-spike.json";
+const MAX_TOTAL_REQUESTS = 60;
+const OUTPUT_PATH = process.env.V3911_SPIKE_OUTPUT_PATH ?? "supabase/.temp/v3911-commons-precision-spike.json";
 const CASES = [
+  { category: "transport", label: "桃園國際機場", query: "桃園國際機場", language: "zh-Hant", expectedCandidates: true },
   { category: "landmark", label: "熊本城", query: "熊本城", language: "ja", expectedCandidates: true },
-  { category: "landmark", label: "高千穗峽", query: "高千穂峡", language: "ja", expectedCandidates: true },
-  { category: "landmark", label: "首里城", query: "首里城", language: "ja", expectedCandidates: true },
-  { category: "landmark", label: "沖繩美麗海水族館", query: "沖縄美ら海水族館", language: "ja", expectedCandidates: true },
-  { category: "landmark", label: "萬座毛", query: "万座毛", language: "ja", expectedCandidates: true },
-  { category: "transport", label: "桃園國際機場第二航廈", query: "Taiwan Taoyuan International Airport Terminal 2", language: "en", expectedCandidates: true },
-  { category: "transport", label: "OTS 臨空豐崎營業所", query: "OTS Rent a Car Toyosaki Okinawa", language: "en", expectedCandidates: false },
-  { category: "hotel", label: "那霸日航城市飯店", query: "Hotel JAL City Naha", language: "en", expectedCandidates: true },
-  { category: "restaurant", label: "福助玉子燒飯糰", query: "Fukusuke Tamago Onigiri Okinawa", language: "en", expectedCandidates: false },
-  { category: "restaurant", label: "琉球新麵 通堂 小祿本店", query: "Ryukyu Shinmen Tondou Oroku Okinawa", language: "en", expectedCandidates: false },
-  { category: "restaurant", label: "肉餐廳 肉久 名護店", query: "Nikukyuu Nago Okinawa restaurant", language: "en", expectedCandidates: false },
-  { category: "restaurant", label: "BANTA CAFE", query: "Banta Cafe Okinawa", language: "en", expectedCandidates: false },
-  { category: "adversarial-exact", label: "桃園國際機場第一航廈", query: "Terminal 1, Taiwan Taoyuan International Airport", language: "en", expectedCandidates: true },
-  { category: "adversarial-ambiguous", label: "第一航廈", query: "第一航廈", language: "zh-Hant", expectedCandidates: false },
-  { category: "adversarial-broad", label: "桃園國際機場", query: "桃園國際機場", language: "zh-Hant", expectedCandidates: false },
+  { category: "landmark", label: "櫻之馬場‧城彩苑", query: "櫻之馬場 城彩苑", language: "zh-Hant", expectedCandidates: true },
+  { category: "transport", label: "熊本熊電鐵", query: "熊本熊電鐵", language: "zh-Hant", expectedCandidates: true },
+  { category: "landmark", label: "熊本上、下通商店街", query: "熊本 上通 下通 商店街", language: "zh-Hant", expectedCandidates: true },
 ];
 
 const countArray = (value) => Array.isArray(value) ? value.length : 0;
@@ -79,7 +69,7 @@ for (const [caseIndex, testCase] of CASES.entries()) {
     {
       request: async (plan) => {
         totalRequestCount += 1;
-        if (totalRequestCount > MAX_TOTAL_REQUESTS) throw new Error("spike exceeded the approved 135-request ceiling");
+        if (totalRequestCount > MAX_TOTAL_REQUESTS) throw new Error("spike exceeded the approved 60-request ceiling");
         const response = await executeCommonsPrecisionRequest(plan, CONTACT_URL);
         layerCounts[plan.layer] = (layerCounts[plan.layer] ?? 0) + countResponseItems(plan.layer, response.payload);
         if (plan.layer === "resolve-entity" && Array.isArray(response.payload?.search)) {
@@ -111,11 +101,10 @@ for (const [caseIndex, testCase] of CASES.entries()) {
     durationMs: Math.round(performance.now() - startedAt),
     regression: testCase.expectedCandidates && finalCount === 0,
     candidates: result.response.candidates.map((candidate) => ({
-      pageId: candidate.pageId,
       fileTitle: candidate.fileTitle,
+      tier: candidate.tier,
       score: candidate.score,
-      evidence: candidate.evidence,
-      review: candidate.review,
+      matchEvidence: candidate.matchEvidence,
       sourcePageUrl: candidate.sourcePageUrl,
     })),
   });

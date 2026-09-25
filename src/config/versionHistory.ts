@@ -14,6 +14,16 @@ export type VersionHistoryItem = {
 
 export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
+    version: "3.9.10",
+    date: "2026-09-25",
+    isMandatoryRelease: false,
+    notes: [
+      "簡化每日行程卡片的照片資訊，只保留照片來源原處連結。",
+      "其他資訊捷徑與查看地圖整組靠右，捷徑緊鄰地圖操作。",
+      "保留查看地圖定位圖示，移除重複的聯外圖示。",
+    ],
+  },
+  {
     version: "3.9.9",
     date: "2026-09-24",
     isMandatoryRelease: false,

@@ -70,14 +70,10 @@ const ambiguousRequest = async (plan) => {
   throw new Error(`未預期的歧義 request plan: ${plan.url}`);
 };
 const ambiguous = await runCommonsPrecisionEngine({ query: "桃園機場", language: "zh-Hant" }, { request: ambiguousRequest, now: () => 1_000 });
-assert.equal(ambiguous.response.state, "entity-ambiguous");
-assert.deepEqual(ambiguous.response.entityChoices, [
-  { qid: "Q200", label: "桃園機場", description: "臺灣的國際機場" },
-  { qid: "Q201", label: "桃園機場" },
-]);
-assert.equal(ambiguous.requestCount, 2);
-const selected = await runCommonsPrecisionEngine({ query: "桃園機場", language: "zh-Hant", selectedEntityQid: "Q200" }, { request: ambiguousRequest, now: () => 1_000 });
-assert.equal(selected.qid, "Q200");
+assert.equal(ambiguous.response.state, "no-suitable-image");
+assert.equal(ambiguous.response.searchMode, "broad");
+assert.equal("entityChoices" in ambiguous.response, false);
+assert.equal(ambiguous.requestCount, 3);
 
 const taoyuanRelatedFile = {
   ...filePage,
@@ -95,6 +91,7 @@ const taoyuanRelatedFile = {
 const extensionRequests = [];
 const extension = await runCommonsPrecisionContinuationEngine({
   query: "桃園國際機場",
+  tier: "manual-review",
   entityEvidence: {
     qid: "Q11515",
     instanceOfQids: ["Q1248784"],
@@ -127,15 +124,16 @@ const extension = await runCommonsPrecisionContinuationEngine({
 });
 assert.equal(extension.response.state, "results");
 assert.equal(extension.response.candidates.length, 1);
+assert.equal(extension.response.candidates[0].tier, "manual-review");
 assert.equal(extension.response.candidates[0].matchEvidence.some(({ kind }) => kind === "related-category"), true);
 assert.deepEqual(extensionRequests.map(({ layer }) => layer), [
   "read-related-categories",
   "read-category-files",
   "read-p18-files",
-  "read-structured-data",
 ]);
 const exhaustedSession = await runCommonsPrecisionContinuationEngine({
   query: "桃園國際機場",
+  tier: "manual-review",
   entityEvidence: extension.entityEvidence,
   layer: "read-related-category-files",
   continuation: JSON.stringify({ parentCategory: "Taiwan Taoyuan International Airport" }),
@@ -148,5 +146,4 @@ const exhaustedSession = await runCommonsPrecisionContinuationEngine({
 });
 assert.equal(exhaustedSession.response.state, "inspection-limit-reached");
 assert.equal(exhaustedSession.requestCount, 0);
-assert.deepEqual(selected.response.resolvedEntity, { qid: "Q200", label: "桃園機場", description: "臺灣的國際機場" });
 console.log("V3.9.1 Commons 精準搜尋整體協調引擎契約驗證通過。");

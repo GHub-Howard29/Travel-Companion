@@ -7,7 +7,6 @@ import {
 } from "./commonsPrecision.ts";
 import type {
   CommonsFileEvidenceSeed,
-  WikidataEntityEvidence,
 } from "./commonsPrecisionWikimedia.ts";
 
 const QID = /^Q[1-9][0-9]*$/;
@@ -151,7 +150,7 @@ export const buildCommonsTextSearchParams = (query: string, offset?: number): UR
   }
   const params = baseParams();
   params.set("generator", "search");
-  params.set("gsrsearch", requireQuery(query));
+  params.set("gsrsearch", `${requireQuery(query)} filetype:bitmap`);
   params.set("gsrnamespace", "6");
   params.set("gsrlimit", "6");
   params.set("prop", "imageinfo");
@@ -360,7 +359,9 @@ export const composeCommonsPrecisionCandidates = (input: {
   metadataPayload: unknown;
   seeds: readonly CommonsFileEvidenceSeed[];
   depictsByPageId: ReadonlyMap<number, readonly string[]>;
-  entityEvidence: Pick<WikidataEntityEvidence, "qid" | "names">;
+  entityEvidence: { qid?: string; names: CommonsPrecisionName[] };
+  allowManualReview?: boolean;
+  forceManualReview?: boolean;
 }): {
   candidates: ReturnType<typeof rankCommonsPrecisionCandidates>["candidates"];
   rejected: Array<{ fileTitle: string; reason: CommonsPrecisionRejectReason | CommonsMetadataRejectReason }>;
@@ -373,11 +374,14 @@ export const composeCommonsPrecisionCandidates = (input: {
   }
   const rawCandidates: CommonsPrecisionRawCandidate[] = [...uniqueMetadata.values()].flatMap((file) => {
     const seed = seeds.get(file.pageId);
-    if (!seed || seed.fileTitle !== file.fileTitle || !QID.test(input.entityEvidence.qid)) return [];
+    if (!seed || seed.fileTitle !== file.fileTitle ||
+      (input.entityEvidence.qid !== undefined && !QID.test(input.entityEvidence.qid))) return [];
     return [{
       ...file,
-      targetQid: input.entityEvidence.qid,
+      ...(input.entityEvidence.qid ? { targetQid: input.entityEvidence.qid } : {}),
       targetNames: input.entityEvidence.names as CommonsPrecisionName[],
+      fromTextSearch: input.allowManualReview && seed.fromAdoptedTextSearch,
+      forceManualReview: input.forceManualReview,
       directP18: seed.directP18,
       exactCategories: seed.exactCategories,
       relatedCategories: seed.relatedCategories,

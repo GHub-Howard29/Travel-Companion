@@ -21,9 +21,9 @@ const entityKey = createCommonsPrecisionEntityCacheKey("Q100");
 const queryHash = "a".repeat(64);
 const candidateKey = createCommonsPrecisionCandidateCacheKey({ queryHash, language: "zh-Hant" });
 const noSuitableKey = createCommonsPrecisionNoSuitableCacheKey({ queryHash, language: "zh-Hant" });
-assert.match(entityKey, /^entity:commons-precision-v1:Q100$/);
-assert.match(candidateKey, /^candidate:commons-precision-v1:zh-hant:a{64}$/);
-assert.match(noSuitableKey, /^no-suitable:commons-precision-v1:zh-hant:a{64}$/);
+assert.match(entityKey, /^entity:commons-precision-v2:Q100$/);
+assert.match(candidateKey, /^candidate:commons-precision-v2:zh-hant:a{64}$/);
+assert.match(noSuitableKey, /^no-suitable:commons-precision-v2:zh-hant:a{64}$/);
 assert.throws(() => createCommonsPrecisionEntityCacheKey("Q0"), /QID/);
 assert.throws(() => createCommonsPrecisionCandidateCacheKey({ queryHash: "raw-query", language: "en" }), /key/);
 

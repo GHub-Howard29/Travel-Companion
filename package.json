@@ -1,7 +1,7 @@
 {
   "name": "travel-companion",
   "private": true,
-  "version": "3.9.10",
+  "version": "3.9.11",
   "type": "module",
   "engines": {
     "node": "22.23.2",
@@ -52,7 +52,8 @@
     "regression:local:status": "node .agents/skills/travel-companion-regression/scripts/local-regression.mjs status",
     "regression:local:prepare": "node .agents/skills/travel-companion-regression/scripts/local-regression.mjs prepare",
     "regression:local:browser-bootstrap": "node .agents/skills/travel-companion-regression/scripts/local-regression.mjs browser-bootstrap",
-    "regression:local:browser-ambiguous-fixture": "node .agents/skills/travel-companion-regression/scripts/local-regression.mjs browser-ambiguous-fixture",
+    "regression:local:browser-broad-fixture": "node .agents/skills/travel-companion-regression/scripts/local-regression.mjs browser-broad-fixture",
+    "regression:local:browser-insufficient-fixture": "node .agents/skills/travel-companion-regression/scripts/local-regression.mjs browser-insufficient-fixture",
     "regression:local:verify": "node .agents/skills/travel-companion-regression/scripts/local-regression.mjs verify",
     "regression:local:full": "node .agents/skills/travel-companion-regression/scripts/local-regression.mjs full",
     "verify:v362-trip-lock": "node --experimental-strip-types --no-warnings scripts/verify-v362-trip-lock.mjs",

@@ -39,6 +39,7 @@ const depictsPlan = planCommonsPrecisionRequest({ layer: "read-structured-data",
 assert.equal(new URL(depictsPlan.url).searchParams.get("ids"), "M10|M11");
 
 const textPlan = planCommonsPrecisionRequest({ layer: "search-adopted-text", query: "第一航廈", offset: 6 });
+assert.equal(new URL(textPlan.url).searchParams.get("gsrsearch"), "第一航廈 filetype:bitmap");
 assert.equal(new URL(textPlan.url).searchParams.get("gsroffset"), "6");
 assert.equal(new URL(textPlan.url).searchParams.get("gsrnamespace"), "6");
 for (const plan of [resolvePlan, evidencePlan, p18Plan, categoryPlan, depictsPlan, textPlan]) {

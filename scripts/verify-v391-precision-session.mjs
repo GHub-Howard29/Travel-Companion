@@ -27,7 +27,7 @@ const token = await sealCommonsPrecisionNextPageToken({
   durationMs: 12_500,
   extensionCategory: "Taiwan Taoyuan International Airport",
 }, key, 1_000, new Uint8Array(12).fill(3));
-assert.match(token, /^cp1\.[A-Za-z0-9_-]+$/);
+assert.match(token, /^cp2\.[A-Za-z0-9_-]+$/);
 assert.equal(token.includes(continuation), false, "原始 continuation 不得出現在 token");
 
 const opened = await openCommonsPrecisionNextPageToken(token, key, {
@@ -43,7 +43,7 @@ if (opened.status === "valid") {
   assert.equal(opened.session.requestCount, 8);
   assert.equal(opened.session.durationMs, 12_500);
   assert.equal(opened.session.extensionCategory, "Taiwan Taoyuan International Airport");
-  assert.equal(opened.session.contractVersion, "commons-precision-v1");
+  assert.equal(opened.session.contractVersion, "commons-precision-v2");
 }
 assert.deepEqual(await openCommonsPrecisionNextPageToken(token, key, {
   nowMs: 1_000 + COMMONS_PRECISION_SESSION_TTL_MS,

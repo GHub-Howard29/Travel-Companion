@@ -9,7 +9,8 @@ Choose by changed risk, not by habit.
 | Verify | Migration grants, Auth, Trip loading, `travel-route`, or V3.9.1 photo integration changed | Covered by the current local-test request | `npm run regression:local:verify` |
 | Full | Release-candidate work or a broad cross-cutting change | Covered only when the user requested complete/full regression | `npm run regression:local:full` |
 | Browser | UI behavior, responsive layout, focus, keyboard, or copy changed | Covered when the user requested UI/browser regression; use the Codex in-app browser | See `browser-checklist.md` |
-| Browser ambiguous fixture | Same-label entity descriptions, QIDs, selection, or responsive choice layout changed | Covered by local browser-test authorization; loopback synthetic response only | `npm run regression:local:browser-ambiguous-fixture` |
+| Browser broad fixture | Ambiguous-name fallback, manual-review grouping, or responsive candidate layout changed | Covered by local browser-test authorization; loopback synthetic response only | `npm run regression:local:browser-broad-fixture` |
+| Browser insufficient fixture | Candidate shortage copy or batch-change visibility changed | Covered by local browser-test authorization; loopback synthetic response only | `npm run regression:local:browser-insufficient-fixture` |
 | External | A real Commons/Wikimedia response is necessary | Fresh single-use authorization every run; state query set, request cap, timeout, retry, and write policy first | No generic command; use the separately approved bounded spike |
 
 ## Automatic decision rules
@@ -17,7 +18,7 @@ Choose by changed risk, not by habit.
 - Documentation-only change: do not start the stack. Use ordinary document checks.
 - Pure helper or contract change: run the narrow existing `verify:*` script; use `verify` only if a live boundary changed.
 - Migration, grants, RLS, Auth, or Edge action change: use `prepare` when fixtures are absent, then `verify`.
-- Photo-dialog UI change: use the narrow contracts and Browser mode. Do not click Search unless External mode was separately authorized.
+- Photo-dialog UI change: use the narrow contracts and Browser mode. Do not click Search unless External mode was separately authorized or the URL enables one of the maintained loopback fixtures.
 - Release-candidate request: use Full plus Browser; production remains a separate gate.
 
 ## Explicit gates

@@ -1,18 +1,18 @@
 /** App 發布版本設定；須與 public/app-version.json 保持一致。 */
-export const APP_VERSION = "3.9.10";
+export const APP_VERSION = "3.9.11";
 
 /**
  * 最近一次已發布版本；此版本必須存在於 versionHistory.ts。
  * production build 會驗證這個規則，避免升版後遺漏版本歷史。
  */
-export const PREVIOUS_RELEASE_VERSION = "3.9.9";
+export const PREVIOUS_RELEASE_VERSION = "3.9.10";
 
 export const RELEASE_DATE = "2026-09-25";
 
 export const RELEASE_NOTES = [
-  "簡化每日行程卡片的照片資訊，只保留照片來源原處連結。",
-  "其他資訊捷徑與查看地圖整組靠右，捷徑緊鄰地圖操作。",
-  "保留查看地圖定位圖示，移除重複的聯外圖示。",
+  "Commons 候選照片分為精準與需人工確認兩層，增加可選照片並保留既有排列。",
+  "移除 QID 範圍選擇，模糊搜尋限制為點陣媒體，少於六張時不提供換批。",
+  "修正自行上傳載入生命週期誤報，並移除每日行程卡片照片備註。",
 ];
 
 /** 目前版本發布時保存的更新政策；不隨執行中客戶端是否已達最低版本而改變。 */

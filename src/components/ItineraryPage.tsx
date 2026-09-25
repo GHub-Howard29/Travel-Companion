@@ -83,7 +83,6 @@ import {
   getPlaceCandidatePhotos,
   searchCommonsPhotoCandidates,
   type CommonsPhotoCandidate,
-  type CommonsResolvedEntity,
   type PlaceCandidate,
   type PlaceCandidatePhoto,
 } from "../services/travelRouteService";
@@ -106,8 +105,8 @@ import {
 } from "../utils/itineraryCoverCrop";
 
 
-type CommonsPageStatus = "empty-first-page" | "duplicate-page" | "exhausted" | "entity-not-found" |
-  "entity-ambiguous" | "inspection-limit-reached" | "project-quota-reached" | "rate-limited" |
+type CommonsPageStatus = "empty-first-page" | "duplicate-page" | "available-complete" |
+  "inspection-limit-reached" | "project-quota-reached" | "rate-limited" |
   "timeout" | "upstream-error" | "session-expired" | "in-progress";
 
 type CoverPhotoSourceChoice = "wikimedia-commons" | "user-upload";
@@ -220,16 +219,14 @@ export const ItineraryPage = ({
   const [autoRouteError, setAutoRouteError] = useState<string | null>(null);
   const [coverTargetIndex, setCoverTargetIndex] = useState<number | null>(null);
   const [commonsQuery, setCommonsQuery] = useState("");
-  const [commonsResolvedEntity, setCommonsResolvedEntity] = useState<CommonsResolvedEntity | null>(null);
-  const [commonsEntityChoices, setCommonsEntityChoices] = useState<CommonsResolvedEntity[]>([]);
+  const [commonsSearchMode, setCommonsSearchMode] = useState<"entity-guided" | "broad" | null>(null);
   const [commonsCandidates, setCommonsCandidates] = useState<CommonsPhotoCandidate[]>([]);
   const [commonsNextPageToken, setCommonsNextPageToken] = useState<string | null>(null);
-  const [commonsExtendedCandidates, setCommonsExtendedCandidates] = useState<CommonsPhotoCandidate[]>([]);
-  const [commonsExtensionPageToken, setCommonsExtensionPageToken] = useState<string | null>(null);
   const [commonsSeenFileTitles, setCommonsSeenFileTitles] = useState<Set<string>>(new Set());
   const [selectedCommonsPhoto, setSelectedCommonsPhoto] = useState<CommonsPhotoCandidate | null>(null);
   const [coverPhotoSource, setCoverPhotoSource] = useState<CoverPhotoSourceChoice>("wikimedia-commons");
   const [userCoverSelection, setUserCoverSelection] = useState<UserCoverSelection | null>(null);
+  const [userCoverLoadState, setUserCoverLoadState] = useState<"idle" | "loading" | "ready" | "error">("idle");
   const [coverDialogStep, setCoverDialogStep] = useState<"search" | "confirm">("search");
   const [coverCrop, setCoverCrop] = useState<ItineraryCoverCropTransform>(DEFAULT_ITINERARY_COVER_CROP);
   const [photoViewer, setPhotoViewer] = useState<CoverPhotoViewerData | null>(null);
@@ -315,6 +312,57 @@ export const ItineraryPage = ({
         height: userCoverSelection.height,
       }
       : null;
+  const preciseCommonsCandidates = commonsCandidates.filter((candidate) => candidate.tier === "precise");
+  const manualReviewCommonsCandidates = commonsCandidates.filter((candidate) => candidate.tier === "manual-review");
+  const renderCommonsCandidateCard = (candidate: CommonsPhotoCandidate) => {
+    const isSelected = selectedCommonsPhoto?.fileTitle === candidate.fileTitle;
+    const name = candidate.fileTitle.replace(/^File:/, "");
+    return (
+      <article key={candidate.fileTitle} className={`overflow-hidden rounded-xl border ${isSelected ? "border-emerald-600 ring-2 ring-emerald-100" : "border-slate-200"}`}>
+        <button
+          type="button"
+          onClick={(clickEvent) => openPhotoViewer({
+            url: candidate.thumbnailUrl,
+            alt: name,
+            sourceLabel: "Wikimedia Commons",
+            sourcePageUrl: candidate.sourcePageUrl,
+            creator: candidate.creator,
+            credit: candidate.credit,
+            license: candidate.license,
+            licenseUrl: candidate.licenseUrl,
+          }, clickEvent.currentTarget)}
+          className="group relative block w-full outline-none ring-inset ring-emerald-500 focus:ring-2"
+          aria-label={`放大檢視「${name}」`}
+        >
+          <img src={candidate.thumbnailUrl} alt="" loading="lazy" referrerPolicy="no-referrer" className="h-28 w-full bg-slate-100 object-cover" />
+          <span className="absolute bottom-2 right-2 rounded-full bg-slate-950/70 p-1.5 text-white"><Eye size={14} /></span>
+        </button>
+        <div className="p-2">
+          <strong className="line-clamp-2 block text-xs text-slate-800">{name}</strong>
+          <span className="mt-1 block text-[11px] text-slate-500">{candidate.creator}</span>
+          <span className="mt-1 block text-[11px] font-semibold text-emerald-700">{candidate.license}</span>
+          {candidate.matchEvidence && candidate.matchEvidence.length > 0 && (
+            <span className="mt-1 block text-[11px] text-slate-600">
+              符合依據：{candidate.matchEvidence.map((evidence) => ({
+                p18: "Wikidata 代表圖",
+                "exact-category": "直接 Commons 分類",
+                "related-category": "一層相關 Commons 分類",
+                "structured-depicts": "結構化描繪實體",
+                description: "描述精確命中",
+                filename: "檔名命中",
+                "broad-association": "可驗證關聯",
+                "wrong-entity": "非目標實體",
+              })[evidence.kind] ?? evidence.kind).join("、")}
+            </span>
+          )}
+          <label className={`mt-2 flex w-full cursor-pointer items-center justify-center rounded-lg px-2 py-1.5 text-xs font-bold ${isSelected ? "bg-emerald-700 text-white" : "bg-emerald-50 text-emerald-700 hover:bg-emerald-100"}`}>
+            <input type="radio" name="commons-photo-candidate" checked={isSelected} onChange={() => setSelectedCommonsPhoto(candidate)} className="sr-only" />
+            {isSelected ? "已選取" : "選取照片"}
+          </label>
+        </div>
+      </article>
+    );
+  };
 
   const resetForm = () => {
     releaseFocusedControl();
@@ -771,6 +819,7 @@ export const ItineraryPage = ({
     if (userCoverObjectUrlRef.current) URL.revokeObjectURL(userCoverObjectUrlRef.current);
     userCoverObjectUrlRef.current = null;
     setUserCoverSelection(null);
+    setUserCoverLoadState("idle");
   };
 
   const selectCoverPhotoSource = (source: CoverPhotoSourceChoice) => {
@@ -792,23 +841,33 @@ export const ItineraryPage = ({
     clearUserCoverSelection();
     const objectUrl = URL.createObjectURL(file);
     userCoverObjectUrlRef.current = objectUrl;
+    setUserCoverLoadState("loading");
+    setCoverPhotoSource("user-upload");
+    setCoverDialogStep("confirm");
+    setCoverPhotoError(null);
     const image = new Image();
     image.onload = () => {
       if (userCoverObjectUrlRef.current !== objectUrl) return;
+      const width = image.naturalWidth;
+      const height = image.naturalHeight;
+      image.onload = null;
+      image.onerror = null;
       setSelectedCommonsPhoto(null);
-      setUserCoverSelection({ file, objectUrl, width: image.naturalWidth, height: image.naturalHeight });
+      setUserCoverSelection({ file, objectUrl, width, height });
+      setUserCoverLoadState("ready");
       setCoverPhotoSource("user-upload");
       setCoverCrop(DEFAULT_ITINERARY_COVER_CROP);
       setCoverPhotoError(null);
       setCoverDialogStep("confirm");
-      image.src = "";
     };
     image.onerror = () => {
       if (userCoverObjectUrlRef.current !== objectUrl) return;
+      image.onload = null;
+      image.onerror = null;
       URL.revokeObjectURL(objectUrl);
       userCoverObjectUrlRef.current = null;
+      setUserCoverLoadState("error");
       setCoverPhotoError("無法讀取這張照片，請改選其他照片。");
-      image.src = "";
     };
     image.src = objectUrl;
   };
@@ -818,12 +877,9 @@ export const ItineraryPage = ({
     coverDialogOpenerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     setCoverTargetIndex(index);
     setCommonsQuery(query);
-    setCommonsResolvedEntity(null);
-    setCommonsEntityChoices([]);
+    setCommonsSearchMode(null);
     setCommonsCandidates([]);
     setCommonsNextPageToken(null);
-    setCommonsExtendedCandidates([]);
-    setCommonsExtensionPageToken(null);
     setCommonsSeenFileTitles(new Set());
     setSelectedCommonsPhoto(null);
     clearUserCoverSelection();
@@ -838,12 +894,9 @@ export const ItineraryPage = ({
   const closeCoverPhotoDialog = () => {
     if (isCoverSaving) return;
     setCoverTargetIndex(null);
-    setCommonsResolvedEntity(null);
-    setCommonsEntityChoices([]);
+    setCommonsSearchMode(null);
     setCommonsCandidates([]);
     setCommonsNextPageToken(null);
-    setCommonsExtendedCandidates([]);
-    setCommonsExtensionPageToken(null);
     setCommonsSeenFileTitles(new Set());
     setSelectedCommonsPhoto(null);
     clearUserCoverSelection();
@@ -895,13 +948,10 @@ export const ItineraryPage = ({
   const startCommonsSearch = () => {
     setCommonsCandidates([]);
     setCommonsNextPageToken(null);
-    setCommonsExtendedCandidates([]);
-    setCommonsExtensionPageToken(null);
     setCommonsSeenFileTitles(new Set());
     setSelectedCommonsPhoto(null);
     setCommonsPageStatus(null);
-    setCommonsResolvedEntity(null);
-    setCommonsEntityChoices([]);
+    setCommonsSearchMode(null);
     void searchCommonsPhotos(commonsQuery, undefined, new Set());
   };
 
@@ -909,8 +959,6 @@ export const ItineraryPage = ({
     queryValue = commonsQuery,
     nextPageToken: string | undefined = undefined,
     seenFileTitles = commonsSeenFileTitles,
-    selectedEntityQid: string | undefined = undefined,
-    candidateTier: "exact" | "extended" = "exact",
   ) => {
     const query = queryValue.trim();
     if (query.length < 2) {
@@ -925,51 +973,28 @@ export const ItineraryPage = ({
     setCoverPhotoError(null);
     setSelectedCommonsPhoto(null);
     try {
-      const result = await searchCommonsPhotoCandidates(supabase, trip.id, query, nextPageToken, selectedEntityQid ?? commonsResolvedEntity?.qid);
-      setCommonsResolvedEntity(result.resolvedEntity ?? (nextPageToken ? commonsResolvedEntity : null));
-      setCommonsEntityChoices(result.entityChoices ?? []);
+      const result = await searchCommonsPhotoCandidates(supabase, trip.id, query, nextPageToken);
+      setCommonsSearchMode(result.searchMode);
       const freshCandidates = result.candidates.filter((candidate) => !seenFileTitles.has(candidate.fileTitle));
       const nextSeenFileTitles = new Set(seenFileTitles);
       result.candidates.forEach((candidate) => nextSeenFileTitles.add(candidate.fileTitle));
       setCommonsSeenFileTitles(nextSeenFileTitles);
       const nextToken = result.nextPageToken ?? null;
-      const nextExtensionToken = result.extensionPageToken ?? null;
-      if (candidateTier === "extended") {
-        setCommonsExtendedCandidates(freshCandidates.slice(0, 6));
-        setCommonsExtensionPageToken(nextExtensionToken);
-        setCommonsPageStatus(freshCandidates.length > 0
-          ? nextExtensionToken ? null : "exhausted"
-          : nextExtensionToken ? "duplicate-page" : "exhausted");
-        return;
-      }
-      setCommonsExtensionPageToken(nextExtensionToken);
       if (result.state !== "results") {
-        if (result.state === "entity-ambiguous" && result.entityChoices?.length) {
-          setCommonsCandidates([]);
-        }
-        if (result.state === "no-suitable-image" && !nextPageToken && nextToken) {
-          setCommonsNextPageToken(nextToken);
-          setCommonsPageStatus("empty-first-page");
-          await searchCommonsPhotos(query, nextToken, nextSeenFileTitles);
-          return;
-        }
+        setCommonsCandidates([]);
         setCommonsNextPageToken(nextToken);
-        setCommonsPageStatus(result.state === "no-suitable-image" || result.state === "offline" ? "empty-first-page" : result.state);
+        setCommonsPageStatus(result.state === "no-suitable-image" || result.state === "offline" ||
+          result.state === "entity-not-found" || result.state === "entity-ambiguous"
+          ? "empty-first-page"
+          : result.state);
         return;
       }
-      setCommonsCandidates(nextPageToken
-        ? [...commonsCandidates, ...freshCandidates].slice(-12)
-        : freshCandidates);
+      setCommonsCandidates(freshCandidates.slice(0, 6));
+      setCommonsNextPageToken(freshCandidates.length === 6 ? nextToken : null);
       if (freshCandidates.length === 0) {
-        setCommonsNextPageToken(nextPageToken ? nextToken : null);
-        setCommonsPageStatus(!nextPageToken
-          ? "empty-first-page"
-          : nextToken === null
-            ? "exhausted"
-            : "duplicate-page");
+        setCommonsPageStatus(nextPageToken ? "duplicate-page" : "empty-first-page");
       } else {
-        setCommonsNextPageToken(nextToken);
-        setCommonsPageStatus(nextToken === null ? "exhausted" : null);
+        setCommonsPageStatus(nextToken === null || freshCandidates.length < 6 ? "available-complete" : null);
       }
     } catch (error) {
       setCoverPhotoError(error instanceof Error ? error.message : "照片搜尋暫時無法使用。");
@@ -1955,7 +1980,7 @@ export const ItineraryPage = ({
                     >
                       照片來源 ↗
                     </a>
-                  ) : <span className="mt-1 block text-[11px] font-semibold text-slate-500">自行上傳</span>}
+                  ) : null}
                 </div>
               )}
               <div className="min-w-0">
@@ -2191,12 +2216,9 @@ export const ItineraryPage = ({
                     value={commonsQuery}
                     onChange={(event) => {
                       setCommonsQuery(event.target.value);
-                      setCommonsResolvedEntity(null);
-                      setCommonsEntityChoices([]);
+                      setCommonsSearchMode(null);
                       setCommonsCandidates([]);
                       setCommonsNextPageToken(null);
-                      setCommonsExtendedCandidates([]);
-                      setCommonsExtensionPageToken(null);
                       setCommonsSeenFileTitles(new Set());
                       setSelectedCommonsPhoto(null);
                       setCommonsPageStatus(null);
@@ -2211,53 +2233,17 @@ export const ItineraryPage = ({
                 </form>
                 {!isOnline && <p className="mt-3 text-xs text-amber-700" aria-live="polite">目前離線，無法搜尋、換一批或儲存照片。</p>}
                 {coverPhotoError && <p className="mt-3 text-xs text-rose-700" aria-live="polite">{coverPhotoError}</p>}
-                {commonsResolvedEntity && (
-                  <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900" aria-live="polite">
-                    <span>已辨識搜尋範圍：<strong>{commonsResolvedEntity.label}</strong></span>
-                    <span>修改上方搜尋詞可重新判定範圍。</span>
-                  </div>
-                )}
-                {commonsEntityChoices.length > 0 && (
-                  <section className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3" aria-labelledby="commons-entity-choice-title" aria-live="polite">
-                    <h4 id="commons-entity-choice-title" className="text-sm font-bold text-amber-900">請選擇要搜尋的地點範圍</h4>
-                    <p className="mt-1 text-xs text-amber-800">選擇前不會搜尋照片；若都不正確，請修改關鍵字。</p>
-                    <div className="mt-2 grid gap-2">
-                      {commonsEntityChoices.map((entity) => (
-                        <button
-                          key={entity.qid}
-                          type="button"
-                          disabled={isCommonsSearching}
-                          aria-label={`選擇地點範圍：${entity.label}${entity.description ? `，${entity.description}` : ""}，${entity.qid}`}
-                          onClick={() => {
-                            setCommonsCandidates([]);
-                            setCommonsNextPageToken(null);
-                            setCommonsExtendedCandidates([]);
-                            setCommonsExtensionPageToken(null);
-                            setCommonsSeenFileTitles(new Set());
-                            setSelectedCommonsPhoto(null);
-                            setCommonsPageStatus(null);
-                            void searchCommonsPhotos(commonsQuery, undefined, new Set(), entity.qid);
-                          }}
-                          className="w-full min-w-0 rounded-lg border border-amber-300 bg-white px-3 py-2 text-left text-sm text-amber-900 hover:bg-amber-100 disabled:opacity-50"
-                        >
-                          <span className="block break-words font-bold">{entity.label}</span>
-                          {entity.description && (
-                            <span className="mt-1 block break-words text-xs font-normal leading-relaxed text-amber-800">{entity.description}</span>
-                          )}
-                          <span className="mt-1 block font-mono text-[11px] font-normal text-amber-700">{entity.qid}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </section>
+                {commonsSearchMode === "broad" && commonsCandidates.length > 0 && (
+                  <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-900" aria-live="polite">
+                    找到多個同名地點或無法確認唯一地點，因此已改用原搜尋詞提供廣泛候選。下列照片均需人工確認。
+                  </p>
                 )}
                 {commonsPageStatus && (
                   <p className="mt-3 text-xs text-slate-600" aria-live="polite">
                     {{
-                      "empty-first-page": "第一批沒有符合條件的照片，系統已自動再查一批；之後可手動換一批或調整搜尋詞。",
-                      "duplicate-page": "這一批沒有新的照片；可再換一批或調整搜尋詞。",
-                      exhausted: "已沒有更多照片；可調整搜尋詞或改用其他來源。",
-                      "entity-not-found": "找不到可精確對應的地點實體，請使用完整地點名稱或調整關鍵字後再試。",
-                      "entity-ambiguous": "搜尋詞對應多個地點，請先選擇正確範圍，或輸入更完整的地點名稱。",
+                      "empty-first-page": "目前沒有可用照片；可調整搜尋詞或改用其他來源。",
+                      "duplicate-page": "這一批沒有新的照片；請調整搜尋詞或改用其他來源。",
+                      "available-complete": `已列出目前可用的 ${commonsCandidates.length} 張照片；可選擇照片或調整搜尋詞。`,
                       "inspection-limit-reached": "已達本次檢查上限；請檢視目前候選或重新調整搜尋詞。",
                       "project-quota-reached": "今日精準搜尋額度已用完，請稍後再試。",
                       "rate-limited": "Wikimedia Commons 暫時受限，請稍後再試。",
@@ -2268,105 +2254,21 @@ export const ItineraryPage = ({
                     }[commonsPageStatus]}
                   </p>
                 )}
-                {commonsCandidates.length > 0 && (
-                  <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3" role="radiogroup" aria-label="Commons 候選照片">
-                    {commonsCandidates.map((candidate) => {
-                      const isSelected = selectedCommonsPhoto?.fileTitle === candidate.fileTitle;
-                      const name = candidate.fileTitle.replace(/^File:/, "");
-                      return (
-                        <article key={candidate.fileTitle} className={`overflow-hidden rounded-xl border ${isSelected ? "border-emerald-600 ring-2 ring-emerald-100" : "border-slate-200"}`}>
-                          <button
-                            type="button"
-                            onClick={(clickEvent) => openPhotoViewer({
-                              url: candidate.thumbnailUrl,
-                              alt: name,
-                              sourceLabel: "Wikimedia Commons",
-                              sourcePageUrl: candidate.sourcePageUrl,
-                              creator: candidate.creator,
-                              credit: candidate.credit,
-                              license: candidate.license,
-                              licenseUrl: candidate.licenseUrl,
-                            }, clickEvent.currentTarget)}
-                            className="group relative block w-full outline-none ring-inset ring-emerald-500 focus:ring-2"
-                            aria-label={`放大檢視「${name}」`}
-                          >
-                            <img src={candidate.thumbnailUrl} alt="" loading="lazy" referrerPolicy="no-referrer" className="h-28 w-full bg-slate-100 object-cover" />
-                            <span className="absolute bottom-2 right-2 rounded-full bg-slate-950/70 p-1.5 text-white"><Eye size={14} /></span>
-                          </button>
-                          <div className="p-2">
-                            <strong className="line-clamp-2 block text-xs text-slate-800">{name}</strong>
-                            <span className="mt-1 block text-[11px] text-slate-500">{candidate.creator}</span>
-                            <span className="mt-1 block text-[11px] font-semibold text-emerald-700">{candidate.license}</span>
-                            {candidate.matchEvidence && candidate.matchEvidence.length > 0 && (
-                              <span className="mt-1 block text-[11px] text-slate-600">
-                                符合依據：{candidate.matchEvidence.map((evidence) => ({
-                                  p18: "Wikidata 代表圖",
-                                  "exact-category": "直接 Commons 分類",
-                                  "related-category": "一層相關 Commons 分類",
-                                  "structured-depicts": "結構化描繪實體",
-                                  description: "描述精確命中",
-                                  filename: "檔名命中",
-                                  "broad-association": "可驗證關聯",
-                                  "wrong-entity": "非目標實體",
-                                })[evidence.kind] ?? evidence.kind).join("、")}
-                              </span>
-                            )}
-                            <label className={`mt-2 flex w-full cursor-pointer items-center justify-center rounded-lg px-2 py-1.5 text-xs font-bold ${isSelected ? "bg-emerald-700 text-white" : "bg-emerald-50 text-emerald-700 hover:bg-emerald-100"}`}>
-                              <input
-                                type="radio"
-                                name="commons-photo-candidate"
-                                checked={isSelected}
-                                onChange={() => setSelectedCommonsPhoto(candidate)}
-                                className="sr-only"
-                              />
-                              {isSelected ? "已選取" : "選取照片"}
-                            </label>
-                          </div>
-                        </article>
-                      );
-                    })}
-                  </div>
+                {preciseCommonsCandidates.length > 0 && (
+                  <section className="mt-4" aria-labelledby="commons-precise-title">
+                    <h4 id="commons-precise-title" className="text-sm font-bold text-slate-800">精準候選</h4>
+                    <p className="mt-1 text-xs leading-relaxed text-slate-600">具備代表圖、直接分類、描繪實體或名稱精確命中等證據。</p>
+                    <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3" role="radiogroup" aria-label="Commons 精準候選照片">
+                      {preciseCommonsCandidates.map(renderCommonsCandidateCard)}
+                    </div>
+                  </section>
                 )}
-                {commonsExtendedCandidates.length > 0 && (
-                  <section className="mt-5 border-t border-slate-200 pt-4" aria-labelledby="commons-extended-title">
-                    <h4 id="commons-extended-title" className="text-sm font-bold text-slate-800">延伸候選</h4>
-                    <p className="mt-1 text-xs leading-relaxed text-slate-600">來自一層已驗證相關分類；請人工確認整體建築、景觀或可辨識的內部場景是否適合作為代表照片。</p>
-                    <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3" role="radiogroup" aria-label="Commons 延伸候選照片">
-                      {commonsExtendedCandidates.map((candidate) => {
-                        const isSelected = selectedCommonsPhoto?.fileTitle === candidate.fileTitle;
-                        const name = candidate.fileTitle.replace(/^File:/, "");
-                        return (
-                          <article key={candidate.fileTitle} className={`overflow-hidden rounded-xl border ${isSelected ? "border-emerald-600 ring-2 ring-emerald-100" : "border-slate-200"}`}>
-                            <button
-                              type="button"
-                              onClick={(clickEvent) => openPhotoViewer({
-                                url: candidate.thumbnailUrl,
-                                alt: name,
-                                sourceLabel: "Wikimedia Commons",
-                                sourcePageUrl: candidate.sourcePageUrl,
-                                creator: candidate.creator,
-                                credit: candidate.credit,
-                                license: candidate.license,
-                                licenseUrl: candidate.licenseUrl,
-                              }, clickEvent.currentTarget)}
-                              className="group relative block w-full outline-none ring-inset ring-emerald-500 focus:ring-2"
-                              aria-label={`放大檢視延伸候選「${name}」`}
-                            >
-                              <img src={candidate.thumbnailUrl} alt="" loading="lazy" referrerPolicy="no-referrer" className="h-28 w-full bg-slate-100 object-cover" />
-                              <span className="absolute bottom-2 right-2 rounded-full bg-slate-950/70 p-1.5 text-white"><Eye size={14} /></span>
-                            </button>
-                            <div className="p-2">
-                              <strong className="line-clamp-2 block text-xs text-slate-800">{name}</strong>
-                              <span className="mt-1 block text-[11px] text-slate-500">{candidate.creator}</span>
-                              <span className="mt-1 block text-[11px] font-semibold text-emerald-700">{candidate.license}</span>
-                              <label className={`mt-2 flex w-full cursor-pointer items-center justify-center rounded-lg px-2 py-1.5 text-xs font-bold ${isSelected ? "bg-emerald-700 text-white" : "bg-emerald-50 text-emerald-700 hover:bg-emerald-100"}`}>
-                                <input type="radio" name="commons-photo-candidate" checked={isSelected} onChange={() => setSelectedCommonsPhoto(candidate)} className="sr-only" />
-                                {isSelected ? "已選取" : "選取照片"}
-                              </label>
-                            </div>
-                          </article>
-                        );
-                      })}
+                {manualReviewCommonsCandidates.length > 0 && (
+                  <section className={`${preciseCommonsCandidates.length > 0 ? "mt-5 border-t border-slate-200 pt-4" : "mt-4"}`} aria-labelledby="commons-manual-title">
+                    <h4 id="commons-manual-title" className="text-sm font-bold text-slate-800">需人工確認</h4>
+                    <p className="mt-1 text-xs leading-relaxed text-slate-600">來自相關分類、圖說或全文搜尋；請確認照片是否適合作為這個地點的代表照片。</p>
+                    <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3" role="radiogroup" aria-label="Commons 需人工確認候選照片">
+                      {manualReviewCommonsCandidates.map(renderCommonsCandidateCard)}
                     </div>
                   </section>
                 )}
@@ -2374,11 +2276,6 @@ export const ItineraryPage = ({
                   {commonsNextPageToken !== null && (
                     <button type="button" onClick={() => void searchCommonsPhotos(commonsQuery, commonsNextPageToken)} disabled={!isOnline || isCommonsSearching || isCoverSaving} className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-700 hover:bg-emerald-100 disabled:opacity-50">
                       換一批
-                    </button>
-                  )}
-                  {commonsNextPageToken === null && commonsExtensionPageToken !== null && (
-                    <button type="button" onClick={() => void searchCommonsPhotos(commonsQuery, commonsExtensionPageToken, commonsSeenFileTitles, undefined, "extended")} disabled={!isOnline || isCommonsSearching || isCoverSaving} className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-sm font-bold text-sky-700 hover:bg-sky-100 disabled:opacity-50">
-                      {commonsExtendedCandidates.length > 0 ? "換一批延伸候選" : "載入延伸候選"}
                     </button>
                   )}
                   <div className="flex flex-col gap-2 sm:ml-auto sm:flex-row">
@@ -2469,7 +2366,20 @@ export const ItineraryPage = ({
                   </button>
                 </div>
               </>
-            ) : null}
+            ) : (
+              <section className="mt-4" aria-live="polite">
+                <div className={`flex min-h-56 items-center justify-center rounded-xl border p-4 text-center text-sm font-bold ${userCoverLoadState === "error" ? "border-rose-200 bg-rose-50 text-rose-700" : "border-slate-200 bg-slate-50 text-slate-600"}`}>
+                  {userCoverLoadState === "error"
+                    ? "無法讀取這張照片，請返回來源並重新選擇。"
+                    : <span className="inline-flex items-center gap-2"><Loader2 size={16} className="animate-spin" />讀取照片中…</span>}
+                </div>
+                <div className="mt-4 flex flex-col gap-2 border-t border-slate-100 pt-4 sm:flex-row sm:justify-end">
+                  <button type="button" onClick={() => { setCoverPhotoError(null); setCoverDialogStep("search"); }} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50">返回來源</button>
+                  <button type="button" onClick={closeCoverPhotoDialog} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50">取消</button>
+                  <button type="button" disabled className="rounded-lg bg-slate-200 px-4 py-2 text-sm font-bold text-slate-400">確認裁切並儲存</button>
+                </div>
+              </section>
+            )}
           </section>
         </div>
       )}
