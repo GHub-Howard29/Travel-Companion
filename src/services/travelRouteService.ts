@@ -47,14 +47,33 @@ export interface CommonsPhotoBatch {
   nextOffset: number | null;
 }
 
+export interface CommonsEligiblePhotoBatch {
+  candidates: CommonsPhotoCandidate[];
+  nextBatchToken: string | null;
+  hasMoreEligibleCandidates: boolean;
+  reachedEnd: boolean;
+}
+
 export interface CommonsPhotoCategory {
+  /** V3.9.12 compatibility alias; canonicalName is the authoritative Commons category value. */
   name: string;
+  canonicalName: string;
   chineseLabel?: string;
+  displayChineseLabel?: string;
+  translationSource?: "wikidata" | "google-nmt";
+  translationStatus: "ready" | "unavailable";
 }
 
 export interface CommonsCategoryPhotoBatch {
   candidates: CommonsPhotoCandidate[];
   continuation: string | null;
+}
+
+export interface CommonsEligibleCategoryPhotoBatch {
+  candidates: CommonsPhotoCandidate[];
+  nextBatchToken: string | null;
+  hasMoreEligibleCandidates: boolean;
+  reachedEnd: boolean;
 }
 
 export interface RouteEstimateResult {
@@ -126,6 +145,22 @@ export const searchCommonsPhotoCandidates = async (
   supabase, { action: "commonsPhotoSearch", tripId, query, offset },
 );
 
+export const searchCommonsEligiblePhotoBatch = async (
+  supabase: SupabaseClient,
+  tripId: string,
+  query: string,
+  batchToken?: string,
+): Promise<CommonsEligiblePhotoBatch> => invokeTravelRoute<CommonsEligiblePhotoBatch>(
+  supabase,
+  {
+    action: "commonsPhotoSearch",
+    tripId,
+    query,
+    batchContractVersion: 2,
+    ...(batchToken ? { batchToken } : {}),
+  },
+);
+
 export const getCommonsPhotoCategories = async (
   supabase: SupabaseClient,
   tripId: string,
@@ -144,6 +179,22 @@ export const getCommonsCategoryPhotos = async (
   continuation?: string,
 ): Promise<CommonsCategoryPhotoBatch> => invokeTravelRoute<CommonsCategoryPhotoBatch>(
   supabase, { action: "commonsCategoryPhotos", tripId, category, ...(continuation ? { continuation } : {}) },
+);
+
+export const getCommonsEligibleCategoryPhotoBatch = async (
+  supabase: SupabaseClient,
+  tripId: string,
+  category: string,
+  batchToken?: string,
+): Promise<CommonsEligibleCategoryPhotoBatch> => invokeTravelRoute<CommonsEligibleCategoryPhotoBatch>(
+  supabase,
+  {
+    action: "commonsCategoryPhotos",
+    tripId,
+    category,
+    batchContractVersion: 2,
+    ...(batchToken ? { batchToken } : {}),
+  },
 );
 
 export const getConfirmedPlace = (
