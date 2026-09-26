@@ -6,7 +6,7 @@
 
 ## 後續候選版本
 
-- [ ] V3.9.13：PWA 更新／遠端 Trip 修訂競態已完成；Commons `zh-TW` 翻譯 fallback、私有快取／限額 migration 草案與 batch v2 後端契約已完成本機實作並通過完整 build。下一閘門為 UI 預覽核准，之後才切換 `ItineraryPage` 使用 v2；Google Translation Key、正式 migration／Edge 部署、升版與發布均尚未執行。維持既有定案範圍，不併入 BUG012／BUG032／BUG033。
+- [ ] V3.9.13：PWA 更新／遠端 Trip 修訂競態、Commons `zh-TW` 翻譯 fallback、私有快取／限額 migration 草案、batch v2 後端契約與正式 `ItineraryPage` v2 UI 均已完成本機實作，UI 預覽已核准且完整 build 通過。下一閘門為建立／限制專用 Google Translation API Key，之後才可套用正式 migration、設定 Edge Secret、部署 `travel-route`、升版與發布。維持既有定案範圍，不併入 BUG012／BUG032／BUG033。
 - [ ] V3.9.14：修正 BUG012 多人帳本 Realtime 即時同步與 BUG033 個人／共用帳本文案。保留既有 30 秒輪詢備援；驗收需以兩設備同 Trip 帳本同畫面確認新增／刪除可即時反映，並回歸有／無共用帳本權限的文案。
 - [ ] V3.9.15：修正 BUG032 行程照片離線預載。以「已載入 Trip 的目前行程卡片實際使用照片」為預載範圍，不預載 Commons 搜尋候選；預載失敗不得阻擋文字資料，並需控制重複下載、失效照片與儲存空間。
 

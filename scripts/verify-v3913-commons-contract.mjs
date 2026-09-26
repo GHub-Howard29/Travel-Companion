@@ -48,9 +48,15 @@ assert.match(client, /searchCommonsEligiblePhotoBatch/);
 assert.match(client, /getCommonsEligibleCategoryPhotoBatch/);
 assert.match(client, /batchContractVersion: 2/);
 
-// UI activation is a separate Product Owner approval gate.
-assert.doesNotMatch(itineraryPage, /searchCommonsEligiblePhotoBatch/);
-assert.doesNotMatch(itineraryPage, /getCommonsEligibleCategoryPhotoBatch/);
+// Product Owner approved the V3.9.13 UI preview; the formal itinerary UI must now use v2.
+assert.match(itineraryPage, /searchCommonsEligiblePhotoBatch/);
+assert.match(itineraryPage, /getCommonsEligibleCategoryPhotoBatch/);
+assert.match(itineraryPage, /category\.canonicalName/);
+assert.match(itineraryPage, /category\.displayChineseLabel/);
+assert.match(itineraryPage, /commonsPage >= Math\.ceil\(commonsCandidates\.length \/ 6\) - 1 && commonsNextBatchToken/);
+assert.match(itineraryPage, /commonsCategoryPage >= Math\.ceil\(commonsCategoryCandidates\.length \/ 6\) - 1 && commonsCategoryNextBatchToken/);
+assert.doesNotMatch(itineraryPage, /commonsNextOffset/);
+assert.doesNotMatch(itineraryPage, /commonsCategoryContinuation/);
 
 const walkFiles = (dir) => readdirSync(dir).flatMap((name) => {
   const path = resolve(dir, name);
@@ -65,4 +71,4 @@ for (const file of walkFiles(resolve(root, "src"))) {
   );
 }
 
-console.log("V3.9.13 Commons 翻譯、私有快取、batch v2、安全邊界與 UI 核准閘門驗證通過。");
+console.log("V3.9.13 Commons 翻譯、私有快取、batch v2、安全邊界與正式 UI 切換驗證通過。");
