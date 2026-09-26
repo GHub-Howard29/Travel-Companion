@@ -19,6 +19,12 @@ import {
 
 type UpdateServiceWorker = (reloadPage?: boolean) => Promise<void>;
 export type AppUpdatePromptMode = "update" | "releaseNotice";
+export type AppUpdatePhase =
+  | "idle"
+  | "checking-metadata"
+  | "downloading"
+  | "waiting-control"
+  | "ready-to-reload";
 const RELEASE_NOTICE_STORAGE_KEY = "travel_companion_seen_app_version";
 const VERSION_POLICY_STORAGE_KEY = "travel_companion_app_version_policy";
 
@@ -191,6 +197,8 @@ export const useAppUpdate = () => {
       : null,
   );
   const [isChecking, setIsChecking] = useState(false);
+  const [updatePhase, setUpdatePhase] = useState<AppUpdatePhase>("idle");
+  const [hasPreparedUpdate, setHasPreparedUpdate] = useState(false);
   const [releaseNoticeVisible, setReleaseNoticeVisible] = useState(() => {
     if (!canShowGeneralPrompt) return false;
     const storedVersion = getStoredAppVersion();
@@ -267,6 +275,7 @@ export const useAppUpdate = () => {
       },
       async onNeedRefresh() {
         workerReadyRef.current = true;
+        setHasPreparedUpdate(true);
         setUpdateError(null);
         await checkVersionPolicy();
       },
@@ -281,6 +290,10 @@ export const useAppUpdate = () => {
 
   const update = useCallback(async () => {
     if (updateInProgressRef.current) return;
+    if (hasPreparedUpdate && updatePhase === "ready-to-reload") {
+      reloadOnce();
+      return;
+    }
     if (!policy.hasUpdate) {
       setStoredAppVersion(APP_VERSION);
       setReleaseNoticeVisible(false);
@@ -289,29 +302,42 @@ export const useAppUpdate = () => {
     updateInProgressRef.current = true;
     setUpdateError(null);
     setIsChecking(true);
+    setUpdatePhase("checking-metadata");
     if (!navigator.onLine) {
-      setUpdateError("需要網路才能完成更新，請連線後重試。");
+      setUpdateError("目前離線，需要網路才能完成更新。");
+      setUpdatePhase("idle");
       updateInProgressRef.current = false;
       setIsChecking(false);
       return;
     }
     try {
       const refreshedPolicy = await checkVersionPolicy();
-      if (refreshedPolicy && !refreshedPolicy.hasUpdate) return;
+      if (refreshedPolicy && !refreshedPolicy.hasUpdate) {
+        setUpdatePhase("idle");
+        return;
+      }
       const registration =
         registrationRef.current ?? (await navigator.serviceWorker.ready);
       registrationRef.current = registration;
+      setUpdatePhase("downloading");
       await registration.update();
       const workerReady = await waitForUpdateWorkerReady(
         registration,
         () => workerReadyRef.current,
       );
       if (!workerReady) {
-        setUpdateError("新版尚未下載完成，請確認網路連線後再重試。");
+        setUpdateError("新版尚未下載完成，請稍後再試；這不代表目前網路一定異常。");
+        setUpdatePhase("idle");
         return;
       }
+      setHasPreparedUpdate(true);
       const updateServiceWorker = updateServiceWorkerRef.current;
-      if (!updateServiceWorker) throw new Error("Service Worker update handler is not ready.");
+      if (!updateServiceWorker) {
+        setUpdateError("新版已偵測到，但更新處理器尚未就緒，請稍後再試。");
+        setUpdatePhase("idle");
+        return;
+      }
+      setUpdatePhase("waiting-control");
       const previousController = navigator.serviceWorker?.controller ?? null;
       let controlPromise = waitForServiceWorkerControl(previousController);
       await updateServiceWorker(true);
@@ -321,17 +347,33 @@ export const useAppUpdate = () => {
         await updateServiceWorker(true);
         controlled = await controlPromise;
       }
-      if (!controlled) throw new Error("新版 Service Worker 尚未接管目前頁面。");
+      if (!controlled) {
+        setUpdateError("新版已準備完成，但尚未接管目前頁面。請重新載入以套用新版。");
+        setUpdatePhase("ready-to-reload");
+        return;
+      }
       setStoredAppVersion(latestMetadata.version);
       reloadOnce();
     } catch (error) {
       console.warn("PWA Service Worker update failed.", error);
-      setUpdateError("更新尚未完成，請確認網路連線後重試。");
+      setUpdateError(
+        navigator.onLine
+          ? "更新處理發生錯誤，請稍後重新嘗試。"
+          : "更新期間網路已中斷，請恢復連線後重試。",
+      );
+      setUpdatePhase("idle");
     } finally {
       updateInProgressRef.current = false;
       setIsChecking(false);
     }
-  }, [checkVersionPolicy, latestMetadata.version, policy.hasUpdate, reloadOnce]);
+  }, [
+    checkVersionPolicy,
+    hasPreparedUpdate,
+    latestMetadata.version,
+    policy.hasUpdate,
+    reloadOnce,
+    updatePhase,
+  ]);
 
   const dismiss = useCallback(() => {
     if (policy.isMandatoryForCurrentClient) return;
@@ -356,6 +398,9 @@ export const useAppUpdate = () => {
     isMandatoryForCurrentClient: policy.isMandatoryForCurrentClient,
     updateError,
     isChecking,
+    updatePhase,
+    hasPreparedUpdate,
+    isUpdateInProgress: isChecking,
     update,
     dismiss,
   };

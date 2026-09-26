@@ -220,6 +220,9 @@ function ConfiguredApp({
     isMandatoryForCurrentClient,
     updateError,
     isChecking,
+    updatePhase,
+    hasPreparedUpdate,
+    isUpdateInProgress,
     update,
     dismiss,
   } = useAppUpdate();
@@ -1004,6 +1007,7 @@ function ConfiguredApp({
       isMandatoryUpdate={isMandatoryForCurrentClient}
       updateError={updateError}
       isChecking={isChecking}
+      updatePhase={updatePhase}
       onUpdate={update}
       onDismiss={dismiss}
     />
@@ -1135,8 +1139,9 @@ function ConfiguredApp({
       />
 
       <TripDataRevisionNotice
-        kind={tripDataNoticeKind}
+        kind={isUpdateInProgress ? null : tripDataNoticeKind}
         isOnline={isOnline}
+        willApplyPreparedUpdate={hasPreparedUpdate && updateAvailable}
         onSnooze={snoozeTripDataNotice}
         onReload={reloadForTripDataChange}
       />

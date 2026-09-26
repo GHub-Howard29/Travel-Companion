@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>V3.9.13 Commons UI Preview</title>
+  <style>
+    :root { font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #1e293b; background: #f1f5f9; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 24px 12px 48px; }
+    .shell { max-width: 880px; margin: 0 auto; }
+    .intro { margin-bottom: 18px; padding: 14px 16px; border: 1px solid #cbd5e1; background: #fff; border-radius: 14px; }
+    .intro h1 { margin: 0; font-size: 18px; }
+    .intro p { margin: 6px 0 0; font-size: 13px; line-height: 1.6; color: #64748b; }
+    .tabs { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+    .tab { border: 1px solid #cbd5e1; background: white; color: #475569; font-weight: 700; font-size: 13px; border-radius: 10px; padding: 9px 12px; cursor: pointer; }
+    .tab.active { border-color: #6ee7b7; background: #ecfdf5; color: #047857; }
+    .phone { width: min(100%, 430px); margin: 0 auto; background: #0f172a; padding: 10px; border-radius: 30px; box-shadow: 0 18px 45px rgba(15,23,42,.18); }
+    .screen { background: #f8fafc; min-height: 760px; border-radius: 22px; padding: 14px 10px; }
+    .modal { background: white; border-radius: 18px; padding: 16px; box-shadow: 0 10px 28px rgba(15,23,42,.12); border: 1px solid #e2e8f0; }
+    .head { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
+    h2 { font-size: 18px; margin: 0; color: #1e293b; }
+    .sub { margin-top: 5px; color: #64748b; font-size: 12px; line-height: 1.5; }
+    .close { border: 0; background: transparent; color: #64748b; font-size: 20px; }
+    .section { margin-top: 16px; }
+    .section-title-row { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+    .section h3 { margin:0; font-size:14px; }
+    .back { color:#047857; background:none; border:0; font-size:12px; font-weight:700; }
+    .hint { margin: 5px 0 0; color:#475569; font-size:12px; line-height:1.55; }
+    .category-list { margin-top: 12px; display: grid; gap: 8px; }
+    .category { width:100%; text-align:left; padding:10px 12px; border-radius:10px; border:1px solid #e2e8f0; background:white; }
+    .category .en { display:block; font-size:14px; font-weight:700; color:#334155; }
+    .category .zh { display:block; margin-top:4px; font-size:12px; color:#64748b; }
+    .grid { margin-top:12px; display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+    .card { border:1px solid #e2e8f0; border-radius:12px; overflow:hidden; background:#fff; }
+    .thumb { aspect-ratio:1/1; background:linear-gradient(135deg,#cbd5e1,#94a3b8); display:flex; align-items:center; justify-content:center; color:white; font-weight:800; font-size:18px; }
+    .card p { margin:0; padding:7px 8px; font-size:10px; color:#64748b; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .pager { margin-top:12px; display:flex; align-items:center; justify-content:space-between; gap:8px; color:#475569; font-size:12px; }
+    .btn { border-radius:9px; border:1px solid #e2e8f0; background:#fff; padding:8px 11px; font-size:12px; font-weight:700; color:#475569; }
+    .btn:disabled { opacity:.38; }
+    .footer { margin-top:15px; padding-top:14px; border-top:1px solid #f1f5f9; display:flex; flex-direction:column; gap:8px; }
+    .load { border-color:#a7f3d0; background:#ecfdf5; color:#047857; }
+    .actions { display:flex; gap:8px; justify-content:flex-end; }
+    .primary { border:0; background:#047857; color:white; padding:9px 13px; border-radius:9px; font-size:13px; font-weight:700; }
+    .note { margin-top:12px; padding:10px 12px; border-radius:10px; background:#f8fafc; border:1px dashed #cbd5e1; font-size:11px; color:#64748b; line-height:1.55; }
+    [hidden] { display:none!important; }
+    @media (min-width:640px) {
+      .grid { grid-template-columns:repeat(3,minmax(0,1fr)); }
+      .footer { flex-direction:row; align-items:center; }
+      .actions { margin-left:auto; }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <section class="intro">
+      <h1>V3.9.13 選圖 UI 預覽（不進正式 App）</h1>
+      <p>預覽只驗證兩件事：① 分類保留 Commons 原文，繁中判讀顯示第二行；② 「載入下一批 24 張」只在第 4 頁且後端已確認仍有合規候選時出現。</p>
+    </section>
+
+    <div class="tabs">
+      <button class="tab active" data-target="categories">A. 分類原文＋繁中</button>
+      <button class="tab" data-target="page4-more">B. 第 4 頁／有下一批</button>
+      <button class="tab" data-target="page4-end">C. 第 4 頁／已到底</button>
+    </div>
+
+    <div class="phone">
+      <div class="screen">
+        <section id="categories" class="modal panel">
+          <div class="head">
+            <div>
+              <h2>設定照片</h2>
+              <p class="sub">先選擇來源與候選照片；選取不會立即儲存。</p>
+            </div>
+            <button class="close" aria-label="關閉">×</button>
+          </div>
+          <section class="section">
+            <div class="section-title-row">
+              <h3>選擇照片類別</h3>
+              <button class="back">返回照片</button>
+            </div>
+            <p class="hint">類別保留 Commons 原文；繁體中文只作輔助判讀，選擇後仍以原始分類名稱查詢照片。部分中文判讀若尚未取得，原文仍可直接選擇。</p>
+            <div class="category-list">
+              <button class="category">
+                <span class="en">Taoyuan International Airport Terminal 1</span>
+                <span class="zh">桃園國際機場第一航廈</span>
+              </button>
+              <button class="category">
+                <span class="en">Airport terminals in Taiwan</span>
+                <span class="zh">臺灣機場航廈</span>
+              </button>
+              <button class="category">
+                <span class="en">Interior of Taoyuan International Airport</span>
+                <span class="zh">桃園國際機場內部</span>
+              </button>
+              <button class="category">
+                <span class="en">Departure halls in airports</span>
+              </button>
+            </div>
+          </section>
+          <div class="footer">
+            <div class="actions">
+              <button class="btn">取消</button>
+              <button class="primary">確認候選照片</button>
+            </div>
+          </div>
+          <div class="note">核准重點：原文永遠是第一行與實際查詢值；中文第二行較淡，不應讓使用者誤以為翻譯文字就是 Commons 類別名稱。</div>
+        </section>
+
+        <section id="page4-more" class="modal panel" hidden>
+          <div class="head">
+            <div>
+              <h2>設定照片</h2>
+              <p class="sub">先選擇來源與候選照片；選取不會立即儲存。</p>
+            </div>
+            <button class="close" aria-label="關閉">×</button>
+          </div>
+          <section class="section">
+            <div class="section-title-row">
+              <h3>廣泛候選</h3>
+            </div>
+            <p class="hint">每批 24 張、每頁 6 張；所有照片均由管理者自行確認。</p>
+            <div class="grid">
+              <div class="card"><div class="thumb">19</div><p>File:Candidate_19.jpg</p></div>
+              <div class="card"><div class="thumb">20</div><p>File:Candidate_20.jpg</p></div>
+              <div class="card"><div class="thumb">21</div><p>File:Candidate_21.jpg</p></div>
+              <div class="card"><div class="thumb">22</div><p>File:Candidate_22.jpg</p></div>
+              <div class="card"><div class="thumb">23</div><p>File:Candidate_23.jpg</p></div>
+              <div class="card"><div class="thumb">24</div><p>File:Candidate_24.jpg</p></div>
+            </div>
+            <div class="pager">
+              <button class="btn">上一頁</button>
+              <span>第 4 / 4 頁</span>
+              <button class="btn" disabled>下一頁</button>
+            </div>
+          </section>
+          <div class="footer">
+            <button class="btn load">載入下一批 24 張</button>
+            <div class="actions">
+              <button class="btn">取消</button>
+              <button class="btn">查看照片類別</button>
+              <button class="primary">確認候選照片</button>
+            </div>
+          </div>
+          <div class="note">只有後端已確認至少還有 1 張「未展示且合規」候選時，第 4 頁才顯示載入下一批。</div>
+        </section>
+
+        <section id="page4-end" class="modal panel" hidden>
+          <div class="head">
+            <div>
+              <h2>設定照片</h2>
+              <p class="sub">先選擇來源與候選照片；選取不會立即儲存。</p>
+            </div>
+            <button class="close" aria-label="關閉">×</button>
+          </div>
+          <section class="section">
+            <h3>廣泛候選</h3>
+            <p class="hint">每批 24 張、每頁 6 張；所有照片均由管理者自行確認。</p>
+            <div class="grid">
+              <div class="card"><div class="thumb">19</div><p>File:Candidate_19.jpg</p></div>
+              <div class="card"><div class="thumb">20</div><p>File:Candidate_20.jpg</p></div>
+              <div class="card"><div class="thumb">21</div><p>File:Candidate_21.jpg</p></div>
+              <div class="card"><div class="thumb">22</div><p>File:Candidate_22.jpg</p></div>
+              <div class="card"><div class="thumb">23</div><p>File:Candidate_23.jpg</p></div>
+              <div class="card"><div class="thumb">24</div><p>File:Candidate_24.jpg</p></div>
+            </div>
+            <div class="pager">
+              <button class="btn">上一頁</button>
+              <span>第 4 / 4 頁</span>
+              <button class="btn" disabled>下一頁</button>
+            </div>
+            <p class="hint" style="margin-top:12px;">已到達這個搜尋或分類的底端，沒有更多照片。</p>
+          </section>
+          <div class="footer">
+            <div class="actions">
+              <button class="btn">取消</button>
+              <button class="btn">查看照片類別</button>
+              <button class="primary">確認候選照片</button>
+            </div>
+          </div>
+          <div class="note">24 張並不代表一定要顯示下一批；如果後端 lookahead 找不到更多合規候選，就不顯示按鈕。</div>
+        </section>
+      </div>
+    </div>
+  </main>
+  <script>
+    const tabs = [...document.querySelectorAll('.tab')];
+    const panels = [...document.querySelectorAll('.panel')];
+    tabs.forEach((tab) => tab.addEventListener('click', () => {
+      tabs.forEach((item) => item.classList.remove('active'));
+      tab.classList.add('active');
+      panels.forEach((panel) => panel.hidden = panel.id !== tab.dataset.target);
+    }));
+  </script>
+</body>
+</html>

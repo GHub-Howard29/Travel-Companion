@@ -8,6 +8,10 @@ import {
   parseDurationSeconds,
   resolveSupabaseRuntimeKey,
 } from "./validation.ts";
+import {
+  buildCommonsEligibleBatch,
+  type CommonsBatchCandidate,
+} from "./commonsCandidateBatch.ts";
 
 const GOOGLE_PLACES_AUTOCOMPLETE_URL =
   "https://places.googleapis.com/v1/places:autocomplete";
@@ -57,6 +61,86 @@ const getSupabaseRuntimeKeys = () => ({
 const sha256 = async (value: string): Promise<string> => {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+};
+
+type CommonsBatchSourceKind = "broad-search" | "category";
+
+interface CommonsBatchSession<TCandidate extends CommonsBatchCandidate> {
+  bufferedCandidates: TCandidate[];
+  seenFileTitles: string[];
+  rawCursor: number | string | null;
+}
+
+const isStoredCommonsCandidate = (value: unknown): value is CommonsBatchCandidate & Record<string, unknown> =>
+  isRecord(value) && typeof value.fileTitle === "string" && value.fileTitle.startsWith("File:");
+
+const createCommonsBatchSession = async <TCandidate extends CommonsBatchCandidate>(
+  admin: ReturnType<typeof createClient>,
+  input: {
+    userId: string;
+    tripId: string;
+    sourceKind: CommonsBatchSourceKind;
+    sourceKey: string;
+    rawCursor: number | string | null;
+    bufferedCandidates: TCandidate[];
+    seenFileTitles: string[];
+  },
+): Promise<string> => {
+  const token = crypto.randomUUID();
+  const tokenHash = await sha256(token);
+  const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+  const { error } = await admin.from("commons_candidate_batch_sessions").insert({
+    token_hash: tokenHash,
+    user_id: input.userId,
+    trip_id: input.tripId,
+    source_kind: input.sourceKind,
+    source_key: input.sourceKey,
+    raw_cursor: input.rawCursor,
+    buffered_candidates: input.bufferedCandidates,
+    seen_file_titles: input.seenFileTitles,
+    expires_at: expiresAt,
+  });
+  if (error) throw error;
+  return token;
+};
+
+const consumeCommonsBatchSession = async <TCandidate extends CommonsBatchCandidate>(
+  admin: ReturnType<typeof createClient>,
+  input: {
+    token: string;
+    userId: string;
+    tripId: string;
+    sourceKind: CommonsBatchSourceKind;
+    sourceKey: string;
+  },
+): Promise<CommonsBatchSession<TCandidate> | null> => {
+  if (!/^[0-9a-f-]{36}$/i.test(input.token)) return null;
+  const tokenHash = await sha256(input.token);
+  const { data, error } = await admin
+    .from("commons_candidate_batch_sessions")
+    .select("token_hash, raw_cursor, buffered_candidates, seen_file_titles")
+    .eq("token_hash", tokenHash)
+    .eq("user_id", input.userId)
+    .eq("trip_id", input.tripId)
+    .eq("source_kind", input.sourceKind)
+    .eq("source_key", input.sourceKey)
+    .gt("expires_at", new Date().toISOString())
+    .maybeSingle();
+  if (error || !data) return null;
+
+  await admin.from("commons_candidate_batch_sessions").delete().eq("token_hash", tokenHash);
+
+  const bufferedCandidates = Array.isArray(data.buffered_candidates)
+    ? data.buffered_candidates.filter(isStoredCommonsCandidate) as TCandidate[]
+    : [];
+  const seenFileTitles = Array.isArray(data.seen_file_titles)
+    ? data.seen_file_titles.filter((value): value is string => typeof value === "string" && value.startsWith("File:"))
+    : [];
+  const rawCursor = typeof data.raw_cursor === "number" || typeof data.raw_cursor === "string"
+    ? data.raw_cursor
+    : null;
+
+  return { bufferedCandidates, seenFileTitles, rawCursor };
 };
 
 const getPlaceKey = (place: { placeId: string }) => `place:${place.placeId.trim()}`;
@@ -142,7 +226,7 @@ const getCommonsImageInfo = async (titles: string[]) => {
     format: "json", origin: "*",
   });
   const response = await fetch(`${COMMONS_API_URL}?${params}`, {
-    headers: { "User-Agent": "Travel-Companion/3.9.12 (Wikimedia Commons photo selector)" }, signal: AbortSignal.timeout(12_000),
+    headers: { "User-Agent": "Travel-Companion/3.9.13 (Wikimedia Commons photo selector)" }, signal: AbortSignal.timeout(12_000),
   });
   if (response.status === 429) throw new Error("照片來源目前忙碌，請稍後再試。");
   if (!response.ok) throw new Error("照片搜尋暫時無法使用。");
@@ -159,37 +243,274 @@ const getCommonsImageInfo = async (titles: string[]) => {
   });
 };
 
-const getCategoryChineseLabels = async (names: string[]): Promise<Map<string, string>> => {
+type CommonsPhotoCandidateRecord = NonNullable<ReturnType<typeof toCommonsPhotoCandidate>>;
+
+const fetchCommonsBroadRawPage = async (
+  query: string,
+  offset: number,
+): Promise<{ candidates: CommonsPhotoCandidateRecord[]; nextCursor: number | null }> => {
+  const params = new URLSearchParams({
+    action: "query",
+    generator: "search",
+    gsrsearch: query,
+    gsrnamespace: "6",
+    gsrlimit: String(COMMONS_BATCH_SIZE),
+    prop: "imageinfo",
+    iiprop: "url|mime|thumbmime|mediatype|size|sha1|timestamp|extmetadata",
+    iiurlwidth: "640",
+    iiextmetadatalanguage: "en",
+    iiextmetadatafilter: "Artist|Credit|LicenseShortName|LicenseUrl|UsageTerms|AttributionRequired|Restrictions",
+    format: "json",
+    origin: "*",
+  });
+  if (offset > 0) {
+    params.set("continue", "gsroffset||");
+    params.set("gsroffset", String(offset));
+  }
+  const response = await fetch(`${COMMONS_API_URL}?${params}`, {
+    headers: { "User-Agent": "Travel-Companion/3.9.13 (Wikimedia Commons photo selector)" },
+    signal: AbortSignal.timeout(12_000),
+  });
+  if (response.status === 429) throw new Error("照片來源目前忙碌，請稍後再試。");
+  if (!response.ok) throw new Error("照片搜尋暫時無法使用。");
+  const payload = await response.json();
+  const pages = isRecord(payload) && isRecord(payload.query) && isRecord(payload.query.pages)
+    ? Object.values(payload.query.pages)
+    : [];
+  const candidates = pages.flatMap((page) => {
+    const candidate = toCommonsPhotoCandidate(page);
+    return candidate ? [candidate] : [];
+  });
+  const rawNextOffset = isRecord(payload) && isRecord(payload.continue)
+    ? payload.continue.gsroffset
+    : null;
+  const parsedNextOffset = (typeof rawNextOffset === "number" || typeof rawNextOffset === "string") &&
+      Number.isInteger(Number(rawNextOffset)) && Number(rawNextOffset) >= 0
+    ? Number(rawNextOffset)
+    : null;
+  return { candidates, nextCursor: parsedNextOffset };
+};
+
+const fetchCommonsCategoryRawPage = async (
+  category: string,
+  continuation: string | null,
+): Promise<{ candidates: CommonsPhotoCandidateRecord[]; nextCursor: string | null }> => {
+  const params = new URLSearchParams({
+    action: "query",
+    list: "categorymembers",
+    cmtitle: `Category:${category.replace(/^Category:/i, "")}`,
+    cmtype: "file",
+    cmlimit: String(COMMONS_BATCH_SIZE),
+    format: "json",
+    origin: "*",
+  });
+  if (continuation) params.set("cmcontinue", continuation);
+  const response = await fetch(`${COMMONS_API_URL}?${params}`, {
+    headers: { "User-Agent": "Travel-Companion/3.9.13 (Wikimedia Commons category selector)" },
+    signal: AbortSignal.timeout(12_000),
+  });
+  if (response.status === 429) throw new Error("照片來源目前忙碌，請稍後再試。");
+  if (!response.ok) throw new Error("類別照片暫時無法使用。");
+  const payload = await response.json();
+  const members = isRecord(payload) && isRecord(payload.query) && Array.isArray(payload.query.categorymembers)
+    ? payload.query.categorymembers
+    : [];
+  const titles = members.flatMap((member) =>
+    isRecord(member) && typeof member.title === "string" && member.title.startsWith("File:")
+      ? [member.title]
+      : []
+  );
+  const candidates = await getCommonsImageInfo(titles);
+  const rawContinuation = isRecord(payload) && isRecord(payload.continue)
+    ? payload.continue.cmcontinue
+    : null;
+  return {
+    candidates,
+    nextCursor: typeof rawContinuation === "string" ? rawContinuation : null,
+  };
+};
+
+type CategoryChineseLabel = {
+  label: string;
+  source: "wikidata" | "google-nmt";
+};
+
+const decodeTranslationText = (value: string): string =>
+  value
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;|&#x27;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .trim();
+
+const cacheCategoryChineseLabels = async (
+  admin: ReturnType<typeof createClient>,
+  entries: Array<{ name: string; label: string; source: CategoryChineseLabel["source"] }>,
+) => {
+  if (entries.length === 0) return;
+  const now = new Date();
+  const expiresAt = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
+  const { error } = await admin
+    .from("commons_category_translation_cache")
+    .upsert(entries.map((entry) => ({
+      category_name: entry.name,
+      target_language: "zh-TW",
+      translated_text: entry.label,
+      source: entry.source,
+      succeeded_at: now.toISOString(),
+      expires_at: expiresAt,
+      updated_at: now.toISOString(),
+    })), { onConflict: "category_name,target_language" });
+  if (error) console.warn("Commons category translation cache write failed.", error.message);
+};
+
+const getCategoryChineseLabels = async (
+  admin: ReturnType<typeof createClient>,
+  userId: string,
+  names: string[],
+): Promise<Map<string, CategoryChineseLabel>> => {
   const uniqueNames = [...new Set(names)].slice(0, 80);
-  if (uniqueNames.length === 0) return new Map();
-  const pagesParams = new URLSearchParams({ action: "query", titles: uniqueNames.map((name) => `Category:${name}`).join("|"), prop: "pageprops", format: "json", origin: "*" });
-  const pagesResponse = await fetch(`${COMMONS_API_URL}?${pagesParams}`, { signal: AbortSignal.timeout(12_000) });
-  if (!pagesResponse.ok) return new Map();
-  const pagesPayload = await pagesResponse.json();
-  const pageEntries = isRecord(pagesPayload) && isRecord(pagesPayload.query) && isRecord(pagesPayload.query.pages)
-    ? Object.values(pagesPayload.query.pages) : [];
-  const qidByName = new Map<string, string>();
-  for (const page of pageEntries) {
-    if (!isRecord(page) || typeof page.title !== "string" || !isRecord(page.pageprops) || typeof page.pageprops.wikibase_item !== "string") continue;
-    qidByName.set(page.title.replace(/^Category:/i, ""), page.pageprops.wikibase_item);
+  const labels = new Map<string, CategoryChineseLabel>();
+  if (uniqueNames.length === 0) return labels;
+
+  try {
+    const pagesParams = new URLSearchParams({
+      action: "query",
+      titles: uniqueNames.map((name) => `Category:${name}`).join("|"),
+      prop: "pageprops",
+      format: "json",
+      origin: "*",
+    });
+    const pagesResponse = await fetch(`${COMMONS_API_URL}?${pagesParams}`, {
+      signal: AbortSignal.timeout(12_000),
+    });
+    if (pagesResponse.ok) {
+      const pagesPayload = await pagesResponse.json();
+      const pageEntries = isRecord(pagesPayload) && isRecord(pagesPayload.query) && isRecord(pagesPayload.query.pages)
+        ? Object.values(pagesPayload.query.pages) : [];
+      const qidByName = new Map<string, string>();
+      for (const page of pageEntries) {
+        if (!isRecord(page) || typeof page.title !== "string" || !isRecord(page.pageprops) || typeof page.pageprops.wikibase_item !== "string") continue;
+        qidByName.set(page.title.replace(/^Category:/i, ""), page.pageprops.wikibase_item);
+      }
+      const qids = [...new Set(qidByName.values())];
+      if (qids.length > 0) {
+        const labelsParams = new URLSearchParams({
+          action: "wbgetentities",
+          ids: qids.join("|"),
+          props: "labels",
+          languages: "zh-hant|zh",
+          format: "json",
+          origin: "*",
+        });
+        const labelsResponse = await fetch(`https://www.wikidata.org/w/api.php?${labelsParams}`, {
+          signal: AbortSignal.timeout(12_000),
+        });
+        if (labelsResponse.ok) {
+          const labelsPayload = await labelsResponse.json();
+          const entities = isRecord(labelsPayload) && isRecord(labelsPayload.entities) ? labelsPayload.entities : {};
+          const labelByQid = new Map<string, string>();
+          for (const [qid, entity] of Object.entries(entities)) {
+            if (!isRecord(entity) || !isRecord(entity.labels)) continue;
+            const label = entity.labels["zh-hant"] ?? entity.labels.zh;
+            if (isRecord(label) && typeof label.value === "string" && label.value.trim()) {
+              labelByQid.set(qid, label.value.trim());
+            }
+          }
+          const wikidataEntries = [...qidByName].flatMap(([name, qid]) => {
+            const label = labelByQid.get(qid);
+            if (!label) return [];
+            labels.set(name, { label, source: "wikidata" });
+            return [{ name, label, source: "wikidata" as const }];
+          });
+          await cacheCategoryChineseLabels(admin, wikidataEntries);
+        }
+      }
+    }
+  } catch (error) {
+    console.warn("Commons category Wikidata labels unavailable.", error);
   }
-  const qids = [...new Set(qidByName.values())];
-  if (qids.length === 0) return new Map();
-  const labelsParams = new URLSearchParams({ action: "wbgetentities", ids: qids.join("|"), props: "labels", languages: "zh-hant|zh", format: "json", origin: "*" });
-  const labelsResponse = await fetch(`https://www.wikidata.org/w/api.php?${labelsParams}`, { signal: AbortSignal.timeout(12_000) });
-  if (!labelsResponse.ok) return new Map();
-  const labelsPayload = await labelsResponse.json();
-  const entities = isRecord(labelsPayload) && isRecord(labelsPayload.entities) ? labelsPayload.entities : {};
-  const labelByQid = new Map<string, string>();
-  for (const [qid, entity] of Object.entries(entities)) {
-    if (!isRecord(entity) || !isRecord(entity.labels)) continue;
-    const label = entity.labels["zh-hant"] ?? entity.labels.zh;
-    if (isRecord(label) && typeof label.value === "string") labelByQid.set(qid, label.value);
+
+  const unresolvedAfterWikidata = uniqueNames.filter((name) => !labels.has(name));
+  if (unresolvedAfterWikidata.length === 0) return labels;
+
+  try {
+    const { data: cachedRows, error } = await admin
+      .from("commons_category_translation_cache")
+      .select("category_name, translated_text, source, expires_at")
+      .eq("target_language", "zh-TW")
+      .in("category_name", unresolvedAfterWikidata)
+      .gt("expires_at", new Date().toISOString());
+    if (error) throw error;
+    for (const row of cachedRows ?? []) {
+      if (
+        typeof row.category_name === "string" &&
+        typeof row.translated_text === "string" &&
+        (row.source === "wikidata" || row.source === "google-nmt")
+      ) {
+        labels.set(row.category_name, {
+          label: row.translated_text,
+          source: row.source,
+        });
+      }
+    }
+  } catch (error) {
+    console.warn("Commons category translation cache read failed.", error);
   }
-  return new Map([...qidByName].flatMap(([name, qid]) => {
-    const label = labelByQid.get(qid);
-    return label ? [[name, label]] : [];
-  }));
+
+  const toTranslate = uniqueNames.filter((name) => !labels.has(name));
+  if (toTranslate.length === 0) return labels;
+
+  const apiKey = Deno.env.get("GOOGLE_CLOUD_TRANSLATE_API_KEY");
+  if (!apiKey) return labels;
+
+  const requestedChars = toTranslate.reduce((sum, name) => sum + name.length, 0);
+  try {
+    const { data: claimed, error: claimError } = await admin.rpc(
+      "tc_claim_commons_translation_slots",
+      {
+        target_user_id: userId,
+        requested_items: toTranslate.length,
+        requested_chars: requestedChars,
+        maximum_items: 80,
+        maximum_chars: 12_000,
+      },
+    );
+    if (claimError || claimed !== true) return labels;
+
+    const endpoint = new URL("https://translation.googleapis.com/language/translate/v2");
+    endpoint.searchParams.set("key", apiKey);
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        q: toTranslate,
+        target: "zh-TW",
+        format: "text",
+      }),
+      signal: AbortSignal.timeout(8_000),
+    });
+    if (!response.ok) return labels;
+    const payload = await response.json();
+    const translations = isRecord(payload) && isRecord(payload.data) && Array.isArray(payload.data.translations)
+      ? payload.data.translations
+      : [];
+    const translatedEntries: Array<{ name: string; label: string; source: "google-nmt" }> = [];
+    toTranslate.forEach((name, index) => {
+      const translation = translations[index];
+      if (!isRecord(translation) || typeof translation.translatedText !== "string") return;
+      const label = decodeTranslationText(translation.translatedText);
+      if (!label) return;
+      labels.set(name, { label, source: "google-nmt" });
+      translatedEntries.push({ name, label, source: "google-nmt" });
+    });
+    await cacheCategoryChineseLabels(admin, translatedEntries);
+  } catch (error) {
+    console.warn("Commons category Translation fallback unavailable.", error);
+  }
+
+  return labels;
 };
 
 const getTransitVehicle = (route: Record<string, unknown>): string => {
@@ -245,7 +566,8 @@ const getAuthorizedClients = async (request: Request, tripId: string) => {
   });
   const { data: userData, error: userError } = await authClient.auth.getUser(token);
   const email = userData.user?.email?.trim().toLowerCase();
-  if (userError || !email) return null;
+  const userId = userData.user?.id;
+  if (userError || !email || !userId) return null;
 
   const admin = createClient(supabaseUrl, secretKey, {
     auth: { persistSession: false },
@@ -260,7 +582,7 @@ const getAuthorizedClients = async (request: Request, tripId: string) => {
     role.role === "super_admin" ||
     (role.role === "trip_editor" && role.trip_id === tripId)
   );
-  return isAuthorized ? { admin } : null;
+  return isAuthorized ? { admin, userId } : null;
 };
 
 const requestRoute = async (
@@ -411,6 +733,57 @@ Deno.serve(async (request) => {
       if (typeof body.query !== "string" || body.query.trim().length < 2 || body.query.trim().length > 120) {
         return json({ error: "請輸入至少 2 個字的照片搜尋詞。" }, 400);
       }
+      const query = body.query.normalize("NFKC").replace(/\s+/g, " ").trim();
+      if (body.batchContractVersion === 2) {
+        const batchToken = typeof body.batchToken === "string" ? body.batchToken : undefined;
+        const session = batchToken
+          ? await consumeCommonsBatchSession<CommonsPhotoCandidateRecord>(clients.admin, {
+              token: batchToken,
+              userId: clients.userId,
+              tripId: body.tripId,
+              sourceKind: "broad-search",
+              sourceKey: query,
+            })
+          : null;
+        if (batchToken && !session) {
+          return json({ error: "照片搜尋 session 已失效，請重新搜尋。", state: "session-expired" }, 400);
+        }
+        if (!batchToken) {
+          await clients.admin.rpc("tc_cleanup_v3913_commons_ephemeral");
+        }
+        const rawCursor = session
+          ? (typeof session.rawCursor === "number" ? session.rawCursor : null)
+          : 0;
+        try {
+          const batch = await buildCommonsEligibleBatch({
+            bufferedCandidates: session?.bufferedCandidates ?? [],
+            seenFileTitles: session?.seenFileTitles ?? [],
+            rawCursor,
+            fetchRawPage: (cursor) => fetchCommonsBroadRawPage(query, cursor ?? 0),
+          });
+          const nextBatchToken = batch.hasMoreEligibleCandidates
+            ? await createCommonsBatchSession(clients.admin, {
+                userId: clients.userId,
+                tripId: body.tripId,
+                sourceKind: "broad-search",
+                sourceKey: query,
+                rawCursor: batch.nextRawCursor,
+                bufferedCandidates: batch.bufferedCandidates,
+                seenFileTitles: batch.seenFileTitles,
+              })
+            : null;
+          return json({
+            candidates: batch.candidates,
+            nextBatchToken,
+            hasMoreEligibleCandidates: batch.hasMoreEligibleCandidates,
+            reachedEnd: batch.reachedEnd,
+          });
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "照片搜尋暫時無法使用。";
+          const status = message.includes("忙碌") ? 429 : 502;
+          return json({ error: message }, status);
+        }
+      }
       const offset = body.offset === undefined ? 0 : body.offset;
       if (!Number.isInteger(offset) || Number(offset) < 0 || Number(offset) > 10_000) {
         return json({ error: "照片搜尋分頁資訊無效。" }, 400);
@@ -479,13 +852,80 @@ Deno.serve(async (request) => {
         ? page.categories.flatMap((category) => isRecord(category) && typeof category.title === "string" && category.title.startsWith("Category:")
           ? [{ name: category.title.slice("Category:".length) }] : []) : []);
       const visibleCategories = categories.slice(0, 80);
-      const chineseLabels = await getCategoryChineseLabels(visibleCategories.map((category) => category.name));
-      return json({ categories: visibleCategories.map((category) => ({ ...category, chineseLabel: chineseLabels.get(category.name) })) });
+      const chineseLabels = await getCategoryChineseLabels(
+        clients.admin,
+        clients.userId,
+        visibleCategories.map((category) => category.name),
+      );
+      return json({
+        categories: visibleCategories.map((category) => {
+          const translated = chineseLabels.get(category.name);
+          return {
+            ...category,
+            canonicalName: category.name,
+            chineseLabel: translated?.label,
+            displayChineseLabel: translated?.label,
+            translationSource: translated?.source,
+            translationStatus: translated ? "ready" : "unavailable",
+          };
+        }),
+      });
     }
 
     if (body.action === "commonsCategoryPhotos") {
       if (typeof body.category !== "string" || body.category.trim().length < 1 || body.category.trim().length > 240) {
         return json({ error: "照片類別資訊無效。" }, 400);
+      }
+      const category = body.category.trim().replace(/^Category:/i, "");
+      if (body.batchContractVersion === 2) {
+        const batchToken = typeof body.batchToken === "string" ? body.batchToken : undefined;
+        const session = batchToken
+          ? await consumeCommonsBatchSession<CommonsPhotoCandidateRecord>(clients.admin, {
+              token: batchToken,
+              userId: clients.userId,
+              tripId: body.tripId,
+              sourceKind: "category",
+              sourceKey: category,
+            })
+          : null;
+        if (batchToken && !session) {
+          return json({ error: "照片搜尋 session 已失效，請重新進入此類別。", state: "session-expired" }, 400);
+        }
+        if (!batchToken) {
+          await clients.admin.rpc("tc_cleanup_v3913_commons_ephemeral");
+        }
+        const rawCursor = session
+          ? (typeof session.rawCursor === "string" ? session.rawCursor : null)
+          : "";
+        try {
+          const batch = await buildCommonsEligibleBatch({
+            bufferedCandidates: session?.bufferedCandidates ?? [],
+            seenFileTitles: session?.seenFileTitles ?? [],
+            rawCursor,
+            fetchRawPage: (cursor) => fetchCommonsCategoryRawPage(category, cursor || null),
+          });
+          const nextBatchToken = batch.hasMoreEligibleCandidates
+            ? await createCommonsBatchSession(clients.admin, {
+                userId: clients.userId,
+                tripId: body.tripId,
+                sourceKind: "category",
+                sourceKey: category,
+                rawCursor: batch.nextRawCursor,
+                bufferedCandidates: batch.bufferedCandidates,
+                seenFileTitles: batch.seenFileTitles,
+              })
+            : null;
+          return json({
+            candidates: batch.candidates,
+            nextBatchToken,
+            hasMoreEligibleCandidates: batch.hasMoreEligibleCandidates,
+            reachedEnd: batch.reachedEnd,
+          });
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "類別照片暫時無法使用。";
+          const status = message.includes("忙碌") ? 429 : 502;
+          return json({ error: message }, status);
+        }
       }
       const continuation = typeof body.continuation === "string" && body.continuation.length <= 500
         ? body.continuation : undefined;

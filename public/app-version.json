@@ -1,9 +1,9 @@
 {
-  "version": "3.9.12",
+  "version": "3.9.13",
   "minimumSupportedVersion": "3.9.2",
-  "releaseDate": "2026-09-25",
+  "releaseDate": "2026-09-26",
   "releaseNotes": [
-    "修正每日行程卡片照片挑選方式。"
+    "改善 Commons 照片類別繁中顯示、下一批候選載入與 PWA 更新時序。"
   ],
   "forceUpdate": false
 }

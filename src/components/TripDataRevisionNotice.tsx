@@ -4,6 +4,7 @@ import type { TripDataNoticeKind } from "../hooks/useTripDataRevision";
 interface TripDataRevisionNoticeProps {
   kind: TripDataNoticeKind | null;
   isOnline: boolean;
+  willApplyPreparedUpdate?: boolean;
   onSnooze: () => void;
   onReload: () => void;
 }
@@ -25,6 +26,7 @@ const criticalCopy: Record<"revoked" | "conflict", {
 export const TripDataRevisionNotice = ({
   kind,
   isOnline,
+  willApplyPreparedUpdate = false,
   onSnooze,
   onReload,
 }: TripDataRevisionNoticeProps) => {
@@ -57,7 +59,7 @@ export const TripDataRevisionNotice = ({
             className="mt-5 flex w-full items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-3 text-sm font-bold text-white hover:bg-slate-800"
           >
             <RefreshCw size={16} />
-            重新載入
+            {willApplyPreparedUpdate ? "重新載入並套用新版" : "重新載入"}
           </button>
         </section>
       </div>
@@ -69,7 +71,9 @@ export const TripDataRevisionNotice = ({
       <section className="mx-auto mt-3 max-w-md rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
         <p className="font-bold">雲端行程資料已有更新，目前暫停行程編輯。</p>
         <p className="mt-1 leading-6 text-amber-800">
-          共用工具仍可正常使用，請重新載入後再繼續編輯行程。
+          {willApplyPreparedUpdate
+            ? "共用工具仍可正常使用；目前已有新版準備完成，重新載入會同時套用新版並取得最新行程資料。"
+            : "共用工具仍可正常使用，請重新載入後再繼續編輯行程。"}
         </p>
         <button
           type="button"
@@ -78,7 +82,7 @@ export const TripDataRevisionNotice = ({
           className="mt-3 inline-flex items-center gap-2 rounded-lg bg-amber-900 px-3 py-2 text-xs font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
         >
           <RefreshCw size={14} />
-          重新載入
+          {willApplyPreparedUpdate ? "重新載入並套用新版" : "重新載入"}
         </button>
       </section>
     );
@@ -89,7 +93,9 @@ export const TripDataRevisionNotice = ({
       <p className="font-bold">行程資料已有更新</p>
       <p className="mt-1 leading-6 text-amber-800">
         {isOnline
-          ? "其他裝置已更新雲端行程資料。若選擇「稍後」，可繼續查看，但請先不要編輯行程，以免發生版本衝突。"
+          ? willApplyPreparedUpdate
+            ? "其他裝置已更新雲端行程資料，而且新版已準備完成。重新載入會同時套用新版並取得最新行程資料；若選擇「稍後」，請先不要編輯行程。"
+            : "其他裝置已更新雲端行程資料。若選擇「稍後」，可繼續查看，但請先不要編輯行程，以免發生版本衝突。"
           : "目前沒有網路連線，無法取得最新資料。恢復連線並重新載入前，請先不要編輯行程。"}
       </p>
       <div className="mt-3 flex gap-2">
@@ -107,7 +113,7 @@ export const TripDataRevisionNotice = ({
           className="inline-flex items-center gap-2 rounded-lg bg-amber-900 px-3 py-2 text-xs font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
         >
           <RefreshCw size={14} />
-          重新載入
+          {willApplyPreparedUpdate ? "重新載入並套用新版" : "重新載入"}
         </button>
       </div>
     </section>

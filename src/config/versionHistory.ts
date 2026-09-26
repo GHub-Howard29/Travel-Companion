@@ -14,6 +14,15 @@ export type VersionHistoryItem = {
 
 export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
+    version: "3.9.12",
+    date: "2026-09-25",
+    isMandatoryRelease: false,
+    notes: [
+      "每日行程照片改為廣泛搜尋、照片類別與類別內照片三階段人工挑選，每批 24 張、每頁 6 張。",
+      "保留授權、來源、裁切與 Storage 安全線，並修正外部連結返回同一 Trip 時跳回 Day 1。",
+    ],
+  },
+  {
     version: "3.9.11",
     date: "2026-09-25",
     isMandatoryRelease: false,
