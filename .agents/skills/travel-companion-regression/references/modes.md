@@ -9,8 +9,8 @@ Choose by changed risk, not by habit.
 | Verify | Migration grants, Auth, Trip loading, `travel-route`, or V3.9.1 photo integration changed | Covered by the current local-test request | `npm run regression:local:verify` |
 | Full | Release-candidate work or a broad cross-cutting change | Covered only when the user requested complete/full regression | `npm run regression:local:full` |
 | Browser | UI behavior, responsive layout, focus, keyboard, or copy changed | Covered when the user requested UI/browser regression; use the Codex in-app browser | See `browser-checklist.md` |
-| Browser broad fixture | Ambiguous-name fallback, manual-review grouping, or responsive candidate layout changed | Covered by local browser-test authorization; loopback synthetic response only | `npm run regression:local:browser-broad-fixture` |
-| Browser insufficient fixture | Candidate shortage copy or batch-change visibility changed | Covered by local browser-test authorization; loopback synthetic response only | `npm run regression:local:browser-insufficient-fixture` |
+| Browser broad fixture | V3.9.13 Commons dialog or batch-v2 boundary changed | Covered by local browser-test authorization; loopback authenticated boundary only, no external photo request | `npm run regression:local:browser-broad-fixture` |
+| Browser insufficient fixture | V3.9.13 Commons dialog or end-of-batch behavior changed | Covered by local browser-test authorization; loopback authenticated boundary only, no external photo request | `npm run regression:local:browser-insufficient-fixture` |
 | External | A real Commons/Wikimedia response is necessary | Fresh single-use authorization every run; state query set, request cap, timeout, retry, and write policy first | No generic command; use the separately approved bounded spike |
 
 ## Automatic decision rules

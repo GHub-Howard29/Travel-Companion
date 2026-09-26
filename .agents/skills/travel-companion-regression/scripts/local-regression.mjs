@@ -236,7 +236,7 @@ const browserBootstrapMode = async () => {
   }, null, 2));
 };
 
-const verifyBrowserFixture = async ({ fixture, expectedCount, expectedMode, url }) => {
+const verifyCommonsV3913LoopbackBoundary = async ({ url }) => {
   await browserBootstrapMode();
   const { apiUrl, anonKey } = getLocalConfig();
   const user = createClient(apiUrl, anonKey, { auth: { autoRefreshToken: false, persistSession: false } });
@@ -244,50 +244,82 @@ const verifyBrowserFixture = async ({ fixture, expectedCount, expectedMode, url 
     email: "v391-admin@example.invalid",
     password: "V391-local-test!",
   });
-  if (authError || !authData.session) throw new Error(`本機照片 fixture 登入失敗：${authError?.message ?? "沒有 session"}`);
-  const response = await fetch(`${apiUrl}/functions/v1/travel-route`, {
-    method: "POST",
-    headers: {
-      apikey: anonKey,
-      Authorization: `Bearer ${authData.session.access_token}`,
-      "Content-Type": "application/json",
-      "x-travel-companion-regression-fixture": fixture,
-    },
-    body: JSON.stringify({
-      action: "commonsPrecisionSearch",
-      tripId: "group-tour-2026-10",
-      query: "中山站",
-    }),
-    signal: AbortSignal.timeout(3_000),
+  if (authError || !authData.session) throw new Error(`本機照片回歸登入失敗：${authError?.message ?? "沒有 session"}`);
+
+  const callEdge = async (body) => {
+    const response = await fetch(`${apiUrl}/functions/v1/travel-route`, {
+      method: "POST",
+      headers: {
+        apikey: anonKey,
+        Authorization: `Bearer ${authData.session.access_token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(3_000),
+    });
+    return { response, body: await response.json() };
+  };
+
+  const bogusToken = "00000000-0000-0000-0000-000000000000";
+  const broad = await callEdge({
+    action: "commonsPhotoSearch",
+    tripId: "group-tour-2026-10",
+    query: "中山站",
+    batchContractVersion: 2,
+    batchToken: bogusToken,
   });
-  const body = await response.json();
-  if (response.status !== 200 || body.contractVersion !== "commons-precision-v2" ||
-    body.state !== "results" || body.searchMode !== expectedMode || body.candidates?.length !== expectedCount ||
-    body.nextPageToken !== undefined) {
-    throw new Error(`本機照片 fixture 不符預期：${response.status} ${JSON.stringify(body)}`);
+  if (broad.response.status !== 400 || broad.body.state !== "session-expired") {
+    throw new Error(`V3.9.13 廣泛候選 session 邊界不符預期：${broad.response.status} ${JSON.stringify(broad.body)}`);
   }
+
+  const category = await callEdge({
+    action: "commonsCategoryPhotos",
+    tripId: "group-tour-2026-10",
+    category: "Taiwan",
+    batchContractVersion: 2,
+    batchToken: bogusToken,
+  });
+  if (category.response.status !== 400 || category.body.state !== "session-expired") {
+    throw new Error(`V3.9.13 類別候選 session 邊界不符預期：${category.response.status} ${JSON.stringify(category.body)}`);
+  }
+
+  const categories = await callEdge({
+    action: "commonsPhotoCategories",
+    tripId: "group-tour-2026-10",
+    fileTitle: "not-a-file-title",
+  });
+  if (categories.response.status !== 400) {
+    throw new Error(`V3.9.13 類別輸入邊界不符預期：${categories.response.status} ${JSON.stringify(categories.body)}`);
+  }
+
+  const legacy = await callEdge({
+    action: "commonsPrecisionSearch",
+    tripId: "group-tour-2026-10",
+    query: "中山站",
+  });
+  if (legacy.response.status !== 410) {
+    throw new Error(`舊 Commons 精準搜尋停用邊界不符預期：${legacy.response.status} ${JSON.stringify(legacy.body)}`);
+  }
+
   console.log(JSON.stringify({
     fixtureReady: true,
     url,
-    query: "中山站",
-    expectedCount,
-    expectedMode,
-    scope: "loopback-only synthetic Edge response; no Wikimedia, cache, usage, Storage, or production access",
+    checks: [
+      "commonsPhotoSearch batch v2 session-expired",
+      "commonsCategoryPhotos batch v2 session-expired",
+      "commonsPhotoCategories validation",
+      "commonsPrecisionSearch disabled",
+    ],
+    scope: "loopback-only authenticated Edge boundary; no Wikimedia, Google, cache, Storage, or production access",
   }, null, 2));
 };
 
-const browserBroadFixtureMode = () => verifyBrowserFixture({
-  fixture: "commons-broad-manual",
-  expectedCount: 6,
-  expectedMode: "broad",
-  url: "http://127.0.0.1:5173/Travel-Companion/?tcRegressionFixture=commons-broad-manual",
+const browserBroadFixtureMode = () => verifyCommonsV3913LoopbackBoundary({
+  url: "http://127.0.0.1:5173/Travel-Companion/?tcRegressionFixture=v3913-commons-boundary",
 });
 
-const browserInsufficientFixtureMode = () => verifyBrowserFixture({
-  fixture: "commons-insufficient",
-  expectedCount: 4,
-  expectedMode: "entity-guided",
-  url: "http://127.0.0.1:5173/Travel-Companion/?tcRegressionFixture=commons-insufficient",
+const browserInsufficientFixtureMode = () => verifyCommonsV3913LoopbackBoundary({
+  url: "http://127.0.0.1:5173/Travel-Companion/?tcRegressionFixture=v3913-commons-boundary",
 });
 
 const verifyMode = async () => {
@@ -309,30 +341,73 @@ const verifyMode = async () => {
   const { data: trips, error: tripError } = await user.from("trips").select("id").eq("id", "group-tour-2026-10");
   if (tripError || trips.length !== 1) throw new Error(`管理者 Trip 載入失敗：${tripError?.message ?? "找不到 fixture"}`);
 
-  const edgeResponse = await fetch(`${apiUrl}/functions/v1/travel-route`, {
-    method: "POST",
-    headers: {
-      apikey: anonKey,
-      Authorization: `Bearer ${authData.session.access_token}`,
-      "Content-Type": "application/json",
-      "x-travel-companion-regression-fixture": "commons-broad-manual",
-    },
-    body: JSON.stringify({
-      action: "commonsPrecisionSearch",
-      tripId: "group-tour-2026-10",
-      query: "中山站",
-    }),
-    signal: AbortSignal.timeout(3_000),
+  const callEdge = async (body) => {
+    const response = await fetch(`${apiUrl}/functions/v1/travel-route`, {
+      method: "POST",
+      headers: {
+        apikey: anonKey,
+        Authorization: `Bearer ${authData.session.access_token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(3_000),
+    });
+    return { response, body: await response.json() };
+  };
+
+  const bogusToken = "00000000-0000-0000-0000-000000000000";
+
+  const broadBoundary = await callEdge({
+    action: "commonsPhotoSearch",
+    tripId: "group-tour-2026-10",
+    query: "中山站",
+    batchContractVersion: 2,
+    batchToken: bogusToken,
   });
-  const edgeBody = await edgeResponse.json();
-  if (edgeResponse.status !== 200 || edgeBody.contractVersion !== "commons-precision-v2" ||
-    edgeBody.state !== "results" || edgeBody.searchMode !== "broad" || edgeBody.candidates?.length !== 6) {
-    throw new Error(`Edge 廣泛候選 fixture 不符預期：${edgeResponse.status} ${JSON.stringify(edgeBody)}`);
+  if (broadBoundary.response.status !== 400 || broadBoundary.body.state !== "session-expired") {
+    throw new Error(`V3.9.13 廣泛候選 session 邊界不符預期：${broadBoundary.response.status} ${JSON.stringify(broadBoundary.body)}`);
   }
 
-  run("npm", ["run", "verify:v391-precision-database"]);
-  run("npm", ["run", "verify:v391-precision-integration"]);
-  console.log("本機 Supabase grants、管理者登入、Trip 載入、V3.9.11 Edge 廣泛候選 fixture 與整合契約均通過；未送出 Wikimedia 請求。");
+  const categoryBoundary = await callEdge({
+    action: "commonsCategoryPhotos",
+    tripId: "group-tour-2026-10",
+    category: "Taiwan",
+    batchContractVersion: 2,
+    batchToken: bogusToken,
+  });
+  if (categoryBoundary.response.status !== 400 || categoryBoundary.body.state !== "session-expired") {
+    throw new Error(`V3.9.13 類別候選 session 邊界不符預期：${categoryBoundary.response.status} ${JSON.stringify(categoryBoundary.body)}`);
+  }
+
+  const categoryInputBoundary = await callEdge({
+    action: "commonsPhotoCategories",
+    tripId: "group-tour-2026-10",
+    fileTitle: "not-a-file-title",
+  });
+  if (categoryInputBoundary.response.status !== 400) {
+    throw new Error(`V3.9.13 類別輸入邊界不符預期：${categoryInputBoundary.response.status} ${JSON.stringify(categoryInputBoundary.body)}`);
+  }
+
+  const legacyBoundary = await callEdge({
+    action: "commonsPrecisionSearch",
+    tripId: "group-tour-2026-10",
+    query: "中山站",
+  });
+  if (legacyBoundary.response.status !== 410) {
+    throw new Error(`舊 Commons 精準搜尋停用邊界不符預期：${legacyBoundary.response.status} ${JSON.stringify(legacyBoundary.body)}`);
+  }
+
+  const { error: batchSessionAdminError } = await admin
+    .from("commons_candidate_batch_sessions")
+    .select("token_hash")
+    .limit(1);
+  if (batchSessionAdminError) {
+    throw new Error(`V3.9.13 batch session service_role grant 失敗：${batchSessionAdminError.message}`);
+  }
+
+  run("npm", ["run", "verify:v3913-commons-batch"]);
+  run("npm", ["run", "verify:v3913-commons-contract"]);
+  console.log("本機 Supabase grants、管理者登入、Trip 載入、V3.9.13 Edge batch v2 邊界與 Commons 合約均通過；未送出 Wikimedia 或 Google 請求。");
 };
 
 const main = async () => {

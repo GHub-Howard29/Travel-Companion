@@ -1,16 +1,16 @@
 /** App 發布版本設定；須與 public/app-version.json 保持一致。 */
-export const APP_VERSION = "3.9.12";
+export const APP_VERSION = "3.9.13";
 
 /**
  * 最近一次已發布版本；此版本必須存在於 versionHistory.ts。
  * production build 會驗證這個規則，避免升版後遺漏版本歷史。
  */
-export const PREVIOUS_RELEASE_VERSION = "3.9.11";
+export const PREVIOUS_RELEASE_VERSION = "3.9.12";
 
-export const RELEASE_DATE = "2026-09-25";
+export const RELEASE_DATE = "2026-09-26";
 
 export const RELEASE_NOTES = [
-  "修正每日行程卡片照片挑選方式。",
+  "改善 Commons 照片類別繁中顯示、下一批候選載入與 PWA 更新時序。",
 ];
 
 /** 目前版本發布時保存的更新政策；不隨執行中客戶端是否已達最低版本而改變。 */
