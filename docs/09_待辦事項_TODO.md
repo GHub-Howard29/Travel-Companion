@@ -2,16 +2,16 @@
 
 > 本文件只保留未完成、待補驗或待評估工作；不累積 `[x]` 歷史。
 >
-> 目前狀態以《[14_專案現況總覽](14_專案現況總覽.md)》為準。最後整理：2026-09-25。
+> 目前狀態以《[14_專案現況總覽](14_專案現況總覽.md)》為準。最後整理：2026-09-26。
 
 ## 後續候選版本
 
-- [ ] V3.9.12 已發布待補驗：由 Product Owner 以完成 PWA 接管的正式登入驗證廣泛搜尋、類別、類別內續載與外部連結返回 Day 保留；不得以 loopback fixture 取代真實 Wikimedia 驗證。
+- [ ] V3.9.13：依《[64_V3.9.13_分類翻譯與候選批次修正規格](64_V3.9.13_分類翻譯與候選批次修正規格.md)》補足 Commons 類別 `zh-TW` 判讀、候選批次控制與 PWA 更新／遠端行程修訂競態；先完成 UI 預覽核准，再取得專用 Google Cloud Translation Basic API Key，之後才可實作、migration、部署與正式驗證。
 
 - [ ] V3.10.1：建立完整 build 的驗證群組與耗時基線，整併驗證入口與失敗報告，不縮減 release build；既有 V3.9.3 總啟動量測已確認存在，本版不重複新增程式內埋點。
-- [ ] V3.9.13：沿用既有總啟動量測，分段量測離線冷啟動約 30 秒的 Service Worker、navigation、session、Trip 快取、localStorage、IndexedDB 與首個可操作畫面瓶頸，再依證據決定是否修正；不新增遠端 telemetry。
-- [ ] V3.9.14：以 loopback fixture 與瀏覽器／viewport 模擬建立零費用 Playwright 響應式回歸基礎。
-- [ ] V3.9.15：整理照片功能模組、型別邊界與按需載入，不新增圖庫來源。
+- [ ] V3.10.2：沿用既有總啟動量測，分段量測離線冷啟動約 30 秒的 Service Worker、navigation、session、Trip 快取、localStorage、IndexedDB 與首個可操作畫面瓶頸，再依證據決定是否修正；不新增遠端 telemetry。
+- [ ] V3.10.3：以 loopback fixture 與瀏覽器／viewport 模擬建立零費用 Playwright 響應式回歸基礎。
+- [ ] V3.10.4：整理照片功能模組、型別邊界與按需載入，不新增圖庫來源。
 - [ ] V3.11.0：只在需求證據足夠時重新評估使用紀錄；原逐次明細、Cron、獨立角色與 TOTP 仍為先前草案。
 
 ## 已發布版本待補驗
