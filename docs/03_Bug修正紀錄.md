@@ -26,29 +26,25 @@
 - 預期：此文案只應在具有共用帳本／代其他成員記帳能力的情境出現；個人帳本作業不應顯示。
 - 狀態：待修正顯示條件並回歸個人帳本與共用帳本兩種權限情境。
 
-## 已修正、待補驗
+### BUG012：多人帳本即時刷新
 
-| 編號 | 主題 | 待補驗範圍 |
+- 問題：B 裝置停留在帳本頁時，A 裝置新增或刪除帳目後，B 不會自動更新；至少需切換功能頁面後才會刷新。
+- 實機觀察：2026-09-26 Android／跨裝置回歸確認新增與刪除皆可重現。
+- 狀態：先前 Realtime／30 秒輪詢修正未達到頁面內即時刷新目標，視為仍未修正；待重新檢查訂閱生命週期與刷新觸發。
+
+## 暫緩補驗
+
+依 Product Owner 指示，iOS 相關實機補驗目前排除，不列入近期消項目標。
+
+| 編號 | 主題 | 剩餘範圍 |
 |---|---|---|
-| BUG003 | 手機附件拍照／相簿／檔案選擇 | Android 已於 2026-09-26 實機通過；僅剩 iOS，依 Product Owner 指示目前排除 |
-| BUG009 | iOS 安裝 PWA 引導 | iOS Safari 與加入主畫面；目前排除 |
-| BUG010 | iOS 照片同步失敗 | iOS IndexedDB、Canvas、Storage 與背景切換；目前排除 |
-| BUG011 | Android 附件拍照入口 | Android 已於 2026-09-26 實機通過；僅剩 iOS，依 Product Owner 指示目前排除 |
-| BUG012 | 多人帳本即時刷新 | **Android 實機未通過**：B 停留在帳本頁時，A 新增／刪除後不會自動更新；至少需切換功能頁面後才會刷新。需修正 Realtime／頁面內刷新行為 |
-| BUG015 | Android PWA／iOS Safari 更新提示 | Android 已於 2026-09-26 實機通過；僅剩 iOS Safari，依 Product Owner 指示目前排除 |
+| BUG003 | 手機附件拍照／相簿／檔案選擇 | Android 已通過；僅剩 iOS |
+| BUG009 | iOS 安裝 PWA 引導 | iOS Safari 與加入主畫面 |
+| BUG010 | iOS 照片同步失敗 | iOS IndexedDB、Canvas、Storage 與背景切換 |
+| BUG011 | Android 附件拍照入口 | Android 已通過；僅剩 iOS |
+| BUG015 | Android PWA／iOS Safari 更新提示 | Android 已通過；僅剩 iOS Safari |
 
-2026-09-26 Android 實機已通過：BUG006 帳目附件單獨刪除與重載、BUG008 Other Info 瀏覽／管理模式、BUG013 非強制更新稍後提醒、BUG014 TWD／JPY／KRW／USD／EUR 分攤取整、BUG018 多行程離線新增／重連／不覆蓋遠端。
-
-詳細問題、原因、修正方式與舊驗證紀錄均保留在完整歷史檔。
-
-## 近期修正
-
-### BUG031：V3.9.1 正式 bundle 誤含本機 Supabase origin
-
-- 影響：手機／PWA 更新後可能停在「正在建立雲端 safe 連線...」。
-- 根因：production rebuild 讀入指向 loopback Supabase 的 `.env.local`。
-- 修正：V3.9.2 新增 production 設定隔離、建置前 URL 防呆與產物掃描，並採必要更新向前修復。
-- 狀態：已修正並發布；3.9.1 → 3.9.2、登入 session 恢復與 Guest Trip 載入已通過。
+已完成驗證與舊修正紀錄移至《[archive/bug-history/03_Bug修正紀錄_完整歷史](archive/bug-history/03_Bug修正紀錄_完整歷史.md)》與版本更新紀錄保存。
 
 ## Bug 管理原則
 
