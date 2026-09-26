@@ -5,7 +5,7 @@
  * Service Worker 更新流程由 useAppUpdate 控制。
  */
 import { RefreshCw, X } from "lucide-react";
-import type { AppUpdatePromptMode } from "../hooks/useAppUpdate";
+import type { AppUpdatePhase, AppUpdatePromptMode } from "../hooks/useAppUpdate";
 
 type UpdatePromptProps = {
   isOpen: boolean;
@@ -17,6 +17,7 @@ type UpdatePromptProps = {
   isMandatoryUpdate: boolean;
   updateError: string | null;
   isChecking: boolean;
+  updatePhase: AppUpdatePhase;
   onUpdate: () => void;
   onDismiss: () => void;
 };
@@ -31,6 +32,7 @@ export function UpdatePrompt({
   isMandatoryUpdate,
   updateError,
   isChecking,
+  updatePhase,
   onUpdate,
   onDismiss,
 }: UpdatePromptProps) {
@@ -42,13 +44,19 @@ export function UpdatePrompt({
     : isMandatoryUpdate
       ? "本次更新必須安裝才能繼續使用"
       : "可以馬上更新，也可以稍後再更新";
-  const primaryActionLabel = isChecking
-    ? "正在檢查更新…"
-    : updateError
-      ? "重試更新"
-      : isMandatoryUpdate
-        ? "立即更新"
-        : "馬上更新";
+  const primaryActionLabel = updatePhase === "ready-to-reload"
+    ? "重新載入套用新版"
+    : isChecking
+      ? updatePhase === "downloading"
+        ? "正在下載新版…"
+        : updatePhase === "waiting-control"
+          ? "等待新版接管…"
+          : "正在檢查更新…"
+      : updateError
+        ? "重試更新"
+        : isMandatoryUpdate
+          ? "立即更新"
+          : "馬上更新";
   const secondaryActionLabel = "稍後更新";
 
   return (
