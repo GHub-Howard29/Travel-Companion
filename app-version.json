@@ -1,9 +1,10 @@
 {
-  "version": "3.9.13",
+  "version": "3.9.14",
   "minimumSupportedVersion": "3.9.2",
-  "releaseDate": "2026-09-26",
+  "releaseDate": "2026-09-27",
   "releaseNotes": [
-    "改善 Commons 照片類別繁中顯示、下一批候選載入與 PWA 更新時序。"
+    "修正 Wikimedia Commons 搜尋結果排序，保留官方相關性順位。",
+    "擴充 Commons 可用授權支援至 CC BY-SA，提升類別與景點照片候選完整度。"
   ],
   "forceUpdate": false
 }
