@@ -19,6 +19,7 @@ assert.match(edge, /translationSource:\s*translated\?\.source/);
 assert.match(edge, /translationStatus:\s*translated \? "ready" : "unavailable"/);
 assert.match(edge, /batchContractVersion === 2/g);
 assert.match(edge, /sourceKind:\s*"broad-search"/);
+assert.match(edge, /gsrsearch:\s*`\$\{query\} filetype:bitmap\|drawing`/);
 assert.match(edge, /sourceKind:\s*"category"/);
 assert.match(edge, /userId:\s*clients\.userId/);
 assert.match(edge, /tripId:\s*body\.tripId/);

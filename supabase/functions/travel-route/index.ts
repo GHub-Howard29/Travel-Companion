@@ -10,6 +10,7 @@ import {
 } from "./validation.ts";
 import {
   buildCommonsEligibleBatch,
+  sortCommonsSearchPagesByRank,
   type CommonsBatchCandidate,
 } from "./commonsCandidateBatch.ts";
 
@@ -157,7 +158,7 @@ const metadataValue = (metadata: Record<string, unknown>, key: string): string |
 };
 
 const isAllowedCommonsLicense = (license: string): boolean =>
-  /^(?:CC0(?: 1\.0)?|Public domain|CC BY (?:1\.0|2\.0|2\.5|3\.0|4\.0))$/i.test(license.trim());
+  /^(?:CC0(?: 1\.0)?|Public domain|CC BY(?:-SA)? (?:1\.0|2\.0|2\.5|3\.0|4\.0))$/i.test(license.trim());
 
 const isHttpsUrl = (value: unknown): value is string => {
   if (typeof value !== "string") return false;
@@ -193,12 +194,12 @@ const toCommonsPhotoCandidate = (page: unknown) => {
   const restrictions = metadataValue(metadata, "Restrictions");
   const licenseUrl = metadataValue(metadata, "LicenseUrl");
   const isPublicDomain = license?.toLowerCase() === "public domain" || license?.toLowerCase().startsWith("cc0");
-  const isCcBy = /^CC BY (?:1\.0|2\.0|2\.5|3\.0|4\.0)$/i.test(license ?? "");
+  const requiresAttribution = /^CC BY(?:-SA)? (?:1\.0|2\.0|2\.5|3\.0|4\.0)$/i.test(license ?? "");
   const cropImageUrl = typeof info.thumburl === "string" ? getCommonsDerivativeUrl(info.thumburl, 1280) : undefined;
   if (info.mediatype !== "BITMAP" || !["image/jpeg", "image/png", "image/webp"].includes(String(info.thumbmime)) ||
     !license || !creator || !isAllowedCommonsLicense(license) || restrictions ||
     !isHttpsUrl(info.thumburl) || !cropImageUrl || !isHttpsUrl(info.descriptionurl) ||
-    (!isPublicDomain && !isHttpsUrl(licenseUrl)) || (isCcBy && !credit)) return null;
+    (!isPublicDomain && !isHttpsUrl(licenseUrl)) || (requiresAttribution && !credit)) return null;
   return {
     fileTitle: page.title,
     thumbnailUrl: normalizeCommonsThumbnailUrl(info.thumburl),
@@ -226,7 +227,7 @@ const getCommonsImageInfo = async (titles: string[]) => {
     format: "json", origin: "*",
   });
   const response = await fetch(`${COMMONS_API_URL}?${params}`, {
-    headers: { "User-Agent": "Travel-Companion/3.9.13 (Wikimedia Commons photo selector)" }, signal: AbortSignal.timeout(12_000),
+    headers: { "User-Agent": "Travel-Companion/3.9.14 (Wikimedia Commons photo selector)" }, signal: AbortSignal.timeout(12_000),
   });
   if (response.status === 429) throw new Error("照片來源目前忙碌，請稍後再試。");
   if (!response.ok) throw new Error("照片搜尋暫時無法使用。");
@@ -252,7 +253,7 @@ const fetchCommonsBroadRawPage = async (
   const params = new URLSearchParams({
     action: "query",
     generator: "search",
-    gsrsearch: query,
+    gsrsearch: `${query} filetype:bitmap|drawing`,
     gsrnamespace: "6",
     gsrlimit: String(COMMONS_BATCH_SIZE),
     prop: "imageinfo",
@@ -268,14 +269,14 @@ const fetchCommonsBroadRawPage = async (
     params.set("gsroffset", String(offset));
   }
   const response = await fetch(`${COMMONS_API_URL}?${params}`, {
-    headers: { "User-Agent": "Travel-Companion/3.9.13 (Wikimedia Commons photo selector)" },
+    headers: { "User-Agent": "Travel-Companion/3.9.14 (Wikimedia Commons photo selector)" },
     signal: AbortSignal.timeout(12_000),
   });
   if (response.status === 429) throw new Error("照片來源目前忙碌，請稍後再試。");
   if (!response.ok) throw new Error("照片搜尋暫時無法使用。");
   const payload = await response.json();
   const pages = isRecord(payload) && isRecord(payload.query) && isRecord(payload.query.pages)
-    ? Object.values(payload.query.pages)
+    ? sortCommonsSearchPagesByRank(Object.values(payload.query.pages))
     : [];
   const candidates = pages.flatMap((page) => {
     const candidate = toCommonsPhotoCandidate(page);
@@ -306,7 +307,7 @@ const fetchCommonsCategoryRawPage = async (
   });
   if (continuation) params.set("cmcontinue", continuation);
   const response = await fetch(`${COMMONS_API_URL}?${params}`, {
-    headers: { "User-Agent": "Travel-Companion/3.9.13 (Wikimedia Commons category selector)" },
+    headers: { "User-Agent": "Travel-Companion/3.9.14 (Wikimedia Commons category selector)" },
     signal: AbortSignal.timeout(12_000),
   });
   if (response.status === 429) throw new Error("照片來源目前忙碌，請稍後再試。");

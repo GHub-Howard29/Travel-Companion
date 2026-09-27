@@ -32,9 +32,9 @@ export const compressCommonsPhoto = async (
   candidate: CommonsPhotoCandidate,
   crop: ItineraryCoverCropTransform,
 ): Promise<{ blob: Blob; width: number; height: number }> => {
-  const isCcBy = /^CC BY (?:1\.0|2\.0|2\.5|3\.0|4\.0)$/i.test(candidate.license.trim());
-  if (isCcBy && (!candidate.credit?.trim() || !candidate.licenseUrl?.startsWith("https://"))) {
-    throw new Error("照片缺少 CC BY 必要的 credit 或授權連結，請改選其他照片。");
+  const requiresAttribution = /^CC BY(?:-SA)? (?:1\.0|2\.0|2\.5|3\.0|4\.0)$/i.test(candidate.license.trim());
+  if (requiresAttribution && (!candidate.credit?.trim() || !candidate.licenseUrl?.startsWith("https://"))) {
+    throw new Error("照片缺少 Creative Commons 必要的 credit 或授權連結，請改選其他照片。");
   }
   const requestedUrl = new URL(candidate.cropImageUrl);
   if (requestedUrl.protocol !== "https:" || requestedUrl.hostname !== "upload.wikimedia.org") {
@@ -137,7 +137,7 @@ export const uploadItineraryCoverPhoto = async (
     sourceRevisionAt: candidate.sourceRevisionAt,
     selectedAt: new Date().toISOString(),
     modified: true,
-    transformation: /^CC BY(?: |$)/i.test(candidate.license)
+    transformation: /^CC BY(?:-SA)?(?: |$)/i.test(candidate.license)
       ? "blurred-background-resized-and-webp-transcoded"
       : undefined,
     width: compressed.width,
