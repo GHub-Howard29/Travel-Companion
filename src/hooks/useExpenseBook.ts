@@ -633,11 +633,6 @@ useEffect(() => {
       await reloadExpenses();
       setActiveExpenseDate(newExpenseData.expense_date);
       clearAddForm();
-      alert(
-        selectedFile
-          ? "已儲存在此裝置的個人帳本，照片也只保存在本機。Excel 內會標註附件名稱，但不會產生雲端下載網址。"
-          : "已儲存在此裝置的個人帳本，不會上傳到共用雲端。你仍可匯出 Excel 備份或分享。",
-      );
     };
 
     const saveToOfflineSandbox = async () => {

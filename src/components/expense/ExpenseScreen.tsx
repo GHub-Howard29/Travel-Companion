@@ -301,9 +301,13 @@ export default function ExpenseScreen({
           <div className="rounded-lg border border-slate-100 bg-slate-50 p-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="min-w-0">
-                <p className="text-xs font-bold text-slate-700">照片附件同步</p>
+                <p className="text-xs font-bold text-slate-700">
+                  {isUsingSharedExpenseBook ? "照片附件同步" : "個人帳本僅儲存在此裝置"}
+                </p>
                 <p className="mt-0.5 text-[11px] leading-relaxed text-slate-500">
-                  最後上傳：{attachmentSyncLabel}。照片會自動壓縮至 1MB 以內，建議在 Wi-Fi 環境下再上傳以節省流量。
+                  {isUsingSharedExpenseBook
+                    ? `最後上傳：${attachmentSyncLabel}。照片會自動壓縮至 1MB 以內，建議在 Wi-Fi 環境下再上傳以節省流量。`
+                    : "帳目與照片不會同步到共用雲端。更換裝置或清除瀏覽器資料前，請先匯出 Excel 備份。照片附件也只保存在目前裝置。"}
                 </p>
                 {isUsingSharedExpenseBook && hasUnsyncedLocalExpenseAttachments && (
                   <p className="mt-1 text-[11px] font-semibold text-orange-700">
@@ -331,7 +335,7 @@ export default function ExpenseScreen({
                 </button>
               ) : (
                 <span className="rounded-lg bg-sky-100 px-3 py-2 text-xs font-bold text-sky-800">
-                  個人帳本照片僅存本機
+                  個人帳本・僅存本機
                 </span>
               )}
             </div>

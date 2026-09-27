@@ -56,7 +56,6 @@ export const useTripDataRevision = ({
     const tripId = selectedTripIdRef.current;
     const email = userEmailRef.current;
     if (!tripId || !email || !navigator.onLine) {
-      setNoticeKind((current) => current ?? "available");
       return;
     }
 
@@ -89,7 +88,6 @@ export const useTripDataRevision = ({
       );
     } catch (error) {
       console.warn("Failed to revalidate Trip access after revision", error);
-      setNoticeKind((current) => current ?? "available");
     }
   }, [onReconcileTrips, supabase]);
 
@@ -123,8 +121,7 @@ export const useTripDataRevision = ({
     try {
       const revision = await getAppDataRevision(supabase);
       if (!revision) {
-        await inspectAccessAndNotify();
-        return true;
+        return false;
       }
       const shouldNotify = acceptRevision(revision);
       if (
@@ -136,8 +133,7 @@ export const useTripDataRevision = ({
       return shouldNotify;
     } catch (error) {
       console.warn("Failed to check Trip data revision", error);
-      setNoticeKind((current) => current ?? "available");
-      return true;
+      return false;
     }
   }, [
     acceptRevision,
