@@ -83,6 +83,7 @@ import {
   APP_SOURCE_CLIENT_HEADER,
   APP_SOURCE_CLIENT_ID,
 } from "./services/tripDataRevisionService";
+import { syncItineraryCoverOfflineCache } from "./services/itineraryCoverOfflineCache";
 
 const ExpenseScreen = lazy(() => import("./components/expense/ExpenseScreen"));
 const ItineraryPage = lazy(() =>
@@ -1040,6 +1041,14 @@ function ConfiguredApp({
 
     setCurrentScreen("itinerary");
   }, [currentScreenType, setCurrentScreen, userEmail]);
+
+  useEffect(() => {
+    if (!currentTrip || !isOnline || !supabaseUrl?.trim()) return;
+
+    void syncItineraryCoverOfflineCache(currentTrip, supabaseUrl).catch((error) => {
+      console.warn("Failed to sync itinerary covers for offline use", error);
+    });
+  }, [currentTrip, isOnline]);
 
   return (
     <AppContext.Provider value={appContextValue}>
