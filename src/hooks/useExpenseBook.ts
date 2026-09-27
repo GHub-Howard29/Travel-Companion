@@ -578,7 +578,7 @@ useEffect(() => {
       amount: amountNum,
       payer: isUsingSharedExpenseBook
         ? newPayer || defaultPayerName || expenseMembers[0]
-        : userEmail,
+        : defaultPayerName || userEmail,
       client_item_id: clientItemId,
       owner_user_id: userId,
       recorded_by_email: userEmail,
@@ -803,7 +803,9 @@ useEffect(() => {
       ...targetExpense,
       title: editDraft.title,
       amount: Math.abs(Math.floor(Number(editDraft.amount))),
-      payer: isUsingSharedExpenseBook ? editDraft.payer : userEmail,
+      payer: isUsingSharedExpenseBook
+        ? editDraft.payer
+        : defaultPayerName || userEmail,
       currency: editDraft.currency,
       expense_date: editDraft.expenseDate || getExpenseDate(targetExpense),
       updated_at: new Date().toISOString(),

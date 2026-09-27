@@ -21,7 +21,6 @@ interface ExpenseScreenProps {
   isSharedTripReadOnly: boolean;
   isUsingSharedExpenseBook: boolean;
   exportsAllSharedExpenses: boolean;
-  userEmail: string | null;
   canManageExpense: (item: ExpenseItem) => boolean;
   safeExpenses: ExpenseItem[];
   filteredExpenses: ExpenseItem[];
@@ -87,7 +86,6 @@ export default function ExpenseScreen({
   isSharedTripReadOnly,
   isUsingSharedExpenseBook,
   exportsAllSharedExpenses,
-  userEmail,
   canManageExpense,
   safeExpenses,
   filteredExpenses,
@@ -455,7 +453,7 @@ export default function ExpenseScreen({
                   const isSelectedPayer =
                     newPayer === m ||
                     (!newPayer && defaultPayerName === m) ||
-                    (!isUsingSharedExpenseBook && m === userEmail);
+                    (!isUsingSharedExpenseBook && m === defaultPayerName);
 
                   return (
                     <button
@@ -614,7 +612,7 @@ export default function ExpenseScreen({
                                 payer: m,
                               }))
                             }
-                            className={`rounded-lg border px-3 py-1.5 text-xs font-bold transition-all ${editDraft.payer === m || (!isUsingSharedExpenseBook && m === userEmail) ? "border-amber-600 bg-amber-600 text-white" : "border-slate-200 bg-white text-slate-600"}`}
+                            className={`rounded-lg border px-3 py-1.5 text-xs font-bold transition-all ${editDraft.payer === m || (!isUsingSharedExpenseBook && m === defaultPayerName) ? "border-amber-600 bg-amber-600 text-white" : "border-slate-200 bg-white text-slate-600"}`}
                           >
                             {m}
                           </button>

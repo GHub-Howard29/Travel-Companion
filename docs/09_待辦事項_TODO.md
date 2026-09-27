@@ -9,7 +9,7 @@
 - [x] V3.9.13：2026-09-26 正式發布完成。Cloud Translation API、專用 Translation Key、Supabase Secret 與硬性 Quota（14,000 字元／日、15,000 字元／分鐘、v2 60 requests／分鐘）均已就緒；V3.9.13 migration 與 batch session 外鍵索引已正式套用，`travel-route` v16 已部署。完整 production build、V3.9.13 專屬驗證、TypeScript、瀏覽器安全、lint、文件連結、本機 Supabase full regression 與 desktop／390×844 RC Browser 回歸均通過。正式 GitHub Pages 已發布，公開 metadata 為 3.9.13、fresh-load bundle 為 `index-w_GCmHOi.js` 且 UI 顯示 v3.9.13；發布合併提交 `bad4361`、annotated tag `v3.9.13`、gh-pages 提交 `8bd8e35` 均已推送。既有 PWA session 可能先由舊 Service Worker 載入上一版 bundle，屬正常更新接管場景；fresh-load smoke 已通過。維持既有定案範圍，不併入 BUG012／BUG032／BUG033。
 - [x] V3.9.14：2026-09-27 正式發布完成。修正 Wikimedia Commons 廣泛搜尋排名與類別候選完整度；一般搜尋保留 Wikimedia `index` 相關性順位，類別搜尋納入符合歸屬條件的 CC BY-SA。完整 production build、瀏覽器安全與正式站實機回歸通過；`travel-route` v19、GitHub Pages、`origin/main` 合併提交 `e93d108` 與 annotated tag `v3.9.14` 均已發布。
 - [x] V3.9.15：2026-09-27 正式發布完成。BUG012 多人帳本 Realtime 已修正，`expenses` 已加入 Supabase Realtime publication，保留 30 秒輪詢備援；兩個獨立瀏覽器頁面同 Trip 帳本新增約 1.0 秒同步、刪除約 0.65 秒同步。BUG033 個人／共用帳本文案已修正；手機照片裁切二次畫面與 modal 背景捲動鎖定已於 390×844 正式站驗證通過。發布合併提交 `278e544`、annotated tag `v3.9.15`、GitHub Pages metadata/UI 3.9.15 與 production migration 均已完成。
-- [ ] V3.9.16：修正 BUG032 行程照片離線預載。以「已載入 Trip 的目前行程卡片實際使用照片」為預載範圍，不預載 Commons 搜尋候選；預載失敗不得阻擋文字資料，並需控制重複下載、失效照片與儲存空間。
+- [ ] V3.9.16：新增 USER 個人帳本本機代號流程，並修正 BUG032 行程照片離線預載。USER 首次登入個人帳本模式若本機尚無代號會要求輸入，同裝置同 Email 後續沿用，側邊欄可修改；代號不寫入共用旅程設定或雲端。BUG032 仍以「已載入 Trip 的目前行程卡片實際使用照片」為預載範圍，不預載 Commons 搜尋候選。
 
 - [ ] V3.10.1：建立完整 build 的驗證群組與耗時基線，整併驗證入口與失敗報告，不縮減 release build；既有 V3.9.3 總啟動量測已確認存在，本版不重複新增程式內埋點。
 - [ ] V3.10.2：沿用既有總啟動量測，分段量測離線冷啟動約 30 秒的 Service Worker、navigation、session、Trip 快取、localStorage、IndexedDB 與首個可操作畫面瓶頸，再依證據決定是否修正；不新增遠端 telemetry。
@@ -22,6 +22,7 @@
 - [x] BUG012（V3.9.15）：多人帳本 Realtime 即時同步已完成；`expenses` Realtime publication、事件後重新抓取與 30 秒輪詢備援均已驗證。
 - [x] BUG033（V3.9.15）：個人／共用帳本文案條件已修正；只有共用帳本且存在其他成員可代記帳時顯示提示。
 - [x] Mobile Crop UI（V3.9.15）：手機照片裁切二次畫面已改為滿高 modal，裁切區限制垂直尺寸、縮放控制不橫向溢出、確認操作保持可見，且開啟照片 modal 時底層行程頁不再跟著捲動。
+- [x] USER Personal Alias（V3.9.16）：ROLE.USER 個人帳本代號本機儲存、首次必填、同 Email 再登入沿用與 USER 專用修改入口已完成本機實作；共用帳本代號與高權限角色流程維持不變，待與 V3.9.16 一併正式驗收。
 - [ ] BUG032（V3.9.16）：改善離線照片可用性；未事先逐一開啟的 Trip 目前離線後只有文字、沒有照片。
 - [ ] 以目前正式版按風險補驗尚未被近期回歸直接覆蓋的舊功能：角色／歷史唯讀與撤權、路線付費 API／正式 OAuth／Android 外部開圖、單日／多日複製，以及離線／pending／跨裝置組合。iOS 依 Product Owner 指示暫不執行。
 

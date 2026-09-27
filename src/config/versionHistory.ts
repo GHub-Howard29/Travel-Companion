@@ -14,6 +14,15 @@ export type VersionHistoryItem = {
 
 export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
+    version: "3.9.15",
+    date: "2026-09-27",
+    isMandatoryRelease: false,
+    notes: [
+      "修正多人共用帳本 Supabase Realtime 即時同步並保留 30 秒輪詢備援。",
+      "修正個人／共用帳本文案，並改善手機照片裁切二次畫面與背景捲動鎖定。",
+    ],
+  },
+  {
     version: "3.9.14",
     date: "2026-09-27",
     isMandatoryRelease: false,
