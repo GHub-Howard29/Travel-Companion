@@ -1,20 +1,18 @@
 /** App 發布版本設定；須與 public/app-version.json 保持一致。 */
-export const APP_VERSION = "3.9.16";
+export const APP_VERSION = "3.9.17";
 
 /**
  * 最近一次已發布版本；此版本必須存在於 versionHistory.ts。
  * production build 會驗證這個規則，避免升版後遺漏版本歷史。
  */
-export const PREVIOUS_RELEASE_VERSION = "3.9.15";
+export const PREVIOUS_RELEASE_VERSION = "3.9.16";
 
 export const RELEASE_DATE = "2026-09-27";
 
 export const RELEASE_NOTES = [
-  "一般 USER 首次進入個人帳本模式時要求設定本機帳本代號，之後同裝置同 Email 自動沿用。",
-  "新增 USER 專用的個人帳本代號修改入口；代號只存在本機，不影響旅程共用記帳代號設定。",
-  "行程載入後背景預載目前卡片已選用照片，讓未逐張開啟的照片也可在離線時顯示。",
-  "修正離線或遠端檢查失敗時誤報「行程資料已有更新」；恢復連線後才重新確認遠端 revision。",
-  "個人帳本取消每筆記帳後的阻斷式提示，改為帳本頁常駐顯示本機保存與備份提醒。",
+  "遠端行程資料有更新時新增「預覽變更」，可先查看自上次載入後的變更分類與數量。",
+  "變更摘要只顯示每日行程、照片附件、旅費帳本、核對清單與其他設定的新增／修改／刪除數量，不顯示內容細節。",
+  "新增最小化 Change Journal，只保存分類、動作、數量、來源 client 與 revision，供重新載入前核對。",
 ];
 
 /** 目前版本發布時保存的更新政策；不隨執行中客戶端是否已達最低版本而改變。 */

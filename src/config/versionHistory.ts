@@ -14,6 +14,15 @@ export type VersionHistoryItem = {
 
 export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
+    version: "3.9.16",
+    date: "2026-09-27",
+    isMandatoryRelease: false,
+    notes: [
+      "新增 ROLE.USER 個人帳本代號本機保存、首次設定、同 Email 沿用與修改入口。",
+      "加入行程照片離線預載，並修正離線 revision 誤報與個人帳本每筆記帳後的阻斷式提示。",
+    ],
+  },
+  {
     version: "3.9.15",
     date: "2026-09-27",
     isMandatoryRelease: false,

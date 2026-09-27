@@ -9,6 +9,11 @@ import {
   toAppDataRevision,
   type AppDataRevision,
 } from "../services/tripDataRevisionService";
+import {
+  getTripChangePreview,
+  type TripChangePreviewSummary,
+  type TripChangePreviewWindow,
+} from "../services/tripChangePreviewService";
 import { clearSharedTripDataAfterAccessLoss } from "../storage/sharedTripDataStorage";
 
 export type TripDataNoticeKind =
@@ -39,7 +44,14 @@ export const useTripDataRevision = ({
   onReconcileTrips,
 }: UseTripDataRevisionOptions) => {
   const [noticeKind, setNoticeKind] = useState<TripDataNoticeKind | null>(null);
+  const [isChangePreviewOpen, setIsChangePreviewOpen] = useState(false);
+  const [isChangePreviewLoading, setIsChangePreviewLoading] = useState(false);
+  const [changePreviewSummary, setChangePreviewSummary] =
+    useState<TripChangePreviewSummary | null>(null);
+  const [changePreviewError, setChangePreviewError] = useState<string | null>(null);
   const knownRevisionRef = useRef<number | null>(null);
+  const knownRevisionUpdatedAtRef = useRef<string | null>(null);
+  const changePreviewWindowRef = useRef<TripChangePreviewWindow | null>(null);
   const noticeTimerRef = useRef<number | null>(null);
   const pendingNoticeRef = useRef(false);
   const selectedTripIdRef = useRef(selectedTripId);
@@ -104,15 +116,33 @@ export const useTripDataRevision = ({
 
   const acceptRevision = useCallback((revision: AppDataRevision): boolean => {
     const knownRevision = knownRevisionRef.current;
+    const knownUpdatedAt = knownRevisionUpdatedAtRef.current;
     if (knownRevision === null) {
       knownRevisionRef.current = revision.revision;
+      knownRevisionUpdatedAtRef.current = revision.updatedAt;
       return false;
     }
     if (revision.revision <= knownRevision) return false;
 
     const shouldNotify = shouldNotifyForRevision(knownRevision, revision);
+    if (shouldNotify) {
+      const previousWindow = changePreviewWindowRef.current;
+      changePreviewWindowRef.current = {
+        fromRevision: previousWindow?.fromRevision ?? knownRevision,
+        toRevision: revision.revision,
+        fromUpdatedAt:
+          previousWindow?.fromUpdatedAt ??
+          knownUpdatedAt ??
+          revision.updatedAt,
+        toUpdatedAt: revision.updatedAt,
+      };
+      setChangePreviewSummary(null);
+      setChangePreviewError(null);
+      scheduleNotice();
+    }
+
     knownRevisionRef.current = revision.revision;
-    if (shouldNotify) scheduleNotice();
+    knownRevisionUpdatedAtRef.current = revision.updatedAt;
     return shouldNotify;
   }, [scheduleNotice]);
 
@@ -215,6 +245,46 @@ export const useTripDataRevision = ({
     }
   }, []);
 
+  const openChangePreview = useCallback(async () => {
+    const previewWindow = changePreviewWindowRef.current;
+    const tripId = selectedTripIdRef.current;
+    setIsChangePreviewOpen(true);
+    setChangePreviewError(null);
+
+    if (!navigator.onLine) {
+      setIsChangePreviewLoading(false);
+      setChangePreviewSummary(null);
+      setChangePreviewError("目前沒有網路連線。");
+      return;
+    }
+    if (!previewWindow || !tripId) {
+      setIsChangePreviewLoading(false);
+      setChangePreviewSummary(null);
+      setChangePreviewError("目前沒有可用的變更摘要範圍。");
+      return;
+    }
+
+    setIsChangePreviewLoading(true);
+    try {
+      const summary = await getTripChangePreview(
+        supabase,
+        tripId,
+        previewWindow,
+      );
+      setChangePreviewSummary(summary);
+    } catch (error) {
+      console.warn("Failed to load Trip change preview", error);
+      setChangePreviewSummary(null);
+      setChangePreviewError("變更摘要暫時無法讀取。");
+    } finally {
+      setIsChangePreviewLoading(false);
+    }
+  }, [supabase]);
+
+  const closeChangePreview = useCallback(() => {
+    setIsChangePreviewOpen(false);
+  }, []);
+
   const showConflict = useCallback(() => setNoticeKind("conflict"), []);
   const snooze = useCallback(() => {
     setNoticeKind((current) => current === "available" ? "snoozed" : current);
@@ -224,7 +294,13 @@ export const useTripDataRevision = ({
   return {
     noticeKind,
     isTripMasterLocked: noticeKind !== null,
+    isChangePreviewOpen,
+    isChangePreviewLoading,
+    changePreviewSummary,
+    changePreviewError,
     checkForRemoteTripChange,
+    openChangePreview,
+    closeChangePreview,
     showConflict,
     snooze,
     reload,

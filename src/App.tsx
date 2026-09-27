@@ -18,6 +18,7 @@ import AppSidebar from "./components/layout/AppSidebar";
 import AppHeader from "./components/layout/AppHeader";
 import { TextInfoPage } from "./components/TextInfoPage";
 import { TripDataRevisionNotice } from "./components/TripDataRevisionNotice";
+import { TripChangePreviewModal } from "./components/TripChangePreviewModal";
 import { clearExchangePurchases } from "./storage/exchangeRateStorage";
 import { getDefaultHomeScreen, setDefaultHomeScreen } from "./storage/defaultHomeStorage";
 import { UpdatePrompt } from "./components/UpdatePrompt";
@@ -314,7 +315,13 @@ function ConfiguredApp({
   const {
     noticeKind: tripDataNoticeKind,
     isTripMasterLocked,
+    isChangePreviewOpen,
+    isChangePreviewLoading,
+    changePreviewSummary,
+    changePreviewError,
     checkForRemoteTripChange,
+    openChangePreview,
+    closeChangePreview,
     showConflict: showTripVersionConflict,
     snooze: snoozeTripDataNotice,
     reload: reloadForTripDataChange,
@@ -1216,7 +1223,18 @@ function ConfiguredApp({
         kind={isUpdateInProgress ? null : tripDataNoticeKind}
         isOnline={isOnline}
         willApplyPreparedUpdate={hasPreparedUpdate && updateAvailable}
+        onPreviewChanges={openChangePreview}
         onSnooze={snoozeTripDataNotice}
+        onReload={reloadForTripDataChange}
+      />
+
+      <TripChangePreviewModal
+        isOpen={isChangePreviewOpen}
+        summary={changePreviewSummary}
+        isLoading={isChangePreviewLoading}
+        error={changePreviewError}
+        willApplyPreparedUpdate={hasPreparedUpdate && updateAvailable}
+        onClose={closeChangePreview}
         onReload={reloadForTripDataChange}
       />
 

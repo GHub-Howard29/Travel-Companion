@@ -11,6 +11,7 @@
 - [x] V3.9.15：2026-09-27 正式發布完成。BUG012 多人帳本 Realtime 已修正，`expenses` 已加入 Supabase Realtime publication，保留 30 秒輪詢備援；兩個獨立瀏覽器頁面同 Trip 帳本新增約 1.0 秒同步、刪除約 0.65 秒同步。BUG033 個人／共用帳本文案已修正；手機照片裁切二次畫面與 modal 背景捲動鎖定已於 390×844 正式站驗證通過。發布合併提交 `278e544`、annotated tag `v3.9.15`、GitHub Pages metadata/UI 3.9.15 與 production migration 均已完成。
 - [x] V3.9.16：2026-09-27 正式發布完成。USER 個人帳本本機代號流程與 BUG032 行程照片離線預載均完成實作與實機驗證；USER 首次登入設定代號、登出再登入不重複詢問、代號修改入口均通過。正式 Trip 16 張已選用照片背景預載 16/16，手機實體飛航模式切換其他日期照片正常；離線 revision 不再誤報「行程資料已有更新」，個人帳本記帳後也不再跳 alert，改為常駐本機保存／備份提醒。完整 production build、PWA、browser-security 與專屬 regression 均通過；發布合併提交 `f042593`、annotated tag `v3.9.16`、GitHub Pages `b0d637a`。
 
+- [ ] V3.9.17：目前開發中。遠端 Trip revision 提示新增「預覽變更」，第一版只顯示分類與數量摘要，不顯示照片、帳目、核對項目或其他內容細節。已建立最小化 Change Journal migration、前端摘要 service、變更摘要 modal 與 regression，完整 production build／PWA／browser-security 均通過。Supabase linked dry-run 目前被既有 migration history 不一致阻擋（正式端多 `20260926122252`、`20260926123044`，本機另有 `20260926194000`、`20260926203500`）；尚未修復 history、尚未套用 V3.9.17 migration。待先釐清既有 migration history，再進行 RC 部署與跨裝置實機驗收。
 - [ ] V3.10.1：建立完整 build 的驗證群組與耗時基線，整併驗證入口與失敗報告，不縮減 release build；既有 V3.9.3 總啟動量測已確認存在，本版不重複新增程式內埋點。
 - [ ] V3.10.2：沿用既有總啟動量測，分段量測離線冷啟動約 30 秒的 Service Worker、navigation、session、Trip 快取、localStorage、IndexedDB 與首個可操作畫面瓶頸，再依證據決定是否修正；不新增遠端 telemetry。
 - [ ] V3.10.3：以 loopback fixture 與瀏覽器／viewport 模擬建立零費用 Playwright 響應式回歸基礎。
@@ -34,4 +35,4 @@
 - [ ] 只在實際需求存在時，重新排程全日時間預覽、路線批次重查、跨午夜與 API 成本控制。
 - [ ] 收集帳本附件管理的具體問題與頻率，再決定功能範圍。
 - [ ] 依資料特性評估將保守聯集合併導入其他資訊與外幣換算，不共用單一合併策略。
-- [ ] Change Journal／「變更內容」預覽：在遠端 revision 要求重新載入前提供可展開的變更摘要（例如照片更換、帳本新增／刪除、核對清單刪除數量）。此功能需新增可靠的結構化變更紀錄來源，不以每日 application snapshot 直接推算；不納入 V3.9.16。
+- [x] V3.9.17 Change Journal 第一版範圍已定案並進入實作：按鈕文案為「預覽變更」、頁面標題為「變更摘要」；只顯示分類與數量，不做完整細節差異。
