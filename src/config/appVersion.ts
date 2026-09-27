@@ -1,17 +1,18 @@
 /** App 發布版本設定；須與 public/app-version.json 保持一致。 */
-export const APP_VERSION = "3.9.14";
+export const APP_VERSION = "3.9.15";
 
 /**
  * 最近一次已發布版本；此版本必須存在於 versionHistory.ts。
  * production build 會驗證這個規則，避免升版後遺漏版本歷史。
  */
-export const PREVIOUS_RELEASE_VERSION = "3.9.13";
+export const PREVIOUS_RELEASE_VERSION = "3.9.14";
 
 export const RELEASE_DATE = "2026-09-27";
 
 export const RELEASE_NOTES = [
-  "修正 Wikimedia Commons 搜尋結果排序，保留官方相關性順位。",
-  "擴充 Commons 可用授權支援至 CC BY-SA，提升類別與景點照片候選完整度。",
+  "修正多人共用帳本 Supabase Realtime 即時同步，保留 30 秒輪詢備援。",
+  "修正個人帳本文案，只有共用帳本可代其他成員記帳時才顯示提示。",
+  "改善手機照片裁切二次畫面比例與操作焦點，並鎖定背景頁面捲動。",
 ];
 
 /** 目前版本發布時保存的更新政策；不隨執行中客戶端是否已達最低版本而改變。 */

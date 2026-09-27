@@ -1,10 +1,11 @@
 {
-  "version": "3.9.14",
+  "version": "3.9.15",
   "minimumSupportedVersion": "3.9.2",
   "releaseDate": "2026-09-27",
   "releaseNotes": [
-    "修正 Wikimedia Commons 搜尋結果排序，保留官方相關性順位。",
-    "擴充 Commons 可用授權支援至 CC BY-SA，提升類別與景點照片候選完整度。"
+    "修正多人共用帳本 Supabase Realtime 即時同步，保留 30 秒輪詢備援。",
+    "修正個人帳本文案，只有共用帳本可代其他成員記帳時才顯示提示。",
+    "改善手機照片裁切二次畫面比例與操作焦點，並鎖定背景頁面捲動。"
   ],
   "forceUpdate": false
 }
