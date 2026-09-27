@@ -15,7 +15,6 @@ import {
 import { writeStoredChecklistProgress } from "../storage/checklistStorage";
 import {
   clearPendingSharedChecklistProgress,
-  readPendingSharedChecklistOrder,
   readPendingSharedChecklistProgress,
   writePendingSharedChecklistProgress,
 } from "../storage/sharedChecklistSyncStorage";
@@ -113,13 +112,6 @@ export const useChecklistState = (
 
       try {
         const localProgress = getChecklistProgress(tripId);
-        const pendingOrder = canSyncSharedChecklist && userEmail
-          ? readPendingSharedChecklistOrder(tripId, userEmail)
-          : null;
-        if (pendingOrder) {
-          setSyncStatus("local");
-          return;
-        }
         const pendingProgress = canSyncSharedChecklist && userEmail
           ? readPendingSharedChecklistProgress(tripId, userEmail)
           : null;
@@ -253,23 +245,13 @@ export const useChecklistState = (
 
   const reloadSharedChecklistFromCloud = useCallback(async () => {
     if (!canReadCloud || isCloudWritePendingRef.current) return;
-    if (
-      canSyncSharedChecklist && userEmail &&
-      (readPendingSharedChecklistOrder(tripId, userEmail) ||
-        readPendingSharedChecklistProgress(tripId, userEmail))
-    ) {
-      return;
-    }
 
     const mutationRevision = localMutationRevisionRef.current;
     const cloudChecklist = await getCloudSharedChecklist(supabase, tripId, seedItems);
     if (
       !cloudChecklist ||
       isCloudWritePendingRef.current ||
-      localMutationRevisionRef.current !== mutationRevision ||
-      (canSyncSharedChecklist && userEmail &&
-        (readPendingSharedChecklistOrder(tripId, userEmail) ||
-          readPendingSharedChecklistProgress(tripId, userEmail)))
+      localMutationRevisionRef.current !== mutationRevision
     ) {
       return;
     }
@@ -293,11 +275,9 @@ export const useChecklistState = (
     setSyncStatus("synced");
   }, [
     canReadCloud,
-    canSyncSharedChecklist,
     seedItems,
     supabase,
     tripId,
-    userEmail,
   ]);
 
   const scheduleRealtimeRefresh = useCallback(() => {

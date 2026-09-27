@@ -60,7 +60,6 @@ assert.match(privateService, /export const getCloudPrivateChecklistId/);
 assert.match(privateHook, /travel-companion-private-checklist-items-/);
 assert.match(privateHook, /table: "checklist_items"/);
 assert.match(privateHook, /getCloudPrivateChecklist\(/);
-assert.match(privateHook, /readPrivateChecklistPendingRevision/);
 
 assert.match(
   tripRepository,
@@ -77,7 +76,7 @@ assert.ok(setCurrentTripIndex >= 0 && cleanupIndex > setCurrentTripIndex);
 assert.match(tripWorkspace, /scheduleItineraryCoverDeletion\([\s\S]*\)\.catch/);
 
 assert.match(app, /table: "other_info_items"/);
-assert.match(app, /reloadCurrentTrip/);
+assert.match(app, /applyCloudOtherInfoSnapshot/);
 
 console.log(
   "V3.9.17 RC2 獨立同步邊界、跨裝置清單、Other Info 刪除與手機分類 UI 契約驗證通過。",

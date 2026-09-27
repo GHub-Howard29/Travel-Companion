@@ -5,6 +5,7 @@ export interface OtherInfoSyncState {
   revision: string;
   status: OtherInfoSyncStatus;
   updatedAt: string;
+  itemIds: string[];
   lastError?: string;
 }
 
@@ -29,7 +30,12 @@ export const readOtherInfoSyncState = (
       return null;
     }
 
-    return value as OtherInfoSyncState;
+    return {
+      ...value,
+      itemIds: Array.isArray(value.itemIds)
+        ? value.itemIds.filter((itemId): itemId is string => typeof itemId === "string")
+        : [],
+    } as OtherInfoSyncState;
   } catch {
     return null;
   }
@@ -37,12 +43,15 @@ export const readOtherInfoSyncState = (
 
 export const markOtherInfoSyncPending = (
   tripId: string,
+  itemIds: string[] = [],
 ): OtherInfoSyncState => {
+  const current = readOtherInfoSyncState(tripId);
   const state: OtherInfoSyncState = {
     tripId,
     revision: crypto.randomUUID(),
     status: "pending",
     updatedAt: new Date().toISOString(),
+    itemIds: Array.from(new Set([...(current?.itemIds ?? []), ...itemIds.filter(Boolean)])),
   };
   localStorage.setItem(getStorageKey(tripId), JSON.stringify(state));
   return state;

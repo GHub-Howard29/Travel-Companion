@@ -15,7 +15,6 @@ import {
 } from "../services/privateChecklistCloudService";
 import {
   markPrivateChecklistPending,
-  readPrivateChecklistPendingRevision,
   writeStoredPrivateChecklist,
 } from "../storage/privateChecklistStorage";
 
@@ -120,10 +119,7 @@ export const usePrivateChecklistState = (
   }, [applyCloudChecklist, canSyncToCloud, ownerEmail, supabase, tripId]);
 
   const reloadPrivateChecklistFromCloud = useCallback(async () => {
-    if (
-      !canSyncToCloud ||
-      readPrivateChecklistPendingRevision(tripId, ownerEmail)
-    ) {
+    if (!canSyncToCloud) {
       return;
     }
 

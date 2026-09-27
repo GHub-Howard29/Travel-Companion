@@ -42,7 +42,10 @@ import {
   TripCreationOfflineError,
   TripVersionConflictError,
 } from "./services/tripRepository";
-import { syncCloudOtherInfoItems } from "./services/otherInfoCloudService";
+import {
+  getCloudOtherInfoItems,
+  syncCloudOtherInfoItems,
+} from "./services/otherInfoCloudService";
 import { getFolders } from "./services/otherInfoService";
 import { syncPrivateChecklistWithCloud } from "./services/privateChecklistCloudService";
 import { syncCloudSharedChecklistSeedItems } from "./services/sharedChecklistCloudService";
@@ -105,6 +108,24 @@ const ExchangeRatePage = lazy(() =>
 const TripEditorModal = lazy(() =>
   import("./components/TripEditorModal").then((module) => ({ default: module.TripEditorModal })),
 );
+
+const getChangedOtherInfoItemIds = (
+  previousItems: OtherInfoItem[],
+  nextItems: OtherInfoItem[],
+): string[] => {
+  const previousById = new Map(previousItems.map((item) => [item.id, item]));
+
+  return nextItems
+    .filter((item) => {
+      const previousItem = previousById.get(item.id);
+      return (
+        !previousItem ||
+        previousItem.updatedAt !== item.updatedAt ||
+        previousItem.isDeleted !== item.isDeleted
+      );
+    })
+    .map((item) => item.id);
+};
 
 const screenLoadingFallback = (
   <div className="py-24 text-center text-slate-400" role="status">
@@ -766,6 +787,27 @@ function ConfiguredApp({
     }
     return mergedItems;
   };
+
+  const applyCloudOtherInfoSnapshot = useCallback(async (): Promise<boolean> => {
+    const tripId = selectedTripId;
+    if (!tripId || !navigator.onLine) return false;
+
+    const cloudItems = await getCloudOtherInfoItems(supabase, tripId);
+    if (cloudItems === null) return false;
+
+    writeStoredOtherInfoItems(tripId, cloudItems);
+    if (currentTrip?.id === tripId) {
+      saveCurrentTripDetailLocally({
+        ...currentTrip,
+        content: {
+          ...currentTrip.content,
+          otherInfoItems: cloudItems,
+        },
+      });
+    }
+    return true;
+  }, [currentTrip, saveCurrentTripDetailLocally, selectedTripId, supabase]);
+
   const syncPendingOtherInfo = useCallback(async () => {
     const tripId = selectedTripId;
     if (
@@ -795,11 +837,16 @@ function ConfiguredApp({
 
         setOtherInfoSyncStatus("syncing");
         const items = record.detail.content.otherInfoItems ?? [];
+        // RC2 以前的 pending state 沒有 itemIds。這種舊狀態不可再把
+        // 整份本機快照上傳，否則會把另一台裝置已 soft-delete 的資料復活。
+        // 舊 pending 直接完成一次 no-op 後改以雲端 active rows 為權威。
+        const pendingItemIds = new Set(pending.itemIds);
+        const pendingItems = items.filter((item) => pendingItemIds.has(item.id));
         const didSyncItems = await syncCloudOtherInfoItems(
           supabase,
           tripId,
-          items.filter((item) => !item.isDeleted),
-          items.filter((item) => item.isDeleted).map((item) => item.id),
+          pendingItems.filter((item) => !item.isDeleted),
+          pendingItems.filter((item) => item.isDeleted).map((item) => item.id),
         );
         // Other Info 已有獨立資料表；不得再以本機快取整筆 upsert trips，
         // 否則舊分頁的待同步狀態可能把較新的 daysData 一併覆寫。
@@ -815,6 +862,7 @@ function ConfiguredApp({
 
         if (clearOtherInfoSyncState(tripId, pending.revision)) {
           setOtherInfoSyncStatus(null);
+          await applyCloudOtherInfoSnapshot();
           break;
         }
       }
@@ -827,7 +875,14 @@ function ConfiguredApp({
     } finally {
       otherInfoSyncingTripsRef.current.delete(tripId);
     }
-  }, [isSharedTripReadOnly, permission.canEditReference, selectedTripId, supabase, userId]);
+  }, [
+    applyCloudOtherInfoSnapshot,
+    isSharedTripReadOnly,
+    permission.canEditReference,
+    selectedTripId,
+    supabase,
+    userId,
+  ]);
 
   const retryOtherInfoSync = useCallback(() => {
     setOtherInfoSyncStatus("syncing");
@@ -839,11 +894,14 @@ function ConfiguredApp({
 
     let refreshTimer: number | null = null;
     const refreshCurrentTrip = () => {
-      if (readOtherInfoSyncState(selectedTripId)) return;
       if (refreshTimer !== null) window.clearTimeout(refreshTimer);
       refreshTimer = window.setTimeout(() => {
         refreshTimer = null;
-        void reloadCurrentTrip();
+        if (readOtherInfoSyncState(selectedTripId)) {
+          void syncPendingOtherInfo();
+        } else {
+          void applyCloudOtherInfoSnapshot();
+        }
       }, 400);
     };
     const refreshWhenVisible = () => {
@@ -875,7 +933,13 @@ function ConfiguredApp({
       document.removeEventListener("visibilitychange", refreshWhenVisible);
       void supabase.removeChannel(channel);
     };
-  }, [isOnline, reloadCurrentTrip, selectedTripId, supabase]);
+  }, [
+    applyCloudOtherInfoSnapshot,
+    isOnline,
+    selectedTripId,
+    supabase,
+    syncPendingOtherInfo,
+  ]);
 
   const handleSaveOtherInfoItems = async (items: OtherInfoItem[]) => {
     if (!currentTrip || isSharedTripReadOnly) return;
@@ -887,9 +951,13 @@ function ConfiguredApp({
         otherInfoItems: items,
       },
     };
+    const changedItemIds = getChangedOtherInfoItemIds(
+      currentTrip.content.otherInfoItems ?? [],
+      items,
+    );
     writeStoredOtherInfoItems(selectedTripId, items);
     saveCurrentTripDetailLocally(nextTrip);
-    markOtherInfoSyncPending(selectedTripId);
+    markOtherInfoSyncPending(selectedTripId, changedItemIds);
     setOtherInfoSyncStatus("pending");
     void syncPendingOtherInfo();
   };
