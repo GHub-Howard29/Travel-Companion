@@ -24,6 +24,7 @@ import { UpdatePrompt } from "./components/UpdatePrompt";
 import { VersionInfoModal } from "./components/VersionInfoModal";
 import { InstallAppPrompt } from "./components/InstallAppPrompt";
 import { LoginSafetyModal } from "./components/LoginSafetyModal";
+import { PersonalExpenseAliasModal } from "./components/PersonalExpenseAliasModal";
 import { UsageSummaryModal } from "./components/UsageSummaryModal";
 import useExpenseBook from "./hooks/useExpenseBook";
 import { useAppUpdate } from "./hooks/useAppUpdate";
@@ -46,6 +47,10 @@ import { syncPrivateChecklistWithCloud } from "./services/privateChecklistCloudS
 import { syncCloudSharedChecklistSeedItems } from "./services/sharedChecklistCloudService";
 import { writeStoredOtherInfoItems } from "./storage/otherInfoStorage";
 import { readStoredTripRecords } from "./storage/tripStorage";
+import {
+  readPersonalExpenseAlias,
+  writePersonalExpenseAlias,
+} from "./storage/personalExpenseAliasStorage";
 import {
   clearOtherInfoSyncState,
   markOtherInfoSyncFailed,
@@ -78,6 +83,7 @@ import {
   APP_SOURCE_CLIENT_HEADER,
   APP_SOURCE_CLIENT_ID,
 } from "./services/tripDataRevisionService";
+import { syncItineraryCoverOfflineCache } from "./services/itineraryCoverOfflineCache";
 
 const ExpenseScreen = lazy(() => import("./components/expense/ExpenseScreen"));
 const ItineraryPage = lazy(() =>
@@ -329,6 +335,11 @@ function ConfiguredApp({
   const [isSharedDataManageMode, setIsSharedDataManageMode] = useState(false);
   const [isVersionInfoOpen, setIsVersionInfoOpen] = useState(false);
   const [isLoginSafetyOpen, setIsLoginSafetyOpen] = useState(false);
+  const [savedPersonalExpenseAlias, setSavedPersonalExpenseAlias] = useState<{
+    email: string;
+    alias: string;
+  } | null>(null);
+  const [isPersonalExpenseAliasEditOpen, setIsPersonalExpenseAliasEditOpen] = useState(false);
   const [requestedOtherInfoFolderId, setRequestedOtherInfoFolderId] = useState<string | null>(null);
   const [otherInfoSyncStatus, setOtherInfoSyncStatus] = useState<
     OtherInfoSyncStatus | "syncing" | null
@@ -365,6 +376,32 @@ function ConfiguredApp({
       window.removeEventListener("focus", refreshHistoricalState);
     };
   }, []);
+
+  const storedPersonalExpenseAlias = useMemo(
+    () =>
+      role === ROLE.USER && userEmail
+        ? readPersonalExpenseAlias(userEmail)
+        : null,
+    [role, userEmail],
+  );
+  const personalExpenseAlias =
+    savedPersonalExpenseAlias?.email === userEmail
+      ? savedPersonalExpenseAlias.alias
+      : storedPersonalExpenseAlias;
+  const isPersonalExpenseAliasRequired =
+    isSessionReady &&
+    !isLoading &&
+    role === ROLE.USER &&
+    Boolean(userEmail) &&
+    !personalExpenseAlias;
+
+  const effectiveExpenseMembers =
+    !isUsingSharedExpenseBook && personalExpenseAlias
+      ? [personalExpenseAlias]
+      : expenseMembers;
+  const effectiveDefaultPayerName = isUsingSharedExpenseBook
+    ? currentUserParticipantName
+    : personalExpenseAlias;
 
   const {
     newTitle,
@@ -429,9 +466,9 @@ function ConfiguredApp({
     canExportAllSharedExpenses: role === ROLE.SUPER_ADMIN,
     currentCurrencyCode,
     currentCurrencySymbol,
-    expenseMembers,
+    expenseMembers: effectiveExpenseMembers,
     participantEmailMap,
-    defaultPayerName: currentUserParticipantName,
+    defaultPayerName: effectiveDefaultPayerName,
     tripTitle: currentTrip?.title || selectedTripMeta?.title || selectedTripId || "travel",
   });
 
@@ -526,16 +563,27 @@ function ConfiguredApp({
     setIsMenuOpen(false);
   };
 
+  const handlePersonalExpenseAliasSave = useCallback(
+    (alias: string) => {
+      if (!userEmail || role !== ROLE.USER) return;
+      const savedAlias = writePersonalExpenseAlias(userEmail, alias);
+      setSavedPersonalExpenseAlias({ email: userEmail, alias: savedAlias });
+      setNewPayer(savedAlias);
+      setIsPersonalExpenseAliasEditOpen(false);
+    },
+    [role, setNewPayer, userEmail],
+  );
+
   useEffect(() => {
     if (!selectedTripMeta) return;
     applyTripDefaults(selectedTripMeta);
   }, [applyTripDefaults, selectedTripMeta]);
 
   useEffect(() => {
-    if (currentUserParticipantName) {
-      setNewPayer(currentUserParticipantName);
+    if (effectiveDefaultPayerName) {
+      setNewPayer(effectiveDefaultPayerName);
     }
-  }, [currentUserParticipantName, setNewPayer]);
+  }, [effectiveDefaultPayerName, setNewPayer]);
 
   const handleScreenSelect = (item: SidebarItemConfig) => {
     if (isAuthRequiredTravelTool(item.type) && !userEmail) {
@@ -994,6 +1042,14 @@ function ConfiguredApp({
     setCurrentScreen("itinerary");
   }, [currentScreenType, setCurrentScreen, userEmail]);
 
+  useEffect(() => {
+    if (!currentTrip || !isOnline || !supabaseUrl?.trim()) return;
+
+    void syncItineraryCoverOfflineCache(currentTrip, supabaseUrl).catch((error) => {
+      console.warn("Failed to sync itinerary covers for offline use", error);
+    });
+  }, [currentTrip, isOnline]);
+
   return (
     <AppContext.Provider value={appContextValue}>
     {isSessionReady && !isLoading && <AppLaunchReady />}
@@ -1037,6 +1093,17 @@ function ConfiguredApp({
       summary={usageSummary}
       error={usageError}
     />
+    {(isPersonalExpenseAliasRequired || isPersonalExpenseAliasEditOpen) &&
+      role === ROLE.USER &&
+      userEmail && (
+        <PersonalExpenseAliasModal
+          email={userEmail}
+          currentAlias={personalExpenseAlias}
+          isRequired={isPersonalExpenseAliasRequired}
+          onClose={() => setIsPersonalExpenseAliasEditOpen(false)}
+          onSave={handlePersonalExpenseAliasSave}
+        />
+      )}
 
     <div className="min-h-screen bg-slate-50 text-slate-800 font-sans antialiased overflow-x-hidden">
       <AppSidebar
@@ -1046,7 +1113,9 @@ function ConfiguredApp({
         tripOptions={tripOptions}
         currentTrip={currentTrip}
         userEmail={userEmail}
-        userParticipantName={currentUserParticipantName}
+        userParticipantName={
+          role === ROLE.USER ? personalExpenseAlias : currentUserParticipantName
+        }
         isOnline={isOnline}
         isSessionReady={isSessionReady}
         hasEditPermission={hasEditPermission}
@@ -1092,6 +1161,11 @@ function ConfiguredApp({
         }}
         appVersion={currentVersion}
         onOpenVersionInfo={() => setIsVersionInfoOpen(true)}
+        personalExpenseAlias={personalExpenseAlias}
+        canEditPersonalExpenseAlias={role === ROLE.USER}
+        onEditPersonalExpenseAlias={() => {
+          setIsPersonalExpenseAliasEditOpen(true);
+        }}
         isSystemDeveloper={isSystemDeveloper}
         onOpenUsageModal={openUsageModal}
       />
@@ -1301,7 +1375,6 @@ function ConfiguredApp({
                 isSharedTripReadOnly={isSharedTripReadOnly}
                 isUsingSharedExpenseBook={isUsingSharedExpenseBook}
                 exportsAllSharedExpenses={exportsAllSharedExpenses}
-                userEmail={userEmail}
                 canManageExpense={(item) =>
                   !isSharedTripReadOnly && canManageExpense(item)
                 }
@@ -1316,9 +1389,9 @@ function ConfiguredApp({
                 setActiveCurrency={setActiveCurrency}
                 currentCurrencyCode={currentCurrencyCode}
                 currentCurrencySymbol={currentCurrencySymbol}
-                expenseMembers={expenseMembers}
+                expenseMembers={effectiveExpenseMembers}
                 participantEmailMap={participantEmailMap}
-                defaultPayerName={currentUserParticipantName}
+                defaultPayerName={effectiveDefaultPayerName}
                 totalExpense={totalExpense}
                 averageExpense={averageExpense}
                 memberShareAmounts={memberShareAmounts}

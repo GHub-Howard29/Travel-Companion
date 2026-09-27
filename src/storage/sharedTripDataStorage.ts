@@ -12,6 +12,7 @@ import {
 } from "./sharedChecklistSyncStorage";
 import { clearUserSharedChecklist } from "./userSharedChecklistStorage";
 import { deleteLocalAttachmentsForTrip } from "./attachmentStorage";
+import { clearItineraryCoverOfflineCache } from "../services/itineraryCoverOfflineCache";
 import {
   deleteStoredTripRecord,
   removeRestrictedOtherInfoFromStoredTrip,
@@ -66,5 +67,8 @@ export const clearSharedTripDataAfterAccessLoss = async (
     clearOtherInfoSyncState(tripId, otherInfoSync.revision);
   }
 
-  await deleteLocalAttachmentsForTrip(tripId);
+  await Promise.all([
+    deleteLocalAttachmentsForTrip(tripId),
+    clearItineraryCoverOfflineCache(tripId),
+  ]);
 };

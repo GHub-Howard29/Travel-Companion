@@ -59,6 +59,9 @@ interface AppSidebarProps {
   onSetDefaultHome: (screenId: string) => void;
   appVersion: string;
   onOpenVersionInfo: () => void;
+  personalExpenseAlias?: string | null;
+  canEditPersonalExpenseAlias?: boolean;
+  onEditPersonalExpenseAlias?: () => void;
   isSystemDeveloper?: boolean;
   onOpenUsageModal?: () => void;
 }
@@ -117,6 +120,9 @@ export default function AppSidebar({
   onSetDefaultHome,
   appVersion,
   onOpenVersionInfo,
+  personalExpenseAlias,
+  canEditPersonalExpenseAlias,
+  onEditPersonalExpenseAlias,
   isSystemDeveloper,
   onOpenUsageModal,
 }: AppSidebarProps) {
@@ -310,6 +316,24 @@ export default function AppSidebar({
                   </span>
                 )}
               </div>
+              {canEditPersonalExpenseAlias && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    closeSidebar();
+                    onEditPersonalExpenseAlias?.();
+                  }}
+                  className="flex w-full items-center justify-between rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-left text-sky-800 hover:bg-sky-100"
+                >
+                  <span className="inline-flex items-center gap-1.5 font-bold">
+                    <Pencil size={12} />
+                    個人帳本代號
+                  </span>
+                  <span className="max-w-[8rem] truncate text-[11px] font-semibold text-sky-700">
+                    {personalExpenseAlias || "未設定"}
+                  </span>
+                </button>
+              )}
             </div>
           ) : (
             <div className="text-center py-2">

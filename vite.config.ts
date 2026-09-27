@@ -80,6 +80,23 @@ export default defineConfig(({ mode }) => {
         clientsClaim: true,
         navigateFallback: '/Travel-Companion/index.html',
         navigateFallbackAllowlist: [/^\/Travel-Companion\/(?:.*)?$/],
+        runtimeCaching: [
+          {
+            urlPattern: ({ url, request }) =>
+              request.destination === 'image' &&
+              url.pathname.includes('/storage/v1/object/public/itinerary-covers/'),
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'travel-companion-itinerary-covers-v1',
+              cacheableResponse: { statuses: [200] },
+              expiration: {
+                maxEntries: 250,
+                maxAgeSeconds: 180 * 24 * 60 * 60,
+                purgeOnQuotaError: true,
+              },
+            },
+          },
+        ],
         // 這會強制打包公用資料夾與編譯後的所有靜態與資料檔案
       },
       manifest: {
