@@ -5,7 +5,7 @@ import { resolve } from "node:path";
 const root = resolve(import.meta.dirname, "..");
 const edge = readFileSync(resolve(root, "supabase/functions/travel-route/index.ts"), "utf8");
 const migration = readFileSync(
-  resolve(root, "supabase/migrations/20260926194000_v3913_commons_translation_batch.sql"),
+  resolve(root, "supabase/migrations/20260926122252_v3913_commons_translation_batch.sql"),
   "utf8",
 );
 const client = readFileSync(resolve(root, "src/services/travelRouteService.ts"), "utf8");
