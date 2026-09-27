@@ -14,6 +14,15 @@ export type VersionHistoryItem = {
 
 export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
+    version: "3.9.13",
+    date: "2026-09-26",
+    isMandatoryRelease: false,
+    notes: [
+      "改善 Commons 分類繁中判讀與可展示候選批次續載，並加入私有翻譯快取與限額保護。",
+      "修正 PWA 更新與遠端 Trip 修訂競態，正式環境完成相關 migration、Edge Function 與回歸驗證。",
+    ],
+  },
+  {
     version: "3.9.12",
     date: "2026-09-25",
     isMandatoryRelease: false,

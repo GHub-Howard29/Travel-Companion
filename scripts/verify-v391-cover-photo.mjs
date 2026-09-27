@@ -67,8 +67,8 @@ const viewer = read("src/components/CoverPhotoViewer.tsx");
 
 assert.match(edge, /iiurlwidth: "640"/);
 assert.match(edge, /getCommonsDerivativeUrl\(info\.thumburl, 1280\)/);
-assert.match(edge, /CC BY \(\?:1\\\.0\|2\\\.0\|2\\\.5\|3\\\.0\|4\\\.0\)/);
-assert.doesNotMatch(edge, /CC BY\(\?:-SA\)/);
+assert.match(edge, /CC BY\(\?:-SA\)\? \(\?:1\\\.0\|2\\\.0\|2\\\.5\|3\\\.0\|4\\\.0\)/);
+assert.match(service, /CC BY\(\?:-SA\)\?/);
 assert.match(service, /candidate\.cropImageUrl/);
 assert.match(service, /responseUrl\.hostname !== "upload\.wikimedia\.org"/);
 assert.match(service, /MAX_SOURCE_PHOTO_BYTES/);

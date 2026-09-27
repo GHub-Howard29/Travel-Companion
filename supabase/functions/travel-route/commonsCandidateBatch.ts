@@ -6,6 +6,19 @@ export interface CommonsBatchCandidate {
   fileTitle: string;
 }
 
+export const sortCommonsSearchPagesByRank = <T>(pages: T[]): T[] =>
+  pages
+    .map((page, position) => {
+      const rank = page && typeof page === "object" && "index" in page &&
+          typeof (page as { index?: unknown }).index === "number" &&
+          Number.isFinite((page as { index: number }).index)
+        ? (page as { index: number }).index
+        : Number.MAX_SAFE_INTEGER;
+      return { page, position, rank };
+    })
+    .sort((left, right) => left.rank - right.rank || left.position - right.position)
+    .map(({ page }) => page);
+
 export interface CommonsRawCandidatePage<TCandidate extends CommonsBatchCandidate, TCursor> {
   candidates: TCandidate[];
   nextCursor: TCursor | null;

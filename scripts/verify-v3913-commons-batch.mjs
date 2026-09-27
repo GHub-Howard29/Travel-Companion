@@ -3,9 +3,20 @@ import assert from "node:assert/strict";
 import {
   COMMONS_ELIGIBLE_BATCH_SIZE,
   buildCommonsEligibleBatch,
+  sortCommonsSearchPagesByRank,
 } from "../supabase/functions/travel-route/commonsCandidateBatch.ts";
 
 const candidate = (id) => ({ fileTitle: `File:${id}.jpg` });
+
+assert.deepEqual(
+  sortCommonsSearchPagesByRank([
+    { pageid: 1797795, index: 17, title: "File:Natural iron hot spring.jpg" },
+    { pageid: 7199203, index: 1, title: "File:Beppu Umi-jigoku04n4272.jpg" },
+    { pageid: 149294356, index: 2, title: "File:Umi Jigoku (Sea Hell) in Beppu.jpg" },
+  ]).map((page) => page.index),
+  [1, 2, 17],
+  "Commons generator search results must preserve Wikimedia relevance rank instead of pageid enumeration order",
+);
 
 const fromPages = (pages) => async (cursor) => {
   const page = pages[cursor];
