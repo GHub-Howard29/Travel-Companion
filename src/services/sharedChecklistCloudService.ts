@@ -10,6 +10,7 @@ interface CloudChecklistRow {
 interface CloudChecklistItemRow {
   id: string;
   client_item_id: string | null;
+  category: string | null;
   label: string;
   is_checked: boolean;
   sort_order: number;
@@ -72,7 +73,7 @@ const mapCloudRowsToSharedChecklist = (
     return {
       id: item.client_item_id ?? `cloud_${item.id}`,
       tripId,
-      category: seedItem?.category ?? FALLBACK_CATEGORY,
+      category: item.category ?? seedItem?.category ?? FALLBACK_CATEGORY,
       label: item.label,
       isChecked: item.is_checked,
       sortOrder: item.sort_order,
@@ -114,7 +115,7 @@ export const getCloudSharedChecklist = async (
 
   const { data: rows, error: itemError } = await supabase
     .from("checklist_items")
-    .select("id, client_item_id, label, is_checked, sort_order, created_at, updated_at")
+    .select("id, client_item_id, category, label, is_checked, sort_order, created_at, updated_at")
     .eq("checklist_id", checklist.id)
     .is("deleted_at", null)
     .order("sort_order", { ascending: true })
@@ -170,6 +171,7 @@ export const initializeCloudSharedChecklist = async (
       seedItems.map((item, sortOrder) => ({
         checklist_id: createdChecklist.id,
         client_item_id: item.id,
+        category: item.category,
         label: item.label,
         is_checked: checkedItemIdSet.has(item.id),
         sort_order: sortOrder,
@@ -263,6 +265,7 @@ export const syncCloudSharedChecklistSeedItems = async (
       missingSeedItems.map((item) => ({
         checklist_id: checklist.id,
         client_item_id: item.id,
+        category: item.category,
         label: item.label,
         is_checked: checkedItemIdSet.has(item.id),
         sort_order: seedItems.findIndex((seedItem) => seedItem.id === item.id),
@@ -281,11 +284,13 @@ export const syncCloudSharedChecklistSeedItems = async (
 
   for (const { item, row } of existingSeedRows) {
     const nextValues: {
+      category: string;
       label: string;
       sort_order: number;
       deleted_at: null;
       is_checked?: boolean;
     } = {
+      category: item.category,
       label: item.label,
       sort_order: seedItems.findIndex((seedItem) => seedItem.id === item.id),
       deleted_at: null,

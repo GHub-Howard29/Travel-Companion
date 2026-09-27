@@ -180,27 +180,13 @@ const ensureSpecialInfoItems = (
 };
 
 const mergeOtherInfoItems = (
-  baseItems: OtherInfoItem[] | undefined,
   cloudItems: OtherInfoItem[],
 ): OtherInfoItem[] => {
-  const mergedItemsById = new Map<string, OtherInfoItem>();
-
-  (baseItems ?? []).forEach((item) => {
-    mergedItemsById.set(item.id, item);
-  });
-
-  cloudItems.forEach((item) => {
-    const localItem = mergedItemsById.get(item.id);
-    if (
-      !localItem ||
-      (!localItem.isDeleted &&
-        new Date(item.updatedAt).getTime() > new Date(localItem.updatedAt).getTime())
-    ) {
-      mergedItemsById.set(item.id, item);
-    }
-  });
-
-  return Array.from(mergedItemsById.values());
+  // Other Info has its own cloud table and pending-write guard. Once the
+  // cloud fetch succeeds, the active cloud rows are authoritative so soft
+  // deletes disappear on other devices instead of being resurrected from a
+  // stale Trip/local cache.
+  return cloudItems;
 };
 
 const normalizeTripDetail = (
@@ -439,14 +425,11 @@ export const getTripDetail = async (
 
     const cloudOtherInfoItems = await getCloudOtherInfoItems(supabase, tripId);
 
-    if (cloudOtherInfoItems && cloudOtherInfoItems.length > 0) {
+    if (cloudOtherInfoItems !== null) {
       return normalizeTripDetail(
         latestRecord.detail,
         latestRecord.meta,
-        mergeOtherInfoItems(
-          latestRecord.detail.content.otherInfoItems,
-          cloudOtherInfoItems,
-        ),
+        mergeOtherInfoItems(cloudOtherInfoItems),
       );
     }
 
@@ -458,11 +441,11 @@ export const getTripDetail = async (
   const seedDetail = await fetchJson<TripDetail>(url);
   const cloudOtherInfoItems = await getCloudOtherInfoItems(supabase, tripId);
 
-  if (seedDetail && cloudOtherInfoItems && cloudOtherInfoItems.length > 0) {
+  if (seedDetail && cloudOtherInfoItems !== null) {
     return normalizeTripDetail(
       seedDetail,
       selectedTripMeta,
-      mergeOtherInfoItems(seedDetail.content.otherInfoItems, cloudOtherInfoItems),
+      mergeOtherInfoItems(cloudOtherInfoItems),
     );
   }
 

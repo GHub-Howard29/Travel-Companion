@@ -134,15 +134,21 @@ export const useChecklistState = (
         }
 
         if (cloudChecklist) {
-          const syncedCloudChecklist = canSyncToCloud
-            ? await syncCloudSharedChecklistSeedItems(
-                supabase,
-                tripId,
-                seedItems,
-                pendingProgress?.checkedItemIds ?? localProgress.checkedItemIds,
-                Boolean(pendingProgress),
-              )
-            : null;
+          const syncedCloudChecklist =
+            canSyncToCloud && pendingProgress
+              ? await syncCloudSharedChecklistSeedItems(
+                  supabase,
+                  tripId,
+                  cloudChecklist.items.map((item) => ({
+                    id: item.id,
+                    category: item.category,
+                    label: item.label,
+                    updatedAt: item.updatedAt,
+                  })),
+                  pendingProgress.checkedItemIds,
+                  true,
+                )
+              : null;
 
           if (!isActive) {
             return;

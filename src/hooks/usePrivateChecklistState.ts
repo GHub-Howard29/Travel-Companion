@@ -9,10 +9,13 @@ import {
   updatePrivateChecklistItem,
 } from "../services/privateChecklistService";
 import {
+  getCloudPrivateChecklist,
+  getCloudPrivateChecklistId,
   syncPrivateChecklistWithCloud,
 } from "../services/privateChecklistCloudService";
 import {
   markPrivateChecklistPending,
+  readPrivateChecklistPendingRevision,
   writeStoredPrivateChecklist,
 } from "../storage/privateChecklistStorage";
 
@@ -41,6 +44,17 @@ export const usePrivateChecklistState = (
   const scopeKey = `${tripId}:${ownerEmail}`;
   const pendingReorderRef = useRef<PrivateChecklist | null>(null);
   const reorderTimerRef = useRef<number | null>(null);
+  const realtimeRefreshTimerRef = useRef<number | null>(null);
+  const [realtimeChecklistScope, setRealtimeChecklistScope] = useState<{
+    tripId: string;
+    ownerEmail: string;
+    checklistId: string | null;
+  } | null>(null);
+  const realtimeChecklistId =
+    realtimeChecklistScope?.tripId === tripId &&
+    realtimeChecklistScope.ownerEmail === ownerEmail
+      ? realtimeChecklistScope.checklistId
+      : null;
   const items = useMemo(
     () =>
       canUsePrivateChecklist
@@ -104,6 +118,127 @@ export const usePrivateChecklistState = (
     );
     applyCloudChecklist(latestChecklist);
   }, [applyCloudChecklist, canSyncToCloud, ownerEmail, supabase, tripId]);
+
+  const reloadPrivateChecklistFromCloud = useCallback(async () => {
+    if (
+      !canSyncToCloud ||
+      readPrivateChecklistPendingRevision(tripId, ownerEmail)
+    ) {
+      return;
+    }
+
+    const cloudChecklist = await getCloudPrivateChecklist(
+      supabase,
+      tripId,
+      ownerEmail,
+    );
+    if (!cloudChecklist) return;
+
+    applyCloudChecklist(cloudChecklist);
+    setSyncStatus("synced");
+    setSyncError(null);
+  }, [
+    applyCloudChecklist,
+    canSyncToCloud,
+    ownerEmail,
+    supabase,
+    tripId,
+  ]);
+
+  const scheduleRealtimeRefresh = useCallback(() => {
+    if (realtimeRefreshTimerRef.current !== null) {
+      window.clearTimeout(realtimeRefreshTimerRef.current);
+    }
+    realtimeRefreshTimerRef.current = window.setTimeout(() => {
+      realtimeRefreshTimerRef.current = null;
+      void reloadPrivateChecklistFromCloud().catch((error) => {
+        console.warn(error);
+        setSyncStatus("error");
+        setSyncError("雲端同步失敗，資料已保存在本機。");
+      });
+    }, 350);
+  }, [reloadPrivateChecklistFromCloud]);
+
+  useEffect(() => {
+    if (!canSyncToCloud) {
+      return;
+    }
+
+    let isActive = true;
+    const resolveChecklistId = async () => {
+      try {
+        const checklistId = await getCloudPrivateChecklistId(supabase, tripId);
+        if (isActive) {
+          setRealtimeChecklistScope({ tripId, ownerEmail, checklistId });
+        }
+      } catch (error) {
+        console.warn(error);
+      }
+    };
+
+    void resolveChecklistId();
+
+    const channel = supabase
+      .channel(`travel-companion-private-checklist-${tripId}-${ownerEmail}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "checklists",
+          filter: `trip_id=eq.${tripId}`,
+        },
+        () => {
+          void resolveChecklistId();
+          scheduleRealtimeRefresh();
+        },
+      )
+      .subscribe();
+
+    return () => {
+      isActive = false;
+      void supabase.removeChannel(channel);
+    };
+  }, [
+    canSyncToCloud,
+    ownerEmail,
+    scheduleRealtimeRefresh,
+    supabase,
+    tripId,
+  ]);
+
+  useEffect(() => {
+    if (!canSyncToCloud || !realtimeChecklistId) return;
+
+    const channel = supabase
+      .channel(`travel-companion-private-checklist-items-${realtimeChecklistId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "checklist_items",
+          filter: `checklist_id=eq.${realtimeChecklistId}`,
+        },
+        scheduleRealtimeRefresh,
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [
+    canSyncToCloud,
+    realtimeChecklistId,
+    scheduleRealtimeRefresh,
+    supabase,
+  ]);
+
+  useEffect(() => () => {
+    if (realtimeRefreshTimerRef.current !== null) {
+      window.clearTimeout(realtimeRefreshTimerRef.current);
+    }
+  }, []);
 
   const flushPendingReorder = useCallback(async () => {
     if (reorderTimerRef.current !== null) {

@@ -4,8 +4,6 @@ import { APP_SOURCE_CLIENT_ID } from "./tripDataRevisionService";
 export type TripChangeCategory =
   | "itinerary"
   | "photo"
-  | "expense"
-  | "checklist"
   | "settings";
 
 export type TripChangeAction = "added" | "updated" | "deleted" | "changed";
@@ -48,8 +46,6 @@ export interface TripChangePreviewWindow {
 const CATEGORY_ORDER: TripChangeCategory[] = [
   "itinerary",
   "photo",
-  "expense",
-  "checklist",
   "settings",
 ];
 
@@ -69,7 +65,7 @@ export const getTripChangePreview = async (
     .from("trip_change_journal")
     .select("category, action, item_count, source_client_id, occurred_at")
     .eq("trip_id", tripId)
-    .gte("revision", window.fromRevision)
+    .gt("revision", window.fromRevision)
     .lte("revision", window.toRevision)
     .gt("occurred_at", window.fromUpdatedAt)
     .order("occurred_at", { ascending: true });

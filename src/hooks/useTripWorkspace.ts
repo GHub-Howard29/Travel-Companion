@@ -679,18 +679,18 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
         undefined,
         enforceVersion,
       );
-      if (currentTrip) {
-        try {
-          await scheduleItineraryCoverDeletion(
-            supabase,
-            getUnusedItineraryCoverPaths(currentTrip, record.detail),
-          );
-        } catch (error) {
-          console.warn("Failed to remove unused itinerary covers", error);
-        }
-      }
       setCurrentTrip(record.detail);
       setIsLoading(false);
+
+      if (currentTrip) {
+        void scheduleItineraryCoverDeletion(
+          supabase,
+          getUnusedItineraryCoverPaths(currentTrip, record.detail),
+        ).catch((error) => {
+          console.warn("Failed to remove unused itinerary covers", error);
+        });
+      }
+
       return didSync;
     },
     [

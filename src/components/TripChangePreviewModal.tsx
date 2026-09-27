@@ -1,8 +1,6 @@
 import {
   CalendarDays,
-  CheckSquare2,
   Image,
-  ReceiptText,
   RefreshCw,
   Settings,
   X,
@@ -34,8 +32,6 @@ const categoryMeta: Record<
 > = {
   itinerary: { label: "每日行程", unit: "項", icon: CalendarDays },
   photo: { label: "照片附件", unit: "張", icon: Image },
-  expense: { label: "旅費帳本", unit: "筆", icon: ReceiptText },
-  checklist: { label: "核對清單", unit: "項", icon: CheckSquare2 },
   settings: { label: "其他設定", unit: "項", icon: Settings },
 };
 
@@ -186,7 +182,7 @@ export const TripChangePreviewModal = ({
           )}
 
           <p className="text-xs leading-5 text-slate-500">
-            此頁只顯示變更類別與數量，不顯示照片、帳目、核對項目或其他內容的詳細差異。
+            此頁只顯示需要重新載入的行程、照片與旅程設定摘要；帳本、共同／私人清單、其他資訊與外幣換算使用各自同步流程，不列入此處。
           </p>
 
           <div className="grid grid-cols-2 gap-2">

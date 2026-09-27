@@ -120,6 +120,25 @@ const getCurrentUserId = async (
   return data.user?.id ?? null;
 };
 
+export const getCloudPrivateChecklistId = async (
+  supabase: SupabaseClient,
+  tripId: string,
+): Promise<string | null> => {
+  const userId = await getCurrentUserId(supabase);
+  if (!userId) return null;
+
+  const { data, error } = await supabase
+    .from("checklists")
+    .select("id")
+    .eq("trip_id", tripId)
+    .eq("scope", "private")
+    .eq("owner_user_id", userId)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data?.id ?? null;
+};
+
 const ensureCloudPrivateChecklist = async (
   supabase: SupabaseClient,
   tripId: string,

@@ -17,6 +17,8 @@ import {
 import { SortableCard } from "./SortableCard";
 import { releaseFocusedControl } from "../utils/viewportUtils";
 
+const NEW_CATEGORY_VALUE = "__new_category__";
+
 interface ChecklistPageProps {
   tripId: string;
   userEmail: string | null;
@@ -70,6 +72,7 @@ export const ChecklistPage = ({
   const [copySourceTripId, setCopySourceTripId] = useState("");
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [draftCategory, setDraftCategory] = useState("其他");
+  const [isCustomCategory, setIsCustomCategory] = useState(false);
   const [draftLabel, setDraftLabel] = useState("");
   const [isSavingList, setIsSavingList] = useState(false);
   const [isDeleteLocked, setIsDeleteLocked] = useState(false);
@@ -124,6 +127,18 @@ export const ChecklistPage = ({
       isOnline,
       userEmail,
     );
+
+  useEffect(() => {
+    if (isLocalUserChecklist || pendingCloudOrderRef.current) return;
+    setCloudChecklistData(
+      items.map((item) => ({
+        id: item.id,
+        category: item.category,
+        label: item.label,
+        updatedAt: item.updatedAt,
+      })),
+    );
+  }, [isLocalUserChecklist, items]);
 
   const flushPendingCloudOrder = useCallback(async () => {
     if (!canSyncSharedChecklist || !isOnline || isCloudOrderSyncingRef.current) return;
@@ -319,7 +334,8 @@ export const ChecklistPage = ({
   const resetForm = () => {
     setIsFormOpen(false);
     setEditingItemId(null);
-    setDraftCategory("");
+    setDraftCategory(categories[0] ?? "其他");
+    setIsCustomCategory(false);
     setDraftLabel("");
   };
 
@@ -333,7 +349,8 @@ export const ChecklistPage = ({
 
   const startCreateItem = () => {
     setEditingItemId(null);
-    setDraftCategory("");
+    setDraftCategory(categories[0] ?? "其他");
+    setIsCustomCategory(false);
     setDraftLabel("");
     setIsCopyOpen(false);
     setIsFormOpen(true);
@@ -538,6 +555,44 @@ export const ChecklistPage = ({
     setIsCopyOpen(false);
   };
 
+  const renderCategoryControl = () => (
+    <div className="space-y-2">
+      <select
+        value={isCustomCategory ? NEW_CATEGORY_VALUE : draftCategory}
+        onChange={(event) => {
+          const value = event.target.value;
+          if (value === NEW_CATEGORY_VALUE) {
+            setIsCustomCategory(true);
+            setDraftCategory("");
+            return;
+          }
+          setIsCustomCategory(false);
+          setDraftCategory(value);
+        }}
+        className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-rose-500 focus:ring-2 focus:ring-rose-500"
+        aria-label="共同檢查清單分類"
+      >
+        {categories.length === 0 && <option value="其他">其他</option>}
+        {categories.map((category) => (
+          <option key={category} value={category}>
+            {category}
+          </option>
+        ))}
+        <option value={NEW_CATEGORY_VALUE}>新增分類…</option>
+      </select>
+      {isCustomCategory && (
+        <input
+          value={draftCategory}
+          onChange={(event) => setDraftCategory(event.target.value)}
+          placeholder="輸入新分類名稱"
+          className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-500"
+          autoComplete="off"
+          required
+        />
+      )}
+    </div>
+  );
+
   return (
     <div className="space-y-6">
       <div className="bg-white p-4 rounded-xl border border-slate-200/80 shadow-sm">
@@ -708,17 +763,7 @@ export const ChecklistPage = ({
             </button>
           </div>
           <form onSubmit={saveChecklistItem} className="space-y-2">
-              <input
-                value={draftCategory}
-                onChange={(event) => setDraftCategory(event.target.value)}
-                list="shared-checklist-category-options"
-                placeholder="選擇或輸入分類"
-                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-500"
-                required
-              />
-              <datalist id="shared-checklist-category-options">
-                {categories.map((category) => <option key={category} value={category} />)}
-              </datalist>
+              {renderCategoryControl()}
               <input
                 value={draftLabel}
                 onChange={(event) => setDraftLabel(event.target.value)}
@@ -752,17 +797,7 @@ export const ChecklistPage = ({
             </button>
           </div>
           <form onSubmit={saveChecklistItem} className="space-y-2">
-            <input
-              value={draftCategory}
-              onChange={(event) => setDraftCategory(event.target.value)}
-              list="shared-checklist-category-options"
-              placeholder="選擇或輸入分類"
-              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-500"
-              required
-            />
-            <datalist id="shared-checklist-category-options">
-              {categories.map((category) => <option key={category} value={category} />)}
-            </datalist>
+            {renderCategoryControl()}
             <input
               value={draftLabel}
               onChange={(event) => setDraftLabel(event.target.value)}
