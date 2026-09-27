@@ -299,6 +299,30 @@ export const ItineraryPage = ({
     return () => cancelAnimationFrame(frameId);
   }, [coverDialogStep, coverTargetIndex, isCommonsSearching]);
 
+  useEffect(() => {
+    if (coverTargetIndex === null) return;
+
+    const body = document.body;
+    const scrollY = window.scrollY;
+    const previousPosition = body.style.position;
+    const previousTop = body.style.top;
+    const previousWidth = body.style.width;
+    const previousOverflow = body.style.overflow;
+
+    body.style.position = "fixed";
+    body.style.top = `-${scrollY}px`;
+    body.style.width = "100%";
+    body.style.overflow = "hidden";
+
+    return () => {
+      body.style.position = previousPosition;
+      body.style.top = previousTop;
+      body.style.width = previousWidth;
+      body.style.overflow = previousOverflow;
+      window.scrollTo({ top: scrollY, left: 0, behavior: "auto" });
+    };
+  }, [coverTargetIndex]);
+
   const currentDayEvents = trip.content.daysData[String(activeDay)] || [];
   const displayedDayEvents = (isOrderMode ? orderDraft : currentDayEvents)
     .map((event, originalIndex) => ({ event, originalIndex }));
@@ -2207,16 +2231,16 @@ export const ItineraryPage = ({
       )}
 
       {coverTargetIndex !== null && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/40 p-3 sm:items-center" role="presentation" aria-hidden={photoViewer ? true : undefined}>
+        <div className="fixed inset-0 z-50 flex items-stretch justify-center bg-slate-950/40 sm:items-center sm:p-3" role="presentation" aria-hidden={photoViewer ? true : undefined}>
           <section
             ref={coverDialogRef}
             onKeyDown={handleCoverDialogKeyDown}
-            className="max-h-[min(46rem,calc(100dvh-1.5rem))] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-4 shadow-2xl"
+            className="h-dvh w-full overflow-y-auto overscroll-contain bg-white p-4 shadow-2xl sm:h-auto sm:max-h-[min(46rem,calc(100dvh-1.5rem))] sm:max-w-2xl sm:rounded-2xl"
             role="dialog"
             aria-modal="true"
             aria-labelledby="commons-photo-title"
           >
-            <div className="flex items-start justify-between gap-3">
+            <div className="sticky top-0 z-10 -mx-4 -mt-4 flex items-start justify-between gap-3 border-b border-slate-100 bg-white px-4 pb-3 pt-4 sm:static sm:m-0 sm:border-0 sm:p-0">
               <div>
                 <h3 id="commons-photo-title" className="text-lg font-bold text-slate-800">{coverDialogStep === "search" ? "設定照片" : "確認照片與裁切"}</h3>
                 <p className="mt-1 text-xs text-slate-500">{coverDialogStep === "search" ? "先選擇來源與候選照片；選取不會立即儲存。" : "確認照片代表正確地點，再調整正方形封面範圍。"}</p>
@@ -2385,7 +2409,7 @@ export const ItineraryPage = ({
                   </aside>
                 </div>
                 {coverPhotoError && <p className="mt-3 text-xs text-rose-700" aria-live="polite">{coverPhotoError}</p>}
-                <div className="mt-4 flex flex-col gap-2 border-t border-slate-100 pt-4 sm:flex-row sm:justify-end">
+                <div className="sticky bottom-0 z-10 -mx-4 mt-4 flex flex-col gap-2 border-t border-slate-100 bg-white px-4 pb-4 pt-3 sm:static sm:mx-0 sm:flex-row sm:justify-end sm:bg-transparent sm:p-0 sm:pt-4">
                   <button type="button" onClick={() => { setCoverPhotoError(null); setCoverDialogStep("search"); }} disabled={isCoverSaving} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-50">返回來源</button>
                   <button type="button" onClick={closeCoverPhotoDialog} disabled={isCoverSaving} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-50">取消</button>
                   <button type="button" onClick={() => void saveCoverPhoto()} disabled={!isOnline || !canSaveSelectedCrop || isCoverSaving} className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-800 disabled:bg-slate-200 disabled:text-slate-400">

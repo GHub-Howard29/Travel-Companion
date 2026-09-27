@@ -122,7 +122,7 @@ export const CoverPhotoCropEditor = ({ source, value, onChange }: CoverPhotoCrop
   };
 
   return (
-    <div>
+    <div className="min-w-0">
       <canvas
         ref={canvasRef}
         width={640}
@@ -136,10 +136,10 @@ export const CoverPhotoCropEditor = ({ source, value, onChange }: CoverPhotoCrop
         onPointerMove={handlePointerMove}
         onPointerUp={endPointer}
         onPointerCancel={endPointer}
-        className="aspect-square w-full touch-none rounded-xl bg-slate-100 object-cover outline-none ring-emerald-500 focus:ring-2"
+        className="mx-auto aspect-square w-full max-w-[50dvh] touch-none rounded-xl bg-slate-100 object-cover outline-none ring-emerald-500 focus:ring-2 sm:max-w-none"
       />
       {loadedUrl !== source.url && <p className="mt-2 text-xs text-slate-500" aria-live="polite">正在載入裁切預覽…</p>}
-      <div className="mt-3 flex items-center gap-3">
+      <div className="mt-3 grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2">
         <button type="button" onClick={() => nudgeZoom(-0.1)} disabled={value.zoom <= 1} className="rounded-lg border border-slate-200 p-2 disabled:opacity-40" aria-label="縮小照片">
           <Minus size={16} />
         </button>
@@ -160,7 +160,7 @@ export const CoverPhotoCropEditor = ({ source, value, onChange }: CoverPhotoCrop
           <Plus size={16} />
         </button>
       </div>
-      <div className="mt-3 flex items-center gap-3 rounded-xl bg-slate-50 p-3">
+      <div className="mt-3 hidden items-center gap-3 rounded-xl bg-slate-50 p-3 sm:flex">
         <canvas ref={cardPreviewRef} width={76} height={76} className="h-[76px] w-[76px] rounded-lg" aria-label="76×76 卡片預覽" role="img" />
         <p className="text-xs leading-relaxed text-slate-600"><strong className="block text-slate-800">76×76 卡片預覽</strong>100% 顯示完整原圖，非正方形空間使用同一照片的模糊背景。</p>
       </div>

@@ -474,7 +474,7 @@ export default function ExpenseScreen({
                 })()
               ))}
             </div>
-            {defaultPayerName && (
+            {defaultPayerName && isUsingSharedExpenseBook && expenseMembers.length > 1 && (
               <span className="text-[11px] font-semibold text-amber-700">
                 已依登入 Email 預設，可代其他成員記帳
               </span>

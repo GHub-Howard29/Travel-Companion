@@ -311,7 +311,7 @@ useEffect(() => {
       clearTimeout(expenseRefreshTimerRef.current);
     }
 
-    expenseRefreshTimerRef.current = setTimeout(refreshExpenseBook, 600);
+    expenseRefreshTimerRef.current = setTimeout(refreshExpenseBook, 150);
   };
 
   const channel = supabase
@@ -322,9 +322,23 @@ useEffect(() => {
         event: "*",
         schema: "public",
         table: "expenses",
-        filter: `trip_id=eq.${expenseBookTripId}`,
       },
-      scheduleRefresh,
+      (payload) => {
+        const nextTripId =
+          payload.new && typeof payload.new === "object" && "trip_id" in payload.new
+            ? String(payload.new.trip_id || "")
+            : "";
+        const previousTripId =
+          payload.old && typeof payload.old === "object" && "trip_id" in payload.old
+            ? String(payload.old.trip_id || "")
+            : "";
+        const changedTripId = nextTripId || previousTripId;
+
+        // DELETE payloads can omit non-key columns. In that case refresh safely;
+        // otherwise ignore changes from a different shared book.
+        if (changedTripId && changedTripId !== expenseBookTripId) return;
+        scheduleRefresh();
+      },
     )
     .subscribe();
 

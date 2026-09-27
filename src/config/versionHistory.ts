@@ -14,6 +14,15 @@ export type VersionHistoryItem = {
 
 export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
+    version: "3.9.14",
+    date: "2026-09-27",
+    isMandatoryRelease: false,
+    notes: [
+      "修正 Wikimedia Commons 一般搜尋相關性排序，保留官方 index 順位。",
+      "納入符合歸屬條件的 CC BY-SA 候選，並完成別府海地獄與 Lake Kinrin 正式站回歸。",
+    ],
+  },
+  {
     version: "3.9.13",
     date: "2026-09-26",
     isMandatoryRelease: false,
