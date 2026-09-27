@@ -6,7 +6,7 @@ const expenseScreen = fs.readFileSync("src/components/expense/ExpenseScreen.tsx"
 const itinerary = fs.readFileSync("src/components/ItineraryPage.tsx", "utf8");
 const cropEditor = fs.readFileSync("src/components/CoverPhotoCropEditor.tsx", "utf8");
 const migration = fs.readFileSync(
-  "supabase/migrations/20260927060000_v3915_expense_realtime.sql",
+  "supabase/migrations/20260927061645_v3915_expense_realtime.sql",
   "utf8",
 );
 
