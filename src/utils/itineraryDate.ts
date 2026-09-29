@@ -24,6 +24,15 @@ export const getItineraryDayDate = (
   return `${dayDate.getFullYear()}-${String(dayDate.getMonth() + 1).padStart(2, "0")}-${String(dayDate.getDate()).padStart(2, "0")}`;
 };
 
+/** 將已驗證的本地日曆日期換為星期標籤。 */
+export const getWeekdayLabel = (gregorianDate: string): string | null => {
+  const match = gregorianDate.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match || !getItineraryDayDate(gregorianDate, 1)) return null;
+
+  const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+  return `星期${["日", "一", "二", "三", "四", "五", "六"][date.getDay()]}`;
+};
+
 /** 將已驗證的本地日曆日期換為農曆月與日；換算失敗時不阻斷行程瀏覽。 */
 export const getLunarDateLabel = (gregorianDate: string): string | null => {
   const match = gregorianDate.match(/^(\d{4})-(\d{2})-(\d{2})$/);

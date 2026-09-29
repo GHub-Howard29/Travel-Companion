@@ -66,7 +66,7 @@ import {
   calculateTimeAdjustment,
   type TimeAdjustmentResult,
 } from "../utils/itineraryTimeAdjustment";
-import { getItineraryDayDate, getLunarDateLabel } from "../utils/itineraryDate";
+import { getItineraryDayDate, getLunarDateLabel, getWeekdayLabel } from "../utils/itineraryDate";
 import { getItineraryDayTone } from "../utils/itineraryDayStyle";
 import {
   copyItineraryItemToDays,
@@ -516,6 +516,7 @@ export const ItineraryPage = ({
     supabase.storage.from(ITINERARY_COVER_BUCKET).getPublicUrl(path).data.publicUrl;
 
   const activeDayDate = getItineraryDayDate(trip.departureDate, activeDay);
+  const activeDayWeekday = activeDayDate ? getWeekdayLabel(activeDayDate) : null;
   const activeDayLunarDate = trip.content.showLunarDate !== false && activeDayDate
     ? getLunarDateLabel(activeDayDate)
     : null;
@@ -1745,7 +1746,7 @@ export const ItineraryPage = ({
             <h2 className="truncate">
               Day {activeDay} 行程探索 {activeDayDate && (
                 <span className="text-sm font-medium text-slate-500">
-                  {activeDayDate.slice(5)}{activeDayLunarDate && `（${activeDayLunarDate}）`}
+                  {activeDayDate.slice(5)}{activeDayWeekday && `（${activeDayWeekday}）`}{activeDayLunarDate && `（${activeDayLunarDate}）`}
                 </span>
               )}
             </h2>

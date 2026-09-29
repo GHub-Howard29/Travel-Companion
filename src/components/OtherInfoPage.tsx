@@ -625,15 +625,26 @@ export const OtherInfoPage = ({
               </div>
             )}
 
-            <button
-              type="button"
-              onClick={handleSave}
-              disabled={isSaveDisabled || isSaving}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-stone-900 px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-stone-700 disabled:cursor-not-allowed disabled:bg-slate-300"
-            >
-              <Save size={16} />
-              {isSaving ? "儲存中..." : "儲存"}
-            </button>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => closeForm(activeFolderId)}
+                disabled={isSaving}
+                className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-600 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <X size={16} />
+                取消
+              </button>
+              <button
+                type="button"
+                onClick={handleSave}
+                disabled={isSaveDisabled || isSaving}
+                className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-stone-900 px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-stone-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+              >
+                <Save size={16} />
+                {isSaving ? "儲存中..." : "儲存"}
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -2,7 +2,7 @@
 
 > 本文件只保留未完成、待補驗或待評估工作；不累積 `[x]` 歷史。
 >
-> 目前狀態以《[14_專案現況總覽](14_專案現況總覽.md)》為準。最後整理：2026-09-27。
+> 目前狀態以《[14_專案現況總覽](14_專案現況總覽.md)》為準。最後整理：2026-09-29。
 
 ## 後續候選版本
 
@@ -12,6 +12,7 @@
 - [x] V3.9.16：2026-09-27 正式發布完成。USER 個人帳本本機代號流程與 BUG032 行程照片離線預載均完成實作與實機驗證；USER 首次登入設定代號、登出再登入不重複詢問、代號修改入口均通過。正式 Trip 16 張已選用照片背景預載 16/16，手機實體飛航模式切換其他日期照片正常；離線 revision 不再誤報「行程資料已有更新」，個人帳本記帳後也不再跳 alert，改為常駐本機保存／備份提醒。完整 production build、PWA、browser-security 與專屬 regression 均通過；發布合併提交 `f042593`、annotated tag `v3.9.16`、GitHub Pages `b0d637a`。
 
 - [x] V3.9.17：正式發布完成。新增「預覽變更」，只針對行程、照片與 Trip 設定顯示變更摘要；共同清單、私人清單、領隊資訊／其他資訊維持各自即時雙向同步，共同清單分類改為手機友善原生下拉。RC2 migration 已套用正式 Supabase，RC3 雙裝置新增／刪除與 Change Journal 實機驗收均通過。正式發布提交 `781f70c`、annotated tag `v3.9.17`、GitHub Pages `321a74a`；公開 metadata 為 3.9.17，minimumSupportedVersion=3.9.17、forceUpdate=true。
+- [ ] V3.9.18：開發內容已完成、暫不發布。其他資訊新增／編輯表單底部改為「取消／儲存」雙按鈕，取消直接放棄未儲存內容；每日行程標題在 `MM-DD` 後新增依實際日期計算的「星期幾」，並保留既有農曆顯示。完整 `npm run build` 已通過；尚未變更版本 metadata、建立 tag、部署 GitHub Pages 或進入正式發布流程。
 - [ ] V3.10.1：建立完整 build 的驗證群組與耗時基線，整併驗證入口與失敗報告，不縮減 release build；既有 V3.9.3 總啟動量測已確認存在，本版不重複新增程式內埋點。
 - [ ] V3.10.2：沿用既有總啟動量測，分段量測離線冷啟動約 30 秒的 Service Worker、navigation、session、Trip 快取、localStorage、IndexedDB 與首個可操作畫面瓶頸，再依證據決定是否修正；不新增遠端 telemetry。
 - [ ] V3.10.3：以 loopback fixture 與瀏覽器／viewport 模擬建立零費用 Playwright 響應式回歸基礎。
