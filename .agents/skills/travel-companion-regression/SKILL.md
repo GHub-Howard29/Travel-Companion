@@ -17,6 +17,18 @@ Use this skill only from the Travel-Companion repository. Select the smallest re
 
 Read [references/modes.md](references/modes.md) to choose a mode. Read [references/browser-checklist.md](references/browser-checklist.md) only when interactive UI verification is required.
 
+## Codebase Memory preflight
+
+Before implementation or regression planning, use the `codebase-memory-mcp` index for `Travel-Companion` as the first-pass map of the affected code.
+
+- Confirm the index is ready and current for the repository/branch. If the indexed Git state is stale after source changes, refresh the index before relying on impact results.
+- Start with graph/code search to locate the feature, then use call-path or dependency tracing to identify callers, callees, storage/services, and likely regression surfaces before editing.
+- Use the graph to narrow investigation; do not treat it as the source of truth for exact behavior. Read the actual source before making a change.
+- For SQL, Supabase migrations, RLS, triggers, policies, or any file/range reported as `parse_partial` or `parse_unusable`, always inspect the original SQL/source directly. Codebase Memory is only a navigation aid for those areas.
+- After implementation, use change/impact analysis when available to compare the actual diff with the predicted affected area, then select the smallest regression mode that covers that risk.
+- Codebase Memory does not replace build, regression, browser verification, or authorization gates. The workflow is: `CBM locate/trace -> inspect source -> implement -> CBM/diff impact check -> regression skill -> build/test -> report`.
+- If Codebase Memory is unavailable, stale, or incomplete, fall back to direct repository/source inspection and state that limitation; do not block a safe change solely because the graph is unavailable.
+
 ## Maintained commands
 
 Run from the repository root:
