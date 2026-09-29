@@ -14,6 +14,15 @@ export type VersionHistoryItem = {
 
 export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
+    version: "3.9.17",
+    date: "2026-09-27",
+    isMandatoryRelease: true,
+    notes: [
+      "新增「預覽變更」，更新行程前可先查看行程與照片的變更摘要。",
+      "改善共同清單、私人清單與其他資訊的跨裝置同步，並改善手機操作與資料同步穩定性。",
+    ],
+  },
+  {
     version: "3.9.16",
     date: "2026-09-27",
     isMandatoryRelease: false,
