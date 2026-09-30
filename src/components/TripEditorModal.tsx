@@ -511,11 +511,16 @@ export const TripEditorModal = ({
           <span className="text-xs font-bold text-slate-500">
             記帳代號設定（不授予本行程編輯權）
           </span>
-          <p className="mt-1 text-xs leading-relaxed text-slate-400">
-            每行填寫「名稱=Email」。左側名稱會顯示在記帳本付款人；右側 Email
-            用於辨識預設登入者，記帳時仍可代其他同行者記帳。本欄只設定記帳顯示代號，不會授予本行程編輯權。本欄會先帶入目前已設定的帳號，請勿刪除既有內容。若要新增同行者，請依上述格式逐行新增；若要授權同行者編輯本行程，再將其 Email 填入下方「可編輯者 Google Email」。
-            {!canManageEditors && " 記帳代號設定僅限系統管理者編輯。"}
-          </p>
+          <div className="mt-1 text-xs leading-relaxed text-slate-400">
+            <p>每行一人，例如 Howard=howard@example.com。此處只設定記帳名稱，不授予編輯權。</p>
+            <details className="mt-1">
+              <summary className="cursor-pointer font-semibold text-slate-500">完整說明</summary>
+              <p className="mt-1">
+                左側名稱顯示為記帳付款人；右側 Email 用於辨識預設登入者，記帳時仍可代其他同行者記帳。既有內容會自動帶入；若要授權編輯旅程，請將 Email 填入下方「可編輯者 Google Email」。
+                {!canManageEditors && " 記帳代號設定僅限系統管理者編輯。"}
+              </p>
+            </details>
+          </div>
           <textarea
             value={participantAssignments}
             onChange={(event) => setParticipantAssignments(event.target.value)}

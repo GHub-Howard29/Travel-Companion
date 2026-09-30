@@ -566,11 +566,20 @@ export const OtherInfoPage = ({
               </button>
             </div>
 
-            <p className="text-xs leading-relaxed text-slate-400">
-              {form.isSensitive
-                ? "快捷入口不建立新資料夾；資料仍歸在目前選擇的分類，並自動套用管理者限定。"
-                : "進入管理時預設為一般資訊；需要保護資料時，再按「新增敏感資料」。"}
-            </p>
+            <div className="text-xs leading-relaxed text-slate-400">
+              <p>訂位代碼、私人電話或受限連結請選「敏感資料」。</p>
+              <details className="mt-1">
+                <summary className="cursor-pointer font-semibold text-slate-500">如何判斷</summary>
+                <p className="mt-1">
+                  訂房編號、租車確認碼、個資或受限文件連結屬敏感內容；一般公開網址可維持一般資訊，固定帳號保護的文件仍應視為敏感資料。
+                </p>
+                <p className="mt-1">
+                  {form.isSensitive
+                    ? "資料仍歸在目前分類，並自動套用管理者限定。"
+                    : "進入管理時預設為一般資訊，需要保護時再選「敏感資料」。"}
+                </p>
+              </details>
+            </div>
 
             {!isSpecialInfoPage && (
             <select

@@ -100,9 +100,11 @@ assert.match(page, /目前沒有可用照片；可調整搜尋詞或改用其他
 assert.match(page, /下一批沒有新的合規照片/);
 assert.match(page, /已到達這個搜尋或分類的底端/);
 assert.doesNotMatch(page, /void searchCommonsPhotos\(query\)/);
-assert.match(page, /float-left mb-2 mr-3 w-\[76px\]/);
+assert.match(page, /w-\[76px\] shrink-0/);
+assert.match(page, /h-\[76px\] w-\[76px\]/);
+assert.doesNotMatch(page, /float-left mb-2 mr-3 w-\[76px\]/);
 assert.doesNotMatch(page, /grid-cols-\[76px_minmax\(0,1fr\)\]/);
-assert.match(page, /flex flex-wrap items-center justify-end gap-2 border-t border-slate-100 pt-2/);
+assert.match(page, /ml-auto flex min-h-8 flex-wrap items-center justify-end gap-2/);
 assert.doesNotMatch(page, /event\.coverPhoto\.creator} ·/);
 assert.match(page, /<FolderOpen size=\{14\} \/> \{linkedOtherInfoFolder\.title\}[\s\S]{0,900}<MapPin size=\{14\} className="text-emerald-600" \/> 查看地圖/);
 assert.doesNotMatch(page, /查看地圖 <ExternalLink size=\{10\} \/>/);

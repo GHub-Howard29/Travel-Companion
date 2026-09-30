@@ -122,7 +122,11 @@ export function UpdatePrompt({
 
           {isUpdateAvailable && (
             <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-800">
-              更新會清除 App 暫存並重新載入頁面。已儲存的旅程、清單、記帳與附件資料不會被清除；如果現在有尚未儲存的資料，請先儲存後再更新，避免重新載入後遺失。
+              <p className="font-semibold">更新會重新載入 App；請先儲存目前編輯內容。</p>
+              <details className="mt-1">
+                <summary className="cursor-pointer font-semibold">資料保留說明</summary>
+                <p className="mt-1">已儲存的旅程、清單、記帳與附件不會被清除。</p>
+              </details>
             </div>
           )}
 

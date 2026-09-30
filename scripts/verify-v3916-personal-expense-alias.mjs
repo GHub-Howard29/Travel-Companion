@@ -21,7 +21,7 @@ assert.match(app, /canEditPersonalExpenseAlias=\{role === ROLE\.USER\}/);
 assert.match(app, /writePersonalExpenseAlias\(userEmail, alias\)/);
 
 assert.match(modal, /設定個人帳本代號/);
-assert.match(modal, /只儲存在目前這台裝置/);
+assert.match(modal, /代號只存在此裝置/);
 assert.match(modal, /!isRequired/);
 
 assert.match(sidebar, /個人帳本代號/);

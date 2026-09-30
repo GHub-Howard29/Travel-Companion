@@ -117,7 +117,7 @@ export const ChecklistPage = ({
     }
   }, [checklistData, isLocalUserChecklist]);
 
-  const { items, syncStatus, syncError, toggleChecklistItem, reorderChecklistItems } =
+  const { items, syncStatus, toggleChecklistItem, reorderChecklistItems } =
     useChecklistState(
       tripId,
       checklistSeedData,
@@ -621,11 +621,10 @@ export const ChecklistPage = ({
         )}
         {!isSharedTripReadOnly && canSyncSharedChecklist && (
           <p className="mt-3 text-xs font-medium text-slate-500">
-            {!isOnline &&
-              "目前為離線狀態，資料先保存於本機；恢復連線後才會完整同步更新。"}
-            {isOnline && syncStatus === "syncing" && "正在同步共同檢查清單..."}
-            {isOnline && syncStatus === "synced" && "共同檢查清單已同步到雲端。"}
-            {isOnline && syncStatus === "error" && syncError}
+            {!isOnline && "離線，變更暫存本機"}
+            {isOnline && syncStatus === "syncing" && "同步中"}
+            {isOnline && syncStatus === "synced" && "已同步"}
+            {isOnline && syncStatus === "error" && "同步失敗，已保留本機變更"}
             {isOnline && syncStatus === "local" && "目前資料先保存於本機。"}
           </p>
         )}
@@ -664,7 +663,7 @@ export const ChecklistPage = ({
           </div>
           <div className="space-y-3">
             {canSyncSharedChecklist && <p className="rounded-lg border border-amber-300 bg-amber-100 px-3 py-2 text-xs font-bold text-amber-900">
-              如需複製使用舊有清單，請勿提早建立任何清單
+              若要複製舊清單，請先不要新增項目。
             </p>}
             {canSyncSharedChecklist && !isOnline && (
               <p className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs font-bold text-sky-700">

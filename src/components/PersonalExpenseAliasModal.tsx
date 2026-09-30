@@ -49,7 +49,7 @@ export function PersonalExpenseAliasModal({
           {isRequired ? "設定個人帳本代號" : "修改個人帳本代號"}
         </h2>
         <p className="mt-2 text-sm leading-6 text-slate-600">
-          此代號只儲存在目前這台裝置，作為個人帳本的付款人名稱，不會寫入旅程共用設定或雲端。
+          代號只存在此裝置，用於個人帳本的付款人名稱。
         </p>
 
         <div className="mt-4 rounded-xl bg-slate-50 px-3 py-2 text-xs text-slate-500">

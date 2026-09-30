@@ -28,10 +28,8 @@ const personalSaveBlock = expenseHook.slice(personalSaveStart, personalSaveEnd);
 assert.doesNotMatch(personalSaveBlock, /alert\s*\(/);
 
 assert.match(expenseScreen, /個人帳本僅儲存在此裝置/);
-assert.match(
-  expenseScreen,
-  /帳目與照片不會同步到共用雲端。更換裝置或清除瀏覽器資料前，請先匯出 Excel 備份。照片附件也只保存在目前裝置。/,
-);
+assert.match(expenseScreen, /個人帳本僅存此裝置。換裝置或清除資料前，請先匯出備份。/);
+assert.match(expenseScreen, /帳目與照片不會同步到共用雲端；照片附件也只保存在目前裝置。/);
 assert.match(expenseScreen, /個人帳本・僅存本機/);
 
 console.log("V3.9.16 離線 revision 誤報與個人帳本非阻斷提示 regression 通過。");

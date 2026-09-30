@@ -14,6 +14,15 @@ export type VersionHistoryItem = {
 
 export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
+    version: "3.9.18",
+    date: "2026-09-29",
+    isMandatoryRelease: false,
+    notes: [
+      "其他資訊新增／編輯表單改為「取消／儲存」雙按鈕，可直接放棄未儲存內容。",
+      "每日行程標題在日期後新增依實際日期計算的星期顯示，並保留農曆資訊。",
+    ],
+  },
+  {
     version: "3.9.17",
     date: "2026-09-27",
     isMandatoryRelease: true,

@@ -164,7 +164,11 @@ export const CoverPhotoCropEditor = ({ source, value, onChange }: CoverPhotoCrop
         <canvas ref={cardPreviewRef} width={76} height={76} className="h-[76px] w-[76px] rounded-lg" aria-label="76×76 卡片預覽" role="img" />
         <p className="text-xs leading-relaxed text-slate-600"><strong className="block text-slate-800">76×76 卡片預覽</strong>100% 顯示完整原圖，非正方形空間使用同一照片的模糊背景。</p>
       </div>
-      <p className="mt-2 text-xs text-slate-500">拖曳調整位置；手機可拖曳或雙指縮放，鍵盤可使用方向鍵與加減鍵。縮放範圍為 100%～250%。</p>
+      <p className="mt-2 text-xs text-slate-500">拖曳調整位置；使用縮放控制。</p>
+      <details className="mt-2 text-xs text-slate-500">
+        <summary className="cursor-pointer font-semibold text-slate-600">完整操作說明</summary>
+        <p className="mt-1 leading-relaxed">手機可拖曳或雙指縮放，鍵盤可使用方向鍵與加減鍵。縮放範圍為 100%～250%。</p>
+      </details>
     </div>
   );
 };

@@ -306,14 +306,24 @@ export default function ExpenseScreen({
                 </p>
                 <p className="mt-0.5 text-[11px] leading-relaxed text-slate-500">
                   {isUsingSharedExpenseBook
-                    ? `最後上傳：${attachmentSyncLabel}。照片會自動壓縮至 1MB 以內，建議在 Wi-Fi 環境下再上傳以節省流量。`
-                    : "帳目與照片不會同步到共用雲端。更換裝置或清除瀏覽器資料前，請先匯出 Excel 備份。照片附件也只保存在目前裝置。"}
+                    ? "照片會壓縮後上傳；建議使用 Wi-Fi。"
+                    : "個人帳本僅存此裝置。換裝置或清除資料前，請先匯出備份。"}
                 </p>
-                {isUsingSharedExpenseBook && hasUnsyncedLocalExpenseAttachments && (
-                  <p className="mt-1 text-[11px] font-semibold text-orange-700">
-                    有離線新增的照片，請先連線讓帳目自動同步後，再按同步照片。
-                  </p>
-                )}
+                <details className="mt-1 text-[11px] leading-relaxed text-slate-500">
+                  <summary className="cursor-pointer font-semibold text-slate-600">詳細說明</summary>
+                  {isUsingSharedExpenseBook ? (
+                    <>
+                      <p className="mt-1">最後上傳：{attachmentSyncLabel}。照片會自動壓縮至 1MB 以內。</p>
+                      {hasUnsyncedLocalExpenseAttachments && (
+                        <p className="mt-1 font-semibold text-orange-700">
+                          有離線新增的照片，請先連線讓帳目自動同步後，再按同步照片。
+                        </p>
+                      )}
+                    </>
+                  ) : (
+                    <p className="mt-1">帳目與照片不會同步到共用雲端；照片附件也只保存在目前裝置。</p>
+                  )}
+                </details>
               </div>
               {isUsingSharedExpenseBook ? (
                 <button

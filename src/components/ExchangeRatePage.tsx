@@ -339,7 +339,7 @@ export const ExchangeRatePage = ({
         </p>
         <h2 className="text-2xl font-extrabold text-slate-900">外幣換算</h2>
         <p className="mt-1 text-sm leading-relaxed text-slate-500">
-          記錄實際換匯金額，以加權平均匯率估算旅途中的新臺幣花費。
+          用實際換匯紀錄估算新臺幣花費。
         </p>
       </div>
 
@@ -351,7 +351,7 @@ export const ExchangeRatePage = ({
             : cloudStatus === "synced"
               ? "已同步"
               : cloudStatus === "error"
-                ? "同步失敗，將保留本機資料"
+                ? "同步失敗，已保留本機變更"
                 : "本機"}
         </p>
       ) : (
@@ -434,7 +434,7 @@ export const ExchangeRatePage = ({
           <h3 className="font-bold text-amber-950">外幣轉新臺幣</h3>
         </div>
         <p className="mt-1 text-xs leading-relaxed text-amber-800">
-          輸入金額後，同時比較實際換匯紀錄與最近載入的臺銀參考匯率。
+          輸入金額即可比較兩種估算。
         </p>
         <input
           type="text"

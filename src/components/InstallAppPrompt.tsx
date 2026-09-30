@@ -147,7 +147,7 @@ export function InstallAppPrompt({
         <div className="min-w-0 flex-1">
           <p className="text-sm font-bold text-slate-900">安裝旅行助手</p>
           <p className="mt-0.5 text-xs leading-relaxed text-slate-500">
-            安裝後可像 App 一樣從主畫面開啟，旅行中比較方便查看行程與記帳。
+            安裝到主畫面，快速查看行程與記帳。
           </p>
           {!installEvent && (
             <p className="mt-2 rounded-lg bg-slate-50 px-3 py-2 text-xs leading-relaxed text-slate-600">

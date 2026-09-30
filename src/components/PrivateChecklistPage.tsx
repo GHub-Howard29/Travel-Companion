@@ -39,7 +39,6 @@ export const PrivateChecklistPage = ({
   const {
     items,
     syncStatus,
-    syncError,
     addItem,
     toggleItem,
     renameItem,
@@ -304,17 +303,17 @@ export const PrivateChecklistPage = ({
           {!isHistoricalOfflineReadOnly &&
             canSyncPrivateChecklist &&
             !isOnline &&
-            "目前為離線狀態，資料先保存於本機；恢復連線後才會完整同步更新。"}
+            "離線，變更暫存本機"}
           {!isHistoricalOfflineReadOnly &&
             canSyncPrivateChecklist &&
             isOnline &&
             syncStatus === "syncing" &&
-            "正在同步雲端..."}
+            "同步中"}
           {!isHistoricalOfflineReadOnly &&
             canSyncPrivateChecklist &&
             isOnline &&
             syncStatus === "synced" &&
-            "已同步到雲端。"}
+            "已同步"}
           {!isHistoricalOfflineReadOnly &&
             canSyncPrivateChecklist &&
             isOnline &&
@@ -324,7 +323,7 @@ export const PrivateChecklistPage = ({
             canSyncPrivateChecklist &&
             isOnline &&
             syncStatus === "error" &&
-            syncError}
+            "同步失敗，已保留本機變更"}
           {!isHistoricalOfflineReadOnly &&
             canSyncPrivateChecklist &&
             isOnline &&
@@ -362,7 +361,7 @@ export const PrivateChecklistPage = ({
           <div className="space-y-3">
             {canSyncPrivateChecklist && (
               <p className="rounded-lg border border-amber-300 bg-amber-100 px-3 py-2 text-xs font-bold text-amber-900">
-                如需複製使用舊有清單，請勿提早建立任何清單
+                若要複製舊清單，請先不要新增項目。
               </p>
             )}
             {canSyncPrivateChecklist && !isOnline && (

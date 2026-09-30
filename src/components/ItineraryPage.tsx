@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { Fragment, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   DndContext,
@@ -150,6 +150,74 @@ const createEmptyItineraryDraft = (): ItineraryItem => ({
   desc: "",
   location: "",
 });
+
+const CollapsibleItineraryDescription = ({
+  value,
+  actions,
+}: {
+  value?: string;
+  actions?: ReactNode;
+}) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [isOverflowing, setIsOverflowing] = useState(false);
+  const contentRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const content = contentRef.current;
+    if (!content || !value || isExpanded) return;
+
+    let disposed = false;
+    const measure = () => {
+      if (disposed) return;
+      setIsOverflowing(content.scrollHeight > content.clientHeight + 1);
+    };
+    const frame = window.requestAnimationFrame(() => {
+      measure();
+      window.requestAnimationFrame(measure);
+    });
+    const timer = window.setTimeout(measure, 150);
+    const observer = new ResizeObserver(measure);
+    observer.observe(content);
+    void document.fonts?.ready.then(measure);
+
+    return () => {
+      disposed = true;
+      window.cancelAnimationFrame(frame);
+      window.clearTimeout(timer);
+      observer.disconnect();
+    };
+  }, [isExpanded, value]);
+
+  const showActionRow = isOverflowing || Boolean(actions);
+
+  return (
+    <>
+      {value && (
+        <div
+          ref={contentRef}
+          className={`whitespace-pre-wrap break-words text-sm leading-relaxed text-slate-600 ${isExpanded ? "" : "line-clamp-3"}`}
+        >
+          <RichTextDisplay value={value} />
+        </div>
+      )}
+      {showActionRow && (
+        <div className="mt-3 flex min-h-8 flex-wrap items-center gap-2 border-t border-slate-100 pt-2">
+          {isOverflowing && (
+            <button
+              type="button"
+              onClick={() => setIsExpanded((expanded) => !expanded)}
+              aria-expanded={isExpanded}
+              className="inline-flex min-h-8 items-center rounded-lg px-2 text-xs font-bold text-emerald-700 hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            >
+              {isExpanded ? "收合" : "展開"}
+            </button>
+          )}
+          {actions && <div className="ml-auto flex min-h-8 flex-wrap items-center justify-end gap-2">{actions}</div>}
+        </div>
+      )}
+    </>
+  );
+};
 
 export const ItineraryPage = ({
   supabase,
@@ -1743,11 +1811,13 @@ export const ItineraryPage = ({
       <div className="mb-4 border-b border-slate-200 pb-3">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
-            <h2 className="truncate">
-              Day {activeDay} 行程探索 {activeDayDate && (
-                <span className="text-sm font-medium text-slate-500">
-                  {activeDayDate.slice(5)}{activeDayWeekday && `（${activeDayWeekday}）`}{activeDayLunarDate && `（${activeDayLunarDate}）`}
-                </span>
+            <h2 className="truncate text-lg font-bold text-slate-900">
+              D{activeDay}{activeDayDate && (
+                <>
+                  {" · "}{activeDayDate.slice(5).replace("-", "/")}
+                  {activeDayWeekday && `（${activeDayWeekday.replace(/^星期/, "")}）`}
+                  {activeDayLunarDate && <span className="text-slate-400">{`（${activeDayLunarDate}）`}</span>}
+                </>
               )}
             </h2>
           </div>
@@ -1814,7 +1884,7 @@ export const ItineraryPage = ({
           </div>
 
           <p className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-xs leading-relaxed text-slate-500">
-            新增活動會依到達時間插入；編輯時間不會自行移動卡片。未填離開時間時，儲存後會沿用到達時間。時間可使用半形或全形冒號，但冒號前後不可空格。
+            新增依到達時間排序；編輯時間不改卡片順序。
           </p>
 
           {isFormOpen && editingIndex === null && renderItemForm(false)}
@@ -1856,7 +1926,7 @@ export const ItineraryPage = ({
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <h4 className="text-sm font-bold text-emerald-900">時間調整模式</h4>
-                  <p className="mt-1 text-xs leading-relaxed text-emerald-800">選擇一個起點，重新計算當日後續行程。</p>
+                  <p className="mt-1 text-xs leading-relaxed text-emerald-800">選擇起點，預覽後續時間</p>
                 </div>
                 <button type="button" onClick={resetTimeAdjustment} className="rounded-lg border border-emerald-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-50">退出</button>
               </div>
@@ -2001,94 +2071,94 @@ export const ItineraryPage = ({
                   </div>
                 </div>
               )}
-              <div className={hasVisibleCover ? "relative flow-root" : ""}>
-              {hasVisibleCover && event.coverPhoto && (
-                <div className="float-left mb-2 mr-3 w-[76px]">
-                  <button
-                    type="button"
-                    onClick={(clickEvent) => openPhotoViewer({
-                      url: getCoverPublicUrl(event.coverPhoto!.storagePath),
-                      alt: `${event.title || "行程"}照片`,
-                      sourceLabel: event.coverPhoto!.source === "wikimedia-commons" ? "Wikimedia Commons" : "自行上傳",
-                      ...(event.coverPhoto!.source === "wikimedia-commons" ? {
-                        sourcePageUrl: event.coverPhoto!.sourcePageUrl,
-                        creator: event.coverPhoto!.creator,
-                        credit: event.coverPhoto!.credit,
-                        license: event.coverPhoto!.license,
-                        licenseUrl: event.coverPhoto!.licenseUrl,
-                      } : {}),
-                      transformation: event.coverPhoto!.transformation,
-                    }, clickEvent.currentTarget)}
-                    className="block rounded-lg outline-none ring-emerald-500 focus:ring-2"
-                    aria-label={`放大檢視「${event.title || "行程"}」照片`}
-                  >
-                    <img
-                      src={getCoverPublicUrl(event.coverPhoto.storagePath)}
-                      alt=""
-                      width={76}
-                      height={76}
-                      loading="lazy"
-                      className="h-[76px] w-[76px] rounded-lg bg-slate-100 object-cover"
-                      onError={() => setFailedCoverPaths((paths) => new Set(paths).add(event.coverPhoto!.storagePath))}
-                    />
-                  </button>
-                  {event.coverPhoto.source === "wikimedia-commons" ? (
-                    <a
-                      href={event.coverPhoto.sourcePageUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="mt-1 block text-[11px] font-semibold text-emerald-700 hover:text-emerald-800"
+              <div className={hasVisibleCover ? "flex min-w-0 items-start gap-3" : "min-w-0"}>
+                {hasVisibleCover && event.coverPhoto && (
+                  <div className="w-[76px] shrink-0">
+                    <button
+                      type="button"
+                      onClick={(clickEvent) => openPhotoViewer({
+                        url: getCoverPublicUrl(event.coverPhoto!.storagePath),
+                        alt: `${event.title || "行程"}照片`,
+                        sourceLabel: event.coverPhoto!.source === "wikimedia-commons" ? "Wikimedia Commons" : "自行上傳",
+                        ...(event.coverPhoto!.source === "wikimedia-commons" ? {
+                          sourcePageUrl: event.coverPhoto!.sourcePageUrl,
+                          creator: event.coverPhoto!.creator,
+                          credit: event.coverPhoto!.credit,
+                          license: event.coverPhoto!.license,
+                          licenseUrl: event.coverPhoto!.licenseUrl,
+                        } : {}),
+                        transformation: event.coverPhoto!.transformation,
+                      }, clickEvent.currentTarget)}
+                      className="block rounded-lg outline-none ring-emerald-500 focus:ring-2"
+                      aria-label={`放大檢視「${event.title || "行程"}」照片`}
                     >
-                      照片來源 ↗
-                    </a>
-                  ) : null}
-                </div>
-              )}
-              <div className="min-w-0">
-              <div className="flex justify-between items-center gap-3 mb-2">
-                {event.time ? (
-                  <div className="flex min-w-0 items-center gap-2 text-sm font-bold text-slate-500">
-                    <span>到達 {event.time}</span>
-                    <span className="text-slate-300" aria-hidden="true">→</span>
-                    <span>離開 {event.departureTime || event.time}</span>
+                      <img
+                        src={getCoverPublicUrl(event.coverPhoto.storagePath)}
+                        alt=""
+                        width={76}
+                        height={76}
+                        loading="lazy"
+                        className="h-[76px] w-[76px] rounded-lg bg-slate-100 object-cover"
+                        onError={() => setFailedCoverPaths((paths) => new Set(paths).add(event.coverPhoto!.storagePath))}
+                      />
+                    </button>
+                    {event.coverPhoto.source === "wikimedia-commons" ? (
+                      <a
+                        href={event.coverPhoto.sourcePageUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="mt-1 block text-[11px] font-semibold text-emerald-700 hover:text-emerald-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                      >
+                        照片來源 ↗
+                      </a>
+                    ) : null}
                   </div>
-                ) : <span />}
-                <span
-                  className={`px-2 py-0.5 border rounded text-xs font-semibold ${event.typeColor}`}
-                >
-                  {event.type}
-                </span>
-              </div>
-              <h3 className="text-lg font-bold text-slate-800 mb-1.5">
-                {event.title}
-              </h3>
-              {event.desc && (
-                <p className="mb-4 whitespace-pre-wrap break-words text-sm leading-relaxed text-slate-600">
-                  <RichTextDisplay value={event.desc} />
-                </p>
-              )}
-              {(event.location || linkedOtherInfoFolder) && (
-                <div className="flex flex-wrap items-center justify-end gap-2 border-t border-slate-100 pt-2">
-                  {linkedOtherInfoFolder && (
-                    <button
-                      type="button"
-                      onClick={() => onOpenOtherInfoFolder(linkedOtherInfoFolder.id)}
-                      className="flex shrink-0 items-center gap-1.5 rounded-lg bg-sky-50 px-3 py-1.5 text-xs font-bold text-sky-700 transition-colors hover:bg-sky-100"
-                    >
-                      <FolderOpen size={14} /> {linkedOtherInfoFolder.title}
-                    </button>
-                  )}
-                  {event.location && (
-                    <button
-                      type="button"
-                      onClick={() => handlePlaceBrowse(event.location!, event.place)}
-                      className="flex shrink-0 items-center gap-1.5 rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600 transition-colors hover:bg-emerald-50 hover:text-emerald-700"
-                    >
-                      <MapPin size={14} className="text-emerald-600" /> 查看地圖
-                    </button>
-                  )}
+                )}
+                <div className="min-w-0 flex-1">
+                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                    {event.time ? (
+                      <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-sm font-bold text-slate-500">
+                        <span>到達 {event.time}</span>
+                        <span className="text-slate-300" aria-hidden="true">→</span>
+                        <span>離開 {event.departureTime || event.time}</span>
+                      </div>
+                    ) : <span />}
+                    <span className={`shrink-0 rounded border px-2 py-0.5 text-xs font-semibold ${event.typeColor}`}>
+                      {event.type}
+                    </span>
+                  </div>
+                  <h3 className="break-words text-lg font-bold text-slate-800">
+                    {event.title}
+                  </h3>
                 </div>
-              )}
+              </div>
+              <div className="mt-3">
+                <CollapsibleItineraryDescription
+                  key={`${sortableId}-${event.desc ?? ""}`}
+                  value={event.desc}
+                  actions={(event.location || linkedOtherInfoFolder) ? (
+                    <>
+                      {linkedOtherInfoFolder && (
+                        <button
+                          type="button"
+                          onClick={() => onOpenOtherInfoFolder(linkedOtherInfoFolder.id)}
+                          className="inline-flex min-h-8 items-center gap-1.5 rounded-lg bg-sky-50 px-3 text-xs font-bold text-sky-700 transition-colors hover:bg-sky-100 focus:outline-none focus:ring-2 focus:ring-sky-500"
+                        >
+                          <FolderOpen size={14} /> {linkedOtherInfoFolder.title}
+                        </button>
+                      )}
+                      {event.location && (
+                        <button
+                          type="button"
+                          onClick={() => handlePlaceBrowse(event.location!, event.place)}
+                          className="inline-flex min-h-8 items-center gap-1.5 rounded-lg bg-slate-100 px-3 text-xs font-bold text-slate-600 transition-colors hover:bg-emerald-50 hover:text-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        >
+                          <MapPin size={14} className="text-emerald-600" /> 查看地圖
+                        </button>
+                      )}
+                    </>
+                  ) : undefined}
+                />
               </div>
               {canManageItinerary && isManageMode && !isOrderMode && (
                 <div className="clear-both mt-3 flex flex-wrap justify-end gap-2 border-t border-slate-100 pt-3">
@@ -2142,7 +2212,6 @@ export const ItineraryPage = ({
                   </button>
                 </div>
               )}
-              </div>
                 </>
               )}
             </article>}
@@ -2306,7 +2375,11 @@ export const ItineraryPage = ({
                 {commonsStage === "search" && commonsCandidates.length > 0 && <>
                   <section className="mt-4" aria-labelledby="commons-broad-title">
                     <h4 id="commons-broad-title" className="text-sm font-bold text-slate-800">廣泛候選</h4>
-                    <p className="mt-1 text-xs leading-relaxed text-slate-600">每批 24 張、每頁 6 張；所有照片均由管理者自行確認。</p>
+                    <p className="mt-1 text-xs leading-relaxed text-slate-600">先選照片，確認後才會儲存。</p>
+                    <details className="mt-1 text-xs leading-relaxed text-slate-500">
+                      <summary className="cursor-pointer font-semibold">選圖規則</summary>
+                      <p className="mt-1">每批 24 張、每頁 6 張；所有照片均由管理者自行確認。Commons 分類保留原文，繁體中文只作輔助判讀。</p>
+                    </details>
                     <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3" role="radiogroup" aria-label="Commons 廣泛候選照片">{displayedCommonsCandidates.map(renderCommonsCandidateCard)}</div>
                   </section>
                   <div className="mt-3 flex items-center justify-between gap-2 text-xs text-slate-600">
@@ -2317,7 +2390,7 @@ export const ItineraryPage = ({
                 </>}
                 {commonsStage === "categories" && <section className="mt-4" aria-labelledby="commons-category-title">
                   <div className="flex items-center justify-between gap-2"><h4 id="commons-category-title" className="text-sm font-bold text-slate-800">選擇照片類別</h4><button type="button" onClick={() => setCommonsStage("search")} className="text-xs font-bold text-emerald-700">返回照片</button></div>
-                  <p className="mt-1 text-xs text-slate-600">類別保留 Commons 原文；繁體中文只作輔助判讀，選擇後仍以原始分類名稱查詢照片。部分中文判讀若尚未取得，原文仍可直接選擇。</p>
+                  <p className="mt-1 text-xs text-slate-600">選擇後以 Commons 原始分類名稱查詢照片。</p>
                   <div className="mt-3 space-y-2">{commonsCategories.map((category) => <button key={category.canonicalName} type="button" onClick={() => void openCommonsCategoryPhotos(category.canonicalName)} className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-left text-sm font-bold text-slate-700 hover:border-emerald-300 hover:bg-emerald-50"><span className="block">{category.canonicalName}</span>{category.displayChineseLabel && <span className="mt-1 block text-xs font-normal text-slate-500">{category.displayChineseLabel}</span>}</button>)}</div>
                 </section>}
                 {commonsStage === "category-photos" && <section className="mt-4" aria-labelledby="commons-category-photo-title">
