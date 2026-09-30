@@ -376,7 +376,7 @@ export const TripEditorModal = ({
                 setShrinkConfirmationStep(1);
               }}
               disabled={isSaving}
-              className="rounded-lg border border-slate-300 px-4 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+              className="rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
             >
               {shrinkConfirmationStep === 1 ? "返回修改" : "取消"}
             </button>

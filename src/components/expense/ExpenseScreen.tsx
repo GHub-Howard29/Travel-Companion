@@ -712,7 +712,7 @@ export default function ExpenseScreen({
                             onClick={() =>
                               onRestoreEditAttachment(String(item.id))
                             }
-                            className="font-bold text-amber-900 underline-offset-2 hover:underline"
+                            className="rounded-lg border border-amber-200 bg-white px-2 py-1 font-bold text-amber-900 hover:bg-amber-50"
                           >
                             取消移除
                           </button>

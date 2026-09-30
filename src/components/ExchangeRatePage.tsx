@@ -483,7 +483,7 @@ export const ExchangeRatePage = ({
             <button
               type="button"
               onClick={() => resetForm()}
-              className="inline-flex items-center gap-1 text-xs font-bold text-slate-500 hover:text-slate-800"
+              className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs font-bold text-slate-500 hover:bg-slate-50 hover:text-slate-800"
             >
               <X size={14} />取消編輯
             </button>

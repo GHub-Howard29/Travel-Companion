@@ -30,8 +30,11 @@ export interface Folder {
   /** 排序 */
   order: number;
 
-  /** 是否為系統固定分類 */
+  /** 是否為系統預設分類；自訂分類為 false */
   isSystem: boolean;
+
+  /** 是否顯示於其他資訊主分類列；舊資料未設定時視為 true */
+  isVisible?: boolean;
 
   /** 建立時間 */
   createdAt: string;

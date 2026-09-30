@@ -39,7 +39,11 @@ import {
   handlePlaceBrowse,
   handleRouteBrowse,
 } from "../utils/navigationUtils";
-import { focusAndRevealControl, releaseFocusedControl } from "../utils/viewportUtils";
+import {
+  focusAndRevealControl,
+  releaseFocusedControl,
+  revealElementTopWhenViewportStable,
+} from "../utils/viewportUtils";
 import { trimRichText } from "../utils/richText";
 import {
   formatCompleteNumericTimeInput,
@@ -332,24 +336,17 @@ export const ItineraryPage = ({
   useEffect(() => {
     if (editingIndex === null) return;
 
-    let layoutFrameId = 0;
+    let cancelReveal: (() => void) | null = null;
     const renderFrameId = requestAnimationFrame(() => {
-      layoutFrameId = requestAnimationFrame(() => {
-        const editingCard = editingCardRef.current;
-        if (!editingCard) return;
+      const editingCard = editingCardRef.current;
+      if (!editingCard) return;
 
-        const viewportOffset = window.visualViewport?.offsetTop ?? 0;
-        const cardTop = window.scrollY + editingCard.getBoundingClientRect().top;
-        window.scrollTo({
-          top: Math.max(0, cardTop - viewportOffset - 8),
-          behavior: "auto",
-        });
-      });
+      cancelReveal = revealElementTopWhenViewportStable(editingCard, 8);
     });
 
     return () => {
       cancelAnimationFrame(renderFrameId);
-      cancelAnimationFrame(layoutFrameId);
+      cancelReveal?.();
     };
   }, [editingIndex]);
 
@@ -1872,7 +1869,11 @@ export const ItineraryPage = ({
                 type="button"
                 onClick={isFormOpen && editingIndex === null ? resetForm : startCreateItem}
                 disabled={!canManageItinerary || editingIndex !== null || isTimeAdjustmentMode || isOrderMode}
-                className="rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+                className={`rounded-lg border px-3 py-2 text-xs font-bold disabled:cursor-not-allowed disabled:opacity-50 ${
+                  isFormOpen && editingIndex === null
+                    ? "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                    : "border-slate-900 bg-slate-900 text-white hover:bg-slate-800"
+                }`}
               >
                 {editingIndex !== null
                   ? "卡片編輯中"

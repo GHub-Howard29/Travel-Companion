@@ -83,7 +83,7 @@ export const CoverPhotoViewer = ({ photo, onClose }: CoverPhotoViewerProps) => {
             </div>}
           </div>
         </div>
-        <button type="button" onClick={onClose} className="mt-3 w-full rounded-lg border border-white/30 px-4 py-2 text-sm font-bold text-white hover:bg-white/10 sm:w-auto">
+        <button type="button" onClick={onClose} className="mt-3 w-full rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-100 sm:w-auto">
           取消
         </button>
       </div>

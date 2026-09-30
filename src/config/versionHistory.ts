@@ -14,6 +14,15 @@ export type VersionHistoryItem = {
 
 export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
+    version: "3.9.19",
+    date: "2026-09-30",
+    isMandatoryRelease: false,
+    notes: [
+      "每日行程日期與卡片排版更精簡，長說明預設三行並可展開／收合，操作列更集中。",
+      "精簡登入、同步、記帳、匯率、更新與照片設定提示，同時保留安全、離線與資料保護提醒。",
+    ],
+  },
+  {
     version: "3.9.18",
     date: "2026-09-29",
     isMandatoryRelease: false,

@@ -1,4 +1,5 @@
 import type { OtherInfoItem } from "./otherInfo";
+import type { Folder } from "./folder";
 
 // 1. 對應 list.json 的行程元資料型別
 export interface TripMeta {
@@ -162,6 +163,8 @@ export interface TripDetail {
     custom_tab_1: CustomTabConfig;
     checklistData: ChecklistItem[];
     participantEmailMap?: Record<string, string>;
+    /** 每一趟 Trip 專屬的其他資訊分類設定；舊資料未設定時由共同預設補齊。 */
+    otherInfoFolders?: Folder[];
     otherInfoItems?: OtherInfoItem[];
     daysData: {
       [dayNumber: string]: ItineraryItem[]; // 動態對應 "1", "2", "3" 等天數的行程陣列

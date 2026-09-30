@@ -7,6 +7,7 @@ import { createClient } from "@supabase/supabase-js";
 // 旅程型別
 import type {
   ChecklistItem,
+  Folder,
   OtherInfoItem,
   SidebarItemConfig,
   TripEditorInput,
@@ -941,6 +942,22 @@ function ConfiguredApp({
     syncPendingOtherInfo,
   ]);
 
+  const handleSaveOtherInfoFolders = async (folders: Folder[]) => {
+    if (!currentTrip || isSharedTripReadOnly) return;
+
+    const nextTrip = {
+      ...currentTrip,
+      content: {
+        ...currentTrip.content,
+        otherInfoFolders: folders,
+      },
+    };
+    const didSave = await saveCurrentTripDetail(nextTrip);
+    if (!didSave && navigator.onLine) {
+      throw new Error("其他資訊分類尚未成功寫入雲端");
+    }
+  };
+
   const handleSaveOtherInfoItems = async (items: OtherInfoItem[]) => {
     if (!currentTrip || isSharedTripReadOnly) return;
 
@@ -1348,7 +1365,7 @@ function ConfiguredApp({
                 hasEditPermission={canEditTripMaster}
                 isOnline={isOnline}
                 onActiveDayChange={setActiveDay}
-                otherInfoFolders={getFolders(selectedTripId).filter((folder) => {
+                otherInfoFolders={(currentTrip.content.otherInfoFolders ?? getFolders(selectedTripId)).filter((folder) => folder.isVisible !== false).filter((folder) => {
                   const folderItems = (currentTrip.content.otherInfoItems ?? []).filter(
                     (item) => item.folderId === folder.id && !item.isDeleted,
                   );
@@ -1443,7 +1460,9 @@ function ConfiguredApp({
                 canEdit={permission.canEditReference && !isSharedTripReadOnly}
                 currentRole={role}
                 items={currentTrip.content.otherInfoItems}
+                folders={currentTrip.content.otherInfoFolders}
                 onSaveItems={handleSaveOtherInfoItems}
+                onSaveFolders={handleSaveOtherInfoFolders}
                 pageTitle={currentSidebarItem?.title}
                 isSpecialInfoPage={isSpecialInfoPage}
                 specialFolderId={specialInfoFolderId}

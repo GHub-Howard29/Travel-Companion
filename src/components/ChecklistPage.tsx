@@ -754,7 +754,7 @@ export const ChecklistPage = ({
             <button
               type="button"
               onClick={resetForm}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-white text-slate-500 hover:bg-slate-100 hover:text-slate-800"
               aria-label="取消"
               title="取消"
             >
@@ -942,7 +942,7 @@ export const ChecklistPage = ({
                               type="button"
                               onMouseDown={(event) => event.preventDefault()}
                               onClick={cancelInlineEdit}
-                              className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                              className="rounded-lg bg-white p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
                               aria-label="取消"
                               title="取消"
                             >

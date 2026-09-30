@@ -1,17 +1,18 @@
 /** App 發布版本設定；須與 public/app-version.json 保持一致。 */
-export const APP_VERSION = "3.9.19";
+export const APP_VERSION = "3.9.20";
 
 /**
  * 最近一次已發布版本；此版本必須存在於 versionHistory.ts。
  * production build 會驗證這個規則，避免升版後遺漏版本歷史。
  */
-export const PREVIOUS_RELEASE_VERSION = "3.9.18";
+export const PREVIOUS_RELEASE_VERSION = "3.9.19";
 
 export const RELEASE_DATE = "2026-09-30";
 
 export const RELEASE_NOTES = [
-  "每日行程日期與卡片排版更精簡，長說明預設三行並可展開／收合，操作列更集中。",
-  "精簡登入、同步、記帳、匯率、更新與照片設定提示，同時保留安全、離線與資料保護提醒。",
+  "其他資訊新增自訂子類別管理，可新增、改名、排序、顯示／隱藏、自動排列與恢復預設，既有資料會保留。",
+  "改善每日行程與其他資訊編輯時的畫面聚焦，手機會等待可視視窗穩定後再將編輯框對齊上緣。",
+  "統一取消按鈕與其他資訊管理操作樣式，並加強排列草稿、恢復預設與變更提示。",
 ];
 
 /** 目前版本發布時保存的更新政策；不隨執行中客戶端是否已達最低版本而改變。 */

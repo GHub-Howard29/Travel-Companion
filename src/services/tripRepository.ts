@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
   AdminProfile,
+  Folder,
   OtherInfoItem,
   SidebarItemConfig,
   TripDetail,
@@ -35,6 +36,7 @@ import { loadInitialWorkspaceSnapshot } from "./tripInitialization";
 import { isProtectedSeedTripId } from "../constants/appConstants";
 import { createTripId } from "../utils/tripIdentity";
 import { updateTripWithVersionRecovery } from "../utils/tripVersionRecovery";
+import { createDefaultFoldersForTrip } from "../utils/folderDefaults";
 export { createTripId } from "../utils/tripIdentity";
 
 const SPECIAL_INFO_SCREEN_ID = "trip_special_info";
@@ -179,6 +181,39 @@ const ensureSpecialInfoItems = (
   return [createSpecialInfoItem(tripId, mode), ...normalizedItems];
 };
 
+const normalizeOtherInfoFolders = (
+  tripId: string,
+  folders: Folder[] | undefined,
+): Folder[] => {
+  if (!folders || folders.length === 0) {
+    return createDefaultFoldersForTrip(tripId);
+  }
+
+  const seen = new Set<string>();
+  const normalized = folders
+    .filter((folder) => folder.tripId === tripId && folder.parentId === null)
+    .filter((folder) => {
+      if (!folder.id || seen.has(folder.id)) return false;
+      seen.add(folder.id);
+      return true;
+    })
+    .map((folder, index) => ({
+      ...folder,
+      title: folder.title.trim() || `分類 ${index + 1}`,
+      order: Number.isFinite(folder.order) ? folder.order : index + 1,
+      isVisible: folder.isVisible !== false,
+    }));
+
+  const byId = new Map<string, Folder>(normalized.map((folder) => [folder.id, folder]));
+  for (const defaultFolder of createDefaultFoldersForTrip(tripId)) {
+    if (!byId.has(defaultFolder.id)) {
+      byId.set(defaultFolder.id, defaultFolder);
+    }
+  }
+
+  return Array.from(byId.values()).sort((a, b) => a.order - b.order);
+};
+
 const mergeOtherInfoItems = (
   cloudItems: OtherInfoItem[],
 ): OtherInfoItem[] => {
@@ -214,6 +249,7 @@ const normalizeTripDetail = (
     content: {
       ...detail.content,
       mode,
+      otherInfoFolders: normalizeOtherInfoFolders(detail.id, detail.content.otherInfoFolders),
       ...(shouldNormalizeOtherInfoItems && normalizedOtherInfoItems
         ? { otherInfoItems: normalizedOtherInfoItems }
         : {}),
@@ -494,6 +530,7 @@ export const createTripRecord = (
       },
       checklistData: [],
       participantEmailMap,
+      otherInfoFolders: createDefaultFoldersForTrip(id),
       otherInfoItems: ensureSpecialInfoItems(id, mode, []),
       daysData: createEmptyDaysData(days),
     },

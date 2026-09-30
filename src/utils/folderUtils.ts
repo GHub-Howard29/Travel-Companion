@@ -36,6 +36,7 @@ export const createFolder = (
     title,
     order,
     isSystem,
+    isVisible: true,
     createdAt: now,
     updatedAt: now,
   };
@@ -64,6 +65,7 @@ export const createFolderWithId = (
     title,
     order,
     isSystem,
+    isVisible: true,
     createdAt: now,
     updatedAt: now,
   };

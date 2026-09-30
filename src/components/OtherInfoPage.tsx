@@ -41,17 +41,23 @@ import {
   type Role,
 } from "../permissions/roles";
 import type { OtherInfoSyncStatus } from "../storage/otherInfoSyncStorage";
-import { releaseFocusedControl } from "../utils/viewportUtils";
+import {
+  releaseFocusedControl,
+  revealElementTopWhenViewportStable,
+} from "../utils/viewportUtils";
 import { openExternalUrl } from "../utils/browserSecurity";
 import { getRichTextRuns, trimRichText } from "../utils/richText";
 import { RichTextColorEditor } from "./RichTextColorEditor";
+import { OtherInfoCategoryManager } from "./OtherInfoCategoryManager";
 
 interface OtherInfoPageProps {
   tripId: string;
   canEdit: boolean;
   currentRole: Role;
   items?: OtherInfoItem[];
+  folders?: Folder[];
   onSaveItems?: (items: OtherInfoItem[]) => Promise<void>;
+  onSaveFolders?: (folders: Folder[]) => Promise<void>;
   pageTitle?: string;
   isSpecialInfoPage?: boolean;
   specialFolderId?: string;
@@ -118,7 +124,9 @@ export const OtherInfoPage = ({
   canEdit,
   currentRole,
   items: syncedItems,
+  folders: syncedFolders,
   onSaveItems,
+  onSaveFolders,
   pageTitle = "旅行資訊",
   isSpecialInfoPage = false,
   specialFolderId,
@@ -127,16 +135,32 @@ export const OtherInfoPage = ({
   onRetrySync,
   onManageModeChange,
 }: OtherInfoPageProps) => {
-  const folders = useMemo<Folder[]>(() => getFolders(tripId), [tripId]);
+  const [localFolders, setLocalFolders] = useState<Folder[]>(() => syncedFolders ?? getFolders(tripId));
+  const folders = useMemo<Folder[]>(
+    () => (syncedFolders ?? localFolders).slice().sort((a, b) => a.order - b.order),
+    [localFolders, syncedFolders],
+  );
+  const visibleFolders = useMemo(
+    () => folders.filter((folder) => folder.isVisible !== false),
+    [folders],
+  );
+  const visibleFolderRows = useMemo(() => {
+    const rows: Folder[][] = [];
+    for (let index = 0; index < visibleFolders.length; index += 3) {
+      rows.push(visibleFolders.slice(index, index + 3));
+    }
+    return rows;
+  }, [visibleFolders]);
   const initialFolderId =
     (requestedFolderId && folders.some((folder) => folder.id === requestedFolderId)
       ? requestedFolderId
       : null) ??
-    (isSpecialInfoPage && specialFolderId ? specialFolderId : folders[0]?.id || "");
+    (isSpecialInfoPage && specialFolderId ? specialFolderId : visibleFolders[0]?.id || folders[0]?.id || "");
   const [localItems, setLocalItems] = useState<OtherInfoItem[]>(() => getItems(tripId));
   const [optimisticItems, setOptimisticItems] = useState<OtherInfoItem[] | null>(null);
   const pendingOrderItemsRef = useRef<OtherInfoItem[] | null>(null);
   const orderTimerRef = useRef<number | null>(null);
+  const managePanelRef = useRef<HTMLDivElement | null>(null);
   const items = optimisticItems ?? syncedItems ?? localItems;
   const visibleItems = useMemo(
     () =>
@@ -149,6 +173,12 @@ export const OtherInfoPage = ({
   );
   const [activeFolderId, setActiveFolderId] = useState(initialFolderId);
   const [isManageMode, setIsManageMode] = useState(false);
+  const [isCategoryManagerOpen, setIsCategoryManagerOpen] = useState(false);
+  const effectiveActiveFolderId = isSpecialInfoPage
+    ? activeFolderId
+    : folders.find((folder) => folder.id === activeFolderId)?.isVisible !== false
+      ? activeFolderId
+      : visibleFolders[0]?.id ?? folders[0]?.id ?? "";
 
   useEffect(() => {
     onManageModeChange?.(isManageMode);
@@ -169,7 +199,15 @@ export const OtherInfoPage = ({
     updateForm,
   } = useOtherInfoForm(initialFolderId);
 
-  const activeFolder = folders.find((folder) => folder.id === activeFolderId);
+  const activeFolder = folders.find((folder) => folder.id === effectiveActiveFolderId);
+
+  const scrollManagePanelToTop = () => {
+    window.requestAnimationFrame(() => {
+      const panel = managePanelRef.current;
+      if (!panel) return;
+      revealElementTopWhenViewportStable(panel, 8);
+    });
+  };
 
   const flushPendingOrder = useCallback(async () => {
     if (orderTimerRef.current !== null) {
@@ -228,17 +266,18 @@ export const OtherInfoPage = ({
       sortOtherInfoItemsByOrder(
         isSpecialInfoPage
           ? getOtherInfoItemsByFolderId(visibleItems, initialFolderId)
-          : getOtherInfoItemsByFolderId(visibleItems, activeFolderId),
+          : getOtherInfoItemsByFolderId(visibleItems, effectiveActiveFolderId),
       ),
-    [activeFolderId, initialFolderId, isSpecialInfoPage, visibleItems],
+    [effectiveActiveFolderId, initialFolderId, isSpecialInfoPage, visibleItems],
   );
 
   const closeManageMode = () => {
     releaseFocusedControl();
     void flushPendingOrder();
     setIsSensitiveSaveConfirmationOpen(false);
+    setIsCategoryManagerOpen(false);
     setIsManageMode(false);
-    closeForm(activeFolderId);
+    closeForm(effectiveActiveFolderId);
   };
 
   const toggleManageMode = () => {
@@ -248,6 +287,13 @@ export const OtherInfoPage = ({
     }
 
     setIsManageMode(true);
+  };
+
+  const persistFolders = async (nextFolders: Folder[]) => {
+    setLocalFolders(nextFolders);
+    if (onSaveFolders) {
+      await onSaveFolders(nextFolders);
+    }
   };
 
   const persistItems = async (nextItems: OtherInfoItem[]) => {
@@ -370,7 +416,7 @@ export const OtherInfoPage = ({
     await persistItems(nextItems);
 
     if (editingItemId === item.id) {
-      closeForm(activeFolderId);
+      closeForm(effectiveActiveFolderId);
     }
   };
 
@@ -472,60 +518,114 @@ export const OtherInfoPage = ({
       )}
 
       {!isSpecialInfoPage && (
-      <div className="flex flex-wrap gap-2">
-        {folders.map((folder) => {
-          const isActive = folder.id === activeFolderId;
-          const count = getOtherInfoItemsByFolderId(visibleItems, folder.id).length;
+        <div className="space-y-2">
+          {visibleFolderRows.map((row, rowIndex) => (
+            <div key={`other-info-folder-row-${rowIndex}`} className="flex flex-wrap gap-2">
+              {row.map((folder) => {
+                const isActive = folder.id === effectiveActiveFolderId;
+                const count = getOtherInfoItemsByFolderId(visibleItems, folder.id).length;
 
-          return (
-            <button
-              key={folder.id}
-              type="button"
-              onClick={() => {
-                setActiveFolderId(folder.id);
-                syncFolderWhenNotEditing(folder.id);
-              }}
-              className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-bold transition-colors ${
-                isActive
-                  ? "border-stone-900 bg-stone-900 text-white"
-                  : "border-slate-200 bg-white text-slate-600 hover:border-stone-300 hover:bg-stone-50"
-              }`}
-            >
-              <FolderOpen size={16} />
-              <span>{folder.title}</span>
-              <span
-                className={`rounded-full px-2 py-0.5 text-xs ${
-                  isActive ? "bg-white/15 text-white" : "bg-slate-100 text-slate-500"
-                }`}
-              >
-                {count}
-              </span>
-            </button>
-          );
-        })}
-      </div>
+                return (
+                  <button
+                    key={folder.id}
+                    type="button"
+                    onClick={() => {
+                      setActiveFolderId(folder.id);
+                      syncFolderWhenNotEditing(folder.id);
+                    }}
+                    className={`inline-flex max-w-full items-center gap-2 rounded-lg border px-3 py-2 text-sm font-bold transition-colors ${
+                      isActive
+                        ? "border-stone-900 bg-stone-900 text-white"
+                        : "border-slate-200 bg-white text-slate-600 hover:border-stone-300 hover:bg-stone-50"
+                    }`}
+                  >
+                    <FolderOpen className="shrink-0" size={16} />
+                    <span className="break-words text-left">{folder.title}</span>
+                    <span
+                      className={`shrink-0 rounded-full px-2 py-0.5 text-xs ${
+                        isActive ? "bg-white/15 text-white" : "bg-slate-100 text-slate-500"
+                      }`}
+                    >
+                      {count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          ))}
+        </div>
       )}
 
       {canEdit && isManageMode && (
-        <div className="rounded-lg border border-stone-200 bg-white p-4 shadow-sm">
+        <div ref={managePanelRef} className="scroll-mt-0 rounded-lg border border-stone-200 bg-white p-4 shadow-sm">
           <div className="flex items-center justify-between gap-3">
-            <div>
-              <h3 className="text-sm font-bold text-slate-800">
-                {isSpecialInfoPage ? `${pageTitle}管理` : "其他資訊管理"}
-              </h3>
+            <h3 className="text-sm font-bold text-slate-800">
+              {isSpecialInfoPage ? `${pageTitle}管理` : "其他資訊管理"}
+            </h3>
+
+            <div className="flex shrink-0 items-center gap-2">
+              {!isSpecialInfoPage && !isCategoryManagerOpen && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsCategoryManagerOpen(false);
+                    openCreateForm(effectiveActiveFolderId);
+                    scrollManagePanelToTop();
+                  }}
+                  disabled={isSaving}
+                  aria-pressed={isFormOpen}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-stone-900 px-3 py-2 text-xs font-bold text-white transition-colors hover:bg-stone-700"
+                >
+                  <Plus size={14} />
+                  新增
+                </button>
+              )}
+
+              {!isSpecialInfoPage && !isFormOpen && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    closeForm(effectiveActiveFolderId);
+                    setIsCategoryManagerOpen((value) => !value);
+                    scrollManagePanelToTop();
+                  }}
+                  disabled={isSaving}
+                  aria-pressed={isCategoryManagerOpen}
+                  aria-controls="other-info-category-manager"
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-stone-900 px-3 py-2 text-xs font-bold text-white transition-colors hover:bg-stone-700"
+                >
+                  <Settings2 size={14} />
+                  排列
+                </button>
+              )}
+
+              {isSpecialInfoPage && !isFormOpen && (
+                <button
+                  type="button"
+                  onClick={() => openCreateForm(effectiveActiveFolderId)}
+                  disabled={isSaving}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-stone-900 px-3 py-2 text-xs font-bold text-white hover:bg-stone-700"
+                >
+                  <Plus size={14} />
+                  新增
+                </button>
+              )}
             </div>
-            {!isFormOpen && (
-              <button
-                type="button"
-                onClick={() => openCreateForm(activeFolderId)}
-                disabled={isSaving}
-                className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-stone-900 px-3 py-2 text-xs font-bold text-white hover:bg-stone-700"
-              >
-                <Plus size={14} />
-                新增
-              </button>
-            )}
           </div>
+        </div>
+      )}
+
+      {canEdit && isManageMode && !isSpecialInfoPage && isCategoryManagerOpen && (
+        <div id="other-info-category-manager">
+          <OtherInfoCategoryManager
+            tripId={tripId}
+            folders={folders}
+            items={items}
+            isSaving={isSaving}
+            onSave={persistFolders}
+            onCancel={() => setIsCategoryManagerOpen(false)}
+            onDone={() => setIsCategoryManagerOpen(false)}
+          />
         </div>
       )}
 
@@ -637,7 +737,7 @@ export const OtherInfoPage = ({
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
-                onClick={() => closeForm(activeFolderId)}
+                onClick={() => closeForm(effectiveActiveFolderId)}
                 disabled={isSaving}
                 className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-600 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
               >
@@ -787,7 +887,10 @@ export const OtherInfoPage = ({
                     </button>
                     <button
                       type="button"
-                      onClick={() => openEditForm(item)}
+                      onClick={() => {
+                        openEditForm(item);
+                        scrollManagePanelToTop();
+                      }}
                       className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-800"
                       aria-label="編輯"
                       title="編輯"
