@@ -1,5 +1,9 @@
 import type { ItineraryItem, TripDetail } from "../types";
 import { getItineraryTimeValue } from "./itineraryTime.ts";
+import {
+  getTravelNodeIndexes,
+  isIncludedInTravelCalculation,
+} from "./itineraryTravel.ts";
 
 export type ItineraryIdFactory = () => string;
 
@@ -39,19 +43,30 @@ const withoutStaleTravelEstimate = (item: ItineraryItem): ItineraryItem => {
   return nextItem;
 };
 
-/** 清除重新排列或插入後，目的地已不是原相鄰卡片的路線快取。 */
+/** 清除重新排列或插入後，有效交通目的地已改變的路線快取。 */
 export const invalidateChangedTravelDestinations = (
   before: ItineraryItem[],
   after: ItineraryItem[],
 ): ItineraryItem[] => {
-  const previousDestinationById = new Map<string, string | null>();
-  before.forEach((item, index) => {
-    if (item.id) previousDestinationById.set(item.id, before[index + 1]?.id ?? null);
-  });
+  const buildDestinationMap = (items: ItineraryItem[]) => {
+    const destinationById = new Map<string, string | null>();
+    const nodeIndexes = getTravelNodeIndexes(items);
+    nodeIndexes.forEach((itemIndex, nodePosition) => {
+      const item = items[itemIndex];
+      if (!item.id) return;
+      const nextNodeIndex = nodeIndexes[nodePosition + 1];
+      destinationById.set(item.id, nextNodeIndex === undefined ? null : items[nextNodeIndex]?.id ?? null);
+    });
+    return destinationById;
+  };
 
-  return after.map((item, index) => {
+  const previousDestinationById = buildDestinationMap(before);
+  const nextDestinationById = buildDestinationMap(after);
+
+  return after.map((item) => {
+    if (!isIncludedInTravelCalculation(item)) return withoutStaleTravelEstimate(item);
     if (!item.id || !previousDestinationById.has(item.id)) return item;
-    return previousDestinationById.get(item.id) === (after[index + 1]?.id ?? null)
+    return previousDestinationById.get(item.id) === nextDestinationById.get(item.id)
       ? item
       : withoutStaleTravelEstimate(item);
   });

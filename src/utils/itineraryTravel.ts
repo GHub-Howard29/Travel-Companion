@@ -28,6 +28,18 @@ export const getPlaceKey = (place: ConfirmedPlace): string =>
 const isTravelMode = (value: unknown): value is TravelMode =>
   value === "drive" || value === "walk" || value === "transit";
 
+export const isIncludedInTravelCalculation = (item: ItineraryItem): boolean => {
+  if (item.type === "餐飲") return item.includeInTravelCalculation !== false;
+  if (item.type === "其他") return item.includeInTravelCalculation === true;
+  return true;
+};
+
+export const getTravelNodeIndexes = (items: ItineraryItem[]): number[] =>
+  items
+    .map((item, index) => ({ item, index }))
+    .filter(({ item }) => isIncludedInTravelCalculation(item))
+    .map(({ index }) => index);
+
 export const getPreferredTravelMode = (
   origin: ItineraryItem,
 ): TravelMode => {
@@ -56,13 +68,25 @@ export const hasDistinctConfirmedPlaces = (
  * 找出剛儲存的活動前後，已具備兩個有效地點但尚無可用估算的交通區段。
  * 回傳值是每個區段起點在 items 中的索引。
  */
-export const getAdjacentTravelOriginIndexesNeedingEstimate = (
+export interface TravelSegmentIndexPair {
+  originIndex: number;
+  destinationIndex: number;
+}
+
+export const getTravelSegmentsNeedingEstimate = (
   items: ItineraryItem[],
   changedIndex: number,
-): number[] =>
-  [changedIndex - 1, changedIndex].filter((originIndex) => {
+): TravelSegmentIndexPair[] => {
+  const nodeIndexes = getTravelNodeIndexes(items);
+  const pairs = nodeIndexes.slice(0, -1).map((originIndex, index) => ({
+    originIndex,
+    destinationIndex: nodeIndexes[index + 1],
+  }));
+
+  return pairs.filter(({ originIndex, destinationIndex }) => {
+    if (changedIndex < originIndex || changedIndex > destinationIndex) return false;
     const origin = items[originIndex];
-    const destination = items[originIndex + 1];
+    const destination = items[destinationIndex];
     return Boolean(
       origin &&
         destination &&
@@ -71,6 +95,15 @@ export const getAdjacentTravelOriginIndexesNeedingEstimate = (
         !getSavedTravelEstimate(origin, destination),
     );
   });
+};
+
+export const getAdjacentTravelOriginIndexesNeedingEstimate = (
+  items: ItineraryItem[],
+  changedIndex: number,
+): number[] =>
+  getTravelSegmentsNeedingEstimate(items, changedIndex).map(
+    ({ originIndex }) => originIndex,
+  );
 
 export const getSavedTravelEstimate = (
   origin: ItineraryItem,

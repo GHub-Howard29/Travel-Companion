@@ -56,17 +56,20 @@ import {
 import {
   formatTravelDistance,
   formatTravelDuration,
-  getAdjacentTravelOriginIndexesNeedingEstimate,
   getPlaceKey,
+  getTravelSegmentsNeedingEstimate,
   getPreferredTravelMode,
   getSavedTravelEstimate,
   getTravelModeLabel,
+  getTravelNodeIndexes,
   getTravelTimeWarning,
   hasDistinctConfirmedPlaces,
   isConfirmedPlace,
   isFlightConnection,
+  isIncludedInTravelCalculation,
 } from "../utils/itineraryTravel";
 import {
+  adjustTimePreviewArrival,
   calculateTimeAdjustment,
   type TimeAdjustmentResult,
 } from "../utils/itineraryTimeAdjustment";
@@ -251,9 +254,13 @@ export const ItineraryPage = ({
   const [copySaveError, setCopySaveError] = useState<string | null>(null);
   const [copySuccess, setCopySuccess] = useState<string | null>(null);
   const [isTimeAdjustmentMode, setIsTimeAdjustmentMode] = useState(false);
+  const [timeAdjustmentEntry, setTimeAdjustmentEntry] = useState<"manual" | "order-preview">("manual");
   const [timeAdjustmentStartIndex, setTimeAdjustmentStartIndex] = useState<number | null>(null);
   const [timeAdjustmentDeparture, setTimeAdjustmentDeparture] = useState("");
   const [timeAdjustmentResult, setTimeAdjustmentResult] = useState<TimeAdjustmentResult | null>(null);
+  const [acceptedTimeAdjustmentIndexes, setAcceptedTimeAdjustmentIndexes] = useState<Set<number>>(new Set());
+  const [manualTimeAdjustmentIndex, setManualTimeAdjustmentIndex] = useState<number | null>(null);
+  const [manualTimeAdjustmentArrival, setManualTimeAdjustmentArrival] = useState("");
   const [isTimeAdjustmentLoading, setIsTimeAdjustmentLoading] = useState(false);
   const [isTimeAdjustmentSaving, setIsTimeAdjustmentSaving] = useState(false);
   const [timeAdjustmentSaveError, setTimeAdjustmentSaveError] = useState<string | null>(null);
@@ -462,9 +469,13 @@ export const ItineraryPage = ({
   const resetTimeAdjustment = () => {
     releaseFocusedControl();
     setIsTimeAdjustmentMode(false);
+    setTimeAdjustmentEntry("manual");
     setTimeAdjustmentStartIndex(null);
     setTimeAdjustmentDeparture("");
     setTimeAdjustmentResult(null);
+    setAcceptedTimeAdjustmentIndexes(new Set());
+    setManualTimeAdjustmentIndex(null);
+    setManualTimeAdjustmentArrival("");
     setTimeAdjustmentSaveError(null);
   };
 
@@ -541,6 +552,12 @@ export const ItineraryPage = ({
     updateDraft({
       type: selectedType.type,
       typeColor: selectedType.typeColor,
+      includeInTravelCalculation:
+        selectedType.type === "餐飲"
+          ? true
+          : selectedType.type === "其他"
+            ? false
+            : undefined,
     });
   };
 
@@ -590,11 +607,31 @@ export const ItineraryPage = ({
     resetForm();
     resetOrder();
     setShowOrderSaved(false);
+    setTimeAdjustmentEntry("manual");
     setIsTimeAdjustmentMode(true);
     setTimeAdjustmentStartIndex(null);
     setTimeAdjustmentDeparture("");
     setTimeAdjustmentResult(null);
     setTimeAdjustmentSaveError(null);
+  };
+
+  const startOrderTimePreview = () => {
+    resetForm();
+    resetOrder();
+    setShowOrderSaved(false);
+    const events = trip.content.daysData[String(activeDay)] ?? [];
+    const startIndex = getTravelNodeIndexes(events)[0] ?? null;
+    const departureTime =
+      startIndex === null ? "" : events[startIndex]?.departureTime || events[startIndex]?.time || "";
+    setTimeAdjustmentEntry("order-preview");
+    setIsTimeAdjustmentMode(true);
+    setTimeAdjustmentStartIndex(startIndex);
+    setTimeAdjustmentDeparture(departureTime);
+    setTimeAdjustmentResult(null);
+    setTimeAdjustmentSaveError(
+      startIndex === null ? "本日沒有可納入交通計算的活動。" : null,
+    );
+    if (startIndex !== null) void prepareTimeAdjustment(startIndex, departureTime);
   };
 
   const startOrderAdjustment = () => {
@@ -782,27 +819,44 @@ export const ItineraryPage = ({
     requestAnimationFrame(() => focusAndRevealControl("time-adjustment-departure"));
   };
 
-  const prepareTimeAdjustment = async () => {
-    if (timeAdjustmentStartIndex === null || isTimeAdjustmentLoading) return;
+  const prepareTimeAdjustment = async (
+    startIndex = timeAdjustmentStartIndex,
+    departureTime = timeAdjustmentDeparture,
+  ) => {
+    if (startIndex === null || isTimeAdjustmentLoading) return;
     const remainingEvents = currentDayEvents;
-    const hasTransit = remainingEvents.slice(timeAdjustmentStartIndex, -1)
-      .some((event) => getPreferredTravelMode(event) === "transit");
-    if (hasTransit && !confirm("此調整包含大眾運輸，將重新查詢受影響區段，可能產生地圖服務費用。要繼續嗎？")) return;
+    const nodeIndexes = getTravelNodeIndexes(remainingEvents)
+      .filter((index) => index >= startIndex);
+    const needsTransitQuery = nodeIndexes.slice(0, -1).some((originIndex, nodePosition) => {
+      const destinationIndex = nodeIndexes[nodePosition + 1];
+      const origin = remainingEvents[originIndex];
+      const destination = remainingEvents[destinationIndex];
+      return (
+        getPreferredTravelMode(origin) === "transit" &&
+        !getSavedTravelEstimate(origin, destination)
+      );
+    });
+    if (
+      needsTransitQuery &&
+      !confirm("此調整包含需重新查詢的大眾運輸區段，可能產生地圖服務費用。要繼續嗎？")
+    ) return;
 
     setIsTimeAdjustmentLoading(true);
     setTimeAdjustmentSaveError(null);
     try {
       const result = await calculateTimeAdjustment(
         remainingEvents,
-        timeAdjustmentStartIndex,
-        timeAdjustmentDeparture,
+        startIndex,
+        departureTime,
         async (_originIndex, origin, destination) => {
-          const mode = getPreferredTravelMode(origin);
-          if (mode === "transit") {
-            if (!isOnline) return null;
-            return requestTravelEstimate(origin, destination, mode);
-          }
-          return getSavedTravelEstimate(origin, destination);
+          const cached = getSavedTravelEstimate(origin, destination);
+          if (cached) return cached;
+          if (!isOnline) return null;
+          return requestTravelEstimate(
+            origin,
+            destination,
+            getPreferredTravelMode(origin),
+          );
         },
       );
       setTimeAdjustmentResult(result);
@@ -819,6 +873,27 @@ export const ItineraryPage = ({
     } finally {
       setIsTimeAdjustmentLoading(false);
     }
+  };
+
+  const confirmManualTimeAdjustment = () => {
+    if (manualTimeAdjustmentIndex === null || !timeAdjustmentResult) return;
+    const adjusted = adjustTimePreviewArrival(
+      currentDayEvents,
+      timeAdjustmentResult,
+      manualTimeAdjustmentIndex,
+      manualTimeAdjustmentArrival,
+    );
+    if (adjusted.blocker) {
+      setTimeAdjustmentSaveError(adjusted.blocker.message);
+      return;
+    }
+    setTimeAdjustmentResult(adjusted);
+    setAcceptedTimeAdjustmentIndexes((accepted) =>
+      new Set([...accepted].filter((index) => index < manualTimeAdjustmentIndex)),
+    );
+    setManualTimeAdjustmentIndex(null);
+    setManualTimeAdjustmentArrival("");
+    setTimeAdjustmentSaveError(null);
   };
 
   const applyTimeAdjustment = async () => {
@@ -1387,7 +1462,7 @@ export const ItineraryPage = ({
       ? sortItineraryItemsByTime(nextEvents)
       : nextEvents;
     const changedIndex = savedEvents.indexOf(nextEvent);
-    const routeOriginIndexes = getAdjacentTravelOriginIndexesNeedingEstimate(
+    const routeSegments = getTravelSegmentsNeedingEstimate(
       savedEvents,
       changedIndex,
     );
@@ -1395,9 +1470,9 @@ export const ItineraryPage = ({
     setIsItemSaving(true);
     setAutoRouteError(null);
     try {
-      for (const originIndex of routeOriginIndexes) {
+      for (const { originIndex, destinationIndex } of routeSegments) {
         const origin = savedEvents[originIndex];
-        const destination = savedEvents[originIndex + 1];
+        const destination = savedEvents[destinationIndex];
         const mode = getPreferredTravelMode(origin);
 
         try {
@@ -1571,6 +1646,22 @@ export const ItineraryPage = ({
             </option>
           ))}
         </select>
+
+        {(draft.type === "餐飲" || draft.type === "其他") && (
+          <label className="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-600">
+            <input
+              type="checkbox"
+              checked={isIncludedInTravelCalculation(draft)}
+              onChange={(event) =>
+                updateDraft({
+                  includeInTravelCalculation: event.target.checked,
+                  travelToNext: undefined,
+                })
+              }
+            />
+            納入交通計算
+          </label>
+        )}
 
         {draft.type === "交通" && (
           <label className="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-600">
@@ -1895,7 +1986,7 @@ export const ItineraryPage = ({
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <h4 className="text-sm font-bold text-sky-900">調整順序</h4>
-                  <p className="mt-1 text-xs leading-relaxed text-sky-800">拖曳卡片、聚焦拖拉按鈕後按 Alt＋上／下方向鍵，或使用上移／下移按鈕。時間與交通方式偏好不會變更。</p>
+                  <p className="mt-1 text-xs leading-relaxed text-sky-800">移動行程卡片只會改變排列順序，不會修改原本時間。儲存後可再預覽依新順序重新計算的時間。</p>
                 </div>
                 <span className="shrink-0 rounded-full bg-white px-2 py-1 text-xs font-bold text-sky-700">草稿</span>
               </div>
@@ -1910,10 +2001,10 @@ export const ItineraryPage = ({
           {showOrderSaved && (
             <section className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3" aria-label="順序儲存完成" role="status">
               <p className="text-sm font-bold text-emerald-900">順序已儲存</p>
-              <p className="mt-1 text-xs leading-relaxed text-emerald-800">原本的到達與離開時間已保留；如需讓時間配合新順序，可接著調整。</p>
+              <p className="mt-1 text-xs leading-relaxed text-emerald-800">原本時間尚未變更，可先預覽依新順序計算的時間。</p>
               <div className="mt-3 flex justify-end gap-2">
                 <button type="button" onClick={() => setShowOrderSaved(false)} className="rounded-lg border border-emerald-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50">完成</button>
-                <button type="button" onClick={startTimeAdjustment} className="rounded-lg bg-emerald-700 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-800">接著調整時間</button>
+                <button type="button" onClick={startOrderTimePreview} className="rounded-lg bg-emerald-700 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-800">預覽新時間</button>
               </div>
             </section>
           )}
@@ -1926,12 +2017,18 @@ export const ItineraryPage = ({
             <section className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50/60 p-3" aria-label="時間調整模式">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <h4 className="text-sm font-bold text-emerald-900">時間調整模式</h4>
-                  <p className="mt-1 text-xs leading-relaxed text-emerald-800">選擇起點，預覽後續時間</p>
+                  <h4 className="text-sm font-bold text-emerald-900">
+                    {timeAdjustmentEntry === "order-preview" ? "新時間預覽" : "時間調整模式"}
+                  </h4>
+                  <p className="mt-1 text-xs leading-relaxed text-emerald-800">
+                    {timeAdjustmentEntry === "order-preview"
+                      ? "尚未修改正式行程，可逐項接受或調整建議時間。"
+                      : "選擇起點，預覽後續時間"}
+                  </p>
                 </div>
                 <button type="button" onClick={resetTimeAdjustment} className="rounded-lg border border-emerald-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-50">退出</button>
               </div>
-              {timeAdjustmentStartIndex !== null && (
+              {timeAdjustmentStartIndex !== null && timeAdjustmentEntry === "manual" && (
                 <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_auto]">
                   <label className="space-y-1">
                     <span className="text-xs font-bold text-slate-700">新的離開時間</span>
@@ -1963,6 +2060,9 @@ export const ItineraryPage = ({
                   </button>
                 </div>
               )}
+              {timeAdjustmentEntry === "order-preview" && isTimeAdjustmentLoading && (
+                <p className="mt-3 text-xs font-semibold text-emerald-700" role="status">正在建立新時間預覽…</p>
+              )}
               {timeAdjustmentResult && (
                 <div id="time-adjustment-result" tabIndex={-1} className="mt-3 rounded-lg border border-emerald-100 bg-white p-3 outline-none focus:ring-2 focus:ring-emerald-500">
                   {timeAdjustmentResult.blocker ? (
@@ -1971,18 +2071,92 @@ export const ItineraryPage = ({
                     <div className="space-y-3 text-sm text-slate-700">
                       {timeAdjustmentResult.items.slice(timeAdjustmentStartIndex ?? 0).map((event, index) => {
                         const absoluteIndex = (timeAdjustmentStartIndex ?? 0) + index;
+                        const originalEvent = currentDayEvents[absoluteIndex];
                         const segment = timeAdjustmentResult.segments.find((entry) => entry.destinationIndex === absoluteIndex);
+                        const isIncluded = isIncludedInTravelCalculation(event);
+                        const changed = Boolean(
+                          originalEvent &&
+                          (originalEvent.time !== event.time ||
+                            (originalEvent.departureTime || originalEvent.time) !==
+                              (event.departureTime || event.time)),
+                        );
                         return <Fragment key={`time-adjustment-preview-${absoluteIndex}-${event.title}`}>
                           {segment && <div className="border-y border-slate-100 py-2 text-xs text-slate-600"><span className="inline-flex items-center gap-1 font-bold"><MaterialTravelModeIcon mode={segment.estimate.mode} />{getTravelModeLabel(segment.estimate.mode)}</span>｜約 {formatTravelDuration(segment.estimate.durationSeconds)}｜{formatTravelDistance(segment.estimate.distanceMeters)}</div>}
-                          <div><p className="font-bold text-slate-800">{event.title || "未命名活動"}</p><p className="mt-0.5 text-xs">{absoluteIndex === timeAdjustmentStartIndex ? `離開 ${event.departureTime}` : `到達 ${event.time} → 離開 ${event.departureTime}`}</p></div>
+                          <div className="rounded-lg border border-slate-100 p-3">
+                            <div className="flex flex-wrap items-start justify-between gap-2">
+                              <div>
+                                <p className="font-bold text-slate-800">{event.title || "未命名活動"}</p>
+                                {!isIncluded ? (
+                                  <p className="mt-1 text-xs text-slate-500">不納入交通計算，時間保持不變</p>
+                                ) : changed ? (
+                                  <>
+                                    <p className="mt-1 text-xs text-slate-500">原時間：到達 {originalEvent?.time || "—"} → 離開 {originalEvent?.departureTime || originalEvent?.time || "—"}</p>
+                                    <p className="mt-0.5 text-xs font-semibold text-emerald-700">建議：到達 {event.time || "—"} → 離開 {event.departureTime || event.time || "—"}</p>
+                                  </>
+                                ) : (
+                                  <p className="mt-1 text-xs text-slate-500">時間不變</p>
+                                )}
+                              </div>
+                              {isIncluded && changed && (
+                                <div className="flex flex-wrap justify-end gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => setAcceptedTimeAdjustmentIndexes((accepted) => new Set(accepted).add(absoluteIndex))}
+                                    className={`rounded-lg px-2.5 py-1.5 text-xs font-bold ${acceptedTimeAdjustmentIndexes.has(absoluteIndex) ? "bg-emerald-700 text-white" : "bg-emerald-50 text-emerald-700 hover:bg-emerald-100"}`}
+                                  >
+                                    {acceptedTimeAdjustmentIndexes.has(absoluteIndex) ? "已接受" : "接受"}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setManualTimeAdjustmentIndex(absoluteIndex);
+                                      setManualTimeAdjustmentArrival(event.time);
+                                      setTimeAdjustmentSaveError(null);
+                                    }}
+                                    className="rounded-lg bg-slate-100 px-2.5 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-200"
+                                  >
+                                    調整到達時間
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                            {manualTimeAdjustmentIndex === absoluteIndex && (
+                              <div className="mt-3 grid gap-2 rounded-lg bg-slate-50 p-2 sm:grid-cols-[1fr_auto_auto]">
+                                <input
+                                  value={manualTimeAdjustmentArrival}
+                                  onChange={(changeEvent) => setManualTimeAdjustmentArrival(changeEvent.target.value)}
+                                  placeholder="例如 14:30"
+                                  className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setManualTimeAdjustmentIndex(null);
+                                    setManualTimeAdjustmentArrival("");
+                                    setTimeAdjustmentSaveError(null);
+                                  }}
+                                  className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600"
+                                >
+                                  取消
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={confirmManualTimeAdjustment}
+                                  className="rounded-lg bg-emerald-700 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-800"
+                                >
+                                  確認調整
+                                </button>
+                              </div>
+                            )}
+                          </div>
                         </Fragment>;
                       })}
                     </div>
                   )}
                   {timeAdjustmentSaveError && <p className="mt-3 text-xs text-rose-700" role="alert">{timeAdjustmentSaveError}</p>}
                   <div className="mt-3 flex justify-end gap-2">
-                    <button type="button" onClick={resetTimeAdjustment} disabled={isTimeAdjustmentSaving} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50">取消調整</button>
-                    <button type="button" onClick={() => void applyTimeAdjustment()} disabled={Boolean(timeAdjustmentResult.blocker) || isTimeAdjustmentSaving} className="rounded-lg bg-emerald-700 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-800 disabled:opacity-50">{isTimeAdjustmentSaving ? "正在套用…" : "套用調整"}</button>
+                    <button type="button" onClick={resetTimeAdjustment} disabled={isTimeAdjustmentSaving} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50">{timeAdjustmentEntry === "order-preview" ? "取消預覽" : "取消調整"}</button>
+                    <button type="button" onClick={() => void applyTimeAdjustment()} disabled={Boolean(timeAdjustmentResult.blocker) || isTimeAdjustmentSaving} className="rounded-lg bg-emerald-700 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-800 disabled:opacity-50">{isTimeAdjustmentSaving ? "正在套用…" : timeAdjustmentEntry === "order-preview" ? "套用新時間" : "套用調整"}</button>
                   </div>
                 </div>
               )}
@@ -2002,19 +2176,25 @@ export const ItineraryPage = ({
           {displayedDayEvents.map(({ event, originalIndex }, sortedIndex) => {
             const nextEntry = displayedDayEvents[sortedIndex + 1];
             const nextEvent = nextEntry?.event;
+            const nextTravelEntry = isIncludedInTravelCalculation(event)
+              ? displayedDayEvents
+                  .slice(sortedIndex + 1)
+                  .find(({ event: candidate }) => isIncludedInTravelCalculation(candidate))
+              : undefined;
+            const nextTravelEvent = nextTravelEntry?.event;
             const sortableId = event.id ?? `legacy-${activeDay}-${originalIndex}`;
             const hasEligiblePlaces = Boolean(
-              nextEvent &&
-                hasDistinctConfirmedPlaces(event, nextEvent) &&
-                !isFlightConnection(event, nextEvent),
+              nextTravelEvent &&
+                hasDistinctConfirmedPlaces(event, nextTravelEvent) &&
+                !isFlightConnection(event, nextTravelEvent),
             );
-            const estimate = nextEvent
-              ? getSavedTravelEstimate(event, nextEvent)
+            const estimate = nextTravelEvent
+              ? getSavedTravelEstimate(event, nextTravelEvent)
               : null;
             const preferredMode = getPreferredTravelMode(event);
             const hasSavedTravelPreference = Boolean(event.travelModeToNext || event.travelToNext);
-            const warning = nextEvent
-              ? getTravelTimeWarning(event, nextEvent, estimate)
+            const warning = nextTravelEvent
+              ? getTravelTimeWarning(event, nextTravelEvent, estimate)
               : null;
             const hasVisibleCover = Boolean(
               event.coverPhoto && !failedCoverPaths.has(event.coverPhoto.storagePath),
@@ -2202,7 +2382,10 @@ export const ItineraryPage = ({
                   </button>
                 </div>
               )}
-              {canAdjustItineraryTime && isTimeAdjustmentMode && (
+              {canAdjustItineraryTime &&
+                isTimeAdjustmentMode &&
+                timeAdjustmentEntry === "manual" &&
+                isIncludedInTravelCalculation(event) && (
                 <div className="mt-3 flex justify-end border-t border-slate-100 pt-3">
                   <button
                     type="button"
@@ -2217,7 +2400,7 @@ export const ItineraryPage = ({
               )}
             </article>}
             </SortableCard>
-            {nextEvent && (hasEligiblePlaces || warning) && (
+            {nextTravelEvent && (hasEligiblePlaces || warning) && (
               <div className="py-1">
                 {(estimate || hasSavedTravelPreference || canManageItinerary) && hasEligiblePlaces && (
                   <div className="mr-auto inline-flex min-h-10 items-stretch overflow-hidden rounded-lg border border-emerald-200 bg-emerald-50 text-xs font-bold text-slate-700 shadow-sm">
@@ -2227,8 +2410,8 @@ export const ItineraryPage = ({
                        handleRouteBrowse(
                          event.place!,
                          event.location,
-                         nextEvent.place!,
-                         nextEvent.location,
+                         nextTravelEvent.place!,
+                         nextTravelEvent.location,
                          preferredMode,
                         )
                       }
@@ -2262,9 +2445,9 @@ export const ItineraryPage = ({
                         type="button"
                         onClick={() => openTravelPanel(
                           event,
-                          nextEvent,
+                          nextTravelEvent,
                           originalIndex,
-                          nextEntry.originalIndex,
+                          nextTravelEntry.originalIndex,
                         )}
                         className="inline-flex min-h-10 items-center gap-1 border-l border-emerald-200 px-3 text-emerald-700 transition-colors hover:bg-emerald-100"
                         aria-label="修改交通方式"

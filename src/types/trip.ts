@@ -107,6 +107,8 @@ export interface ItineraryItem {
   place?: ConfirmedPlace;
   /** 明確標記航班卡片；不依標題是否包含「機場」推測。 */
   travelKind?: "flight";
+  /** V3.9.22：餐飲／其他卡片可覆寫是否納入交通節點；舊資料依類型套用預設。 */
+  includeInTravelCalculation?: boolean;
   /** 永久保留的交通方式偏好；Google 預估資料過期後仍用於維持區段。 */
   travelModeToNext?: TravelMode;
   /** 由本卡片前往下一張相鄰卡片的最後儲存交通結果。 */

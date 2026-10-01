@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 
-import { calculateTimeAdjustment } from "../src/utils/itineraryTimeAdjustment.ts";
+import {
+  adjustTimePreviewArrival,
+  calculateTimeAdjustment,
+} from "../src/utils/itineraryTimeAdjustment.ts";
 import { getItineraryDayDate, getLunarDateLabel } from "../src/utils/itineraryDate.ts";
 
 const estimate = (minutes) => ({
@@ -31,6 +34,42 @@ const midnight = await calculateTimeAdjustment([item("A", "20:00", "23:50"), ite
 assert.match(midnight.blocker.message, /跨越午夜/);
 const missing = await calculateTimeAdjustment([item("A", "09:00", "10:00"), item("B", "", "11:00")], 0, "10:00", route);
 assert.match(missing.blocker.message, /到達時間/);
+
+const skipped = await calculateTimeAdjustment([
+  item("A", "09:00", "10:00"),
+  { ...item("B", "", ""), type: "其他", includeInTravelCalculation: false },
+  item("C", "11:30", "12:00"),
+], 0, "10:00", route);
+assert.equal(skipped.blocker, null);
+assert.equal(skipped.segments.length, 1);
+assert.equal(skipped.segments[0].originIndex, 0);
+assert.equal(skipped.segments[0].destinationIndex, 2);
+assert.equal(skipped.items[1].time, "");
+assert.equal(skipped.items[2].time, "10:30");
+
+const manuallyDelayed = adjustTimePreviewArrival(
+  [
+    item("A", "09:00", "10:00"),
+    item("B", "11:00", "12:00"),
+    item("C", "13:00", "13:30"),
+  ],
+  await calculateTimeAdjustment(
+    [
+      item("A", "09:00", "10:00"),
+      item("B", "11:00", "12:00"),
+      item("C", "13:00", "13:30"),
+    ],
+    0,
+    "10:00",
+    route,
+  ),
+  1,
+  "12:00",
+);
+assert.equal(manuallyDelayed.blocker, null);
+assert.equal(manuallyDelayed.items[1].time, "12:00");
+assert.equal(manuallyDelayed.items[1].departureTime, "13:00");
+assert.equal(manuallyDelayed.items[2].time, "13:30");
 
 assert.equal(getItineraryDayDate("2026-09-08", 1), "2026-09-08");
 assert.equal(getItineraryDayDate("2026-09-08", 2), "2026-09-09");

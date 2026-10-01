@@ -14,6 +14,16 @@ export type VersionHistoryItem = {
 
 export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
+    version: "3.9.21",
+    date: "2026-10-01",
+    isMandatoryRelease: false,
+    notes: [
+      "修正 Android PWA 更新接管後重新載入可能白畫面的問題。",
+      "更新流程改為等待新版 Service Worker 完成啟用／接管確認後才允許重新載入，避免重複觸發更新。",
+      "改善更新中的按鈕狀態，降低使用者誤以為更新中斷而重複點擊的情況。",
+    ],
+  },
+  {
     version: "3.9.20",
     date: "2026-09-30",
     isMandatoryRelease: false,

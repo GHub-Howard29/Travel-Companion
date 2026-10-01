@@ -7,9 +7,11 @@ import {
   getPlaceKey,
   getPreferredTravelMode,
   getSavedTravelEstimate,
+  getTravelSegmentsNeedingEstimate,
   getTravelTimeWarning,
   hasDistinctConfirmedPlaces,
   isFlightConnection,
+  isIncludedInTravelCalculation,
   removeExpiredTravelEstimates,
 } from "../src/utils/itineraryTravel.ts";
 import { sanitizeStoredTripRecord } from "../src/storage/tripStorage.ts";
@@ -93,12 +95,27 @@ assert.equal(isFlightConnection(
 ), true);
 assert.equal(getSavedTravelEstimate({ ...origin, travelKind: "flight" }, destination), null);
 assert.equal(getTravelTimeWarning({ ...origin, travelKind: "flight" }, destination, validEstimate), null);
+assert.equal(isIncludedInTravelCalculation({ ...origin, type: "餐飲" }), true);
+assert.equal(isIncludedInTravelCalculation({ ...origin, type: "餐飲", includeInTravelCalculation: false }), false);
+assert.equal(isIncludedInTravelCalculation({ ...origin, type: "其他" }), false);
+assert.equal(isIncludedInTravelCalculation({ ...origin, type: "其他", includeInTravelCalculation: true }), true);
 assert.deepEqual(
   getAdjacentTravelOriginIndexesNeedingEstimate([
     { ...origin, travelKind: "flight", travelToNext: undefined },
     destination,
   ], 0),
   [],
+);
+assert.deepEqual(
+  getTravelSegmentsNeedingEstimate(
+    [
+      { ...origin, travelToNext: undefined },
+      { ...destination, type: "其他", includeInTravelCalculation: false },
+      { ...destination, title: "C", place: { placeId: "ChIJ-place-c" } },
+    ],
+    1,
+  ),
+  [{ originIndex: 0, destinationIndex: 2 }],
 );
 assert.equal(formatTravelDuration(21 * 60), "21 分鐘");
 assert.equal(formatTravelDuration(90 * 60), "1 小時 30 分鐘");

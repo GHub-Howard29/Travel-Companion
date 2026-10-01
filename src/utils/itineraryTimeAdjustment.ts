@@ -6,7 +6,9 @@ import {
 import {
   getPreferredTravelMode,
   getTravelModeLabel,
+  getTravelNodeIndexes,
   isFlightConnection,
+  isIncludedInTravelCalculation,
 } from "./itineraryTravel.ts";
 
 export interface TimeAdjustmentSegment {
@@ -40,6 +42,107 @@ const toClockTime = (minutes: number): string => {
 
 const roundUpToHalfHour = (minutes: number): number => Math.ceil(minutes / 30) * 30;
 
+export const adjustTimePreviewArrival = (
+  sourceItems: ItineraryItem[],
+  result: TimeAdjustmentResult,
+  targetIndex: number,
+  requestedArrivalTime: string,
+): TimeAdjustmentResult => {
+  const requestedArrival = getItineraryTimeValue(normalizeItineraryTime(requestedArrivalTime));
+  const suggestedArrival = getItineraryTimeValue(result.items[targetIndex]?.time);
+  const originalArrival = getItineraryTimeValue(sourceItems[targetIndex]?.time);
+  const originalDeparture = getItineraryTimeValue(
+    sourceItems[targetIndex]?.departureTime || sourceItems[targetIndex]?.time,
+  );
+  if (
+    requestedArrival === null ||
+    suggestedArrival === null ||
+    originalArrival === null ||
+    originalDeparture === null ||
+    requestedArrival < suggestedArrival
+  ) {
+    return {
+      ...result,
+      blocker: {
+        index: targetIndex,
+        message: "調整後的到達時間不得早於系統建議時間。",
+        focusTarget: "arrival",
+      },
+    };
+  }
+
+  const items = result.items.map((item) => ({ ...item }));
+  const stayMinutes = originalDeparture - originalArrival;
+  const targetDeparture = requestedArrival + stayMinutes;
+  if (targetDeparture >= 24 * 60) {
+    return {
+      ...result,
+      blocker: {
+        index: targetIndex,
+        message: "調整後將跨越午夜，系統不會自動移動到隔日。",
+        focusTarget: "arrival",
+      },
+    };
+  }
+  items[targetIndex] = {
+    ...items[targetIndex],
+    time: toClockTime(requestedArrival),
+    departureTime: toClockTime(targetDeparture),
+  };
+
+  const downstreamSegments = result.segments
+    .filter((segment) => segment.originIndex >= targetIndex)
+    .sort((left, right) => left.originIndex - right.originIndex);
+
+  for (const segment of downstreamSegments) {
+    const origin = items[segment.originIndex];
+    const destination = items[segment.destinationIndex];
+    const originDeparture = getItineraryTimeValue(origin.departureTime || origin.time);
+    const destinationOriginalArrival = getItineraryTimeValue(sourceItems[segment.destinationIndex]?.time);
+    const destinationOriginalDeparture = getItineraryTimeValue(
+      sourceItems[segment.destinationIndex]?.departureTime ||
+        sourceItems[segment.destinationIndex]?.time,
+    );
+    if (
+      originDeparture === null ||
+      destinationOriginalArrival === null ||
+      destinationOriginalDeparture === null
+    ) {
+      return {
+        ...result,
+        blocker: {
+          index: segment.destinationIndex,
+          message: "後續活動缺少有效時間，無法完成預覽調整。",
+          focusTarget: "arrival",
+        },
+      };
+    }
+
+    const arrivalMinutes = roundUpToHalfHour(
+      originDeparture + segment.estimate.durationSeconds / 60,
+    );
+    const departureMinutes =
+      arrivalMinutes + (destinationOriginalDeparture - destinationOriginalArrival);
+    if (arrivalMinutes >= 24 * 60 || departureMinutes >= 24 * 60) {
+      return {
+        ...result,
+        blocker: {
+          index: segment.destinationIndex,
+          message: "調整後將跨越午夜，系統不會自動移動到隔日。",
+          focusTarget: "arrival",
+        },
+      };
+    }
+    items[segment.destinationIndex] = {
+      ...destination,
+      time: toClockTime(arrivalMinutes),
+      departureTime: toClockTime(departureMinutes),
+    };
+  }
+
+  return { ...result, items, blocker: null };
+};
+
 /**
  * 依序重算同一天後續活動。此函式只在記憶體中建立結果；呼叫端必須在
  * 使用者確認後才儲存 result.items，因此可安全地用於預覽。
@@ -61,11 +164,26 @@ export const calculateTimeAdjustment = async (
     };
   }
 
+  if (!isIncludedInTravelCalculation(items[startIndex])) {
+    return {
+      items: sourceItems,
+      segments: [],
+      blocker: {
+        index: startIndex,
+        message: "此活動未納入交通計算，請改從其他活動開始。",
+        focusTarget: "route",
+      },
+    };
+  }
+
   items[startIndex] = { ...items[startIndex], departureTime };
   const segments: TimeAdjustmentSegment[] = [];
+  const travelNodeIndexes = getTravelNodeIndexes(items).filter((index) => index >= startIndex);
+  const startNodePosition = travelNodeIndexes.indexOf(startIndex);
 
-  for (let destinationIndex = startIndex + 1; destinationIndex < items.length; destinationIndex += 1) {
-    const originIndex = destinationIndex - 1;
+  for (let nodePosition = startNodePosition + 1; nodePosition < travelNodeIndexes.length; nodePosition += 1) {
+    const originIndex = travelNodeIndexes[nodePosition - 1];
+    const destinationIndex = travelNodeIndexes[nodePosition];
     const origin = items[originIndex];
     const destination = items[destinationIndex];
     const originDeparture = getItineraryTimeValue(origin.departureTime || origin.time);
