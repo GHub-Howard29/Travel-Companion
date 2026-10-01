@@ -10,6 +10,9 @@ const cloudService = readSource("src/services/tripCloudService.ts");
 const itineraryPage = readSource("src/components/ItineraryPage.tsx");
 const timeAdjustment = readSource("src/utils/itineraryTimeAdjustment.ts");
 const app = readSource("src/App.tsx");
+const restoreTripDeleteTombstoneMigration = readSource(
+  "supabase/migrations/20261001141000_v3922_restore_trip_delete_tombstone.sql",
+);
 
 assert.match(
   repository,
@@ -48,6 +51,19 @@ assert.doesNotMatch(
 assert.match(app, /error instanceof TripDeletionError/);
 assert.match(app, /error\.stage === "attachments"/);
 assert.match(app, /error\.stage === "rpc"/);
+
+assert.match(
+  restoreTripDeleteTombstoneMigration,
+  /if tg_op = 'DELETE' then[\s\S]*insert into public\.trip_deletion_tombstones[\s\S]*next_revision\.revision/,
+);
+assert.match(
+  restoreTripDeleteTombstoneMigration,
+  /perform private\.tc_record_trip_change\([\s\S]*case when tg_op = 'INSERT' then 'added' else 'deleted' end/,
+);
+assert.match(
+  restoreTripDeleteTombstoneMigration,
+  /perform realtime\.send\(/,
+);
 
 assert.match(
   timeAdjustment,
