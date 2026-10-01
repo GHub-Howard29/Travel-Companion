@@ -18,7 +18,11 @@ for (const phase of [
 }
 
 assert.match(updateHook, /新版尚未下載完成，請稍後再試；這不代表目前網路一定異常。/);
-assert.match(updateHook, /新版已準備完成，但尚未接管目前頁面。請重新載入以套用新版。/);
+assert.match(updateHook, /waitForServiceWorkerHandoff/);
+assert.match(updateHook, /activeWorker === controller/);
+assert.match(updateHook, /await updateServiceWorker\(false\)/);
+assert.doesNotMatch(updateHook, /await updateServiceWorker\(true\)/);
+assert.match(updateHook, /新版尚未完成接管，請稍後重試更新；目前版本仍可正常使用。/);
 assert.match(updateHook, /navigator\.onLine\s*\?\s*"更新處理發生錯誤/);
 assert.match(updatePrompt, /正在下載新版…/);
 assert.match(updatePrompt, /等待新版接管…/);

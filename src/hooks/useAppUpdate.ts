@@ -78,34 +78,69 @@ const fetchLatestVersionMetadata = async (): Promise<AppVersionMetadata | null> 
   }
 };
 
-const waitForServiceWorkerControl = (
+type ServiceWorkerHandoffState = "controlled" | "active" | "timeout";
+
+const waitForServiceWorkerHandoff = (
+  registration: ServiceWorkerRegistration,
   previousController: ServiceWorker | null,
-  timeoutMs = 8000,
-) => {
-  if (!("serviceWorker" in navigator)) return Promise.resolve(false);
-  return new Promise<boolean>((resolve) => {
+  expectedWorker: ServiceWorker | null,
+  timeoutMs = 12000,
+): Promise<ServiceWorkerHandoffState> => {
+  if (!("serviceWorker" in navigator)) return Promise.resolve("timeout");
+
+  return new Promise<ServiceWorkerHandoffState>((resolve) => {
     let settled = false;
     let timeoutId: number | null = null;
-    const finish = (controlled: boolean) => {
+    let readinessCheckId: number | null = null;
+
+    const getState = (): ServiceWorkerHandoffState | null => {
+      const controller = navigator.serviceWorker.controller;
+      const activeWorker = registration.active;
+      const controllerAligned =
+        Boolean(controller) &&
+        controller !== previousController &&
+        controller?.state === "activated" &&
+        activeWorker === controller;
+
+      if (controllerAligned) return "controlled";
+
+      const expectedWorkerActivated =
+        expectedWorker !== null &&
+        expectedWorker.state === "activated" &&
+        activeWorker === expectedWorker;
+      const replacementActive =
+        expectedWorker === null &&
+        Boolean(activeWorker) &&
+        activeWorker !== previousController &&
+        activeWorker?.state === "activated";
+
+      if (expectedWorkerActivated || replacementActive) return "active";
+      return null;
+    };
+
+    const finish = (state: ServiceWorkerHandoffState) => {
       if (settled) return;
       settled = true;
       if (timeoutId !== null) window.clearTimeout(timeoutId);
+      if (readinessCheckId !== null) window.clearInterval(readinessCheckId);
       navigator.serviceWorker.removeEventListener("controllerchange", handleControllerChange);
-      resolve(controlled);
+      expectedWorker?.removeEventListener("statechange", handleWorkerStateChange);
+      resolve(state);
     };
-    const handleControllerChange = () => {
-      const nextController = navigator.serviceWorker.controller;
-      finish(Boolean(nextController && nextController !== previousController));
+
+    const checkForControlledPage = () => {
+      if (getState() === "controlled") finish("controlled");
     };
+    const handleControllerChange = () => checkForControlledPage();
+    const handleWorkerStateChange = () => checkForControlledPage();
+
     navigator.serviceWorker.addEventListener("controllerchange", handleControllerChange);
-    const currentController = navigator.serviceWorker.controller;
-    if (currentController && currentController !== previousController) {
-      finish(true);
-      return;
-    }
+    expectedWorker?.addEventListener("statechange", handleWorkerStateChange);
+    readinessCheckId = window.setInterval(checkForControlledPage, 100);
+    checkForControlledPage();
+
     timeoutId = window.setTimeout(() => {
-      const current = navigator.serviceWorker.controller;
-      finish(Boolean(current && current !== previousController));
+      finish(getState() ?? "timeout");
     }, timeoutMs);
   });
 };
@@ -212,6 +247,7 @@ export const useAppUpdate = () => {
   const registrationRef = useRef<ServiceWorkerRegistration | null>(null);
   const workerReadyRef = useRef(false);
   const updateInProgressRef = useRef(false);
+  const safeReloadWorkerRef = useRef<ServiceWorker | null>(null);
   const reloadStartedRef = useRef(false);
 
   const reloadOnce = useCallback(() => {
@@ -291,7 +327,22 @@ export const useAppUpdate = () => {
   const update = useCallback(async () => {
     if (updateInProgressRef.current) return;
     if (hasPreparedUpdate && updatePhase === "ready-to-reload") {
-      reloadOnce();
+      const registration = registrationRef.current;
+      const safeReloadWorker = safeReloadWorkerRef.current;
+      if (
+        registration?.active &&
+        safeReloadWorker &&
+        registration.active === safeReloadWorker &&
+        safeReloadWorker.state === "activated"
+      ) {
+        setStoredAppVersion(latestMetadata.version);
+        reloadOnce();
+        return;
+      }
+
+      safeReloadWorkerRef.current = null;
+      setUpdateError("新版接管狀態已改變，請重新執行更新確認。");
+      setUpdatePhase("idle");
       return;
     }
     if (!policy.hasUpdate) {
@@ -319,6 +370,8 @@ export const useAppUpdate = () => {
       const registration =
         registrationRef.current ?? (await navigator.serviceWorker.ready);
       registrationRef.current = registration;
+      const previousController = navigator.serviceWorker?.controller ?? null;
+      safeReloadWorkerRef.current = null;
       setUpdatePhase("downloading");
       await registration.update();
       const workerReady = await waitForUpdateWorkerReady(
@@ -337,23 +390,35 @@ export const useAppUpdate = () => {
         setUpdatePhase("idle");
         return;
       }
+
+      const expectedWorker = registration.waiting ?? registration.installing;
       setUpdatePhase("waiting-control");
-      const previousController = navigator.serviceWorker?.controller ?? null;
-      let controlPromise = waitForServiceWorkerControl(previousController);
-      await updateServiceWorker(true);
-      let controlled = await controlPromise;
-      if (!controlled) {
-        controlPromise = waitForServiceWorkerControl(navigator.serviceWorker?.controller ?? null);
-        await updateServiceWorker(true);
-        controlled = await controlPromise;
+      const handoffPromise = waitForServiceWorkerHandoff(
+        registration,
+        previousController,
+        expectedWorker,
+      );
+
+      // vite-plugin-pwa 的 prompt 模式在此只需要送出一次 SKIP_WAITING。
+      // reload 由本 hook 在確認新 worker 已 active／接管後統一控制，避免重複觸發競態。
+      await updateServiceWorker(false);
+      const handoffState = await handoffPromise;
+
+      if (handoffState === "controlled") {
+        setStoredAppVersion(latestMetadata.version);
+        reloadOnce();
+        return;
       }
-      if (!controlled) {
-        setUpdateError("新版已準備完成，但尚未接管目前頁面。請重新載入以套用新版。");
+
+      if (handoffState === "active" && registration.active) {
+        safeReloadWorkerRef.current = registration.active;
+        setUpdateError(null);
         setUpdatePhase("ready-to-reload");
         return;
       }
-      setStoredAppVersion(latestMetadata.version);
-      reloadOnce();
+
+      setUpdateError("新版尚未完成接管，請稍後重試更新；目前版本仍可正常使用。");
+      setUpdatePhase("idle");
     } catch (error) {
       console.warn("PWA Service Worker update failed.", error);
       setUpdateError(

@@ -14,6 +14,16 @@ export type VersionHistoryItem = {
 
 export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
+    version: "3.9.20",
+    date: "2026-09-30",
+    isMandatoryRelease: false,
+    notes: [
+      "其他資訊新增自訂子類別管理，可新增、改名、排序、顯示／隱藏、自動排列與恢復預設，既有資料會保留。",
+      "改善每日行程與其他資訊編輯時的畫面聚焦，手機會等待可視視窗穩定後再將編輯框對齊上緣。",
+      "統一取消按鈕與其他資訊管理操作樣式，並加強排列草稿、恢復預設與變更提示。",
+    ],
+  },
+  {
     version: "3.9.19",
     date: "2026-09-30",
     isMandatoryRelease: false,
