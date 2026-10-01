@@ -71,6 +71,7 @@ import {
 import {
   adjustTimePreviewArrival,
   calculateTimeAdjustment,
+  materializeTimeAdjustmentEstimates,
   type TimeAdjustmentResult,
 } from "../utils/itineraryTimeAdjustment";
 import { getItineraryDayDate, getLunarDateLabel, getWeekdayLabel } from "../utils/itineraryDate";
@@ -935,13 +936,25 @@ export const ItineraryPage = ({
       const stableDaysData = ensureItineraryDaysDataIds(trip.content.daysData);
       const dayKey = String(activeDay);
       const stableActiveDay = stableDaysData[dayKey] ?? [];
+      const committedItems = await materializeTimeAdjustmentEstimates(
+        timeAdjustmentResult,
+        async (_originIndex, origin, destination) => {
+          if (!isOnline) return null;
+          return requestTravelEstimate(
+            origin,
+            destination,
+            getPreferredTravelMode(origin),
+          );
+        },
+      );
+
       await onSaveTripDetail({
         ...trip,
         content: {
           ...trip.content,
           daysData: {
             ...stableDaysData,
-            [dayKey]: timeAdjustmentResult.items.map((item, index) => ({
+            [dayKey]: committedItems.map((item, index) => ({
               ...item,
               id: stableActiveDay[index]?.id ?? item.id ?? createItineraryItemId(),
             })),

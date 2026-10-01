@@ -6,6 +6,7 @@ import {
 } from "./itineraryTime.ts";
 import {
   getPreferredTravelMode,
+  getSavedTravelEstimate,
   getTravelModeLabel,
   getTravelNodeIndexes,
   isFlightConnection,
@@ -35,6 +36,42 @@ export type TimeAdjustmentEstimateResolver = (
   origin: ItineraryItem,
   destination: ItineraryItem,
 ) => Promise<SavedTravelEstimate | null>;
+
+export const materializeTimeAdjustmentEstimates = async (
+  result: TimeAdjustmentResult,
+  refreshEstimate: TimeAdjustmentEstimateResolver,
+): Promise<ItineraryItem[]> => {
+  const items = result.items.map((item) => ({ ...item }));
+
+  for (const segment of result.segments) {
+    const origin = items[segment.originIndex];
+    const destination = items[segment.destinationIndex];
+    if (!origin || !destination) {
+      throw new Error("時間預覽的交通區段已失效，請重新建立預覽。");
+    }
+
+    let estimate = segment.estimate;
+    if (!getSavedTravelEstimate({ ...origin, travelToNext: estimate }, destination)) {
+      const refreshed = await refreshEstimate(
+        segment.originIndex,
+        origin,
+        destination,
+      );
+      if (!refreshed) {
+        throw new Error("交通資料已過期，需要連線後重新建立路線。");
+      }
+      estimate = refreshed;
+    }
+
+    items[segment.originIndex] = {
+      ...origin,
+      travelModeToNext: estimate.mode,
+      travelToNext: estimate,
+    };
+  }
+
+  return items;
+};
 
 const toClockTime = (minutes: number): string => {
   const normalized = Math.round(minutes);

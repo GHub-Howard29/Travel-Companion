@@ -446,6 +446,7 @@ export const getTripDetail = async (
   tripId: string,
   selectedTripMeta?: TripMeta,
   initialCloudRecords?: StoredTripRecord[],
+  preferCloud = false,
 ): Promise<TripDetail | null> => {
   const storedTrip = readStoredTripRecords().find(
     (record) => record.meta.id === tripId,
@@ -453,9 +454,12 @@ export const getTripDetail = async (
   const cloudTrip = (initialCloudRecords ?? await getCloudTripRecords(supabase)).find(
     (record) => record.meta.id === tripId,
   );
-  const latestRecord = chooseLatestRecord([cloudTrip, storedTrip]);
+  const latestRecord =
+    preferCloud && cloudTrip
+      ? cloudTrip
+      : chooseLatestRecord([cloudTrip, storedTrip]);
   if (latestRecord) {
-    if (readOtherInfoSyncState(tripId) && storedTrip) {
+    if (!preferCloud && readOtherInfoSyncState(tripId) && storedTrip) {
       return normalizeTripDetail(storedTrip.detail, storedTrip.meta);
     }
 
@@ -623,11 +627,12 @@ export const createTripRecordWithCloudSync = async (
 export const updateTripRecord = (
   tripId: string,
   input: TripEditorInput,
+  sourceRecord?: StoredTripRecord,
 ): StoredTripRecord | null => {
-  const currentRecord = readStoredTripRecords().find(
-    (record) => record.meta.id === tripId,
-  );
-  if (!currentRecord) return null;
+  const currentRecord =
+    sourceRecord ??
+    readStoredTripRecords().find((record) => record.meta.id === tripId);
+  if (!currentRecord || currentRecord.meta.id !== tripId) return null;
 
   const days = createDays(input.dayCount);
   const currentDaysData = currentRecord.detail.content.daysData;
@@ -682,6 +687,7 @@ export const updateTripRecord = (
     detail,
     editorEmails: normalizeEmails(input.editorEmails),
     updatedAt: new Date().toISOString(),
+    cloudUpdatedAt: currentRecord.cloudUpdatedAt ?? currentRecord.updatedAt,
   };
 };
 

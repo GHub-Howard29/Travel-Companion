@@ -35,7 +35,10 @@ import useSystemUsage from "./hooks/useSystemUsage";
 import { useTripDataRevision } from "./hooks/useTripDataRevision";
 import { AppContext } from "./app/context/AppContext";
 import { ROLE } from "./permissions/roles";
-import { getCloudTripRecords } from "./services/tripCloudService";
+import {
+  getCloudTripRecords,
+  TripDeletionError,
+} from "./services/tripCloudService";
 import {
   DuplicateTripIdError,
   getTripDetail,
@@ -670,8 +673,17 @@ function ConfiguredApp({
       alert("無法載入管理者名稱設定，請稍後再試。");
     }
   };
-  const openEditTrip = () => {
+  const openEditTrip = async () => {
     if (!canEditTripMaster) return;
+    if (isOnline && navigator.onLine) {
+      try {
+        await reloadCurrentTrip(true);
+      } catch (error) {
+        console.error("Failed to refresh Trip master snapshot:", error);
+        alert("無法取得最新旅程資料，請確認網路後再開啟編輯。");
+        return;
+      }
+    }
     setTripEditorMode("edit");
     setTripEditorTargetTripId(selectedTripId);
     setIsTripEditorOpen(true);
@@ -738,7 +750,17 @@ function ConfiguredApp({
       setIsMenuOpen(false);
     } catch (error) {
       console.error("Trip deletion failed:", error);
-      alert("無法確認旅程已完整刪除，請保留此畫面並確認網路後再試一次。");
+      if (error instanceof TripDeletionError) {
+        const message =
+          error.stage === "attachments"
+            ? "旅程附件尚未完成刪除排程，旅程資料尚未刪除，請確認網路後再試一次。"
+            : error.stage === "rpc"
+              ? "旅程刪除交易尚未確認完成，請確認網路後再試一次。"
+              : "旅程刪除回傳資料異常，請保留此畫面後再試一次。";
+        alert(message);
+      } else {
+        alert("無法確認旅程已完整刪除，請保留此畫面並確認網路後再試一次。");
+      }
       setIsLoading(false);
     }
   };

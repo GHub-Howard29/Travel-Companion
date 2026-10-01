@@ -400,11 +400,29 @@ export const insertCloudTripRecord = async (
   return insertedRecord;
 };
 
+export type TripDeletionStage = "attachments" | "rpc" | "result";
+
+export class TripDeletionError extends Error {
+  readonly stage: TripDeletionStage;
+  readonly cause: unknown;
+
+  constructor(stage: TripDeletionStage, message: string, cause?: unknown) {
+    super(message);
+    this.name = "TripDeletionError";
+    this.stage = stage;
+    this.cause = cause;
+  }
+}
+
 export const deleteCloudTripRecord = async (
   supabase: SupabaseClient,
   tripId: string,
 ): Promise<boolean> => {
   if (!navigator.onLine) return false;
+
+  // Retrying an already committed deletion is safe: the tombstone is the
+  // durable proof that the Trip was removed and must never be recreated.
+  if (await cloudTripTombstoneExists(supabase, tripId)) return true;
 
   try {
     // Keep editor permission until all files have been queued. The RPC checks
@@ -412,14 +430,30 @@ export const deleteCloudTripRecord = async (
     await scheduleCloudAttachmentsForTripDeletion(supabase, tripId);
     await scheduleCloudItineraryCoversForTripDeletion(supabase, tripId);
   } catch (error) {
-    console.warn("Failed to remove trip attachments", error);
-    return false;
+    throw new TripDeletionError(
+      "attachments",
+      "Trip attachments could not be queued for deletion",
+      error,
+    );
   }
 
   const { data, error } = await supabase.rpc("tc_delete_trip", {
     target_trip_id: tripId,
   });
-  if (error) throw error;
+  if (error) {
+    // The request may have committed on the server even if the client received
+    // an error or retried after losing the response. Only the error path needs
+    // a recovery lookup; successful RPCs are already authoritative.
+    try {
+      if (await cloudTripTombstoneExists(supabase, tripId)) return true;
+    } catch (verificationError) {
+      console.warn(
+        "Trip deletion RPC failed and tombstone recovery could not be checked",
+        verificationError,
+      );
+    }
+    throw new TripDeletionError("rpc", "Trip deletion RPC failed", error);
+  }
 
   const result = Array.isArray(data) ? data[0] as {
     deleted_trip_id?: unknown;
@@ -431,18 +465,14 @@ export const deleteCloudTripRecord = async (
     !Number.isSafeInteger(deletionRevision) ||
     deletionRevision < 0
   ) {
-    throw new Error("Trip deletion RPC did not return a valid tombstone");
+    throw new TripDeletionError(
+      "result",
+      "Trip deletion RPC did not return a valid tombstone",
+    );
   }
 
-  const { data: tombstone, error: tombstoneError } = await supabase
-    .from("trip_deletion_tombstones")
-    .select("trip_id, deletion_revision")
-    .eq("trip_id", tripId)
-    .eq("deletion_revision", deletionRevision)
-    .maybeSingle();
-  if (tombstoneError) throw tombstoneError;
-  if (!tombstone) {
-    throw new Error("Trip deletion committed but its tombstone could not be confirmed");
-  }
+  // tc_delete_trip creates the tombstone and returns its revision in the same
+  // database transaction. Do not turn a committed deletion into a false
+  // failure by requiring another network round-trip here.
   return true;
 };

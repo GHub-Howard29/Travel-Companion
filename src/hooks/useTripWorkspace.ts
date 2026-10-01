@@ -44,6 +44,7 @@ import {
 } from "../storage/tripStorage";
 import { removeRestrictedStoredOtherInfoItems } from "../storage/otherInfoStorage";
 import {
+  getCloudTripRecord,
   getCloudTripRecordsStrict,
   getTripDeletionTombstones,
 } from "../services/tripCloudService";
@@ -573,11 +574,24 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
       if (!selectedTripId || !selectedTripMeta || !currentTrip) return;
       if (!canWriteSelectedTripNow()) throw new HistoricalTripLockedError();
 
+      const cloudSnapshot = navigator.onLine
+        ? await getCloudTripRecord(supabase, selectedTripId)
+        : null;
       const record =
-        updateTripRecord(selectedTripId, input) ??
+        updateTripRecord(
+          selectedTripId,
+          input,
+          cloudSnapshot ?? undefined,
+        ) ??
         createTripRecordFromExisting(selectedTripMeta, currentTrip, input);
+      const expectedUpdatedAt =
+        cloudSnapshot?.cloudUpdatedAt ?? cloudSnapshot?.updatedAt;
 
-      await saveTripRecordWithCloudSync(supabase, record);
+      await saveTripRecordWithCloudSync(
+        supabase,
+        record,
+        expectedUpdatedAt,
+      );
       try {
         await scheduleItineraryCoverDeletion(
           supabase,
@@ -731,19 +745,34 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
     [canWriteSelectedTripNow, currentTripEditorEmails, selectedTripMeta],
   );
 
-  const reloadCurrentTrip = useCallback(async () => {
+  const reloadCurrentTrip = useCallback(async (preferCloud = false) => {
     if (!selectedTripId || !navigator.onLine) return;
 
     const loadRevision = ++tripLoadRevisionRef.current;
+    const cloudSnapshot = preferCloud
+      ? await getCloudTripRecord(supabase, selectedTripId)
+      : null;
+    if (preferCloud && !cloudSnapshot) {
+      throw new Error("目前旅程已不存在，請重新載入旅程清單。");
+    }
 
     const nextTrip = await getTripDetail(
       supabase,
       getBasePath(),
       selectedTripId,
       selectedTripMeta ?? undefined,
+      cloudSnapshot ? [cloudSnapshot] : undefined,
+      preferCloud,
     );
     if (nextTrip && tripLoadRevisionRef.current === loadRevision) {
       setCurrentTrip(nextTrip);
+      if (cloudSnapshot) {
+        setTripOptions((current) =>
+          current.map((trip) =>
+            trip.id === cloudSnapshot.meta.id ? cloudSnapshot.meta : trip,
+          ),
+        );
+      }
     }
   }, [getBasePath, selectedTripId, selectedTripMeta, supabase]);
 

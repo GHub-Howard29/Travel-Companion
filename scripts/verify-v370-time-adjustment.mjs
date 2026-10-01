@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   adjustTimePreviewArrival,
   calculateTimeAdjustment,
+  materializeTimeAdjustmentEstimates,
 } from "../src/utils/itineraryTimeAdjustment.ts";
 import { getItineraryDayDate, getLunarDateLabel } from "../src/utils/itineraryDate.ts";
 
@@ -85,6 +86,67 @@ assert.equal(manuallyDelayed.blocker, null);
 assert.equal(manuallyDelayed.items[1].time, "12:00");
 assert.equal(manuallyDelayed.items[1].departureTime, "13:00");
 assert.equal(manuallyDelayed.items[2].time, "13:30");
+
+const validDriveEstimate = {
+  mode: "drive",
+  durationSeconds: 1_200,
+  distanceMeters: 5_000,
+  originKey: "place:place-origin-123",
+  destinationKey: "place:place-destination-456",
+  queriedAt: "2026-10-01T00:00:00.000Z",
+  expiresAt: "2099-10-02T00:00:00.000Z",
+};
+const routeItems = [
+  {
+    ...item("A", "09:00", "10:00"),
+    place: { placeId: "place-origin-123" },
+  },
+  {
+    ...item("B", "10:30", "11:30"),
+    place: { placeId: "place-destination-456" },
+  },
+];
+let driveRefreshCalls = 0;
+const committedDrive = await materializeTimeAdjustmentEstimates(
+  {
+    items: routeItems,
+    segments: [{ originIndex: 0, destinationIndex: 1, estimate: validDriveEstimate }],
+    blocker: null,
+  },
+  async () => {
+    driveRefreshCalls += 1;
+    return null;
+  },
+);
+assert.equal(driveRefreshCalls, 0);
+assert.deepEqual(committedDrive[0].travelToNext, validDriveEstimate);
+assert.equal(committedDrive[0].travelModeToNext, "drive");
+
+const staleTransitEstimate = {
+  ...validDriveEstimate,
+  mode: "transit",
+  departureTimeBasis: "09:30",
+};
+const refreshedTransitEstimate = {
+  ...staleTransitEstimate,
+  departureTimeBasis: "10:00",
+  queriedAt: "2026-10-01T00:01:00.000Z",
+};
+let transitRefreshCalls = 0;
+const committedTransit = await materializeTimeAdjustmentEstimates(
+  {
+    items: routeItems,
+    segments: [{ originIndex: 0, destinationIndex: 1, estimate: staleTransitEstimate }],
+    blocker: null,
+  },
+  async () => {
+    transitRefreshCalls += 1;
+    return refreshedTransitEstimate;
+  },
+);
+assert.equal(transitRefreshCalls, 1);
+assert.deepEqual(committedTransit[0].travelToNext, refreshedTransitEstimate);
+assert.equal(committedTransit[0].travelModeToNext, "transit");
 
 assert.equal(getItineraryDayDate("2026-09-08", 1), "2026-09-08");
 assert.equal(getItineraryDayDate("2026-09-08", 2), "2026-09-09");
