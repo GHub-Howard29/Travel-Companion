@@ -2,6 +2,7 @@ import type { ItineraryItem, SavedTravelEstimate } from "../types";
 import {
   getItineraryTimeValue,
   normalizeItineraryTime,
+  validateRequiredItineraryTimeRange,
 } from "./itineraryTime.ts";
 import {
   getPreferredTravelMode,
@@ -150,19 +151,40 @@ export const adjustTimePreviewArrival = (
 export const calculateTimeAdjustment = async (
   sourceItems: ItineraryItem[],
   startIndex: number,
+  requestedArrivalTime: string,
   requestedDepartureTime: string,
   resolveEstimate: TimeAdjustmentEstimateResolver,
 ): Promise<TimeAdjustmentResult> => {
   const items = sourceItems.map((item) => ({ ...item }));
-  const departureTime = normalizeItineraryTime(requestedDepartureTime);
-  const departureMinutes = getItineraryTimeValue(departureTime);
-  if (startIndex < 0 || startIndex >= items.length || departureMinutes === null) {
+  const timeRange = validateRequiredItineraryTimeRange(
+    requestedArrivalTime,
+    requestedDepartureTime,
+  );
+  if (startIndex < 0 || startIndex >= items.length) {
     return {
       items: sourceItems,
       segments: [],
-      blocker: { index: startIndex, message: "請輸入有效的新離開時間。", focusTarget: "departure" },
+      blocker: { index: startIndex, message: "請選擇有效的調整起點。", focusTarget: "arrival" },
     };
   }
+  if (!timeRange.isValid) {
+    const departureBeforeArrival = timeRange.departureError === "before-arrival";
+    return {
+      items: sourceItems,
+      segments: [],
+      blocker: {
+        index: startIndex,
+        message: departureBeforeArrival
+          ? "新的離開時間不可早於新的到達時間。"
+          : timeRange.arrivalError
+            ? "請輸入有效的新到達時間。"
+            : "請輸入有效的新離開時間。",
+        focusTarget: departureBeforeArrival || timeRange.departureError ? "departure" : "arrival",
+      },
+    };
+  }
+  const arrivalTime = timeRange.arrivalTime;
+  const departureTime = timeRange.departureTime;
 
   if (!isIncludedInTravelCalculation(items[startIndex])) {
     return {
@@ -176,7 +198,11 @@ export const calculateTimeAdjustment = async (
     };
   }
 
-  items[startIndex] = { ...items[startIndex], departureTime };
+  items[startIndex] = {
+    ...items[startIndex],
+    time: arrivalTime,
+    departureTime,
+  };
   const segments: TimeAdjustmentSegment[] = [];
   const travelNodeIndexes = getTravelNodeIndexes(items).filter((index) => index >= startIndex);
   const startNodePosition = travelNodeIndexes.indexOf(startIndex);

@@ -22,24 +22,38 @@ const adjusted = await calculateTimeAdjustment([
   item("A", "09:00", "10:15"),
   item("B", "11:00", "12:30"),
   item("C", "13:00", "13:00"),
-], 0, "10:30", route);
+], 0, "09:30", "10:30", route);
 assert.equal(adjusted.blocker, null);
 assert.deepEqual(adjusted.items.map(({ time, departureTime }) => [time, departureTime]), [
-  ["09:00", "10:30"], ["11:00", "12:30"], ["13:00", "13:00"],
+  ["09:30", "10:30"], ["11:00", "12:30"], ["13:00", "13:00"],
 ]);
 
-const boundary = await calculateTimeAdjustment([item("A", "09:00", "10:00"), item("B", "10:00", "10:00")], 0, "10:00", async () => estimate(30));
+const boundary = await calculateTimeAdjustment([item("A", "09:00", "10:00"), item("B", "10:00", "10:00")], 0, "09:00", "10:00", async () => estimate(30));
 assert.equal(boundary.items[1].time, "10:30");
-const midnight = await calculateTimeAdjustment([item("A", "20:00", "23:50"), item("B", "23:00", "23:30")], 0, "23:50", async () => estimate(20));
+const midnight = await calculateTimeAdjustment([item("A", "20:00", "23:50"), item("B", "23:00", "23:30")], 0, "20:00", "23:50", async () => estimate(20));
 assert.match(midnight.blocker.message, /跨越午夜/);
-const missing = await calculateTimeAdjustment([item("A", "09:00", "10:00"), item("B", "", "11:00")], 0, "10:00", route);
+const missing = await calculateTimeAdjustment([item("A", "09:00", "10:00"), item("B", "", "11:00")], 0, "09:00", "10:00", route);
 assert.match(missing.blocker.message, /到達時間/);
+
+let invalidRangeRouteCalls = 0;
+const invalidRange = await calculateTimeAdjustment(
+  [item("A", "09:50", "10:30"), item("B", "11:30", "12:30")],
+  0,
+  "09:50",
+  "08:30",
+  async () => {
+    invalidRangeRouteCalls += 1;
+    return estimate(21);
+  },
+);
+assert.match(invalidRange.blocker.message, /不可早於/);
+assert.equal(invalidRangeRouteCalls, 0);
 
 const skipped = await calculateTimeAdjustment([
   item("A", "09:00", "10:00"),
   { ...item("B", "", ""), type: "其他", includeInTravelCalculation: false },
   item("C", "11:30", "12:00"),
-], 0, "10:00", route);
+], 0, "09:00", "10:00", route);
 assert.equal(skipped.blocker, null);
 assert.equal(skipped.segments.length, 1);
 assert.equal(skipped.segments[0].originIndex, 0);
@@ -60,6 +74,7 @@ const manuallyDelayed = adjustTimePreviewArrival(
       item("C", "13:00", "13:30"),
     ],
     0,
+    "09:00",
     "10:00",
     route,
   ),

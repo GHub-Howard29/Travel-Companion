@@ -9,6 +9,7 @@ const revisionNotice = readFileSync(resolve(root, "src/components/TripDataRevisi
 const app = readFileSync(resolve(root, "src/App.tsx"), "utf8");
 
 for (const phase of [
+  "syncing-data",
   "checking-metadata",
   "downloading",
   "waiting-control",
@@ -24,10 +25,19 @@ assert.match(updateHook, /await updateServiceWorker\(false\)/);
 assert.doesNotMatch(updateHook, /await updateServiceWorker\(true\)/);
 assert.match(updateHook, /新版尚未完成接管，請稍後重試更新；目前版本仍可正常使用。/);
 assert.match(updateHook, /navigator\.onLine\s*\?\s*"更新處理發生錯誤/);
+assert.match(updatePrompt, /正在同步行程資料…/);
 assert.match(updatePrompt, /正在下載新版…/);
 assert.match(updatePrompt, /等待新版接管…/);
 assert.match(updatePrompt, /重新載入套用新版/);
-assert.match(app, /kind=\{isUpdateInProgress \? null : tripDataNoticeKind\}/);
+assert.match(updateHook, /await beforeUpdate\(\)/);
+assert.match(updateHook, /行程資料同步尚未完成/);
+assert.doesNotMatch(
+  updateHook,
+  /onNeedReload:\s*\(\)\s*=>\s*\{[^}]*reloadOnce\(/s,
+);
+assert.match(app, /await reconcileTripWorkspace\(\)/);
+assert.match(app, /await reloadCurrentTrip\(\)/);
+assert.match(app, /kind=\{updateAvailable \? null : tripDataNoticeKind\}/);
 assert.match(app, /willApplyPreparedUpdate=\{hasPreparedUpdate && updateAvailable\}/);
 assert.match(revisionNotice, /重新載入並套用新版/);
 assert.match(revisionNotice, /重新載入會同時套用新版並取得最新行程資料/);

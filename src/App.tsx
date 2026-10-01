@@ -251,7 +251,6 @@ function ConfiguredApp({
     isChecking,
     updatePhase,
     hasPreparedUpdate,
-    isUpdateInProgress,
     update,
     dismiss,
   } = useAppUpdate();
@@ -1142,6 +1141,21 @@ function ConfiguredApp({
     });
   }, [currentTrip, isOnline]);
 
+  const handleAppUpdate = useCallback(() => {
+    void update(async () => {
+      if (!isSessionReady || !isOnline || !hasAnyManagementRole) return;
+      await reconcileTripWorkspace();
+      await reloadCurrentTrip();
+    });
+  }, [
+    hasAnyManagementRole,
+    isOnline,
+    isSessionReady,
+    reconcileTripWorkspace,
+    reloadCurrentTrip,
+    update,
+  ]);
+
   return (
     <AppContext.Provider value={appContextValue}>
     {isSessionReady && !isLoading && <AppLaunchReady />}
@@ -1156,7 +1170,7 @@ function ConfiguredApp({
       updateError={updateError}
       isChecking={isChecking}
       updatePhase={updatePhase}
-      onUpdate={update}
+      onUpdate={handleAppUpdate}
       onDismiss={dismiss}
     />
     <InstallAppPrompt
@@ -1305,7 +1319,7 @@ function ConfiguredApp({
       />
 
       <TripDataRevisionNotice
-        kind={isUpdateInProgress ? null : tripDataNoticeKind}
+        kind={updateAvailable ? null : tripDataNoticeKind}
         isOnline={isOnline}
         willApplyPreparedUpdate={hasPreparedUpdate && updateAvailable}
         onPreviewChanges={openChangePreview}

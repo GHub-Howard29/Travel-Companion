@@ -21,6 +21,7 @@ type UpdateServiceWorker = (reloadPage?: boolean) => Promise<void>;
 export type AppUpdatePromptMode = "update" | "releaseNotice";
 export type AppUpdatePhase =
   | "idle"
+  | "syncing-data"
   | "checking-metadata"
   | "downloading"
   | "waiting-control"
@@ -316,52 +317,66 @@ export const useAppUpdate = () => {
         await checkVersionPolicy();
       },
       onNeedReload: () => {
-        if (!updateInProgressRef.current) reloadOnce();
+        // Workbox 的 controlling 事件只代表接管訊號；實際 reload 一律由 update()
+        // 在資料 preflight 與 Service Worker handoff 驗證完成後統一執行。
       },
       onRegisterError(error: unknown) {
         console.warn("PWA Service Worker registration failed.", error);
       },
     });
-  }, [checkVersionPolicy, reloadOnce]);
+  }, [checkVersionPolicy]);
 
-  const update = useCallback(async () => {
+  const update = useCallback(async (beforeUpdate?: () => Promise<void>) => {
     if (updateInProgressRef.current) return;
-    if (hasPreparedUpdate && updatePhase === "ready-to-reload") {
-      const registration = registrationRef.current;
-      const safeReloadWorker = safeReloadWorkerRef.current;
-      if (
-        registration?.active &&
-        safeReloadWorker &&
-        registration.active === safeReloadWorker &&
-        safeReloadWorker.state === "activated"
-      ) {
-        setStoredAppVersion(latestMetadata.version);
-        reloadOnce();
-        return;
-      }
-
-      safeReloadWorkerRef.current = null;
-      setUpdateError("新版接管狀態已改變，請重新執行更新確認。");
-      setUpdatePhase("idle");
-      return;
-    }
     if (!policy.hasUpdate) {
       setStoredAppVersion(APP_VERSION);
       setReleaseNoticeVisible(false);
       return;
     }
+
     updateInProgressRef.current = true;
     setUpdateError(null);
     setIsChecking(true);
-    setUpdatePhase("checking-metadata");
-    if (!navigator.onLine) {
-      setUpdateError("目前離線，需要網路才能完成更新。");
-      setUpdatePhase("idle");
-      updateInProgressRef.current = false;
-      setIsChecking(false);
-      return;
-    }
     try {
+      if (!navigator.onLine) {
+        setUpdateError("目前離線，需要網路才能完成更新。");
+        setUpdatePhase("idle");
+        return;
+      }
+
+      if (beforeUpdate) {
+        setUpdatePhase("syncing-data");
+        try {
+          await beforeUpdate();
+        } catch (error) {
+          console.warn("App update data preflight failed.", error);
+          setUpdateError("行程資料同步尚未完成，請稍後重試更新；目前資料不會被覆蓋。");
+          setUpdatePhase("idle");
+          return;
+        }
+      }
+
+      if (hasPreparedUpdate && updatePhase === "ready-to-reload") {
+        const registration = registrationRef.current;
+        const safeReloadWorker = safeReloadWorkerRef.current;
+        if (
+          registration?.active &&
+          safeReloadWorker &&
+          registration.active === safeReloadWorker &&
+          safeReloadWorker.state === "activated"
+        ) {
+          setStoredAppVersion(latestMetadata.version);
+          reloadOnce();
+          return;
+        }
+
+        safeReloadWorkerRef.current = null;
+        setUpdateError("新版接管狀態已改變，請重新執行更新確認。");
+        setUpdatePhase("idle");
+        return;
+      }
+
+      setUpdatePhase("checking-metadata");
       const refreshedPolicy = await checkVersionPolicy();
       if (refreshedPolicy && !refreshedPolicy.hasUpdate) {
         setUpdatePhase("idle");

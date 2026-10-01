@@ -47,11 +47,13 @@ export function UpdatePrompt({
   const primaryActionLabel = updatePhase === "ready-to-reload"
     ? "重新載入套用新版"
     : isChecking
-      ? updatePhase === "downloading"
-        ? "正在下載新版…"
-        : updatePhase === "waiting-control"
-          ? "等待新版接管…"
-          : "正在檢查更新…"
+      ? updatePhase === "syncing-data"
+        ? "正在同步行程資料…"
+        : updatePhase === "downloading"
+          ? "正在下載新版…"
+          : updatePhase === "waiting-control"
+            ? "等待新版接管…"
+            : "正在檢查更新…"
       : updateError
         ? "重試更新"
         : isMandatoryUpdate
