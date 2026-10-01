@@ -15,8 +15,8 @@
 - [x] V3.9.18：2026-09-29 正式發布完成。其他資訊新增／編輯表單底部改為「取消／儲存」雙按鈕，取消直接放棄未儲存內容；每日行程標題在 `MM-DD` 後新增依實際日期計算的「星期幾」，並保留既有農曆顯示。完整 production build、TypeScript、PWA、browser-security、ESLint 與文件連結驗證均通過；正式發布提交 `b9418fc`、annotated tag `v3.9.18`、GitHub Pages `e1fff43`，公開 metadata 為 3.9.18、minimumSupportedVersion=3.9.17、forceUpdate=true，採一般更新。
 - [x] V3.9.19：2026-09-30 正式發布完成。長說明 3 行展開／收合、每日標題與卡片排版、登入與功能提示漸進揭露均已完成；完整 production build、lint、PWA、browser-security 與文件驗證通過。正式 source commit `c5a87a3`、annotated tag `v3.9.19` 已推送，正式站 metadata／UI 均為 3.9.19。
 - [x] V3.9.20：2026-10-01 正式發布完成。其他資訊自訂子類別、草稿取消／完成、恢復預設紅字提示、統一取消按鈕樣式與手機編輯 viewport 對齊均已完成；完整 build、PWA、browser-security 與 Android PWA RC 功能驗收通過。正式 tag `v3.9.20`、GitHub Pages `2bf8a51`；RC 更新時發現的重新載入白畫面問題依 Product Owner 決策移交 V3.9.21。
-- [ ] V3.9.21：修正 Android PWA 更新接管後按「重新載入套用新版」可能白畫面的問題。需檢查 Service Worker waiting／skipWaiting、controllerchange、reload 時機與 active controller 邊界；驗收必須從 V3.9.20 正式版升級 RC，重新載入後直接進入新版、不需手動重啟。
-- [ ] V3.9.22：排序後續時間重算與「調整時間」整合（原 V3.9.21）。產品規則與主要 UI 已定案：排序先獨立儲存、再由使用者進入「預覽新時間」；30 分鐘向後進位；預覽可逐項接受或手動延後到達時間，最後一次性套用。取消固定時間專屬功能；只有餐飲／其他顯示「納入交通計算」（餐飲預設勾選、其他預設不勾選），略過卡片仍跨接前後有效地點。既有「調整時間」保留並共用同一套預覽引擎。
+- [x] V3.9.21：2026-10-01 正式發布完成。更新流程改為單次 skipWaiting，等待新版 Service Worker active／controller 接管狀態確認後才允許 reload，並維持 reload 去重與更新中按鈕鎖定；完整 production build、PWA、browser-security 與更新競態 regression 通過。V3.9.20 → V3.9.21 仍由舊版更新程式執行，因此新版流程的跨版本 Android PWA 實機驗證延後至 V3.9.21 → V3.9.22 RC。
+- [ ] V3.9.22：排序後續時間重算與「調整時間」整合（原 V3.9.21）。產品規則與主要 UI 已定案：排序先獨立儲存、再由使用者進入「預覽新時間」；30 分鐘向後進位；預覽可逐項接受或手動延後到達時間，最後一次性套用。取消固定時間專屬功能；只有餐飲／其他顯示「納入交通計算」（餐飲預設勾選、其他預設不勾選），略過卡片仍跨接前後有效地點。既有「調整時間」保留並共用同一套預覽引擎。V3.9.22 RC 時必須同步補驗 V3.9.21 新 PWA 更新流程：更新中不得重新出現可點擊更新按鈕，接管後 reload 不白畫面且不需重啟 App。
 - [ ] V3.10.1：建立完整 build 的驗證群組與耗時基線，整併驗證入口與失敗報告，不縮減 release build；既有 V3.9.3 總啟動量測已確認存在，本版不重複新增程式內埋點。
 - [ ] V3.10.2：沿用既有總啟動量測，分段量測離線冷啟動約 30 秒的 Service Worker、navigation、session、Trip 快取、localStorage、IndexedDB 與首個可操作畫面瓶頸，再依證據決定是否修正；不新增遠端 telemetry。
 - [ ] V3.10.3：以 loopback fixture 與瀏覽器／viewport 模擬建立零費用 Playwright 響應式回歸基礎。
