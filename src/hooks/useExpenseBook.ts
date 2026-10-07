@@ -87,6 +87,45 @@ const getErrorMessage = (error: unknown) => {
   return String(error || "unknown-error");
 };
 
+const ATTACHMENT_SYNC_MAX_ATTEMPTS = 5;
+const ATTACHMENT_SYNC_RETRY_DELAY_MS = 3000;
+
+const waitForAttachmentRetry = (delayMs: number) =>
+  new Promise<boolean>((resolve) => {
+    if (!navigator.onLine) {
+      resolve(false);
+      return;
+    }
+
+    let settled = false;
+    const finish = (canRetry: boolean) => {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timeoutId);
+      window.removeEventListener("offline", handleOffline);
+      resolve(canRetry);
+    };
+    const handleOffline = () => finish(false);
+    const timeoutId = window.setTimeout(() => finish(navigator.onLine), delayMs);
+
+    window.addEventListener("offline", handleOffline, { once: true });
+  });
+
+const isNonRetryableAttachmentError = (message: string) => {
+  const normalized = message.toLowerCase();
+  return (
+    normalized.includes("local-attachment-not-found") ||
+    normalized.includes("row-level security") ||
+    normalized.includes("permission") ||
+    normalized.includes("not authorized") ||
+    normalized.includes("unauthorized") ||
+    normalized.includes("invalid jwt") ||
+    normalized.includes("jwt expired") ||
+    /\b401\b/.test(normalized) ||
+    /\b403\b/.test(normalized)
+  );
+};
+
 const getTodayDateString = () => {
   const now = new Date();
   const localTime = now.getTime() - now.getTimezoneOffset() * 60_000;
@@ -187,6 +226,7 @@ const reloadExpenses = useCallback(async (bookId = expenseBookTripId) => {
   const [removedAttachmentExpenseIds, setRemovedAttachmentExpenseIds] =
     useState<Set<string>>(() => new Set());
   const [isSyncingAttachments, setIsSyncingAttachments] = useState(false);
+  const [attachmentSyncAttempt, setAttachmentSyncAttempt] = useState(0);
   const [lastAttachmentSyncStamp, setLastAttachmentSyncStamp] = useState<{
     bookId: string;
     value: string;
@@ -1212,163 +1252,226 @@ useEffect(() => {
     }
 
     setIsSyncingAttachments(true);
-    const savedItems: ExpenseItem[] = [];
+    setAttachmentSyncAttempt(0);
 
-    for (const item of filteredPendingItems) {
-      try {
-        const attachment = await getLocalAttachment(item.local_attachment_id);
-        if (!attachment) {
-          const errorMessage = "local-attachment-not-found";
-          const failedExpense: ExpenseItem = {
-            ...item,
-            attachment_status: "upload_failed",
-            attachment_last_error: errorMessage,
-          };
+    const finalItems = new Map<string, ExpenseItem>();
+    let remainingItems = filteredPendingItems;
+    let stoppedForOffline = false;
 
-          savedItems.push(failedExpense);
-          if (!String(item.id).startsWith("local_")) {
-            await supabase
+    try {
+      for (
+        let attempt = 1;
+        attempt <= ATTACHMENT_SYNC_MAX_ATTEMPTS && remainingItems.length > 0;
+        attempt += 1
+      ) {
+        if (attempt > 1) {
+          const canRetry = await waitForAttachmentRetry(
+            ATTACHMENT_SYNC_RETRY_DELAY_MS,
+          );
+          if (!canRetry) {
+            stoppedForOffline = true;
+            break;
+          }
+        }
+
+        if (!navigator.onLine) {
+          stoppedForOffline = true;
+          break;
+        }
+
+        setAttachmentSyncAttempt(attempt);
+        const retryItems: Array<
+          ExpenseItem & { local_attachment_id: string }
+        > = [];
+
+        for (let index = 0; index < remainingItems.length; index += 1) {
+          const item = remainingItems[index];
+
+          if (!navigator.onLine) {
+            stoppedForOffline = true;
+            retryItems.push(...remainingItems.slice(index));
+            break;
+          }
+
+          try {
+            const attachment = await getLocalAttachment(
+              item.local_attachment_id,
+            );
+            if (!attachment) {
+              throw new Error("local-attachment-not-found");
+            }
+
+            const path = buildExpenseAttachmentPath(
+              selectedTripId,
+              String(item.id),
+              attachment.fileName,
+            );
+
+            await uploadAttachmentToStorage(path, attachment);
+
+            const updatePayload = {
+              attachment_bucket: ATTACHMENT_BUCKET,
+              attachment_path: path,
+              attachment_name: attachment.fileName,
+              attachment_mime: attachment.mimeType,
+              attachment_size: attachment.size,
+              attachment_status: "synced",
+              attachment_uploaded_at: new Date().toISOString(),
+              attachment_uploaded_by: userEmail,
+              attachment_last_error: null,
+            };
+
+            const { data, error: updateError } = await supabase
+              .from("expenses")
+              .update(updatePayload)
+              .eq("id", item.id)
+              .select()
+              .single();
+            if (updateError) throw updateError;
+
+            finalItems.set(String(item.id), {
+              ...(data as ExpenseItem),
+              local_attachment_id: item.local_attachment_id,
+            });
+          } catch (error) {
+            const errorMessage = getErrorMessage(error);
+            const failedExpense: ExpenseItem & {
+              local_attachment_id: string;
+            } = {
+              ...item,
+              attachment_status: "upload_failed",
+              attachment_last_error: errorMessage,
+            };
+
+            finalItems.set(String(item.id), failedExpense);
+
+            if (!navigator.onLine) {
+              stoppedForOffline = true;
+              retryItems.push(failedExpense, ...remainingItems.slice(index + 1));
+              break;
+            }
+
+            if (
+              attempt < ATTACHMENT_SYNC_MAX_ATTEMPTS &&
+              !isNonRetryableAttachmentError(errorMessage)
+            ) {
+              retryItems.push(failedExpense);
+            }
+          }
+        }
+
+        remainingItems = retryItems;
+        if (stoppedForOffline) break;
+      }
+
+      setExpenses((current) => {
+        const updated = current.map(
+          (item) => finalItems.get(String(item.id)) || item,
+        );
+        localStorage.setItem(
+          toBookStorageKey(expenseBookTripId),
+          JSON.stringify(updated),
+        );
+        return updated;
+      });
+
+      const finalFailedItems = Array.from(finalItems.values()).filter(
+        (item) => item.attachment_status !== "synced",
+      );
+      if (navigator.onLine && finalFailedItems.length > 0) {
+        await Promise.allSettled(
+          finalFailedItems.map((item) =>
+            supabase
               .from("expenses")
               .update({
                 attachment_status: "upload_failed",
-                attachment_last_error: errorMessage,
+                attachment_last_error: item.attachment_last_error || "unknown-error",
               })
-              .eq("id", item.id);
-          }
-          continue;
-        }
-
-        const path = buildExpenseAttachmentPath(
-          selectedTripId,
-          String(item.id),
-          attachment.fileName,
+              .eq("id", item.id),
+          ),
         );
+      }
 
-        await uploadAttachmentToStorage(path, attachment);
-
-        const updatePayload = {
-          attachment_bucket: ATTACHMENT_BUCKET,
-          attachment_path: path,
-          attachment_name: attachment.fileName,
-          attachment_mime: attachment.mimeType,
-          attachment_size: attachment.size,
-          attachment_status: "synced",
-          attachment_uploaded_at: new Date().toISOString(),
-          attachment_uploaded_by: userEmail,
-          attachment_last_error: null,
-        };
-
-        const { data, error: updateError } = await supabase
+      if (expenseBookTripId && navigator.onLine) {
+        const { data: refreshedData } = await supabase
           .from("expenses")
-          .update(updatePayload)
-          .eq("id", item.id)
-          .select()
-          .single();
-        if (updateError) throw updateError;
+          .select("*")
+          .eq("trip_id", expenseBookTripId)
+          .is("deleted_at", null)
+          .order("created_at", { ascending: true });
+        if (refreshedData) {
+          const cachedItems = readStoredExpenses(
+            toBookStorageKey(expenseBookTripId),
+            expenseBookTripId,
+            currentCurrencyCode,
+          );
+          const cachedLocalAttachmentIds = new Map(
+            cachedItems.map((item) => [
+              String(item.id),
+              item.local_attachment_id || null,
+            ]),
+          );
+          const hydrated = await Promise.all(
+            (refreshedData as ExpenseItem[]).map(async (item) => {
+              const cachedLocalAttachmentId =
+                cachedLocalAttachmentIds.get(String(item.id)) || null;
+              const recoveredId =
+                item.local_attachment_id ||
+                cachedLocalAttachmentId ||
+                (shouldRecoverLocalAttachment(item)
+                  ? await findLocalAttachmentIdByExpense(
+                      String(item.id),
+                      expenseBookTripId,
+                    )
+                  : null);
 
-        savedItems.push({
-          ...(data as ExpenseItem),
-          local_attachment_id: item.local_attachment_id,
-        });
-      } catch (error) {
-        const errorMessage = getErrorMessage(error);
-        const failedExpense: ExpenseItem = {
-          ...item,
-          attachment_status: "upload_failed",
-          attachment_last_error: errorMessage,
-        };
-
-        savedItems.push(failedExpense);
-        if (!String(item.id).startsWith("local_")) {
-          await supabase
-            .from("expenses")
-            .update({
-              attachment_status: "upload_failed",
-              attachment_last_error: errorMessage,
-            })
-            .eq("id", item.id);
+              return {
+                ...item,
+                local_attachment_id: recoveredId,
+              };
+            }),
+          );
+          setExpenses(hydrated);
+          localStorage.setItem(
+            toBookStorageKey(expenseBookTripId),
+            JSON.stringify(hydrated),
+          );
         }
       }
-    }
 
-    setExpenses((current) => {
-      const savedMap = new Map(
-        savedItems.map((item) => [String(item.id), item]),
-      );
-      const updated = current.map(
-        (item) => savedMap.get(String(item.id)) || item,
-      );
-      localStorage.setItem(
-        toBookStorageKey(expenseBookTripId),
-        JSON.stringify(updated),
-      );
-      return updated;
-    });
+      const completedItems = Array.from(finalItems.values());
+      const successCount = completedItems.filter(
+        (item) => item.attachment_status === "synced",
+      ).length;
+      const failedCount = filteredPendingItems.length - successCount;
+      const firstFailedError =
+        completedItems.find((item) => item.attachment_status !== "synced")
+          ?.attachment_last_error ?? "";
 
-    if (expenseBookTripId) {
-      const { data: refreshedData } = await supabase
-        .from("expenses")
-        .select("*")
-        .eq("trip_id", expenseBookTripId)
-        .is("deleted_at", null)
-        .order("created_at", { ascending: true });
-      if (refreshedData) {
-        const cachedItems = readStoredExpenses(
-          toBookStorageKey(expenseBookTripId),
-          expenseBookTripId,
-          currentCurrencyCode,
-        );
-        const cachedLocalAttachmentIds = new Map(
-          cachedItems.map((item) => [
-            String(item.id),
-            item.local_attachment_id || null,
-          ]),
-        );
-        const hydrated = await Promise.all(
-          (refreshedData as ExpenseItem[]).map(async (item) => {
-            const cachedLocalAttachmentId =
-              cachedLocalAttachmentIds.get(String(item.id)) || null;
-            const recoveredId =
-              item.local_attachment_id ||
-              cachedLocalAttachmentId ||
-              (shouldRecoverLocalAttachment(item)
-                ? await findLocalAttachmentIdByExpense(
-                    String(item.id),
-                    expenseBookTripId,
-                  )
-                : null);
-
-            return {
-              ...item,
-              local_attachment_id: recoveredId,
-            };
-          }),
-        );
-        setExpenses(hydrated);
+      if (successCount > 0) {
+        const now = new Date().toISOString();
         localStorage.setItem(
-          toBookStorageKey(expenseBookTripId),
-          JSON.stringify(hydrated),
+          `attachment_last_sync_${expenseBookTripId}`,
+          now,
         );
+        setLastAttachmentSyncStamp({ bookId: expenseBookTripId, value: now });
       }
+
+      if (stoppedForOffline) {
+        alert(
+          "網路已中斷，已停止照片自動重試。未同步照片會保留在本機；請連線後再次按「同步照片」。",
+        );
+      } else if (failedCount > 0) {
+        alert(
+          `照片同步完成 ${successCount} 筆，失敗 ${failedCount} 筆。已停止自動重試，失敗項目會保留本機照片；請稍後再次按「同步照片」。${firstFailedError ? `\n錯誤原因：${firstFailedError}` : ""}`,
+        );
+      } else {
+        alert(`照片同步完成，共 ${successCount} 筆。`);
+      }
+    } finally {
+      setAttachmentSyncAttempt(0);
+      setIsSyncingAttachments(false);
     }
-
-    const now = new Date().toISOString();
-    localStorage.setItem(`attachment_last_sync_${expenseBookTripId}`, now);
-    setLastAttachmentSyncStamp({ bookId: expenseBookTripId, value: now });
-    setIsSyncingAttachments(false);
-    const failedCount = savedItems.filter(
-      (item) => item.attachment_status !== "synced",
-    ).length;
-    const successCount = savedItems.length - failedCount;
-    const firstFailedError =
-      savedItems.find((item) => item.attachment_status !== "synced")
-        ?.attachment_last_error ?? "";
-
-    alert(
-      failedCount > 0
-        ? `照片同步完成 ${successCount} 筆，失敗 ${failedCount} 筆。失敗項目會保留本機照片供下次重試。${firstFailedError ? `\n錯誤原因：${firstFailedError}` : ""}`
-        : `照片同步完成，共 ${successCount} 筆。`,
-    );
   };
 
   const buildExpenseXlsx = async () => {
@@ -1881,6 +1984,7 @@ const pendingAttachmentCount = isUsingSharedExpenseBook
     setEditAttachmentFile,
     removedAttachmentExpenseIds: Array.from(removedAttachmentExpenseIds),
     isSyncingAttachments,
+    attachmentSyncAttempt,
     pendingDeleteId,
     activeCurrency,
     setActiveCurrency,

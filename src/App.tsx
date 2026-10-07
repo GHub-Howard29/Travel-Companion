@@ -455,6 +455,7 @@ function ConfiguredApp({
     setEditAttachmentFile,
     removedAttachmentExpenseIds,
     isSyncingAttachments,
+    attachmentSyncAttempt,
     pendingDeleteId,
     setActiveCurrency,
     formCurrency,
@@ -1568,6 +1569,7 @@ function ConfiguredApp({
                 pendingAttachmentCount={pendingAttachmentCount}
                 hasUnsyncedLocalExpenseAttachments={hasUnsyncedLocalExpenseAttachments}
                 isSyncingAttachments={isSyncingAttachments}
+                attachmentSyncAttempt={attachmentSyncAttempt}
                 newTitle={newTitle}
                 newAmount={newAmount}
                 newExpenseDate={newExpenseDate}

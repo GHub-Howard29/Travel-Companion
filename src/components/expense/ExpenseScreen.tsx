@@ -45,6 +45,7 @@ interface ExpenseScreenProps {
   pendingAttachmentCount: number;
   hasUnsyncedLocalExpenseAttachments: boolean;
   isSyncingAttachments: boolean;
+  attachmentSyncAttempt: number;
   newTitle: string;
   newAmount: string;
   newExpenseDate: string;
@@ -110,6 +111,7 @@ export default function ExpenseScreen({
   pendingAttachmentCount,
   hasUnsyncedLocalExpenseAttachments,
   isSyncingAttachments,
+  attachmentSyncAttempt,
   newTitle,
   newAmount,
   newExpenseDate,
@@ -338,7 +340,9 @@ export default function ExpenseScreen({
                 >
                   <UploadCloud size={14} />
                   {isSyncingAttachments
-                    ? "同步中..."
+                    ? attachmentSyncAttempt > 0
+                      ? `同步中 ${attachmentSyncAttempt}/5...`
+                      : "準備同步..."
                     : pendingAttachmentCount > 0
                       ? `同步照片 ${pendingAttachmentCount}`
                       : "照片已同步"}

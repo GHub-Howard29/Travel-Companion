@@ -14,6 +14,15 @@ export type VersionHistoryItem = {
 
 export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
+    version: "3.9.24",
+    date: "2026-10-07",
+    isMandatoryRelease: false,
+    notes: [
+      "PWA 啟動、回前景與恢復上線時主動檢查 Service Worker 更新。",
+      "修正新版 worker 已 active 但舊頁面仍由舊 controller 控制時的重試更新循環；V3.9.23 → V3.9.24 PWA 真實更新回歸已通過。",
+    ],
+  },
+  {
     version: "3.9.23",
     date: "2026-10-07",
     isMandatoryRelease: false,
