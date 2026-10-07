@@ -397,10 +397,12 @@ export default function ExpenseScreen({
                 ))}
               </select>
               <input
-                type="number"
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
                 placeholder="金額"
                 value={newAmount}
-                onChange={(e) => setNewAmount(e.target.value)}
+                onChange={(e) => setNewAmount(e.target.value.replace(/\D/g, ""))}
                 className="box-border w-full min-w-0 max-w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
                 required
               />
@@ -600,12 +602,14 @@ export default function ExpenseScreen({
                           ))}
                         </select>
                         <input
-                          type="number"
+                          type="text"
+                          inputMode="numeric"
+                          pattern="[0-9]*"
                           value={editDraft.amount}
                           onChange={(e) =>
                             setEditDraft((draft) => ({
                               ...draft,
-                              amount: e.target.value,
+                              amount: e.target.value.replace(/\D/g, ""),
                             }))
                           }
                           className="box-border w-full min-w-0 max-w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500"

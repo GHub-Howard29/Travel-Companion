@@ -11,6 +11,7 @@ import {
   findDefaultTrip,
   getDefaultActiveDay,
   isHistoricalTrip,
+  sortTripsByDateDesc,
 } from "../utils/tripHelpers";
 import { getParticipantAliasByEmail } from "../utils/participantUtils";
 import { toPersonalBookTripId } from "../storage/expenseStorage";
@@ -63,10 +64,27 @@ interface UseTripWorkspaceOptions {
   supabase: SupabaseClient;
 }
 
+const LAST_AUTHENTICATED_EMAIL_KEY = "travel_companion_last_authenticated_email";
+
+const readLastAuthenticatedEmail = (): string | null => {
+  const email = localStorage.getItem(LAST_AUTHENTICATED_EMAIL_KEY)?.trim().toLowerCase() ?? "";
+  return email || null;
+};
+
+const rememberAuthenticatedEmail = (email: string | null | undefined) => {
+  const normalizedEmail = email?.trim().toLowerCase() ?? "";
+  if (normalizedEmail) {
+    localStorage.setItem(LAST_AUTHENTICATED_EMAIL_KEY, normalizedEmail);
+  }
+};
+
 export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) {
+  const startsOffline = !navigator.onLine;
   const [userId, setUserId] = useState<string | null>(null);
-  const [userEmail, setUserEmail] = useState<string | null>(null);
-  const [isSessionReady, setIsSessionReady] = useState(false);
+  const [userEmail, setUserEmail] = useState<string | null>(() =>
+    startsOffline ? readLastAuthenticatedEmail() : null,
+  );
+  const [isSessionReady, setIsSessionReady] = useState(startsOffline);
   const [isOnline, setIsOnline] = useState(() => navigator.onLine);
   const [tripOptions, setTripOptions] = useState<TripMeta[]>([]);
   const [selectedTripId, setSelectedTripId] = useState<string>("");
@@ -189,8 +207,14 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
 
   useEffect(() => {
     void supabase.auth.getSession().then(({ data: { session } }) => {
-      setUserId(session?.user?.id || null);
-      setUserEmail(session?.user?.email || null);
+      if (session) {
+        setUserId(session.user.id || null);
+        setUserEmail(session.user.email || null);
+        rememberAuthenticatedEmail(session.user.email);
+      } else if (navigator.onLine) {
+        setUserId(null);
+        setUserEmail(null);
+      }
       setIsSessionReady(true);
     }).catch((error) => {
       console.warn("Failed to restore Supabase session", error);
@@ -199,9 +223,18 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUserId(session?.user?.id || null);
-      setUserEmail(session?.user?.email || null);
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (session) {
+        setUserId(session.user.id || null);
+        setUserEmail(session.user.email || null);
+        rememberAuthenticatedEmail(session.user.email);
+      } else if (event === "SIGNED_OUT" || navigator.onLine) {
+        setUserId(null);
+        setUserEmail(null);
+        if (event === "SIGNED_OUT") {
+          localStorage.removeItem(LAST_AUTHENTICATED_EMAIL_KEY);
+        }
+      }
       setIsSessionReady(true);
     });
 
@@ -291,31 +324,46 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
     if (!isSessionReady) return;
 
     let isActive = true;
-    const loadInitialWorkspace = async () => {
-      if (navigator.onLine) {
-        await reconcileTripWorkspace();
-        return;
-      }
 
-      const sortedTrips = await getTripMetas(supabase, getBasePath());
+    const loadStoredWorkspace = async () => {
+      const storedRecords = readStoredTripRecords();
+      const sortedTrips = storedRecords.length > 0
+        ? sortTripsByDateDesc(storedRecords.map((record) => record.meta))
+        : await getTripMetas(supabase, getBasePath(), []);
       if (!isActive) return;
+
       setTripOptions(sortedTrips);
       if (sortedTrips.length > 0) {
         const returnTripId = getExternalReturnTripId(sortedTrips.map((trip) => trip.id));
         const defaultTrip = sortedTrips.find((trip) => trip.id === returnTripId) ??
           findDefaultTrip(sortedTrips) ?? sortedTrips[0];
+        initialCloudRecordsRef.current = [];
         setSelectedTripId(defaultTrip.id);
       } else {
         setIsLoading(false);
       }
     };
 
-    void loadInitialWorkspace()
-      .catch((error) => {
-        if (!isActive) return;
-        console.error(error);
-        setIsLoading(false);
-      });
+    const loadInitialWorkspace = async () => {
+      if (!navigator.onLine) {
+        await loadStoredWorkspace();
+        return;
+      }
+
+      try {
+        await reconcileTripWorkspace();
+      } catch (error) {
+        console.warn("Initial cloud workspace load failed; using cached trip data", error);
+        setIsOnline(false);
+        await loadStoredWorkspace();
+      }
+    };
+
+    void loadInitialWorkspace().catch((error) => {
+      if (!isActive) return;
+      console.error(error);
+      setIsLoading(false);
+    });
 
     return () => {
       isActive = false;

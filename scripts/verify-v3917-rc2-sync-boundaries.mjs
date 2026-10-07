@@ -59,7 +59,11 @@ assert.doesNotMatch(
 assert.match(privateService, /export const getCloudPrivateChecklistId/);
 assert.match(privateHook, /travel-companion-private-checklist-items-/);
 assert.match(privateHook, /table: "checklist_items"/);
-assert.match(privateHook, /getCloudPrivateChecklist\(/);
+assert.match(
+  privateHook,
+  /scheduleRealtimeRefresh[\s\S]*syncLatestChecklist\(\)/,
+);
+assert.doesNotMatch(privateHook, /reloadPrivateChecklistFromCloud/);
 
 assert.match(
   tripRepository,

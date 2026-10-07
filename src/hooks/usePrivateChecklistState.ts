@@ -9,7 +9,6 @@ import {
   updatePrivateChecklistItem,
 } from "../services/privateChecklistService";
 import {
-  getCloudPrivateChecklist,
   getCloudPrivateChecklistId,
   syncPrivateChecklistWithCloud,
 } from "../services/privateChecklistCloudService";
@@ -118,42 +117,21 @@ export const usePrivateChecklistState = (
     applyCloudChecklist(latestChecklist);
   }, [applyCloudChecklist, canSyncToCloud, ownerEmail, supabase, tripId]);
 
-  const reloadPrivateChecklistFromCloud = useCallback(async () => {
-    if (!canSyncToCloud) {
-      return;
-    }
-
-    const cloudChecklist = await getCloudPrivateChecklist(
-      supabase,
-      tripId,
-      ownerEmail,
-    );
-    if (!cloudChecklist) return;
-
-    applyCloudChecklist(cloudChecklist);
-    setSyncStatus("synced");
-    setSyncError(null);
-  }, [
-    applyCloudChecklist,
-    canSyncToCloud,
-    ownerEmail,
-    supabase,
-    tripId,
-  ]);
-
   const scheduleRealtimeRefresh = useCallback(() => {
     if (realtimeRefreshTimerRef.current !== null) {
       window.clearTimeout(realtimeRefreshTimerRef.current);
     }
     realtimeRefreshTimerRef.current = window.setTimeout(() => {
       realtimeRefreshTimerRef.current = null;
-      void reloadPrivateChecklistFromCloud().catch((error) => {
-        console.warn(error);
-        setSyncStatus("error");
-        setSyncError("雲端同步失敗，資料已保存在本機。");
-      });
+      void syncLatestChecklist()
+        .then(() => setSyncStatus("synced"))
+        .catch((error) => {
+          console.warn(error);
+          setSyncStatus("error");
+          setSyncError("雲端同步失敗，資料已保存在本機。");
+        });
     }, 350);
-  }, [reloadPrivateChecklistFromCloud]);
+  }, [syncLatestChecklist]);
 
   useEffect(() => {
     if (!canSyncToCloud) {

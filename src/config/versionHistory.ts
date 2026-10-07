@@ -14,6 +14,16 @@ export type VersionHistoryItem = {
 
 export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
+    version: "3.9.22",
+    date: "2026-10-01",
+    isMandatoryRelease: false,
+    notes: [
+      "調整順序與時間重算分離，新增預覽新時間與到達／離開時間整合。",
+      "餐飲與其他卡片可自行決定是否納入交通計算，被略過卡片不會中斷前後有效地點的交通鏈。",
+      "修正 Trip 編輯版本基準、旅程刪除重試，以及套用新時間時交通時間／距離保存問題。",
+    ],
+  },
+  {
     version: "3.9.21",
     date: "2026-10-01",
     isMandatoryRelease: false,

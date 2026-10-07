@@ -426,10 +426,13 @@ function ConfiguredApp({
     Boolean(userEmail) &&
     !personalExpenseAlias;
 
-  const effectiveExpenseMembers =
-    !isUsingSharedExpenseBook && personalExpenseAlias
-      ? [personalExpenseAlias]
-      : expenseMembers;
+  const effectiveExpenseMembers = useMemo(
+    () =>
+      !isUsingSharedExpenseBook && personalExpenseAlias
+        ? [personalExpenseAlias]
+        : expenseMembers,
+    [expenseMembers, isUsingSharedExpenseBook, personalExpenseAlias],
+  );
   const effectiveDefaultPayerName = isUsingSharedExpenseBook
     ? currentUserParticipantName
     : personalExpenseAlias;
@@ -504,12 +507,9 @@ function ConfiguredApp({
   });
 
   const applyTripDefaults = useCallback((trip: TripMeta) => {
-    if (trip.participants.length > 0) {
-      setNewPayer(trip.participants[0]);
-    }
     setActiveCurrency("ALL");
     setFormCurrency(trip.currencyConfig.code);
-  }, [setActiveCurrency, setFormCurrency, setNewPayer]);
+  }, [setActiveCurrency, setFormCurrency]);
 
   const getBasePath = () => {
     const path = window.location.pathname;
@@ -610,11 +610,37 @@ function ConfiguredApp({
     applyTripDefaults(selectedTripMeta);
   }, [applyTripDefaults, selectedTripMeta]);
 
+  const payerDefaultScopeRef = useRef("");
+
   useEffect(() => {
-    if (effectiveDefaultPayerName) {
-      setNewPayer(effectiveDefaultPayerName);
+    if (!expenseBookTripId) {
+      payerDefaultScopeRef.current = "";
+      return;
     }
-  }, [effectiveDefaultPayerName, setNewPayer]);
+
+    const payerScope = `${expenseBookTripId}:${isUsingSharedExpenseBook ? "shared" : "personal"}`;
+    const fallbackPayer =
+      effectiveDefaultPayerName || effectiveExpenseMembers[0] || userEmail || "";
+
+    if (payerDefaultScopeRef.current !== payerScope) {
+      payerDefaultScopeRef.current = payerScope;
+      setNewPayer(fallbackPayer);
+      return;
+    }
+
+    setNewPayer((currentPayer) =>
+      currentPayer && effectiveExpenseMembers.includes(currentPayer)
+        ? currentPayer
+        : fallbackPayer,
+    );
+  }, [
+    effectiveDefaultPayerName,
+    effectiveExpenseMembers,
+    expenseBookTripId,
+    isUsingSharedExpenseBook,
+    setNewPayer,
+    userEmail,
+  ]);
 
   const handleScreenSelect = (item: SidebarItemConfig) => {
     if (isAuthRequiredTravelTool(item.type) && !userEmail) {
