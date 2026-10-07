@@ -129,16 +129,17 @@ const waitForServiceWorkerHandoff = (
       resolve(state);
     };
 
-    const checkForControlledPage = () => {
-      if (getState() === "controlled") finish("controlled");
+    const checkForHandoff = () => {
+      const state = getState();
+      if (state) finish(state);
     };
-    const handleControllerChange = () => checkForControlledPage();
-    const handleWorkerStateChange = () => checkForControlledPage();
+    const handleControllerChange = () => checkForHandoff();
+    const handleWorkerStateChange = () => checkForHandoff();
 
     navigator.serviceWorker.addEventListener("controllerchange", handleControllerChange);
     expectedWorker?.addEventListener("statechange", handleWorkerStateChange);
-    readinessCheckId = window.setInterval(checkForControlledPage, 100);
-    checkForControlledPage();
+    readinessCheckId = window.setInterval(checkForHandoff, 100);
+    checkForHandoff();
 
     timeoutId = window.setTimeout(() => {
       finish(getState() ?? "timeout");
@@ -148,10 +149,20 @@ const waitForServiceWorkerHandoff = (
 
 const waitForUpdateWorkerReady = (
   registration: ServiceWorkerRegistration,
+  previousController: ServiceWorker | null,
   isWorkerReady: () => boolean,
   timeoutMs = 30000,
 ) => {
-  if (isWorkerReady() || registration.waiting) return Promise.resolve(true);
+  const hasActivatedReplacement = () =>
+    Boolean(
+      registration.active &&
+      registration.active !== previousController &&
+      registration.active.state === "activated",
+    );
+
+  if (isWorkerReady() || registration.waiting || hasActivatedReplacement()) {
+    return Promise.resolve(true);
+  }
 
   return new Promise<boolean>((resolve) => {
     let settled = false;
@@ -169,7 +180,9 @@ const waitForUpdateWorkerReady = (
       resolve(ready);
     };
     const checkReady = () => {
-      if (isWorkerReady() || registration.waiting) finish(true);
+      if (isWorkerReady() || registration.waiting || hasActivatedReplacement()) {
+        finish(true);
+      }
     };
     const handleStateChange = () => {
       checkReady();
@@ -250,12 +263,29 @@ export const useAppUpdate = () => {
   const updateInProgressRef = useRef(false);
   const safeReloadWorkerRef = useRef<ServiceWorker | null>(null);
   const reloadStartedRef = useRef(false);
+  const lastWorkerUpdateCheckAtRef = useRef(0);
 
   const reloadOnce = useCallback(() => {
     if (reloadStartedRef.current) return;
     reloadStartedRef.current = true;
     window.location.reload();
   }, []);
+
+  const requestServiceWorkerUpdate = useCallback(
+    (registration?: ServiceWorkerRegistration | null, force = false) => {
+      const targetRegistration = registration ?? registrationRef.current;
+      if (!targetRegistration || !navigator.onLine) return;
+
+      const now = Date.now();
+      if (!force && now - lastWorkerUpdateCheckAtRef.current < 30000) return;
+      lastWorkerUpdateCheckAtRef.current = now;
+
+      void targetRegistration.update().catch((error) => {
+        console.warn("PWA Service Worker update check failed.", error);
+      });
+    },
+    [],
+  );
 
   const checkVersionPolicy = useCallback(async () => {
     const metadata = await fetchLatestVersionMetadata();
@@ -278,12 +308,14 @@ export const useAppUpdate = () => {
   useEffect(() => {
     const initialCheckId = window.setTimeout(() => void checkVersionPolicy(), 0);
     const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible") void checkVersionPolicy();
+      if (document.visibilityState !== "visible") return;
+      void checkVersionPolicy();
+      requestServiceWorkerUpdate();
     };
     const handleOnline = () => {
       setUpdateError(null);
       void checkVersionPolicy();
-      void registrationRef.current?.update();
+      requestServiceWorkerUpdate(undefined, true);
     };
     const handleOffline = () => {
       setPolicy((current) => {
@@ -302,13 +334,14 @@ export const useAppUpdate = () => {
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
     };
-  }, [checkVersionPolicy]);
+  }, [checkVersionPolicy, requestServiceWorkerUpdate]);
 
   useEffect(() => {
     updateServiceWorkerRef.current = registerSW({
       immediate: true,
       onRegisteredSW(_serviceWorkerUrl, registration) {
         registrationRef.current = registration ?? null;
+        requestServiceWorkerUpdate(registration ?? null, true);
       },
       async onNeedRefresh() {
         workerReadyRef.current = true;
@@ -324,7 +357,7 @@ export const useAppUpdate = () => {
         console.warn("PWA Service Worker registration failed.", error);
       },
     });
-  }, [checkVersionPolicy]);
+  }, [checkVersionPolicy, requestServiceWorkerUpdate]);
 
   const update = useCallback(async (beforeUpdate?: () => Promise<void>) => {
     if (updateInProgressRef.current) return;
@@ -342,18 +375,6 @@ export const useAppUpdate = () => {
         setUpdateError("目前離線，需要網路才能完成更新。");
         setUpdatePhase("idle");
         return;
-      }
-
-      if (beforeUpdate) {
-        setUpdatePhase("syncing-data");
-        try {
-          await beforeUpdate();
-        } catch (error) {
-          console.warn("App update data preflight failed.", error);
-          setUpdateError("行程資料同步尚未完成，請稍後重試更新；目前資料不會被覆蓋。");
-          setUpdatePhase("idle");
-          return;
-        }
       }
 
       if (hasPreparedUpdate && updatePhase === "ready-to-reload") {
@@ -376,6 +397,18 @@ export const useAppUpdate = () => {
         return;
       }
 
+      if (beforeUpdate) {
+        setUpdatePhase("syncing-data");
+        try {
+          await beforeUpdate();
+        } catch (error) {
+          console.warn("App update data preflight failed.", error);
+          setUpdateError("行程資料同步尚未完成，請稍後重試更新；目前資料不會被覆蓋。");
+          setUpdatePhase("idle");
+          return;
+        }
+      }
+
       setUpdatePhase("checking-metadata");
       const refreshedPolicy = await checkVersionPolicy();
       if (refreshedPolicy && !refreshedPolicy.hasUpdate) {
@@ -391,6 +424,7 @@ export const useAppUpdate = () => {
       await registration.update();
       const workerReady = await waitForUpdateWorkerReady(
         registration,
+        previousController,
         () => workerReadyRef.current,
       );
       if (!workerReady) {
@@ -399,6 +433,20 @@ export const useAppUpdate = () => {
         return;
       }
       setHasPreparedUpdate(true);
+
+      const activatedReplacement =
+        registration.active &&
+        registration.active !== previousController &&
+        registration.active.state === "activated" &&
+        !registration.waiting &&
+        !registration.installing;
+      if (activatedReplacement) {
+        safeReloadWorkerRef.current = registration.active;
+        setUpdateError(null);
+        setUpdatePhase("ready-to-reload");
+        return;
+      }
+
       const updateServiceWorker = updateServiceWorkerRef.current;
       if (!updateServiceWorker) {
         setUpdateError("新版已偵測到，但更新處理器尚未就緒，請稍後再試。");

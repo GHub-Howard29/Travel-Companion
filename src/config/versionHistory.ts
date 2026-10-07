@@ -14,6 +14,15 @@ export type VersionHistoryItem = {
 
 export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
+    version: "3.9.23",
+    date: "2026-10-07",
+    isMandatoryRelease: false,
+    notes: [
+      "修正帳本拍照返回後代記帳人被重設、私人清單同步回復舊狀態與多位數金額輸入問題。",
+      "改善離線冷啟動，PWA 在開啟前已斷網時可直接使用已載入的本機行程與最後驗證使用者。",
+    ],
+  },
+  {
     version: "3.9.22",
     date: "2026-10-01",
     isMandatoryRelease: false,
