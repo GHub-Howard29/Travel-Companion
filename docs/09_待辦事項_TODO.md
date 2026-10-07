@@ -2,7 +2,7 @@
 
 > 本文件只保留未完成、待補驗或待評估工作；不累積 `[x]` 歷史。
 >
-> 目前狀態以《[14_專案現況總覽](14_專案現況總覽.md)》為準。最後整理：2026-09-30。
+> 目前狀態以《[14_專案現況總覽](14_專案現況總覽.md)》為準。最後整理：2026-10-07。
 
 ## 後續候選版本
 
@@ -16,8 +16,10 @@
 - [x] V3.9.19：2026-09-30 正式發布完成。長說明 3 行展開／收合、每日標題與卡片排版、登入與功能提示漸進揭露均已完成；完整 production build、lint、PWA、browser-security 與文件驗證通過。正式 source commit `c5a87a3`、annotated tag `v3.9.19` 已推送，正式站 metadata／UI 均為 3.9.19。
 - [x] V3.9.20：2026-10-01 正式發布完成。其他資訊自訂子類別、草稿取消／完成、恢復預設紅字提示、統一取消按鈕樣式與手機編輯 viewport 對齊均已完成；完整 build、PWA、browser-security 與 Android PWA RC 功能驗收通過。正式 tag `v3.9.20`、GitHub Pages `2bf8a51`；RC 更新時發現的重新載入白畫面問題依 Product Owner 決策移交 V3.9.21。
 - [x] V3.9.21：2026-10-01 正式發布完成。更新流程改為單次 skipWaiting，等待新版 Service Worker active／controller 接管狀態確認後才允許 reload，並維持 reload 去重與更新中按鈕鎖定；完整 production build、PWA、browser-security 與更新競態 regression 通過。V3.9.20 → V3.9.21 仍由舊版更新程式執行，因此新版流程的跨版本 Android PWA 實機驗證延後至 V3.9.21 → V3.9.22 RC。
-- [x] V3.9.22：2026-10-01 正式發布完成。排序與時間重算已分離，支援「預覽新時間」、到達／離開雙欄位、交通節點略過與套用後交通時間／距離自動保存；Trip master 編輯改用 authoritative cloud snapshot 與同一 `cloudUpdatedAt` optimistic-lock 基準。RC3 實機已驗證歷史 Trip 日期修改、Trip 刪除與排序後交通自動更新／保存均通過。刪除失敗根因確認為 V3.9.17 migration 覆寫 `private.tc_broadcast_trip_data_revision()` 時漏掉 DELETE tombstone 分支，hotfix commit `0a73149` 已推送，正式 Supabase migration `20261001143042_v3922_restore_trip_delete_tombstone` 已套用並驗證刪除通過。完整 production build、PWA、browser-security、TypeScript、ESLint 與 RC3 regression 均通過。唯一剩餘跨版本驗證債為「更新前同步 Trip → Service Worker 接管」，移交 V3.10.1 RC 以 V3.9.22 → V3.10.1 實機驗證。
-- [ ] V3.10.1：建立完整 build 的驗證群組與耗時基線，整併驗證入口與失敗報告，不縮減 release build；既有 V3.9.3 總啟動量測已確認存在，本版不重複新增程式內埋點。RC 階段需以 V3.9.22 正式版 → V3.10.1 驗證 PWA 更新前同步：遠端 Trip 有未同步 revision 時，應先完成資料同步，再進 Service Worker 接管／reload，不重複下載、不白畫面、不需重啟 App。
+- [x] V3.9.22：2026-10-01 正式發布完成。排序與時間重算已分離，支援「預覽新時間」、到達／離開雙欄位、交通節點略過與套用後交通時間／距離自動保存；Trip master 編輯改用 authoritative cloud snapshot 與同一 `cloudUpdatedAt` optimistic-lock 基準。RC3 實機已驗證歷史 Trip 日期修改、Trip 刪除與排序後交通自動更新／保存均通過。刪除失敗根因確認為 V3.9.17 migration 覆寫 `private.tc_broadcast_trip_data_revision()` 時漏掉 DELETE tombstone 分支，hotfix commit `0a73149` 已推送，正式 Supabase migration `20261001143042_v3922_restore_trip_delete_tombstone` 已套用並驗證刪除通過。完整 production build、PWA、browser-security、TypeScript、ESLint 與 RC3 regression 均通過。
+- [x] V3.9.23：2026-10-07 依 Product Owner 指示跳過 RC 直接正式部署。修正帳本拍照返回後代記帳人重設、私人清單 Realtime stale snapshot 覆蓋 pending、帳本金額偶發無法輸入四位數以上，以及 PWA 長時間未執行後「先斷網再冷啟動」白畫面。Chrome 實際驗證帳本付款人、私人清單、8 位數金額與啟動前已 Offline 的冷啟動均通過。
+- [x] V3.9.24：2026-10-07 依 Product Owner 指示直接正式部署。PWA 註冊完成／回到前景／恢復上線時主動檢查 Service Worker；補齊新版 worker 已 active、舊頁面仍由舊 controller 控制的 handoff 狀態，避免「等待新版接管 → 重試更新」循環。專項 regression、完整 production build 與瀏覽器 V3.9.23 → V3.9.24 跨版本模擬均通過；source `c7ada6c`、GitHub Pages `8b3b060`。
+- [ ] V3.10.1：建立完整 build 的驗證群組與耗時基線，整併驗證入口與失敗報告，不縮減 release build；既有 V3.9.3 總啟動量測已確認存在，本版不重複新增程式內埋點。RC 階段可補做 Android 安裝型 PWA 真實跨版本更新／更新前同步實機回歸：遠端 Trip 有未同步 revision 時，應先完成資料同步，再進 Service Worker 接管／reload，不重複下載、不白畫面、不需重啟 App。
 - [ ] V3.10.2：沿用既有總啟動量測，分段量測離線冷啟動約 30 秒的 Service Worker、navigation、session、Trip 快取、localStorage、IndexedDB 與首個可操作畫面瓶頸，再依證據決定是否修正；不新增遠端 telemetry。
 - [ ] V3.10.3：以 loopback fixture 與瀏覽器／viewport 模擬建立零費用 Playwright 響應式回歸基礎。
 - [ ] V3.10.4：整理照片功能模組、型別邊界與按需載入，不新增圖庫來源。
