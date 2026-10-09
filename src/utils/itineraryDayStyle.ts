@@ -16,7 +16,7 @@ type ItineraryDayButtonState = {
 };
 
 /**
- * 日期按鈕配色規則：三天以下行程全白；較長行程保留首日／中間日底色，
+ * 日期按鈕配色規則：少於三天行程全白；三天以上行程保留首日／中間日底色，
  * 末日白底。當天或選取只增加細紅框，不改變原有底色。
  */
 export const getItineraryDayButtonClasses = (
@@ -25,7 +25,7 @@ export const getItineraryDayButtonClasses = (
   { isActive, isToday }: ItineraryDayButtonState,
 ): string => {
   const tone = getItineraryDayTone(days, index);
-  const isShortTrip = days.length <= 3;
+  const isShortTrip = days.length < 3;
   const baseClass = isShortTrip
     ? "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
     : {

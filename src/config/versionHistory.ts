@@ -14,6 +14,16 @@ export type VersionHistoryItem = {
 
 export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
+    version: "3.9.28",
+    date: "2026-10-10",
+    isMandatoryRelease: false,
+    notes: [
+      "調整每日行程日期按鈕配色：四天以上行程保留首日／中間日原有底色，末日白底。",
+      "當天或選取日期只增加細紅框，不改變原有底色；三天以下行程日期按鈕統一白底。",
+      "最低支援版本維持 3.9.27，沿用既有 PWA 更新接管與離線同步規則。",
+    ],
+  },
+  {
     version: "3.9.27",
     date: "2026-10-09",
     isMandatoryRelease: true,
