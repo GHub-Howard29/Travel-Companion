@@ -12,6 +12,7 @@ interface CloudTripRow {
   id: string;
   title: string;
   departure_date: string;
+  is_public: boolean;
   participants: unknown;
   currency_config: unknown;
   sidebar_config: unknown;
@@ -35,16 +36,17 @@ const toCloudTripInsert = (record: StoredTripRecord) => ({
   id: record.meta.id,
   title: record.meta.title,
   departure_date: record.meta.departureDate,
+  is_public: record.meta.isPublic ?? record.detail.isPublic,
   participants: record.meta.participants,
   currency_config: record.meta.currencyConfig,
   sidebar_config: record.detail.sidebarConfig,
   content: {
-    ...sanitizeItineraryCoverPhotos(removeExpiredTravelEstimates(record.detail.content)),
+    ...Object.fromEntries(Object.entries(sanitizeItineraryCoverPhotos(removeExpiredTravelEstimates(record.detail.content)))
+      .filter(([key]) => key !== "participantEmailMap" && key !== "otherInfoItems")),
     mode: record.meta.mode ?? "guided",
-    participantEmailMap:
-      record.meta.participantEmailMap ??
-      record.detail.content.participantEmailMap ??
-      {},
+    ...(record.meta.participantEmailMap !== undefined || record.detail.content.participantEmailMap !== undefined
+      ? { participantEmailMap: record.meta.participantEmailMap ?? record.detail.content.participantEmailMap }
+      : {}),
   },
 });
 
@@ -194,6 +196,7 @@ const toTripRecord = (row: CloudTripRow): StoredTripRecord | null => {
     departureDate: row.departure_date,
     dayCount: row.content.days.length,
     mode,
+    isPublic: row.is_public,
     participants,
     participantEmailMap,
     currencyConfig: row.currency_config,
@@ -202,7 +205,7 @@ const toTripRecord = (row: CloudTripRow): StoredTripRecord | null => {
     id: row.id,
     title: row.title,
     departureDate: row.departure_date,
-    isPublic: true,
+    isPublic: row.is_public,
     sidebarConfig: row.sidebar_config,
     content: {
       ...sanitizeItineraryCoverPhotos(removeExpiredTravelEstimates(row.content)),
@@ -217,6 +220,32 @@ const toTripRecord = (row: CloudTripRow): StoredTripRecord | null => {
     editorEmails: [],
     updatedAt: row.updated_at,
     cloudUpdatedAt: row.updated_at,
+  };
+};
+
+/** A private RPC supplies participant email mappings only to authorized Trip editors.
+ * Guest/public Trip rows never contain this map in their content JSON.
+ */
+const hydratePrivateParticipantEmails = async (
+  supabase: SupabaseClient,
+  record: StoredTripRecord | null,
+): Promise<StoredTripRecord | null> => {
+  if (!record) return null;
+  const { data: sessionData } = await supabase.auth.getSession();
+  if (!sessionData.session) return record;
+  const { data, error } = await supabase.rpc("tc_read_trip_participant_email_map", {
+    target_trip_id: record.meta.id,
+  });
+  if (error) throw error;
+  if (data === null) return record;
+  const mapping = toParticipantEmailMap(data);
+  return {
+    ...record,
+    meta: { ...record.meta, participantEmailMap: mapping },
+    detail: {
+      ...record.detail,
+      content: { ...record.detail.content, participantEmailMap: mapping },
+    },
   };
 };
 
@@ -241,15 +270,16 @@ export const getCloudTripRecordsStrict = async (
   const { data, error } = await supabase
     .from("trips")
     .select(
-      "id, title, departure_date, participants, currency_config, sidebar_config, content, updated_at",
+      "id, title, departure_date, is_public, participants, currency_config, sidebar_config, content, updated_at",
     )
     .order("departure_date", { ascending: false });
 
   if (error) throw error;
 
-  return ((data ?? []) as CloudTripRow[])
+  const hydrated = await Promise.all(((data ?? []) as CloudTripRow[])
     .map(toTripRecord)
-    .filter((record): record is StoredTripRecord => Boolean(record));
+    .map((record) => hydratePrivateParticipantEmails(supabase, record)));
+  return hydrated.filter((record): record is StoredTripRecord => Boolean(record));
 };
 
 export const getCloudTripRecord = async (
@@ -261,13 +291,13 @@ export const getCloudTripRecord = async (
   const { data, error } = await supabase
     .from("trips")
     .select(
-      "id, title, departure_date, participants, currency_config, sidebar_config, content, updated_at",
+      "id, title, departure_date, is_public, participants, currency_config, sidebar_config, content, updated_at",
     )
     .eq("id", tripId)
     .maybeSingle();
 
   if (error) throw error;
-  return data ? toTripRecord(data as CloudTripRow) : null;
+  return hydratePrivateParticipantEmails(supabase, data ? toTripRecord(data as CloudTripRow) : null);
 };
 
 export const getTripDeletionTombstones = async (
@@ -319,7 +349,7 @@ export const upsertCloudTripRecord = async (
     .from("trips")
     .upsert(toCloudTripInsert(record), { onConflict: "id" })
     .select(
-      "id, title, departure_date, participants, currency_config, sidebar_config, content, updated_at",
+      "id, title, departure_date, is_public, participants, currency_config, sidebar_config, content, updated_at",
     )
     .single();
 
@@ -328,7 +358,7 @@ export const upsertCloudTripRecord = async (
     return null;
   }
 
-  return toTripRecord(data as CloudTripRow);
+  return hydratePrivateParticipantEmails(supabase, toTripRecord(data as CloudTripRow));
 };
 
 export const updateCloudTripRecord = async (
@@ -342,14 +372,14 @@ export const updateCloudTripRecord = async (
     .eq("id", record.meta.id)
     .eq("updated_at", expectedUpdatedAt)
     .select(
-      "id, title, departure_date, participants, currency_config, sidebar_config, content, updated_at",
+      "id, title, departure_date, is_public, participants, currency_config, sidebar_config, content, updated_at",
     )
     .maybeSingle();
 
   if (error) throw error;
   if (!data) throw new TripVersionConflictError();
 
-  const updatedRecord = toTripRecord(data as CloudTripRow);
+  const updatedRecord = await hydratePrivateParticipantEmails(supabase, toTripRecord(data as CloudTripRow));
   if (!updatedRecord) {
     throw new Error("雲端回傳的旅程資料格式不正確");
   }
@@ -386,13 +416,13 @@ export const insertCloudTripRecord = async (
     .from("trips")
     .insert(toCloudTripInsert(record))
     .select(
-      "id, title, departure_date, participants, currency_config, sidebar_config, content, updated_at",
+      "id, title, departure_date, is_public, participants, currency_config, sidebar_config, content, updated_at",
     )
     .single();
 
   if (error) throw error;
 
-  const insertedRecord = toTripRecord(data as CloudTripRow);
+  const insertedRecord = await hydratePrivateParticipantEmails(supabase, toTripRecord(data as CloudTripRow));
   if (!insertedRecord) {
     throw new Error("雲端回傳的旅程資料格式不正確");
   }

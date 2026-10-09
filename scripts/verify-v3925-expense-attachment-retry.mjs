@@ -3,7 +3,6 @@ import { readFileSync } from "node:fs";
 
 const hook = readFileSync("src/hooks/useExpenseBook.ts", "utf8");
 const screen = readFileSync("src/components/expense/ExpenseScreen.tsx", "utf8");
-const appVersion = readFileSync("src/config/appVersion.ts", "utf8");
 
 assert.match(
   hook,
@@ -65,10 +64,4 @@ assert.match(
   "同步按鈕應顯示目前第幾次嘗試",
 );
 
-assert.match(
-  appVersion,
-  /APP_VERSION = "3\.9\.25"/,
-  "V3.9.25 實作必須使用 3.9.25 版本號",
-);
-
-console.log("V3.9.25 帳本照片有限自動重試與離線停止 regression 通過。");
+console.log("帳本照片有限自動重試與離線停止 regression 通過。");

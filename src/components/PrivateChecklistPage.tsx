@@ -515,7 +515,7 @@ export const PrivateChecklistPage = ({
             const nextItem = displayItems[itemIndex + 1];
 
             return (
-              <SortableCard id={item.id} disabled={!canEditPrivateChecklist || !isManageMode || isEditing}>
+              <SortableCard key={item.id} id={item.id} disabled={!canEditPrivateChecklist || !isManageMode || isEditing}>
               {(dragHandle) => <div className="flex items-start gap-3 p-4">
                 <button
                   type="button"

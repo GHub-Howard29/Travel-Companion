@@ -55,6 +55,7 @@ import { syncPrivateChecklistWithCloud } from "./services/privateChecklistCloudS
 import { syncCloudSharedChecklistSeedItems } from "./services/sharedChecklistCloudService";
 import { writeStoredOtherInfoItems } from "./storage/otherInfoStorage";
 import { readStoredTripRecords } from "./storage/tripStorage";
+import { clearSharedTripDataAfterAccessLoss } from "./storage/sharedTripDataStorage";
 import {
   readPersonalExpenseAlias,
   writePersonalExpenseAlias,
@@ -265,8 +266,11 @@ function ConfiguredApp({
     setUserId,
     setUserEmail,
     tripOptions,
+    setTripOptions,
     selectedTripId,
+    setSelectedTripId,
     currentTrip,
+    setCurrentTrip,
     isLoading,
     setIsLoading,
     currentScreen,
@@ -305,6 +309,7 @@ function ConfiguredApp({
     superAdminEmails,
     defaultParticipantProfiles,
     refreshDefaultParticipantProfiles,
+    invalidateWorkspaceAccess,
   } = useTripWorkspace({ supabase });
   const {
     isSystemDeveloper,
@@ -581,7 +586,18 @@ function ConfiguredApp({
   };
 
   const handleLogout = async () => {
+    const previousEmail = userEmail ?? "";
+    invalidateWorkspaceAccess();
     await supabase.auth.signOut();
+    // V3.9.26: never leave cloud-backed private Trip data available to a
+    // different user of the same device after an explicit logout.
+    for (const record of readStoredTripRecords()) {
+      if (!record.cloudUpdatedAt) continue;
+      await clearSharedTripDataAfterAccessLoss(record.meta.id, previousEmail, true);
+    }
+    setCurrentTrip(null);
+    setSelectedTripId("");
+    setTripOptions([]);
     Object.keys(localStorage).forEach((key) => {
       if (key.startsWith("auth_") || key.startsWith("admin_profile_")) {
         localStorage.removeItem(key);
@@ -734,6 +750,7 @@ function ConfiguredApp({
             currentTrip?.content.participantEmailMap ??
             input.participantEmailMap,
           editorEmails: currentTripEditorEmails,
+          isPublic: selectedTripMeta?.isPublic ?? currentTrip?.isPublic,
         };
 
     try {
@@ -1183,12 +1200,12 @@ function ConfiguredApp({
   }, [currentScreenType, setCurrentScreen, userEmail]);
 
   useEffect(() => {
-    if (!currentTrip || !isOnline || !supabaseUrl?.trim()) return;
+    if (!currentTrip || !isOnline || !supabase) return;
 
-    void syncItineraryCoverOfflineCache(currentTrip, supabaseUrl).catch((error) => {
+    void syncItineraryCoverOfflineCache(currentTrip, supabase).catch((error) => {
       console.warn("Failed to sync itinerary covers for offline use", error);
     });
-  }, [currentTrip, isOnline]);
+  }, [currentTrip, isOnline, supabase]);
 
   const handleAppUpdate = useCallback(() => {
     void update(async () => {

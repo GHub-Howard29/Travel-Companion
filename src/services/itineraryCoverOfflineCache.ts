@@ -1,4 +1,6 @@
 import type { TripDetail } from "../types";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { ITINERARY_COVER_BUCKET } from "../constants/appConstants";
 import { MAX_ITINERARY_COVER_BYTES } from "../constants/appConstants";
 import {
   getItineraryCoverPaths,
@@ -43,13 +45,14 @@ const isCacheableCoverResponse = (response: Response): boolean => {
 
 export const syncItineraryCoverOfflineCache = async (
   trip: TripDetail,
-  supabaseUrl: string,
+  supabase: SupabaseClient,
 ): Promise<void> => {
   if (!navigator.onLine || !("caches" in window)) return;
 
-  const desiredUrls = [...getItineraryCoverPaths(trip)].map((path) =>
-    getItineraryCoverPublicUrl(supabaseUrl, path),
-  );
+  const publicUrl = supabase.storage.from(ITINERARY_COVER_BUCKET).getPublicUrl("_").data.publicUrl;
+  const storageBaseUrl = publicUrl.split("/storage/v1/object/public/")[0];
+  const paths = [...getItineraryCoverPaths(trip)];
+  const desiredUrls = paths.map((path) => getItineraryCoverPublicUrl(storageBaseUrl, path));
   const desiredSet = new Set(desiredUrls);
   const previousUrls = readManifest(trip.id);
   const cache = await caches.open(ITINERARY_COVER_CACHE_NAME);
@@ -60,11 +63,13 @@ export const syncItineraryCoverOfflineCache = async (
       .map((url) => cache.delete(url)),
   );
 
-  for (const url of desiredUrls) {
+  for (const [index, url] of desiredUrls.entries()) {
     if (await cache.match(url)) continue;
 
     try {
-      const response = await fetch(url, {
+      const { data, error } = await supabase.storage.from(ITINERARY_COVER_BUCKET).createSignedUrl(paths[index], 3600);
+      if (error || !data?.signedUrl) continue;
+      const response = await fetch(data.signedUrl, {
         cache: "no-store",
         credentials: "omit",
         redirect: "follow",

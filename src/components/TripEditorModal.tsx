@@ -140,6 +140,7 @@ export const TripEditorModal = ({
   const [tripMode, setTripMode] = useState<TripMode>(() =>
     getInitialTripMode(trip, tripDetail),
   );
+  const [isPublic, setIsPublic] = useState(mode === "create" ? false : (trip?.isPublic ?? tripDetail?.isPublic ?? true));
   const [participantAssignments, setParticipantAssignments] = useState(
     toParticipantAssignmentText(
       trip?.participants ?? [],
@@ -250,6 +251,7 @@ export const TripEditorModal = ({
       mode: tripMode,
       participants: nextParticipants,
       participantEmailMap,
+      ...(canManageEditors ? { isPublic } : {}),
       editorEmails: nextEditorEmails,
       currencyCode,
       currencySymbol,
@@ -494,6 +496,16 @@ export const TripEditorModal = ({
             aria-label="顯示農曆日期"
           />
         </label>
+
+        {canManageEditors && (
+          <label className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 px-3 py-2.5">
+            <span>
+              <span className="block text-sm font-bold text-slate-700">公開行程</span>
+              <span className="mt-0.5 block text-xs text-slate-500">公開後所有使用者及訪客可閱覽；不公開時僅管理員和本行程受邀編輯者可閱覽。</span>
+            </span>
+            <input type="checkbox" role="switch" checked={isPublic} onChange={(event) => setIsPublic(event.target.checked)} className="h-5 w-9 shrink-0 accent-emerald-700" aria-label="公開行程" />
+          </label>
+        )}
 
         <label className="block">
           <span className="text-xs font-bold text-slate-500">旅程型態</span>

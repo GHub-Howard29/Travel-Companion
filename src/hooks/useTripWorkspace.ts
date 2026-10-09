@@ -44,6 +44,7 @@ import {
   writeTripCacheState,
 } from "../storage/tripStorage";
 import { removeRestrictedStoredOtherInfoItems } from "../storage/otherInfoStorage";
+import { upsertCloudOtherInfoItems } from "../services/otherInfoCloudService";
 import {
   getCloudTripRecord,
   getCloudTripRecordsStrict,
@@ -51,6 +52,7 @@ import {
 } from "../services/tripCloudService";
 import { decideTripReconciliation } from "../services/tripReconciliation";
 import { clearSharedTripDataAfterAccessLoss } from "../storage/sharedTripDataStorage";
+import { isProtectedSeedTripId } from "../constants/appConstants";
 import { getUnusedItineraryCoverPaths } from "../utils/itineraryCoverPhoto";
 import { scheduleItineraryCoverDeletion } from "../services/itineraryCoverPhotoService";
 import { clearItineraryCoverOfflineCache } from "../services/itineraryCoverOfflineCache";
@@ -110,6 +112,13 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
   const userEmailRef = useRef(userEmail);
   const activeDayRef = useRef(activeDay);
   const currentTripIdRef = useRef<string | null>(null);
+  // Invalidate stale async responses before an account transition or logout.
+  const workspaceEpochRef = useRef(0);
+  const invalidateWorkspaceAccess = useCallback(() => {
+    workspaceEpochRef.current += 1;
+    tripLoadRevisionRef.current += 1;
+    initialCloudRecordsRef.current = null;
+  }, []);
 
   useEffect(() => {
     selectedTripIdRef.current = selectedTripId;
@@ -224,6 +233,11 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
+      const nextEmail = session?.user.email?.trim().toLowerCase() ?? null;
+      if (event === "SIGNED_OUT" || (userEmailRef.current && nextEmail !== userEmailRef.current)) {
+        invalidateWorkspaceAccess();
+      }
+      userEmailRef.current = nextEmail;
       if (session) {
         setUserId(session.user.id || null);
         setUserEmail(session.user.email || null);
@@ -239,7 +253,7 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
     });
 
     return () => subscription.unsubscribe();
-  }, [supabase]);
+  }, [supabase, invalidateWorkspaceAccess]);
 
   useEffect(() => {
     const handleOnline = () => setIsOnline(true);
@@ -252,15 +266,40 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
     };
   }, []);
 
+  // A second tab can revoke a Trip and remove its local copy. Do not keep
+  // rendering the old in-memory private content after the storage change.
+  useEffect(() => {
+    const onTripCacheChanged = (event: StorageEvent) => {
+      if (event.key !== "travel_companion_custom_trips") return;
+      const selected = selectedTripIdRef.current;
+      if (!selected) return;
+      const stillCached = readStoredTripRecords().some((record) => record.meta.id === selected);
+      if (stillCached) return;
+      const previousCloudTrip = tripOptions.find((trip) => trip.id === selected);
+      if (!previousCloudTrip || isProtectedSeedTripId(selected)) return;
+      invalidateWorkspaceAccess();
+      setCurrentTrip(null);
+      setSelectedTripId("");
+      setTripOptions((trips) => trips.filter((trip) => trip.id !== selected));
+      setAdminProfile(null);
+      setHasEditPermission(false);
+      setCurrentTripEditorEmails([]);
+    };
+    window.addEventListener("storage", onTripCacheChanged);
+    return () => window.removeEventListener("storage", onTripCacheChanged);
+  }, [invalidateWorkspaceAccess, tripOptions]);
+
   const reconcileTripWorkspace = useCallback(async (): Promise<boolean> => {
     if (!isSessionReady || !navigator.onLine) return false;
     if (reconciliationPromiseRef.current) return reconciliationPromiseRef.current;
 
+    const expectedEpoch = workspaceEpochRef.current;
     const reconciliation = (async () => {
       const [cloudRecords, tombstones] = await Promise.all([
         getCloudTripRecordsStrict(supabase),
         getTripDeletionTombstones(supabase),
       ]);
+      if (workspaceEpochRef.current !== expectedEpoch) return false;
       const decision = decideTripReconciliation(
         readStoredTripRecords(),
         cloudRecords,
@@ -268,9 +307,11 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
         readTripCacheState(),
       );
 
+      if (workspaceEpochRef.current !== expectedEpoch) return false;
       replaceStoredTripRecords(decision.storedRecords);
       writeTripCacheState(decision.nextState);
       for (const tripId of decision.cleanupTripIds) {
+        if (workspaceEpochRef.current !== expectedEpoch) return false;
         await clearSharedTripDataAfterAccessLoss(
           tripId,
           userEmailRef.current ?? "",
@@ -289,6 +330,7 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
         cloudRecords,
         tombstoneIds,
       );
+      if (workspaceEpochRef.current !== expectedEpoch) return false;
       const currentSelectedTripId = selectedTripIdRef.current;
       const selectedTripWasRemoved = Boolean(
         currentSelectedTripId &&
@@ -396,6 +438,7 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
     if (!selectedTripId) return;
 
     const loadTripAndAuthData = async () => {
+      const expectedEpoch = workspaceEpochRef.current;
       const loadRevision = ++tripLoadRevisionRef.current;
       const initialCloudRecords = initialCloudRecordsRef.current;
       initialCloudRecordsRef.current = null;
@@ -407,7 +450,7 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
           selectedTripMeta,
           initialCloudRecords ?? undefined,
         );
-        if (tripData && tripLoadRevisionRef.current === loadRevision) {
+        if (tripData && tripLoadRevisionRef.current === loadRevision && workspaceEpochRef.current === expectedEpoch) {
           const rememberedDay = consumeExternalReturnDay(tripData.id, tripData.content.days);
           const canPreserveActiveDay =
             currentTripIdRef.current === tripData.id &&
@@ -436,9 +479,10 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
         console.error(error);
       }
 
+      if (workspaceEpochRef.current !== expectedEpoch) return;
       if (userEmail) {
         getTripEditorEmails(supabase, selectedTripId)
-          .then(setCurrentTripEditorEmails)
+          .then((emails) => { if (workspaceEpochRef.current === expectedEpoch) setCurrentTripEditorEmails(emails); })
           .catch((error) => {
             console.warn(error);
             setCurrentTripEditorEmails([]);
@@ -457,6 +501,7 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
             .select("email, role, trip_id")
             .eq("email", userEmail);
 
+          if (workspaceEpochRef.current !== expectedEpoch) return;
           if (!error && data) {
             const profiles = data as AdminUser[];
             setHasAnyManagementRole(
@@ -485,6 +530,7 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
         }
       }
 
+      if (workspaceEpochRef.current !== expectedEpoch) return;
       if (!profile && cachedProfile) {
         try {
           const parsedProfile = JSON.parse(cachedProfile) as AdminUser;
@@ -540,7 +586,7 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
 
       if (profile?.role === "super_admin") {
         getSuperAdminEmails(supabase)
-          .then(setSuperAdminEmails)
+          .then((emails) => { if (workspaceEpochRef.current === expectedEpoch) setSuperAdminEmails(emails); })
           .catch((error) => {
             console.warn(error);
             setSuperAdminEmails([]);
@@ -604,6 +650,11 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
       }
       if (syncEditors) {
         await syncTripEditorEmails(supabase, record.meta.id, record.editorEmails);
+      }
+      // V3.9.26: initial Other Info is stored under dedicated RLS rules.
+      const initialItems = record.detail.content.otherInfoItems ?? [];
+      if (initialItems.length && !await upsertCloudOtherInfoItems(supabase, record.meta.id, initialItems)) {
+        console.warn("Unable to sync initial Trip Other Info; local copy retained");
       }
 
       const nextTrips = await getTripMetas(supabase, getBasePath());
@@ -832,6 +883,7 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
     setUserId,
     setUserEmail,
     tripOptions,
+    setTripOptions,
     selectedTripId,
     setSelectedTripId,
     currentTrip,
@@ -876,5 +928,6 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
     superAdminEmails,
     defaultParticipantProfiles,
     refreshDefaultParticipantProfiles,
+    invalidateWorkspaceAccess,
   };
 }

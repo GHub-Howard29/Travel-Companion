@@ -8,9 +8,11 @@ const sharedCleanup = fs.readFileSync("src/storage/sharedTripDataStorage.ts", "u
 const vite = fs.readFileSync("vite.config.ts", "utf8");
 
 assert.match(cacheService, /getItineraryCoverPaths\(trip\)/);
-assert.match(cacheService, /getItineraryCoverPublicUrl\(supabaseUrl, path\)/);
+assert.match(cacheService, /getItineraryCoverPublicUrl\(storageBaseUrl, path\)/);
+assert.match(cacheService, /createSignedUrl\(paths\[index\], 3600\)/);
 assert.match(cacheService, /await cache\.match\(url\)/);
-assert.match(cacheService, /fetch\(url, \{/);
+assert.match(cacheService, /fetch\(data\.signedUrl, \{/);
+assert.doesNotMatch(cacheService, /fetch\(url, \{/);
 assert.match(cacheService, /cache: "no-store"/);
 assert.match(cacheService, /contentType !== "image\/webp"/);
 assert.match(cacheService, /MAX_ITINERARY_COVER_BYTES/);
@@ -18,7 +20,7 @@ assert.match(cacheService, /previousUrls[\s\S]*!desiredSet\.has\(url\)[\s\S]*cac
 assert.match(cacheService, /MAX_ITINERARY_COVER_CACHE_ENTRIES = 250/);
 assert.match(cacheService, /clearItineraryCoverOfflineCache/);
 
-assert.match(app, /syncItineraryCoverOfflineCache\(currentTrip, supabaseUrl\)/);
+assert.match(app, /syncItineraryCoverOfflineCache\(currentTrip, supabase\)/);
 assert.match(app, /if \(!currentTrip \|\| !isOnline/);
 
 assert.match(workspace, /clearItineraryCoverOfflineCache\(tripId\)/);
@@ -31,4 +33,4 @@ assert.match(vite, /maxEntries: 250/);
 
 assert.doesNotMatch(cacheService, /commonsCategory|commonsSearch|cropImageUrl/);
 
-console.log("V3.9.16 BUG032 行程卡片照片背景預載、CacheFirst 離線讀取與清理契約驗證通過。");
+console.log("V3.9.16 BUG032 / V3.9.26 限時簽名網址、離線照片快取與清理契約驗證通過。");

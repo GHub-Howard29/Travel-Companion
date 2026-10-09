@@ -1,7 +1,7 @@
 {
   "name": "travel-companion",
   "private": true,
-  "version": "3.9.25",
+  "version": "3.9.26",
   "type": "module",
   "engines": {
     "node": "22.23.2",

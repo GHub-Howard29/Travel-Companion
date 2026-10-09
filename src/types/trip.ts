@@ -11,6 +11,8 @@ export interface TripMeta {
   detailPath?: string;
   participants: string[];
   participantEmailMap?: Record<string, string>;
+  /** V3.9.26: Cloud visibility; legacy records remain publicly readable until migration. */
+  isPublic?: boolean;
   currencyConfig: {
     code: string;
     symbol: string;
@@ -25,6 +27,8 @@ export interface TripEditorInput {
   mode: TripMode;
   participants: string[];
   participantEmailMap: Record<string, string>;
+  /** Only super_admin may change this; server must enforce. */
+  isPublic?: boolean;
   editorEmails: string[];
   currencyCode: string;
   currencySymbol: string;

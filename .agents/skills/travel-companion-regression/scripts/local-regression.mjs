@@ -60,7 +60,9 @@ const isLoopback = (value) => {
 
 const getLocalConfig = () => {
   const status = readSupabaseStatus();
-  const apiUrl = pick(status, ["API_URL", "api_url"]);
+  const reportedApiUrl = pick(status, ["API_URL", "api_url"]);
+  // Windows Docker Desktop may reject 127.0.0.1 while localhost works.
+  const apiUrl = reportedApiUrl?.replace("http://127.0.0.1:", "http://localhost:");
   const anonKey = pick(status, ["PUBLISHABLE_KEY", "ANON_KEY", "anon_key"]);
   const serviceKey = pick(status, ["SERVICE_ROLE_KEY", "SECRET_KEY", "service_role_key"]);
   if (!apiUrl || !anonKey || !serviceKey) {
@@ -328,6 +330,7 @@ const verifyMode = async () => {
   const guest = createClient(apiUrl, anonKey, { auth: { autoRefreshToken: false, persistSession: false } });
   const user = createClient(apiUrl, anonKey, { auth: { autoRefreshToken: false, persistSession: false } });
 
+  console.log("[verify] checking service Trip");
   const { error: serviceTripError } = await admin.from("trips").select("id").eq("id", "group-tour-2026-10").single();
   if (serviceTripError) throw new Error(`service_role Trip grant 失敗：${serviceTripError.message}`);
   const { error: guestOtherInfoError } = await guest.from("other_info_items").select("id").limit(1);

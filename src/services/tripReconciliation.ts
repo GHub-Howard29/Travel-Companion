@@ -23,21 +23,22 @@ export const decideTripReconciliation = (
   const newlyDeletedIds = tombstones
     .filter((tombstone) => tombstone.deletionRevision > state.lastDeletionRevision)
     .map((tombstone) => tombstone.tripId);
-  const legacyResidualIds = state.legacyRepairCompleted
-    ? []
-    : storedRecords
-        .filter(
-          (record) =>
-            Boolean(record.cloudUpdatedAt) &&
-            !cloudIds.has(record.meta.id) &&
-            !isProtectedSeedTripId(record.meta.id),
-        )
-        .map((record) => record.meta.id);
+  // V3.9.26: when the authoritative online RLS result no longer includes a
+  // cloud-backed Trip, revoke its cached access on EVERY reconciliation.
+  // This also covers public -> private changes and editor revocation after
+  // the one-time legacy cleanup has already completed.
+  const inaccessibleTripIds = storedRecords
+    .filter((record) =>
+      Boolean(record.cloudUpdatedAt) &&
+      !cloudIds.has(record.meta.id) &&
+      !isProtectedSeedTripId(record.meta.id),
+    )
+    .map((record) => record.meta.id);
   const cleanupTripIds = [
     ...new Set([
       ...state.pendingCleanupTripIds,
       ...newlyDeletedIds,
-      ...legacyResidualIds,
+      ...inaccessibleTripIds,
       ...storedRecords
         .filter((record) => tombstoneIds.has(record.meta.id))
         .map((record) => record.meta.id),

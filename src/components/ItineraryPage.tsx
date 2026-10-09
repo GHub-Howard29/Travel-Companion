@@ -104,6 +104,8 @@ import {
   MAX_USER_COVER_SOURCE_BYTES,
 } from "../services/itineraryCoverPhotoService";
 import { ITINERARY_COVER_BUCKET } from "../constants/appConstants";
+import { ITINERARY_COVER_CACHE_NAME } from "../services/itineraryCoverOfflineCache";
+import { getItineraryCoverPaths } from "../utils/itineraryCoverPhoto";
 import { RichTextColorEditor } from "./RichTextColorEditor";
 import { RichTextDisplay } from "./RichTextDisplay";
 import { MaterialTravelModeIcon } from "./MaterialTravelModeIcon";
@@ -322,6 +324,34 @@ export const ItineraryPage = ({
   const [coverPhotoError, setCoverPhotoError] = useState<string | null>(null);
   const [commonsPageStatus, setCommonsPageStatus] = useState<CommonsPageStatus | null>(null);
   const [failedCoverPaths, setFailedCoverPaths] = useState<Set<string>>(() => new Set());
+  const [coverUrls, setCoverUrls] = useState<Record<string, string>>({});
+  useEffect(() => {
+    let cancelled = false;
+    const objectUrls: string[] = [];
+    const paths = [...getItineraryCoverPaths(trip)];
+    void Promise.all(paths.map(async (path) => {
+      let url: string | undefined;
+      if (isOnline) {
+        const { data, error } = await supabase.storage.from(ITINERARY_COVER_BUCKET)
+          .createSignedUrl(path, 3600);
+        if (!error) url = data?.signedUrl;
+      }
+      if (!url && "caches" in window) {
+        const cacheKey = supabase.storage.from(ITINERARY_COVER_BUCKET).getPublicUrl(path).data.publicUrl;
+        const cache = await caches.open(ITINERARY_COVER_CACHE_NAME);
+        const response = await cache.match(cacheKey);
+        if (response) {
+          url = URL.createObjectURL(await response.blob());
+          objectUrls.push(url);
+        }
+      }
+      if (url && !cancelled) setCoverUrls((current) => ({ ...current, [path]: url }));
+    })).catch((error) => console.warn("Failed to load authorized itinerary covers", error));
+    return () => {
+      cancelled = true;
+      objectUrls.forEach((url) => URL.revokeObjectURL(url));
+    };
+  }, [trip, supabase, isOnline]);
   const editingCardRef = useRef<HTMLElement | null>(null);
   const coverDialogRef = useRef<HTMLElement | null>(null);
   const coverDialogOpenerRef = useRef<HTMLElement | null>(null);
@@ -597,8 +627,7 @@ export const ItineraryPage = ({
 
   const canManageItinerary = hasEditPermission && isOnline;
   const canAdjustItineraryTime = hasEditPermission;
-  const getCoverPublicUrl = (path: string) =>
-    supabase.storage.from(ITINERARY_COVER_BUCKET).getPublicUrl(path).data.publicUrl;
+  const getCoverPublicUrl = (path: string) => coverUrls[path] ?? "";
 
   const activeDayDate = getItineraryDayDate(trip.departureDate, activeDay);
   const activeDayWeekday = activeDayDate ? getWeekdayLabel(activeDayDate) : null;
@@ -2270,7 +2299,7 @@ export const ItineraryPage = ({
               ? getTravelTimeWarning(event, nextTravelEvent, estimate)
               : null;
             const hasVisibleCover = Boolean(
-              event.coverPhoto && !failedCoverPaths.has(event.coverPhoto.storagePath),
+              event.coverPhoto && Boolean(coverUrls[event.coverPhoto.storagePath]) && !failedCoverPaths.has(event.coverPhoto.storagePath),
             );
             const linkedOtherInfoFolder = event.otherInfoFolderId
               ? otherInfoFolders.find(

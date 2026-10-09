@@ -36,6 +36,8 @@ export const getCloudSharedChecklistId = async (
     .select("id")
     .eq("trip_id", tripId)
     .eq("scope", "shared")
+    .order("created_at", { ascending: true })
+    .limit(1)
     .maybeSingle();
 
   if (error) throw error;
@@ -103,6 +105,8 @@ export const getCloudSharedChecklist = async (
     .select("id, updated_at")
     .eq("trip_id", tripId)
     .eq("scope", "shared")
+    .order("created_at", { ascending: true })
+    .limit(1)
     .maybeSingle();
 
   if (selectError) {
@@ -205,6 +209,8 @@ export const syncCloudSharedChecklistSeedItems = async (
     .select("id")
     .eq("trip_id", tripId)
     .eq("scope", "shared")
+    .order("created_at", { ascending: true })
+    .limit(1)
     .maybeSingle();
 
   if (checklistError) {
@@ -358,6 +364,8 @@ export const updateCloudSharedChecklistItemChecked = async (
     .select("id")
     .eq("trip_id", tripId)
     .eq("scope", "shared")
+    .order("created_at", { ascending: true })
+    .limit(1)
     .maybeSingle();
 
   if (checklistError) {

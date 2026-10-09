@@ -511,6 +511,7 @@ export const createTripRecord = (
     departureDate: input.departureDate,
     dayCount: input.dayCount,
     mode,
+    isPublic: input.isPublic ?? false,
     participants,
     participantEmailMap,
     currencyConfig: {
@@ -522,7 +523,7 @@ export const createTripRecord = (
     id,
     title: meta.title,
     departureDate: meta.departureDate,
-    isPublic: true,
+    isPublic: input.isPublic ?? false,
     sidebarConfig: createSidebarConfig(mode),
     content: {
       mode,
@@ -655,6 +656,7 @@ export const updateTripRecord = (
     departureDate: input.departureDate,
     dayCount: input.dayCount,
     mode,
+    isPublic: input.isPublic ?? currentRecord.meta.isPublic ?? currentRecord.detail.isPublic,
     participants,
     participantEmailMap,
     currencyConfig: {
@@ -666,6 +668,7 @@ export const updateTripRecord = (
     ...currentRecord.detail,
     title: meta.title,
     departureDate: meta.departureDate,
+    isPublic: meta.isPublic ?? true,
     sidebarConfig: normalizeSidebarConfig(currentRecord.detail.sidebarConfig, mode),
     content: {
       ...currentRecord.detail.content,
@@ -716,6 +719,7 @@ export const createTripRecordFromExisting = (
     departureDate: input.departureDate,
     dayCount: input.dayCount,
     mode,
+    isPublic: input.isPublic ?? meta.isPublic ?? detail.isPublic,
     participants,
     participantEmailMap,
     currencyConfig: {
@@ -727,6 +731,7 @@ export const createTripRecordFromExisting = (
     ...detail,
     title: nextMeta.title,
     departureDate: nextMeta.departureDate,
+    isPublic: nextMeta.isPublic ?? true,
     sidebarConfig: normalizeSidebarConfig(detail.sidebarConfig, mode),
     content: {
       ...detail.content,

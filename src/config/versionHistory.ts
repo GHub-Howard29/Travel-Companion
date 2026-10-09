@@ -14,6 +14,15 @@ export type VersionHistoryItem = {
 
 export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
+    version: "3.9.25",
+    date: "2026-10-08",
+    isMandatoryRelease: false,
+    notes: [
+      "共用帳本照片同步在線上暫時失敗時，每隔 3 秒自動重試，最多共嘗試 5 次。",
+      "自動重試只處理仍失敗的照片；已成功照片不重傳，第 5 次仍失敗後停止並等待使用者再次按同步。",
+    ],
+  },
+  {
     version: "3.9.24",
     date: "2026-10-07",
     isMandatoryRelease: false,
