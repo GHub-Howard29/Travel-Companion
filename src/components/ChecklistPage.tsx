@@ -92,8 +92,10 @@ export const ChecklistPage = ({
     initialPendingCloudOrder,
   );
   const isCloudOrderSyncingRef = useRef(false);
+  const cloudOrderSyncPromiseRef = useRef<Promise<void> | null>(null);
   const cloudOrderTimerRef = useRef<number | null>(null);
   const cloudOrderRetryTimerRef = useRef<number | null>(null);
+  const syncOnManageExitRef = useRef<(() => Promise<void>) | null>(null);
   const [pendingSyncRetry, setPendingSyncRetry] = useState(0);
   const [, setLocalChecklistRevision] = useState(0);
   const localChecklistData =
@@ -141,63 +143,78 @@ export const ChecklistPage = ({
   }, [isLocalUserChecklist, items]);
 
   const flushPendingCloudOrder = useCallback(async () => {
-    if (!canSyncSharedChecklist || !isOnline || isCloudOrderSyncingRef.current) return;
-
-    if (cloudOrderTimerRef.current !== null) {
-      window.clearTimeout(cloudOrderTimerRef.current);
-      cloudOrderTimerRef.current = null;
-    }
-    if (cloudOrderRetryTimerRef.current !== null) {
-      window.clearTimeout(cloudOrderRetryTimerRef.current);
-      cloudOrderRetryTimerRef.current = null;
+    if (!canSyncSharedChecklist || !isOnline) return;
+    if (cloudOrderSyncPromiseRef.current) {
+      await cloudOrderSyncPromiseRef.current;
+      return;
     }
 
-    isCloudOrderSyncingRef.current = true;
-    try {
-      while (navigator.onLine) {
-        const pending = userEmail
-          ? readPendingSharedChecklistOrder(tripId, userEmail)
-          : pendingCloudOrderRef.current;
-        if (!pending) break;
+    const syncPromise = (async () => {
+      if (cloudOrderTimerRef.current !== null) {
+        window.clearTimeout(cloudOrderTimerRef.current);
+        cloudOrderTimerRef.current = null;
+      }
+      if (cloudOrderRetryTimerRef.current !== null) {
+        window.clearTimeout(cloudOrderRetryTimerRef.current);
+        cloudOrderRetryTimerRef.current = null;
+      }
 
-        const mergedItems = await onSaveChecklistData(
-          pending.items,
-          pending.baseItems,
-        );
-        // 重連時可能仍有舊的雲端快照在元件記憶體中；先以已完成三方
-        // 合併的結果更新畫面，避免短暫回退到離線前資料而必須手動刷新。
-        setCloudChecklistData(mergedItems);
-        reorderChecklistItems(mergedItems);
-        // 同步已完成後才讀回旅程快照，讓 App 的全域旅程資料也與共同清單
-        // 一致；不依賴恢復連線提示框的手動整頁重新載入。
-        await onReloadChecklistData();
-        if (!userEmail) {
-          pendingCloudOrderRef.current = null;
-          break;
+      isCloudOrderSyncingRef.current = true;
+      try {
+        while (navigator.onLine) {
+          const pending = userEmail
+            ? readPendingSharedChecklistOrder(tripId, userEmail)
+            : pendingCloudOrderRef.current;
+          if (!pending) break;
+
+          const mergedItems = await onSaveChecklistData(
+            pending.items,
+            pending.baseItems,
+          );
+          // 重連時可能仍有舊的雲端快照在元件記憶體中；先以已完成三方
+          // 合併的結果更新畫面，避免短暫回退到離線前資料而必須手動刷新。
+          setCloudChecklistData(mergedItems);
+          reorderChecklistItems(mergedItems);
+          // 同步已完成後才讀回旅程快照，讓 App 的全域旅程資料也與共同清單
+          // 一致；不依賴恢復連線提示框的手動整頁重新載入。
+          await onReloadChecklistData();
+          if (!userEmail) {
+            pendingCloudOrderRef.current = null;
+            break;
+          }
+          if (
+            clearPendingSharedChecklistOrder(
+              tripId,
+              userEmail,
+              pending.revision,
+            )
+          ) {
+            pendingCloudOrderRef.current = null;
+            break;
+          }
         }
-        if (
-          clearPendingSharedChecklistOrder(
-            tripId,
-            userEmail,
-            pending.revision,
-          )
-        ) {
-          pendingCloudOrderRef.current = null;
-          break;
+      } catch (error) {
+        console.warn(error);
+      } finally {
+        isCloudOrderSyncingRef.current = false;
+        const hasPending = userEmail
+          ? Boolean(readPendingSharedChecklistOrder(tripId, userEmail))
+          : Boolean(pendingCloudOrderRef.current);
+        if (navigator.onLine && hasPending) {
+          cloudOrderRetryTimerRef.current = window.setTimeout(() => {
+            cloudOrderRetryTimerRef.current = null;
+            setPendingSyncRetry((revision) => revision + 1);
+          }, 1500);
         }
       }
-    } catch (error) {
-      console.warn(error);
+    })();
+
+    cloudOrderSyncPromiseRef.current = syncPromise;
+    try {
+      await syncPromise;
     } finally {
-      isCloudOrderSyncingRef.current = false;
-      const hasPending = userEmail
-        ? Boolean(readPendingSharedChecklistOrder(tripId, userEmail))
-        : Boolean(pendingCloudOrderRef.current);
-      if (navigator.onLine && hasPending) {
-        cloudOrderRetryTimerRef.current = window.setTimeout(() => {
-          cloudOrderRetryTimerRef.current = null;
-          setPendingSyncRetry((revision) => revision + 1);
-        }, 1500);
+      if (cloudOrderSyncPromiseRef.current === syncPromise) {
+        cloudOrderSyncPromiseRef.current = null;
       }
     }
   }, [
@@ -294,7 +311,6 @@ export const ChecklistPage = ({
     document.addEventListener("visibilitychange", flushWhenHidden);
     return () => {
       document.removeEventListener("visibilitychange", flushWhenHidden);
-      void flushPendingCloudOrder();
     };
   }, [flushPendingCloudOrder]);
 
@@ -312,6 +328,19 @@ export const ChecklistPage = ({
   const categories = Array.from(
     new Set(activeChecklistData.map((item) => item.category)),
   );
+  const syncOnManageExit = useCallback(async () => {
+    releaseFocusedControl();
+    await flushPendingCloudOrder();
+  }, [flushPendingCloudOrder]);
+
+  useEffect(() => {
+    syncOnManageExitRef.current = syncOnManageExit;
+  }, [syncOnManageExit]);
+
+  useEffect(() => () => {
+    void syncOnManageExitRef.current?.();
+  }, []);
+
   const progressPercent =
     items.length > 0
       ? (visibleCheckedItemIds.length / items.length) * 100
@@ -339,12 +368,16 @@ export const ChecklistPage = ({
     setDraftLabel("");
   };
 
-  const closeManageMode = () => {
-    releaseFocusedControl();
-    void flushPendingCloudOrder();
+  const exitManageMode = async (closeUi = true) => {
+    await syncOnManageExit();
+    if (!closeUi) return;
     setIsManageMode(false);
     setIsCopyOpen(false);
     resetForm();
+  };
+
+  const closeManageMode = () => {
+    void exitManageMode(true);
   };
 
   const startCreateItem = () => {
