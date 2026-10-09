@@ -259,9 +259,7 @@ export const useAppUpdate = () => {
   });
   const updateServiceWorkerRef = useRef<UpdateServiceWorker | null>(null);
   const registrationRef = useRef<ServiceWorkerRegistration | null>(null);
-  const workerReadyRef = useRef(false);
   const updateInProgressRef = useRef(false);
-  const safeReloadWorkerRef = useRef<ServiceWorker | null>(null);
   const reloadStartedRef = useRef(false);
   const lastWorkerUpdateCheckAtRef = useRef(0);
 
@@ -344,7 +342,6 @@ export const useAppUpdate = () => {
         requestServiceWorkerUpdate(registration ?? null, true);
       },
       async onNeedRefresh() {
-        workerReadyRef.current = true;
         setHasPreparedUpdate(true);
         setUpdateError(null);
         await checkVersionPolicy();
@@ -377,26 +374,6 @@ export const useAppUpdate = () => {
         return;
       }
 
-      if (hasPreparedUpdate && updatePhase === "ready-to-reload") {
-        const registration = registrationRef.current;
-        const safeReloadWorker = safeReloadWorkerRef.current;
-        if (
-          registration?.active &&
-          safeReloadWorker &&
-          registration.active === safeReloadWorker &&
-          safeReloadWorker.state === "activated"
-        ) {
-          setStoredAppVersion(latestMetadata.version);
-          reloadOnce();
-          return;
-        }
-
-        safeReloadWorkerRef.current = null;
-        setUpdateError("新版接管狀態已改變，請重新執行更新確認。");
-        setUpdatePhase("idle");
-        return;
-      }
-
       if (beforeUpdate) {
         setUpdatePhase("syncing-data");
         try {
@@ -419,13 +396,12 @@ export const useAppUpdate = () => {
         registrationRef.current ?? (await navigator.serviceWorker.ready);
       registrationRef.current = registration;
       const previousController = navigator.serviceWorker?.controller ?? null;
-      safeReloadWorkerRef.current = null;
       setUpdatePhase("downloading");
       await registration.update();
       const workerReady = await waitForUpdateWorkerReady(
         registration,
         previousController,
-        () => workerReadyRef.current,
+        () => Boolean(registration.waiting),
       );
       if (!workerReady) {
         setUpdateError("新版尚未下載完成，請稍後再試；這不代表目前網路一定異常。");
@@ -433,7 +409,6 @@ export const useAppUpdate = () => {
         return;
       }
       setHasPreparedUpdate(true);
-
       const activatedReplacement =
         registration.active &&
         registration.active !== previousController &&
@@ -441,9 +416,8 @@ export const useAppUpdate = () => {
         !registration.waiting &&
         !registration.installing;
       if (activatedReplacement) {
-        safeReloadWorkerRef.current = registration.active;
-        setUpdateError(null);
-        setUpdatePhase("ready-to-reload");
+        setStoredAppVersion(latestMetadata.version);
+        reloadOnce();
         return;
       }
 
@@ -474,9 +448,8 @@ export const useAppUpdate = () => {
       }
 
       if (handoffState === "active" && registration.active) {
-        safeReloadWorkerRef.current = registration.active;
-        setUpdateError(null);
-        setUpdatePhase("ready-to-reload");
+        setStoredAppVersion(latestMetadata.version);
+        reloadOnce();
         return;
       }
 
@@ -496,11 +469,9 @@ export const useAppUpdate = () => {
     }
   }, [
     checkVersionPolicy,
-    hasPreparedUpdate,
     latestMetadata.version,
     policy.hasUpdate,
     reloadOnce,
-    updatePhase,
   ]);
 
   const dismiss = useCallback(() => {

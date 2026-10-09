@@ -29,8 +29,8 @@ assert.match(
 
 assert.match(
   updateHook,
-  /const activatedReplacement =[\s\S]*registration\.active !== previousController[\s\S]*!registration\.waiting[\s\S]*!registration\.installing[\s\S]*setUpdatePhase\("ready-to-reload"\)/,
-  "新版已 active 但舊頁面仍由舊 controller 控制時，必須直接進入安全重新載入階段",
+  /const activatedReplacement =[\s\S]*registration\.active !== previousController[\s\S]*!registration\.waiting[\s\S]*!registration\.installing[\s\S]*setStoredAppVersion\(latestMetadata\.version\)[\s\S]*reloadOnce\(\)/,
+  "新版已 active 但舊頁面仍由舊 controller 控制時，必須直接重新載入，不可要求第二次點擊",
 );
 
 assert.match(
@@ -39,15 +39,16 @@ assert.match(
   "handoff 檢查應立即接受 active 狀態，不可固定等待 timeout",
 );
 
-const readyToReloadIndex = updateHook.indexOf(
-  'if (hasPreparedUpdate && updatePhase === "ready-to-reload")',
+assert.doesNotMatch(
+  updateHook,
+  /workerReadyRef|safeReloadWorkerRef/,
+  "更新流程不可保留跨次嘗試的過期 worker ready 狀態",
 );
-const beforeUpdateIndex = updateHook.indexOf("if (beforeUpdate)");
-assert.ok(
-  readyToReloadIndex >= 0 &&
-    beforeUpdateIndex >= 0 &&
-    readyToReloadIndex < beforeUpdateIndex,
-  "第二次按下「重新載入套用新版」應直接 reload，不可再次執行資料 preflight",
+
+assert.match(
+  updateHook,
+  /waitForUpdateWorkerReady\([\s\S]*\(\) => Boolean\(registration\.waiting\)/,
+  "新版 ready 判斷必須以當次 registration.waiting 為準，不可使用過期全域旗標",
 );
 
 console.log("V3.9.24 PWA 主動更新檢查與 active-worker handoff regression 通過.");
