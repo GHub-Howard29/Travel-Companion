@@ -14,6 +14,16 @@ export type VersionHistoryItem = {
 
 export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
+    version: "3.9.26",
+    date: "2026-10-09",
+    isMandatoryRelease: false,
+    notes: [
+      "行程公開／私人權限與受邀編輯者隔離正式完成，公開資料不再攜帶私人參與者 Email map。",
+      "其他資訊與共同清單改由正規化資料表同步，保留離線變更與重新連線後的同步流程。",
+      "帳本附件離線保存、重新連線上傳與失敗重試規則維持不變；既有照片簽名網址仍維持 1 小時有效期。",
+    ],
+  },
+  {
     version: "3.9.25",
     date: "2026-10-08",
     isMandatoryRelease: false,
