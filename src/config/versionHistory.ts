@@ -14,6 +14,16 @@ export type VersionHistoryItem = {
 
 export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
+    version: "3.9.27",
+    date: "2026-10-09",
+    isMandatoryRelease: true,
+    notes: [
+      "修正 PWA 更新接管在新版 worker 已 active 時仍等待逾時並誤報更新失敗的問題。",
+      "共同清單退出管理時統一等待排序同步完成，避免切換頁面或行程時背景同步尚未完成。",
+      "沿用 V3.9.26 的行程公開權限、離線同步與附件簽名網址 1 小時有效期規則。",
+    ],
+  },
+  {
     version: "3.9.26",
     date: "2026-10-09",
     isMandatoryRelease: false,

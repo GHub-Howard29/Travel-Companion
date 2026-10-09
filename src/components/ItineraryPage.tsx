@@ -75,7 +75,7 @@ import {
   type TimeAdjustmentResult,
 } from "../utils/itineraryTimeAdjustment";
 import { getItineraryDayDate, getLunarDateLabel, getWeekdayLabel } from "../utils/itineraryDate";
-import { getItineraryDayTone } from "../utils/itineraryDayStyle";
+import { getItineraryDayButtonClasses } from "../utils/itineraryDayStyle";
 import {
   copyItineraryItemToDays,
   createItineraryItemId,
@@ -1943,19 +1943,17 @@ export const ItineraryPage = ({
     <>
       <div className="grid grid-cols-5 gap-1.5 mb-6">
         {trip.content.days.map((day, index) => {
-          const tone = getItineraryDayTone(trip.content.days, index);
           const isActive = activeDay === day;
-          const colorClass = {
-            first: isActive
-              ? "border-blue-300 bg-blue-100 text-blue-700 ring-2 ring-blue-100"
-              : "border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100",
-            middle: isActive
-              ? "border-emerald-300 bg-emerald-100 text-emerald-700 ring-2 ring-emerald-100"
-              : "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100",
-            last: isActive
-              ? "border-rose-300 bg-rose-100 text-rose-700 ring-2 ring-rose-100"
-              : "border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100",
-          }[tone];
+          const dayDate = getItineraryDayDate(trip.departureDate, day);
+          const todayDate = new Intl.DateTimeFormat("en-CA", {
+            timeZone: "Asia/Taipei",
+          }).format(new Date());
+          const isToday = dayDate === todayDate;
+          const colorClass = getItineraryDayButtonClasses(
+            trip.content.days,
+            index,
+            { isActive, isToday },
+          );
 
           return (
           <button
