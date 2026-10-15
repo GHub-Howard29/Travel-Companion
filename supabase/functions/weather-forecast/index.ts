@@ -1,4 +1,6 @@
-import { createClient } from "npm:@supabase/supabase-js@2.108.2";
+import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2.108.2";
+
+type WeatherSupabaseClient = SupabaseClient;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -15,8 +17,11 @@ const env = (name: string) => {
 };
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value) && typeof value === "object" && !Array.isArray(value);
-const isValidDate = (value: unknown): value is string =>
-  typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(`${value}T00:00:00Z`));
+const isValidDate = (value: unknown): value is string => {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const parsed = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+};
 const isValidTime = (value: unknown): value is string =>
   typeof value === "string" && /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(value);
 const dayDate = (departureDate: string, dayNumber: number) => {
@@ -91,7 +96,7 @@ const getStoredCandidate = (trip: Record<string, unknown>, candidate: Candidate)
   return verified;
 };
 
-const getCoordinates = async (admin: any, placeId: string) => {
+const getCoordinates = async (admin: WeatherSupabaseClient, placeId: string) => {
   const now = new Date();
   const { data: cached } = await admin.from("weather_place_coordinates")
     .select("place_id, latitude, longitude, fetched_at, expires_at, status, last_error, updated_at")
@@ -124,15 +129,14 @@ const getCoordinates = async (admin: any, placeId: string) => {
         if (!isCoordinate(latitude, longitude)) { lastError = "PLACE_DETAILS_INVALID_COORDINATES"; break; }
         const fetchedAt = new Date().toISOString();
         const expiresAt = new Date(Date.now() + 30 * 86400000).toISOString();
-        const { error } = await admin.from("weather_place_coordinates").upsert({
-          place_id: placeId, latitude, longitude, fetched_at: fetchedAt, expires_at: expiresAt,
-          status: "valid", last_error: null, updated_at: fetchedAt,
-        }, { onConflict: "place_id" });
-        if (error) throw new Error("COORDINATE_CACHE_WRITE_FAILED");
-        if (cached && isCoordinate(cached.latitude, cached.longitude) &&
-          (cached.latitude !== latitude || cached.longitude !== longitude)) {
-          await admin.from("weather_daily_forecasts").delete().eq("place_id", placeId);
-        }
+        const { data: stored, error } = await admin.rpc("tc_weather_store_coordinates", {
+          p_place_id: placeId,
+          p_latitude: latitude,
+          p_longitude: longitude,
+          p_fetched_at: fetchedAt,
+          p_expires_at: expiresAt,
+        });
+        if (error || stored !== true) throw new Error("COORDINATE_CACHE_WRITE_FAILED");
         return { latitude: latitude as number, longitude: longitude as number };
       }
     } catch (error) {
@@ -140,10 +144,17 @@ const getCoordinates = async (admin: any, placeId: string) => {
     }
     if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, 250 * (2 ** attempt)));
   }
-  await admin.from("weather_place_coordinates").upsert({
-    place_id: placeId, latitude: null, longitude: null, status: "failed", last_error: lastError,
-    updated_at: new Date().toISOString(),
-  }, { onConflict: "place_id" });
+  const failedAt = new Date().toISOString();
+  if (cached) {
+    // Preserve any previously stored coordinate values; a failed refresh must not erase them.
+    await admin.from("weather_place_coordinates").update({
+      status: "failed", last_error: lastError, updated_at: failedAt,
+    }).eq("place_id", placeId);
+  } else {
+    await admin.from("weather_place_coordinates").insert({
+      place_id: placeId, status: "failed", last_error: lastError, updated_at: failedAt,
+    });
+  }
   throw new Error(lastError);
 };
 
@@ -194,7 +205,7 @@ const fetchForecast = async (latitude: number, longitude: number, forecastDate: 
 };
 
 const getForecastForCandidate = async (
-  admin: any, candidate: Candidate,
+  admin: WeatherSupabaseClient, candidate: Candidate,
 ): Promise<WeatherResult> => {
   const requestId = candidate.cardId;
   const { data: previous } = await admin.from("weather_daily_forecasts").select("*")
@@ -253,8 +264,16 @@ const getForecastForCandidate = async (
 
   const { data: latest } = await admin.from("weather_daily_forecasts").select("*")
     .eq("place_id", candidate.placeId).eq("forecast_date", candidate.forecastDate).maybeSingle();
-  const stillUsable = latest?.fetched_at && Date.parse(latest.fetched_at) > Date.now() - 48 * 3600000 &&
-    typeof latest.timezone === "string" && latest.timezone.length > 0;
+  const { data: currentCoordinates } = await admin.from("weather_place_coordinates")
+    .select("latitude, longitude, status, expires_at")
+    .eq("place_id", candidate.placeId).maybeSingle();
+  const coordinatesMatch = currentCoordinates?.status === "valid" &&
+    isCoordinate(currentCoordinates.latitude, currentCoordinates.longitude) &&
+    currentCoordinates.expires_at && Date.parse(currentCoordinates.expires_at) > Date.now() &&
+    latest?.latitude === currentCoordinates.latitude && latest?.longitude === currentCoordinates.longitude;
+  const stillUsable = Boolean(coordinatesMatch && latest?.fetched_at &&
+    Date.parse(latest.fetched_at) > Date.now() - 48 * 3600000 &&
+    typeof latest.timezone === "string" && latest.timezone.length > 0);
   if (!stillUsable) return {
     request_id: requestId, place_id: candidate.placeId, forecast_date: candidate.forecastDate,
     status: "unavailable", message: "暫時無法取得天氣",
@@ -280,7 +299,7 @@ Deno.serve(async (request) => {
     const url = env("SUPABASE_URL");
     const publishableKey = Deno.env.get("SUPABASE_ANON_KEY") ?? env("SUPABASE_PUBLISHABLE_KEY");
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? env("SUPABASE_SECRET_KEY");
-    const admin: any = createClient(url, serviceRoleKey, { auth: { persistSession: false, autoRefreshToken: false } });
+    const admin = createClient(url, serviceRoleKey, { auth: { persistSession: false, autoRefreshToken: false } }) as WeatherSupabaseClient;
     const cronSecret = Deno.env.get("WEATHER_CRON_SECRET");
     const providedCronSecret = request.headers.get("x-weather-cron-secret");
     if (providedCronSecret) {
@@ -326,10 +345,10 @@ Deno.serve(async (request) => {
 
     const authorization = request.headers.get("authorization");
     if (!authorization) return json({ error: "UNAUTHORIZED" }, 401);
-    const scoped: any = createClient(url, publishableKey, {
+    const scoped = createClient(url, publishableKey, {
       global: { headers: { Authorization: authorization } },
       auth: { persistSession: false, autoRefreshToken: false },
-    });
+    }) as WeatherSupabaseClient;
     const body = await request.json();
     if (!isRecord(body) || typeof body.trip_id !== "string" || !body.trip_id.trim()) return json({ error: "INVALID_REQUEST" }, 400);
     const { data: trip, error: tripError } = await scoped.from("trips").select("id, departure_date, content").eq("id", body.trip_id).maybeSingle();

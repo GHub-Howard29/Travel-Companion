@@ -430,7 +430,9 @@ export const ItineraryPage = ({
   }, [coverTargetIndex]);
 
   const weatherDaysDataRef = useRef(trip.content.daysData);
-  weatherDaysDataRef.current = trip.content.daysData;
+  useEffect(() => {
+    weatherDaysDataRef.current = trip.content.daysData;
+  }, [trip.content.daysData]);
 
   useEffect(() => {
     const daysData = weatherDaysDataRef.current;
@@ -478,23 +480,6 @@ export const ItineraryPage = ({
       });
     return () => { cancelled = true; };
   }, [isOnline, supabase, trip.departureDate, trip.id]);
-
-  useEffect(() => {
-    const currentCards = new Map<string, { placeId: string; forecastDate: string }>();
-    for (const [dayKey, cards] of Object.entries(trip.content.daysData)) {
-      const forecastDate = getItineraryDayDate(trip.departureDate, Number(dayKey));
-      if (!forecastDate) continue;
-      for (const card of cards) {
-        if (card.id && card.showWeather === true && card.place?.placeId) {
-          currentCards.set(card.id, { placeId: card.place.placeId, forecastDate });
-        }
-      }
-    }
-    setWeatherByCardId((current) => Object.fromEntries(Object.entries(current).filter(([cardId, weather]) => {
-      const card = currentCards.get(cardId);
-      return Boolean(card && card.placeId === weather.place_id && card.forecastDate === weather.forecast_date);
-    })));
-  }, [trip.content.daysData, trip.departureDate]);
 
   const currentDayEvents = trip.content.daysData[String(activeDay)] || [];
   const displayedDayEvents = (isOrderMode ? orderDraft : currentDayEvents)
@@ -2408,7 +2393,9 @@ export const ItineraryPage = ({
               {event.showWeather === true && (
                 <div className={`mb-3 rounded-lg border px-3 py-2 text-xs ${weatherByCardId[event.id ?? ""]?.status === "stale" ? "border-amber-200 bg-amber-50 text-amber-800" : weatherByCardId[event.id ?? ""] && isLongRangeForecast(weatherByCardId[event.id ?? ""].forecast_date, weatherByCardId[event.id ?? ""].timezone) ? "border-slate-100 bg-slate-50 text-slate-600 opacity-80" : "border-sky-100 bg-sky-50/70 text-slate-700"}`} aria-live="polite">
                   {(() => {
-                    const weather = weatherByCardId[event.id ?? ""];
+                    const storedWeather = weatherByCardId[event.id ?? ""];
+                    const weather = storedWeather?.place_id === event.place?.placeId &&
+                      storedWeather.forecast_date === activeDayDate ? storedWeather : undefined;
                     const forecast = weather?.weather;
                     const description = getWeatherDescription(forecast?.weather_code);
                     const reminders = getWeatherReminders(forecast);

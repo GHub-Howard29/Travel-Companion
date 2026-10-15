@@ -300,6 +300,8 @@ Commit 完成後，Codex 必須回報實際使用的中文 Commit 訊息。
 
 專業術語第一次出現時，必須附上對應本專案功能的解釋。例如 `RLS` 要說明為 Supabase 資料列權限，用來限制誰能讀寫特定 Trip 或使用者資料。
 
+Supabase migration 與雙電腦同步一律依 `docs/81_Supabase_雙電腦_Migration_同步流程.md` 執行。Git pull 不會自動更新本機 Docker 資料庫；正式部署前必須檢查 migration history 與 schema diff，不得直接套用未審查的 diff SQL。
+
 ---
 
 # 九、Build Rules

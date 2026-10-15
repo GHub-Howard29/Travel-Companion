@@ -11,7 +11,7 @@ const itineraryPage = readSource("src/components/ItineraryPage.tsx");
 const timeAdjustment = readSource("src/utils/itineraryTimeAdjustment.ts");
 const app = readSource("src/App.tsx");
 const restoreTripDeleteTombstoneMigration = readSource(
-  "supabase/migrations/20261001141000_v3922_restore_trip_delete_tombstone.sql",
+  "supabase/migrations/20261001143042_v3922_restore_trip_delete_tombstone.sql",
 );
 
 assert.match(

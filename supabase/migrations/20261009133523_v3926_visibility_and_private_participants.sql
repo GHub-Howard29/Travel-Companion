@@ -240,3 +240,5 @@ after delete on public.trips for each row
 execute function private.tc_purge_trip_participant_emails();
 
 commit;
+
+;
