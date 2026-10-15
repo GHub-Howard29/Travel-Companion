@@ -1,0 +1,42 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+
+const read = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
+const tripTypes = read("../src/types/trip.ts");
+const itinerary = read("../src/components/ItineraryPage.tsx");
+const weatherService = read("../src/services/weatherForecastService.ts");
+const edgeFunction = read("../supabase/functions/weather-forecast/index.ts");
+const migration = read("../supabase/migrations/20261015090000_v3101_weather_cache.sql");
+const config = read("../supabase/config.toml");
+
+assert.match(tripTypes, /showWeather\?: boolean/);
+assert.match(itinerary, /checked=\{draft\.showWeather === true\}/);
+assert.match(itinerary, /儲存卡片後才生效/);
+assert.match(itinerary, /requestTripWeather/);
+assert.match(itinerary, /weatherDaysDataRef = useRef\(trip\.content\.daysData\)/);
+assert.match(itinerary, /離線，顯示上次成功取得的資料/);
+assert.match(itinerary, /creativecommons\.org\/licenses\/by\/4\.0/);
+assert.match(weatherService, /rain >= 60/);
+assert.match(weatherService, /rain >= 40/);
+assert.match(weatherService, /temperature_2m_max.*>= 35/s);
+assert.match(weatherService, /temperature_2m_min.*<= 10/s);
+assert.match(weatherService, /loadWeatherForecastCache/);
+assert.match(weatherService, /storeWeatherForecastResults/);
+assert.match(weatherService, /offset \+= 10/);
+assert.match(edgeFunction, /weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max/);
+assert.match(edgeFunction, /getStoredCandidate\(/);
+assert.match(edgeFunction, /card\.showWeather !== true/);
+assert.match(edgeFunction, /tc_weather_claim_lease/);
+assert.match(edgeFunction, /tc_weather_release_lease/);
+assert.match(edgeFunction, /x-weather-cron-secret/);
+assert.match(edgeFunction, /WEATHER_CRON_SECRET/);
+assert.match(edgeFunction, /start_date: forecastDate, end_date: forecastDate/);
+assert.match(migration, /primary key \(place_id, forecast_date\)/i);
+assert.match(migration, /refresh_lease_until/);
+assert.match(migration, /tc_weather_purge_expired_cache/);
+assert.match(migration, /travel-companion-weather-cache-cleanup/);
+assert.doesNotMatch(migration, /forecast_date date not null,\s*latitude double precision/s);
+assert.match(migration, /revoke all on public\.weather_daily_forecasts from anon, authenticated/i);
+assert.match(config, /\[functions\.weather-forecast\][\s\S]*?verify_jwt = false/);
+
+console.log("V3.10.1 weather forecast: frontend contract, cache isolation, lease, authorization and attribution static checks passed.");

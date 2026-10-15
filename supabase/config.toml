@@ -390,6 +390,10 @@ verify_jwt = false
 # V3.9.6+: 公開匯率查詢服務，不強制閘道驗證 JWT，避免未登入訪客或非對稱 ES256 Token 遭阻擋。
 verify_jwt = false
 
+[functions.weather-forecast]
+# APP Trip visibility is checked inside the function; scheduled calls use a separate server secret.
+verify_jwt = false
+
 # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"
 

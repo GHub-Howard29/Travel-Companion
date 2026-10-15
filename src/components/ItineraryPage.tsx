@@ -105,6 +105,7 @@ import {
 } from "../services/itineraryCoverPhotoService";
 import { ITINERARY_COVER_BUCKET } from "../constants/appConstants";
 import { ITINERARY_COVER_CACHE_NAME } from "../services/itineraryCoverOfflineCache";
+import { getWeatherDescription, getWeatherReminders, isLongRangeForecast, loadWeatherForecastCache, requestTripWeather, storeWeatherForecastResults, type WeatherForecastItem } from "../services/weatherForecastService";
 import { getItineraryCoverPaths } from "../utils/itineraryCoverPhoto";
 import { RichTextColorEditor } from "./RichTextColorEditor";
 import { RichTextDisplay } from "./RichTextDisplay";
@@ -276,6 +277,7 @@ export const ItineraryPage = ({
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [draft, setDraft] = useState<ItineraryItem>(createEmptyItineraryDraft);
+  const [weatherByCardId, setWeatherByCardId] = useState<Record<string, WeatherForecastItem>>({});
   const [timeErrors, setTimeErrors] = useState<{
     arrival?: string;
     departure?: string;
@@ -426,6 +428,73 @@ export const ItineraryPage = ({
       window.scrollTo({ top: scrollY, left: 0, behavior: "auto" });
     };
   }, [coverTargetIndex]);
+
+  const weatherDaysDataRef = useRef(trip.content.daysData);
+  weatherDaysDataRef.current = trip.content.daysData;
+
+  useEffect(() => {
+    const daysData = weatherDaysDataRef.current;
+    const enabledCards = Object.entries(daysData).flatMap(([dayKey, cards]) => {
+      const dayNumber = Number(dayKey);
+      const forecastDate = getItineraryDayDate(trip.departureDate, dayNumber);
+      return forecastDate ? cards.filter((card) => card.showWeather === true && card.id && card.place?.placeId)
+        .map((card) => ({ card, forecastDate })) : [];
+    });
+    if (!enabledCards.length) {
+      setWeatherByCardId({});
+      return;
+    }
+    const cached = loadWeatherForecastCache(trip.id);
+    const waiting = Object.fromEntries(enabledCards.map(({ card, forecastDate }) => [card.id!, {
+      request_id: card.id!, place_id: card.place!.placeId, forecast_date: forecastDate,
+      status: "waiting" as const, message: "等候預報更新",
+    }]));
+    const cachedForCurrentDates = Object.fromEntries(enabledCards.flatMap(({ card, forecastDate }) => {
+      const item = cached[card.id!];
+      return item?.forecast_date === forecastDate ? [[card.id!, item]] : [];
+    }));
+    if (!isOnline) {
+      setWeatherByCardId(Object.fromEntries(enabledCards.map(({ card }) => {
+        const item = cachedForCurrentDates[card.id!];
+        if (item?.weather && item.fetched_at) return [card.id!, { ...item, message: "離線，顯示上次成功取得的資料" }];
+        return [card.id!, { ...waiting[card.id!], status: "unavailable" as const, message: "離線，暫時無法取得天氣" }];
+      })));
+      return;
+    }
+    setWeatherByCardId(Object.fromEntries(enabledCards.map(({ card }) => [card.id!, cachedForCurrentDates[card.id!] ?? waiting[card.id!]])));
+    let cancelled = false;
+    void requestTripWeather(supabase, trip.id, trip.departureDate, daysData)
+      .then((results) => {
+        if (cancelled) return;
+        setWeatherByCardId(storeWeatherForecastResults(trip.id, results));
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setWeatherByCardId(Object.fromEntries(enabledCards.map(({ card }) => [card.id!, {
+          ...(cachedForCurrentDates[card.id!] ?? waiting[card.id!]),
+          status: cachedForCurrentDates[card.id!]?.weather ? "stale" as const : "unavailable" as const,
+          message: cachedForCurrentDates[card.id!]?.weather ? "更新失敗，顯示上次資料" : "暫時無法取得天氣",
+        }])));
+      });
+    return () => { cancelled = true; };
+  }, [isOnline, supabase, trip.departureDate, trip.id]);
+
+  useEffect(() => {
+    const currentCards = new Map<string, { placeId: string; forecastDate: string }>();
+    for (const [dayKey, cards] of Object.entries(trip.content.daysData)) {
+      const forecastDate = getItineraryDayDate(trip.departureDate, Number(dayKey));
+      if (!forecastDate) continue;
+      for (const card of cards) {
+        if (card.id && card.showWeather === true && card.place?.placeId) {
+          currentCards.set(card.id, { placeId: card.place.placeId, forecastDate });
+        }
+      }
+    }
+    setWeatherByCardId((current) => Object.fromEntries(Object.entries(current).filter(([cardId, weather]) => {
+      const card = currentCards.get(cardId);
+      return Boolean(card && card.placeId === weather.place_id && card.forecastDate === weather.forecast_date);
+    })));
+  }, [trip.content.daysData, trip.departureDate]);
 
   const currentDayEvents = trip.content.daysData[String(activeDay)] || [];
   const displayedDayEvents = (isOrderMode ? orderDraft : currentDayEvents)
@@ -1823,6 +1892,18 @@ export const ItineraryPage = ({
                 : "可輸入地點並確認，讓系統自動建立交通區段。"}
         </p>
 
+        {isConfirmedPlace(draft.place) && (
+          <label className="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-600">
+            <input
+              type="checkbox"
+              checked={draft.showWeather === true}
+              onChange={(event) => updateDraft({ showWeather: event.target.checked })}
+            />
+            顯示天氣
+            <span className="text-xs text-slate-400">儲存卡片後才生效</span>
+          </label>
+        )}
+
         {isPlaceSearchOpen && (
           <section className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm" aria-label="確認地點">
             <div className="flex items-center justify-between gap-2">
@@ -2324,6 +2405,55 @@ export const ItineraryPage = ({
                 renderItemForm(true)
               ) : (
                 <>
+              {event.showWeather === true && (
+                <div className={`mb-3 rounded-lg border px-3 py-2 text-xs ${weatherByCardId[event.id ?? ""]?.status === "stale" ? "border-amber-200 bg-amber-50 text-amber-800" : weatherByCardId[event.id ?? ""] && isLongRangeForecast(weatherByCardId[event.id ?? ""].forecast_date, weatherByCardId[event.id ?? ""].timezone) ? "border-slate-100 bg-slate-50 text-slate-600 opacity-80" : "border-sky-100 bg-sky-50/70 text-slate-700"}`} aria-live="polite">
+                  {(() => {
+                    const weather = weatherByCardId[event.id ?? ""];
+                    const forecast = weather?.weather;
+                    const description = getWeatherDescription(forecast?.weather_code);
+                    const reminders = getWeatherReminders(forecast);
+                    return (
+                      <>
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                          {forecast ? (
+                            <>
+                              <span className="font-semibold">{description.icon} {description.label}</span>
+                              {typeof forecast.temperature_2m_min === "number" && typeof forecast.temperature_2m_max === "number" && (
+                                <span>{Math.round(forecast.temperature_2m_min)}°C–{Math.round(forecast.temperature_2m_max)}°C</span>
+                              )}
+                              {typeof forecast.precipitation_probability_max === "number" && (
+                                <span>降雨機率 {forecast.precipitation_probability_max}%</span>
+                              )}
+                            </>
+                          ) : <span>{weather?.message ?? "等候預報更新"}</span>}
+                          {weather?.status === "stale" && weather.fetched_at && (
+                            <details className="inline-block">
+                              <summary className="cursor-pointer underline underline-offset-2">上次成功更新：{Math.max(1, Math.floor((Date.now() - Date.parse(weather.fetched_at)) / 3600000))} 小時前</summary>
+                              <p className="mt-1">完整時間：{new Intl.DateTimeFormat("zh-TW", { dateStyle: "short", timeStyle: "short" }).format(new Date(weather.fetched_at))}</p>
+                            </details>
+                          )}
+                          <span>資料來源：</span>
+                          <a href="https://open-meteo.com/" target="_blank" rel="noreferrer" className="font-semibold text-emerald-700 underline underline-offset-2">Open-Meteo</a>
+                          <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noreferrer" className="text-emerald-700 underline underline-offset-2">CC BY 4.0（資料已整理／翻譯）</a>
+                        </div>
+                        {weather?.message && forecast && <p className="mt-1">{weather.message}</p>}
+                        {forecast && weather && isLongRangeForecast(weather.forecast_date, weather.timezone) && <p className="mt-1">長期預報，仍可能變動</p>}
+                        {reminders.length > 0 && (
+                          <div className="mt-1 font-medium text-amber-800">
+                            <p>{reminders[0]}</p>
+                            {reminders.length > 1 && (
+                              <details className="mt-1">
+                                <summary className="cursor-pointer">還有 {reminders.length - 1} 項提醒</summary>
+                                <ul className="mt-1 list-inside list-disc">{reminders.slice(1).map((reminder) => <li key={reminder}>{reminder}</li>)}</ul>
+                              </details>
+                            )}
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()}
+                </div>
+              )}
               {isOrderMode && (
                 <div className="mb-3 flex items-center justify-between gap-3 border-b border-sky-100 pb-3">
                   <span className="text-xs font-bold text-sky-700">第 {sortedIndex + 1} 站</span>

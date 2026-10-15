@@ -109,6 +109,8 @@ export interface ItineraryItem {
   location: string;
   /** 經管理者確認、可穩定供 Places／Routes 使用的地點。 */
   place?: ConfirmedPlace;
+  /** V3.10.1：僅在卡片成功儲存後生效；舊資料缺值視為未啟用。 */
+  showWeather?: boolean;
   /** 明確標記航班卡片；不依標題是否包含「機場」推測。 */
   travelKind?: "flight";
   /** V3.9.22：餐飲／其他卡片可覆寫是否納入交通節點；舊資料依類型套用預設。 */
