@@ -10,24 +10,34 @@
 
 migration list 對齊只代表版本紀錄一致，不保證資料庫結構完全一致；schema diff（結構差異比較）仍是必要的發布檢查。
 
-## 2. 開始工作前：同步 Git 與本機 schema
+## 2. 每次開始工作前：AI 自動核對與同步
 
-在要開始工作的電腦執行：
+本節同時是 `AGENTS.md` 的執行細則。AI 每次開始專案任務都必須先核對 Git；涉及資料庫時，再核對本機 Supabase。不可因任務看似只改文件就略過 Git 核對。
+
+### Git 檢查與安全拉取
 
     git status --short --branch
+    git branch --show-current
     git fetch origin
-    git switch develop
-    git pull --ff-only origin develop
+    git status --short --branch
+    git log -1 --oneline
+
+- 只有在工作目錄乾淨、目前分支是 `develop`，且 `origin/develop` 僅比本機領先、沒有分歧時，AI 才可自動執行 `git pull --ff-only origin develop`，並再次確認狀態與最新 commit。
+- 若有已修改、已暫存或 untracked 檔案，或目前分支不是 `develop`，不可自動切分支、stash、覆寫或 reset；先保留現況並回報。
+- 若本機領先遠端、雙方分歧、upstream 不明或 fetch 失敗，停止自動拉取，先查明狀態。
+
+### Supabase 本機資料庫檢查
+
+僅在任務涉及 Supabase、migration 或需要執行資料庫測試時執行：
 
     npx supabase status
     npx supabase migration list --local
-    npx supabase migration up --local
-    npx supabase db lint --local
 
-- 若工作目錄有未提交變更，先確認屬於自己的工作，不可直接覆蓋或重設。
-- 若 Docker／Supabase 尚未啟動，先確認 Docker Desktop 正常，再依專案既有方式啟動 Supabase。
-- migration up --local 只套用尚未執行的 migration，不會把本機資料庫推送到正式環境。
-- 若 migration 因資料檢查而中止，先保存錯誤訊息並盤點資料；不可用 db reset、刪除 Docker volume 或 migration repair 略過問題。
+確認 Docker／本機 Supabase 正常後，先讀取並審查所有待套用 migration SQL。純新增且不破壞既有資料的 migration，可在風險確認後執行 `npx supabase migration up --local`，再執行 `npx supabase db lint --local` 及相關測試。
+
+若 migration 可能刪除／重建資料、改變欄位型別或主鍵、刪除欄位／索引、改寫資料或影響附件關聯，必須先建立可辨識且可還原的本機資料備份，確認備份檔存在且非空，再考慮執行。若無法確認備份及還原方式，或變更涉及 Supabase Storage 物件，先停止並回報。不可假設資料庫備份會一併備份 Storage 中的檔案。
+
+若 migration 因資料檢查而中止，先保存完整錯誤訊息並盤點資料；不可用 `db reset`、刪除 Docker volume 或 `migration repair` 略過問題。任何正式 Supabase 寫入／部署操作都必須取得使用者明確核准。
 
 ## 3. 新增 schema 變更的標準流程
 
@@ -57,21 +67,15 @@ migration list 對齊只代表版本紀錄一致，不保證資料庫結構完�
 
 ## 4. 第二台電腦接手
 
-在第二台電腦：
+第二台電腦同樣先完整執行第 2 節的 Git 核對。只有工作目錄乾淨且目前位於 `develop`、遠端只有可 fast-forward 的新提交時，才自動拉取；不可為了同步而自動切分支或覆蓋未提交工作。
 
-    git status --short --branch
-    git fetch origin
-    git switch develop
-    git pull --ff-only origin develop
+Git 同步後，依第 2 節核對本機 Supabase 狀態與 migration 清單。檢視待套用 SQL 並依風險規則決定是否執行 `npx supabase migration up --local`，之後再執行：
 
-    npx supabase status
-    npx supabase migration list --local
-    npx supabase migration up --local
     npx supabase db lint --local
     npm run lint
     npm run build
 
-若 migration 失敗，不要重建資料庫來「求同步」。先判斷是本機舊資料不符合新約束、migration 缺漏，還是環境版本差異，再用向前修正處理。需要搬移本機測試資料時，先做資料備份並確認還原可用。
+若 migration 失敗，不要重建資料庫來「求同步」。先判斷是本機舊資料不符合新約束、migration 缺漏，還是環境版本差異，再用向前修正處理。需要搬移本機測試資料或執行有破壞風險的 migration 時，先做資料備份並確認還原可用；若無法確認備份與還原方式，先停止並回報。
 
 ## 5. 正式環境部署前的停止線
 
