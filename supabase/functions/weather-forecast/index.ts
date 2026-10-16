@@ -1,4 +1,5 @@
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2.108.2";
+import { preferSharedTargetCandidate, type WeatherCandidate } from "./target-selection.ts";
 
 type WeatherSupabaseClient = SupabaseClient;
 
@@ -49,14 +50,7 @@ const isCoordinate = (latitude: unknown, longitude: unknown) =>
   typeof latitude === "number" && Number.isFinite(latitude) && latitude >= -90 && latitude <= 90 &&
   typeof longitude === "number" && Number.isFinite(longitude) && longitude >= -180 && longitude <= 180;
 
-interface Candidate {
-  tripId: string;
-  dayNumber: number;
-  cardId: string;
-  placeId: string;
-  forecastDate: string;
-  arrivalTime: string;
-}
+type Candidate = WeatherCandidate;
 interface WeatherResult {
   request_id: string;
   place_id: string;
@@ -323,7 +317,11 @@ Deno.serve(async (request) => {
         }
       }
       const results: WeatherResult[] = [];
-      const unique = new Map(candidates.map((candidate) => [`${candidate.placeId}|${candidate.forecastDate}`, candidate]));
+      const unique = new Map<string, Candidate>();
+      for (const candidate of candidates) {
+        const key = `${candidate.placeId}|${candidate.forecastDate}`;
+        unique.set(key, preferSharedTargetCandidate(unique.get(key), candidate));
+      }
       const targets = [...unique.values()];
       for (let batchOffset = 0; batchOffset < targets.length; batchOffset += 10) {
         const batch = targets.slice(batchOffset, batchOffset + 10);
@@ -365,7 +363,11 @@ Deno.serve(async (request) => {
       const verified = getStoredCandidate(trip as Record<string, unknown>, candidate);
       if (verified) candidates.push(verified);
     }
-    const unique = new Map(candidates.map((candidate) => [`${candidate.placeId}|${candidate.forecastDate}`, candidate]));
+    const unique = new Map<string, Candidate>();
+    for (const candidate of candidates) {
+      const key = `${candidate.placeId}|${candidate.forecastDate}`;
+      unique.set(key, preferSharedTargetCandidate(unique.get(key), candidate));
+    }
     const uniqueResults = new Map<string, WeatherResult>();
     for (const [key, candidate] of [...unique.entries()].slice(0, 10)) {
       uniqueResults.set(key, await getForecastForCandidate(admin, candidate));
