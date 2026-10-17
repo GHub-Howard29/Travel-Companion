@@ -56,6 +56,7 @@ assert.match(itinerary, /天氣更新診斷結果/);
 assert.match(edgeFunction, /ageSinceSuccess >= 24 \* 3600000/);
 assert.match(edgeFunction, /failedRecently \? false/);
 assert.match(edgeFunction, /x-weather-cron-secret/);
+assert.match(edgeFunction, /x-travel-companion-client-id/);
 assert.match(edgeFunction, /WEATHER_CRON_SECRET/);
 assert.match(edgeFunction, /logWeatherDiagnostic/);
 assert.match(edgeFunction, /environment_variable_missing/);

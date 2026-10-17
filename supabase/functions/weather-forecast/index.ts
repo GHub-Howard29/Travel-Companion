@@ -5,7 +5,7 @@ type WeatherSupabaseClient = SupabaseClient;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, apikey, content-type, x-client-info, x-weather-cron-secret",
+  "Access-Control-Allow-Headers": "authorization, apikey, content-type, x-client-info, x-travel-companion-client-id, x-weather-cron-secret",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), {
