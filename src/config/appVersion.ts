@@ -5,7 +5,7 @@ export const APP_VERSION = "3.10.3";
  * 最近一次已發布版本；此版本必須存在於 versionHistory.ts。
  * production build 會驗證這個規則，避免升版後遺漏版本歷史。
  */
-export const PREVIOUS_RELEASE_VERSION = "3.10.1";
+export const PREVIOUS_RELEASE_VERSION = "3.10.2";
 
 export const RELEASE_DATE = "2026-10-18";
 
