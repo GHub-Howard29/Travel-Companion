@@ -34,7 +34,7 @@ export const getItineraryDayButtonClasses = (
         last: "border-slate-200 bg-white text-slate-700 hover:bg-slate-50",
       }[tone];
   const emphasisClass = isActive || isToday
-    ? "border-[1.5px] border-rose-500 ring-1 ring-rose-100"
+    ? "!border-[3px] !border-rose-700 ring-1 ring-rose-200"
     : "";
   return `${baseClass} ${emphasisClass}`.trim();
 };

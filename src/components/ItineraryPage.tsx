@@ -274,6 +274,18 @@ export const ItineraryPage = ({
     onManageModeChange?.(isManageMode || isTimeAdjustmentMode || isOrderMode || Boolean(copySource));
     return () => onManageModeChange?.(false);
   }, [copySource, isManageMode, isOrderMode, isTimeAdjustmentMode, onManageModeChange]);
+
+  useEffect(() => {
+    const closeWeatherSourceDisclosure = (event: PointerEvent) => {
+      if (!(event.target instanceof Node)) return;
+      document.querySelectorAll<HTMLDetailsElement>("details[data-weather-source-disclosure][open]")
+        .forEach((details) => {
+          if (!details.contains(event.target as Node)) details.open = false;
+        });
+    };
+    document.addEventListener("pointerdown", closeWeatherSourceDisclosure);
+    return () => document.removeEventListener("pointerdown", closeWeatherSourceDisclosure);
+  }, []);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [draft, setDraft] = useState<ItineraryItem>(createEmptyItineraryDraft);
@@ -479,7 +491,7 @@ export const ItineraryPage = ({
         }])));
       });
     return () => { cancelled = true; };
-  }, [isOnline, supabase, trip.departureDate, trip.id]);
+  }, [isOnline, supabase, trip.content.daysData, trip.departureDate, trip.id]);
 
   const currentDayEvents = trip.content.daysData[String(activeDay)] || [];
   const displayedDayEvents = (isOrderMode ? orderDraft : currentDayEvents)
@@ -2391,7 +2403,7 @@ export const ItineraryPage = ({
               ) : (
                 <>
               {event.showWeather === true && (
-                <div className={`mb-3 rounded-lg border px-3 py-2 text-xs ${weatherByCardId[event.id ?? ""]?.status === "stale" ? "border-amber-200 bg-amber-50 text-amber-800" : weatherByCardId[event.id ?? ""] && isLongRangeForecast(weatherByCardId[event.id ?? ""].forecast_date, weatherByCardId[event.id ?? ""].timezone) ? "border-slate-100 bg-slate-50 text-slate-600 opacity-80" : "border-sky-100 bg-sky-50/70 text-slate-700"}`} aria-live="polite">
+                <div className={`mb-3 rounded-lg border px-3 py-2 text-xs ${weatherByCardId[event.id ?? ""]?.status === "stale" ? "border-amber-200 bg-amber-50 text-amber-800" : (weatherByCardId[event.id ?? ""]?.status === "long_range" || (weatherByCardId[event.id ?? ""] && isLongRangeForecast(weatherByCardId[event.id ?? ""].forecast_date, weatherByCardId[event.id ?? ""].timezone))) ? "border-slate-100 bg-slate-50 text-slate-600 opacity-80" : "border-sky-100 bg-sky-50/70 text-slate-700"}`} aria-live="polite">
                   {(() => {
                     const storedWeather = weatherByCardId[event.id ?? ""];
                     const weather = storedWeather?.place_id === event.place?.placeId &&
@@ -2413,15 +2425,23 @@ export const ItineraryPage = ({
                               )}
                             </>
                           ) : <span>{weather?.message ?? "等候預報更新"}</span>}
-                          {weather?.status === "stale" && weather.fetched_at && (
-                            <details className="inline-block">
-                              <summary className="cursor-pointer underline underline-offset-2">上次成功更新：{Math.max(1, Math.floor((Date.now() - Date.parse(weather.fetched_at)) / 3600000))} 小時前</summary>
-                              <p className="mt-1">完整時間：{new Intl.DateTimeFormat("zh-TW", { dateStyle: "short", timeStyle: "short" }).format(new Date(weather.fetched_at))}</p>
-                            </details>
+                          {weather?.weather && weather.fetched_at && (
+                            <span className="text-slate-500">
+                              最後更新：{new Intl.DateTimeFormat("zh-TW", {
+                                month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit",
+                                hour12: false, timeZone: "Asia/Taipei",
+                              }).format(new Date(weather.fetched_at))}
+                            </span>
                           )}
-                          <span>資料來源：</span>
-                          <a href="https://open-meteo.com/" target="_blank" rel="noreferrer" className="font-semibold text-emerald-700 underline underline-offset-2">Open-Meteo</a>
-                          <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noreferrer" className="text-emerald-700 underline underline-offset-2">CC BY 4.0（資料已整理／翻譯）</a>
+                          <details className="weather-source-disclosure relative" data-weather-source-disclosure>
+                            <summary className="cursor-pointer list-none font-semibold text-emerald-700 underline underline-offset-2">
+                              資料來源
+                            </summary>
+                            <div className="absolute right-0 z-10 mt-1 flex min-w-max flex-col gap-2 rounded-lg border border-slate-200 bg-white p-3 text-xs shadow-lg">
+                              <a href="https://open-meteo.com/" target="_blank" rel="noreferrer" className="text-emerald-700 underline underline-offset-2">Open-Meteo 天氣資料</a>
+                              <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noreferrer" className="text-emerald-700 underline underline-offset-2">CC BY 4.0 授權（資料已整理／翻譯）</a>
+                            </div>
+                          </details>
                         </div>
                         {weather?.message && forecast && <p className="mt-1">{weather.message}</p>}
                         {forecast && weather && isLongRangeForecast(weather.forecast_date, weather.timezone) && <p className="mt-1">長期預報，仍可能變動</p>}

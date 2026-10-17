@@ -153,6 +153,11 @@ const supabase =
       })
     : null;
 type ConfiguredSupabaseClient = NonNullable<typeof supabase>;
+const isLocalTestLoginEnabled = Boolean(
+  import.meta.env.DEV &&
+  supabaseUrl &&
+  ["localhost", "127.0.0.1"].includes(new URL(supabaseUrl).hostname),
+);
 
 const isIosStandalonePwa = () => {
   const navigatorWithStandalone = navigator as Navigator & {
@@ -521,6 +526,30 @@ function ConfiguredApp({
     const path = window.location.pathname;
     if (path.includes("/Travel-Companion")) return "/Travel-Companion/";
     return "/";
+  };
+
+  // Local-only test login: available only in Vite dev mode against localhost Supabase.
+  const handleLocalTestLogin = async (email: string, password: string) => {
+    if (!isLocalTestLoginEnabled) {
+      throw new Error("本機測試登入僅能連線至本機 Supabase。");
+    }
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) throw new Error("本機測試登入失敗，請確認測試帳號與密碼。");
+    setIsLoginSafetyOpen(false);
+  };
+
+  const handleLocalTestSignUp = async (email: string, password: string) => {
+    if (!isLocalTestLoginEnabled || !email.toLowerCase().endsWith("@example.invalid")) {
+      throw new Error("本機測試帳號僅允許使用 @example.invalid Email。");
+    }
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { data: { local_test: true, purpose: "v3101-weather-rc" } },
+    });
+    if (error) throw new Error("建立本機測試帳號失敗；若帳號已存在，請改用登入。");
+    if (!data.session) throw new Error("本機 Auth 未建立登入 session，請檢查本機 Email 確認設定。");
+    setIsLoginSafetyOpen(false);
   };
 
   // 登入 / 登出
@@ -1246,6 +1275,9 @@ function ConfiguredApp({
     <LoginSafetyModal
       isOpen={isLoginSafetyOpen}
       isIosStandalonePwa={isIosStandalonePwa()}
+      isLocalTestLoginEnabled={isLocalTestLoginEnabled}
+      onLocalTestLogin={handleLocalTestLogin}
+      onLocalTestSignUp={handleLocalTestSignUp}
       onClose={() => setIsLoginSafetyOpen(false)}
       onConfirm={handleGoogleLogin}
     />

@@ -10,7 +10,8 @@ const firstSelected = getItineraryDayButtonClasses(longTrip, 0, {
   isToday: false,
 });
 assert.match(firstSelected, /bg-blue-50/);
-assert.match(firstSelected, /border-rose-500/);
+assert.match(firstSelected, /!border-rose-700/);
+assert.match(firstSelected, /!border-\[3px\]/);
 assert.doesNotMatch(firstSelected, /bg-white/);
 
 const middleToday = getItineraryDayButtonClasses(longTrip, 2, {
@@ -18,7 +19,7 @@ const middleToday = getItineraryDayButtonClasses(longTrip, 2, {
   isToday: true,
 });
 assert.match(middleToday, /bg-emerald-50/);
-assert.match(middleToday, /border-rose-500/);
+assert.match(middleToday, /!border-rose-700/);
 assert.doesNotMatch(middleToday, /bg-white/);
 
 const lastSelected = getItineraryDayButtonClasses(longTrip, 4, {
@@ -26,14 +27,14 @@ const lastSelected = getItineraryDayButtonClasses(longTrip, 4, {
   isToday: false,
 });
 assert.match(lastSelected, /bg-white/);
-assert.match(lastSelected, /border-rose-500/);
+assert.match(lastSelected, /!border-rose-700/);
 
 const twoDayTrip = getItineraryDayButtonClasses([1, 2], 1, {
   isActive: true,
   isToday: false,
 });
 assert.match(twoDayTrip, /bg-white/);
-assert.match(twoDayTrip, /border-rose-500/);
+assert.match(twoDayTrip, /!border-rose-700/);
 assert.doesNotMatch(twoDayTrip, /bg-blue-50|bg-emerald-50/);
 
 const threeDayTrip = getItineraryDayButtonClasses([1, 2, 3], 0, {
@@ -41,7 +42,7 @@ const threeDayTrip = getItineraryDayButtonClasses([1, 2, 3], 0, {
   isToday: false,
 });
 assert.match(threeDayTrip, /bg-blue-50/);
-assert.match(threeDayTrip, /border-rose-500/);
+assert.match(threeDayTrip, /!border-rose-700/);
 assert.doesNotMatch(threeDayTrip, /bg-white/);
 
 console.log("V3.9.29 日期按鈕三天分界與細紅框規則驗證通過");

@@ -1,9 +1,12 @@
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 import { LogIn, ShieldCheck, X } from "lucide-react";
 
 interface LoginSafetyModalProps {
   isOpen: boolean;
   isIosStandalonePwa?: boolean;
+  isLocalTestLoginEnabled?: boolean;
+  onLocalTestLogin?: (email: string, password: string) => Promise<void>;
+  onLocalTestSignUp?: (email: string, password: string) => Promise<void>;
   onClose: () => void;
   onConfirm: () => Promise<void>;
 }
@@ -11,13 +14,45 @@ interface LoginSafetyModalProps {
 export function LoginSafetyModal({
   isOpen,
   isIosStandalonePwa = false,
+  isLocalTestLoginEnabled = false,
+  onLocalTestLogin,
+  onLocalTestSignUp,
   onClose,
   onConfirm,
 }: LoginSafetyModalProps) {
   const [showIosHelp, setShowIosHelp] = useState(isIosStandalonePwa);
+  const [localTestEmail, setLocalTestEmail] = useState("");
+  const [localTestPassword, setLocalTestPassword] = useState("");
+  const [localTestError, setLocalTestError] = useState("");
+  const [isLocalTestSubmitting, setIsLocalTestSubmitting] = useState(false);
   const closeModal = () => {
     setShowIosHelp(isIosStandalonePwa);
+    setLocalTestPassword("");
+    setLocalTestError("");
     onClose();
+  };
+
+  const submitLocalTestLogin = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!isLocalTestLoginEnabled || !onLocalTestLogin || isLocalTestSubmitting) return;
+    setLocalTestError("");
+    setIsLocalTestSubmitting(true);
+    void onLocalTestLogin(localTestEmail.trim(), localTestPassword)
+      .catch((error: unknown) => {
+        setLocalTestError(error instanceof Error ? error.message : "本機測試登入失敗。");
+      })
+      .finally(() => setIsLocalTestSubmitting(false));
+  };
+
+  const submitLocalTestSignUp = () => {
+    if (!isLocalTestLoginEnabled || !onLocalTestSignUp || isLocalTestSubmitting) return;
+    setLocalTestError("");
+    setIsLocalTestSubmitting(true);
+    void onLocalTestSignUp(localTestEmail.trim(), localTestPassword)
+      .catch((error: unknown) => {
+        setLocalTestError(error instanceof Error ? error.message : "建立本機測試帳號失敗。");
+      })
+      .finally(() => setIsLocalTestSubmitting(false));
   };
 
   if (!isOpen) return null;
@@ -69,6 +104,55 @@ export function LoginSafetyModal({
             )}
           </div>
         </div>
+
+        {isLocalTestLoginEnabled && onLocalTestLogin && (
+          <form onSubmit={submitLocalTestLogin} className="space-y-3 border-t border-dashed border-slate-200 bg-slate-50 px-4 py-4">
+            <div>
+              <h3 className="text-sm font-bold text-slate-800">本機測試登入</h3>
+              <p className="mt-1 text-xs text-slate-500">僅連線 localhost Supabase，不使用正式 Google OAuth。</p>
+            </div>
+            <label className="block text-xs font-semibold text-slate-600">
+              測試帳號 Email
+              <input
+                type="email"
+                autoComplete="username"
+                required
+                value={localTestEmail}
+                onChange={(event) => setLocalTestEmail(event.target.value)}
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal text-slate-900 outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
+              />
+            </label>
+            <label className="block text-xs font-semibold text-slate-600">
+              測試密碼
+              <input
+                type="password"
+                autoComplete="current-password"
+                required
+                value={localTestPassword}
+                onChange={(event) => setLocalTestPassword(event.target.value)}
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal text-slate-900 outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
+              />
+            </label>
+            {localTestError && <p role="alert" className="text-xs text-red-700">{localTestError}</p>}
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="submit"
+                disabled={isLocalTestSubmitting}
+                className="rounded-lg bg-emerald-700 px-3 py-2.5 text-sm font-bold text-white hover:bg-emerald-800 disabled:cursor-wait disabled:opacity-60"
+              >
+                {isLocalTestSubmitting ? "處理中…" : "登入測試帳號"}
+              </button>
+              <button
+                type="button"
+                disabled={isLocalTestSubmitting}
+                onClick={submitLocalTestSignUp}
+                className="rounded-lg border border-emerald-700 bg-white px-3 py-2.5 text-sm font-bold text-emerald-800 hover:bg-emerald-50 disabled:cursor-wait disabled:opacity-60"
+              >
+                建立測試帳號
+              </button>
+            </div>
+          </form>
+        )}
 
         <div className="grid grid-cols-2 gap-2 border-t border-slate-100 bg-white p-3">
           <button
