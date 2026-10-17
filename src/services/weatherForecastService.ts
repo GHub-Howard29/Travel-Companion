@@ -143,9 +143,25 @@ export const requestTripWeather = async (
   const results: WeatherForecastItem[] = [];
   for (let offset = 0; offset < targetGroups.length; offset += 10) {
     const batch = targetGroups.slice(offset, offset + 10).flat();
-    const { data, error } = await supabase.functions.invoke("weather-forecast", { body: { trip_id: tripId, items: batch } });
+    const { data, error } = await supabase.functions.invoke("weather-forecast", {
+      body: { trip_id: tripId, items: batch },
+      timeout: 60_000,
+    });
     if (error) throw new Error("天氣資料暫時無法讀取。");
     if (Array.isArray(data?.results)) results.push(...data.results as WeatherForecastItem[]);
   }
-  return results;
+
+  const resultsByRequestId = new Map(results.map((result) => [result.request_id, result]));
+  return items.map((item) => {
+    const result = resultsByRequestId.get(item.card_id);
+    if (result?.place_id === item.place_id && result.forecast_date === item.forecast_date &&
+      result.status !== "waiting") return result;
+    return {
+      request_id: item.card_id,
+      place_id: item.place_id,
+      forecast_date: item.forecast_date,
+      status: "unavailable" as const,
+      message: "未取得有效天氣回應，請稍後重試",
+    };
+  });
 };

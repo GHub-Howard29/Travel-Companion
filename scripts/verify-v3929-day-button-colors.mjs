@@ -11,7 +11,7 @@ const firstSelected = getItineraryDayButtonClasses(longTrip, 0, {
 });
 assert.match(firstSelected, /bg-blue-50/);
 assert.match(firstSelected, /!border-rose-700/);
-assert.match(firstSelected, /!border-\[3px\]/);
+assert.match(firstSelected, /!border-2/);
 assert.doesNotMatch(firstSelected, /bg-white/);
 
 const middleToday = getItineraryDayButtonClasses(longTrip, 2, {
@@ -19,7 +19,8 @@ const middleToday = getItineraryDayButtonClasses(longTrip, 2, {
   isToday: true,
 });
 assert.match(middleToday, /bg-emerald-50/);
-assert.match(middleToday, /!border-rose-700/);
+assert.match(middleToday, /ring-1 ring-slate-300/);
+assert.doesNotMatch(middleToday, /border-rose-700/);
 assert.doesNotMatch(middleToday, /bg-white/);
 
 const lastSelected = getItineraryDayButtonClasses(longTrip, 4, {

@@ -40,10 +40,13 @@ create index if not exists weather_daily_forecasts_fetched_at_idx
 
 alter table public.weather_place_coordinates enable row level security;
 alter table public.weather_daily_forecasts enable row level security;
-revoke all on public.weather_place_coordinates from anon, authenticated;
-revoke all on public.weather_daily_forecasts from anon, authenticated;
-grant all on public.weather_place_coordinates to service_role;
-grant all on public.weather_daily_forecasts to service_role;
+revoke all on public.weather_place_coordinates from anon, authenticated, service_role;
+revoke all on public.weather_daily_forecasts from anon, authenticated, service_role;
+-- The Edge Function reads coordinate/forecast cache rows and only writes coordinate
+-- failure state directly. Forecast writes and cache cleanup go through SECURITY DEFINER
+-- RPCs / the postgres-owned cron job, so do not grant broad table privileges.
+grant select, insert, update on public.weather_place_coordinates to service_role;
+grant select on public.weather_daily_forecasts to service_role;
 
 create or replace function public.tc_weather_claim_lease(p_place_id text, p_forecast_date date)
 returns uuid

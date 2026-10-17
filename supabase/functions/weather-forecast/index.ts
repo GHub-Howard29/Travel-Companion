@@ -16,6 +16,34 @@ const env = (name: string) => {
   if (!value) throw new Error(`Missing ${name}`);
   return value;
 };
+const logWeatherDiagnostic = (
+  event: string,
+  traceId: string,
+  stage: string,
+  details: Record<string, string | number | boolean | null> = {},
+) => {
+  // Never pass API keys, authorization headers, request bodies, place IDs, or raw error messages here.
+  console.error(JSON.stringify({
+    scope: "weather-forecast",
+    event,
+    trace_id: traceId,
+    stage,
+    ...details,
+  }));
+};
+const safeErrorCode = (error: unknown) => {
+  const message = error instanceof Error ? error.message : "";
+  const knownCodes = new Set([
+    "COORDINATE_CACHE_READ_FAILED", "COORDINATE_CACHE_WRITE_FAILED", "PLACE_DETAILS_FAILED",
+    "PLACE_DETAILS_RATE_LIMITED", "PLACE_DETAILS_TIMEOUT", "PLACE_DETAILS_NETWORK_ERROR",
+    "PLACE_DETAILS_RESPONSE_ERROR", "PLACE_DETAILS_INVALID_COORDINATES", "PLACE_DETAILS_RETRY_COOLDOWN",
+    "WEATHER_SERVICE_NOT_CONFIGURED", "WEATHER_LEASE_FAILED", "WEATHER_CACHE_WRITE_FAILED",
+    "OPEN_METEO_FAILED", "OPEN_METEO_RATE_LIMITED", "OPEN_METEO_TIMEOUT", "OPEN_METEO_INVALID_RESPONSE",
+    "ARRIVAL_TIME_PASSED", "WEATHER_SERVICE_FAILED",
+  ]);
+  if (knownCodes.has(message) || /^(?:PLACE_DETAILS|OPEN_METEO)_HTTP_[1-5][0-9]{2}$/.test(message)) return message;
+  return "UNCLASSIFIED_ERROR";
+};
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value) && typeof value === "object" && !Array.isArray(value);
 const isValidDate = (value: unknown): value is string => {
@@ -90,21 +118,38 @@ const getStoredCandidate = (trip: Record<string, unknown>, candidate: Candidate)
   return verified;
 };
 
-const getCoordinates = async (admin: WeatherSupabaseClient, placeId: string) => {
+const getCoordinates = async (admin: WeatherSupabaseClient, placeId: string, traceId: string) => {
   const now = new Date();
-  const { data: cached } = await admin.from("weather_place_coordinates")
+  const { data: cached, error: cacheReadError } = await admin.from("weather_place_coordinates")
     .select("place_id, latitude, longitude, fetched_at, expires_at, status, last_error, updated_at")
     .eq("place_id", placeId).maybeSingle();
+  if (cacheReadError) {
+    logWeatherDiagnostic("coordinate_cache_read_failed", traceId, "coordinate_cache_read", {
+      error_code: "COORDINATE_CACHE_READ_FAILED",
+      database_code: cacheReadError.code ?? null,
+    });
+    throw new Error("COORDINATE_CACHE_READ_FAILED");
+  }
   if (cached?.status === "valid" && isCoordinate(cached.latitude, cached.longitude) &&
     cached.expires_at && Date.parse(cached.expires_at) > now.getTime() && !cached.last_error) {
     return { latitude: cached.latitude as number, longitude: cached.longitude as number };
   }
   if (cached?.status === "failed" && cached.updated_at &&
     Date.parse(cached.updated_at) > now.getTime() - 3600000) {
-    throw new Error(typeof cached.last_error === "string" ? cached.last_error : "PLACE_DETAILS_RETRY_COOLDOWN");
+    // Do not trust historical last_error text; it may predate the safe diagnostic-code policy.
+    throw new Error("PLACE_DETAILS_RETRY_COOLDOWN");
   }
 
-  const apiKey = env("GOOGLE_MAPS_API_KEY");
+  let apiKey: string;
+  try {
+    apiKey = env("GOOGLE_MAPS_API_KEY");
+  } catch {
+    logWeatherDiagnostic("environment_variable_missing", traceId, "google_places_configuration", {
+      variable: "GOOGLE_MAPS_API_KEY",
+      configured: false,
+    });
+    throw new Error("WEATHER_SERVICE_NOT_CONFIGURED");
+  }
   let lastError = "PLACE_DETAILS_FAILED";
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
@@ -114,6 +159,11 @@ const getCoordinates = async (admin: WeatherSupabaseClient, placeId: string) => 
       });
       if (!response.ok) {
         lastError = response.status === 429 ? "PLACE_DETAILS_RATE_LIMITED" : `PLACE_DETAILS_HTTP_${response.status}`;
+        logWeatherDiagnostic("google_places_http_error", traceId, "google_places_request", {
+          error_code: lastError,
+          http_status: response.status,
+          attempt: attempt + 1,
+        });
         if (response.status < 500 && response.status !== 429) break;
       } else {
         const payload = await response.json();
@@ -130,25 +180,55 @@ const getCoordinates = async (admin: WeatherSupabaseClient, placeId: string) => 
           p_fetched_at: fetchedAt,
           p_expires_at: expiresAt,
         });
-        if (error || stored !== true) throw new Error("COORDINATE_CACHE_WRITE_FAILED");
+        if (error || stored !== true) {
+          logWeatherDiagnostic("coordinate_cache_write_failed", traceId, "coordinate_cache_write", {
+            error_code: "COORDINATE_CACHE_WRITE_FAILED",
+            database_code: error?.code ?? null,
+            rpc_returned_true: stored === true,
+          });
+          throw new Error("COORDINATE_CACHE_WRITE_FAILED");
+        }
+        logWeatherDiagnostic("coordinate_lookup_succeeded", traceId, "coordinate_cache_write", {
+          cache_write_succeeded: true,
+        });
         return { latitude: latitude as number, longitude: longitude as number };
       }
     } catch (error) {
-      lastError = error instanceof Error && error.name === "TimeoutError" ? "PLACE_DETAILS_TIMEOUT" : lastError;
+      if (error instanceof Error && error.name === "TimeoutError") {
+        lastError = "PLACE_DETAILS_TIMEOUT";
+        logWeatherDiagnostic("google_places_timeout", traceId, "google_places_request", {
+          error_code: lastError,
+          attempt: attempt + 1,
+        });
+      } else if (error instanceof Error &&
+        ["COORDINATE_CACHE_WRITE_FAILED", "WEATHER_SERVICE_NOT_CONFIGURED", "COORDINATE_CACHE_READ_FAILED"].includes(error.message)) {
+        lastError = error.message;
+        break;
+      } else {
+        if (error instanceof TypeError) lastError = "PLACE_DETAILS_NETWORK_ERROR";
+        logWeatherDiagnostic("google_places_request_failed", traceId, "google_places_request", {
+          error_code: error instanceof TypeError ? "PLACE_DETAILS_NETWORK_ERROR" : "PLACE_DETAILS_RESPONSE_ERROR",
+          attempt: attempt + 1,
+        });
+      }
     }
     if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, 250 * (2 ** attempt)));
   }
   const failedAt = new Date().toISOString();
-  if (cached) {
-    // Preserve any previously stored coordinate values; a failed refresh must not erase them.
-    await admin.from("weather_place_coordinates").update({
+  // Preserve any previously stored coordinate values; a failed refresh must not erase them.
+  const failureWriteResult = cached
+    ? await admin.from("weather_place_coordinates").update({
       status: "failed", last_error: lastError, updated_at: failedAt,
-    }).eq("place_id", placeId);
-  } else {
-    await admin.from("weather_place_coordinates").insert({
+    }).eq("place_id", placeId)
+    : await admin.from("weather_place_coordinates").insert({
       place_id: placeId, status: "failed", last_error: lastError, updated_at: failedAt,
     });
-  }
+  const failureWriteError = failureWriteResult.error;
+  logWeatherDiagnostic("coordinate_lookup_failed", traceId, "coordinate_failure_record_write", {
+    error_code: lastError,
+    failure_record_write_succeeded: !failureWriteError,
+    database_code: failureWriteError?.code ?? null,
+  });
   throw new Error(lastError);
 };
 
@@ -202,6 +282,7 @@ const getForecastForCandidate = async (
   admin: WeatherSupabaseClient, candidate: Candidate,
 ): Promise<WeatherResult> => {
   const requestId = candidate.cardId;
+  const traceId = crypto.randomUUID();
   const { data: previous } = await admin.from("weather_daily_forecasts").select("*")
     .eq("place_id", candidate.placeId).eq("forecast_date", candidate.forecastDate).maybeSingle();
   const now = new Date();
@@ -225,7 +306,7 @@ const getForecastForCandidate = async (
 
   if (shouldRefresh) {
     try {
-      const coords = await getCoordinates(admin, candidate.placeId);
+      const coords = await getCoordinates(admin, candidate.placeId, traceId);
       const { data: token, error: leaseError } = await admin.rpc("tc_weather_claim_lease", {
         p_place_id: candidate.placeId, p_forecast_date: candidate.forecastDate,
       });
@@ -247,13 +328,27 @@ const getForecastForCandidate = async (
           });
           if (releaseError) throw new Error("WEATHER_CACHE_WRITE_FAILED");
         } catch (error) {
-          await admin.rpc("tc_weather_release_lease", {
-            p_place_id: candidate.placeId, p_forecast_date: candidate.forecastDate, p_token: token,
-            p_success: false, p_error: error instanceof Error ? error.message : "WEATHER_REFRESH_FAILED",
+          const errorCode = safeErrorCode(error);
+          logWeatherDiagnostic("forecast_refresh_failed", traceId, "forecast_fetch_or_cache_write", {
+            error_code: errorCode,
           });
+          const { error: releaseError } = await admin.rpc("tc_weather_release_lease", {
+            p_place_id: candidate.placeId, p_forecast_date: candidate.forecastDate, p_token: token,
+            p_success: false, p_error: errorCode,
+          });
+          if (releaseError) {
+            logWeatherDiagnostic("forecast_lease_release_failed", traceId, "forecast_lease_release", {
+              error_code: "WEATHER_LEASE_RELEASE_FAILED",
+              database_code: releaseError.code ?? null,
+            });
+          }
         }
       }
-    } catch { /* Serve a still-valid previous forecast below; never expose internal diagnostics. */ }
+    } catch (error) {
+      logWeatherDiagnostic("forecast_refresh_failed", traceId, "coordinate_or_lease", {
+        error_code: safeErrorCode(error),
+      });
+    }
   }
 
   const { data: latest } = await admin.from("weather_daily_forecasts").select("*")
@@ -286,9 +381,11 @@ const getForecastForCandidate = async (
   };
 };
 
-Deno.serve(async (request) => {
+const handleRequest = async (request: Request) => {
   if (request.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (request.method !== "POST") return json({ error: "METHOD_NOT_ALLOWED" }, 405);
+  const traceId = crypto.randomUUID();
+  let stage = "environment_configuration";
   try {
     const url = env("SUPABASE_URL");
     const publishableKey = Deno.env.get("SUPABASE_ANON_KEY") ?? env("SUPABASE_PUBLISHABLE_KEY");
@@ -296,6 +393,7 @@ Deno.serve(async (request) => {
     const admin = createClient(url, serviceRoleKey, { auth: { persistSession: false, autoRefreshToken: false } }) as WeatherSupabaseClient;
     const cronSecret = Deno.env.get("WEATHER_CRON_SECRET");
     const providedCronSecret = request.headers.get("x-weather-cron-secret");
+    stage = "request_authorization";
     if (providedCronSecret) {
       if (!cronSecret || providedCronSecret !== cronSecret) return json({ error: "UNAUTHORIZED" }, 401);
       const { data: trips, error } = await admin.from("trips").select("id, departure_date, content").limit(500);
@@ -331,8 +429,10 @@ Deno.serve(async (request) => {
             const { data: trip } = await admin.from("trips").select("id, departure_date, content").eq("id", candidate.tripId).maybeSingle();
             if (!trip || !getStoredCandidate(trip as Record<string, unknown>, candidate)) return null;
             const result = await getForecastForCandidate(admin, candidate);
-            await admin.from("weather_daily_forecasts").update({ last_scheduled_refresh_at: new Date().toISOString() })
-              .eq("place_id", candidate.placeId).eq("forecast_date", candidate.forecastDate);
+            await admin.rpc("tc_weather_mark_scheduled_refresh", {
+              p_place_id: candidate.placeId,
+              p_forecast_date: candidate.forecastDate,
+            });
             return result;
           }));
           results.push(...groupResults.filter((result): result is WeatherResult => result !== null));
@@ -347,8 +447,10 @@ Deno.serve(async (request) => {
       global: { headers: { Authorization: authorization } },
       auth: { persistSession: false, autoRefreshToken: false },
     }) as WeatherSupabaseClient;
+    stage = "request_body_validation";
     const body = await request.json();
     if (!isRecord(body) || typeof body.trip_id !== "string" || !body.trip_id.trim()) return json({ error: "INVALID_REQUEST" }, 400);
+    stage = "trip_read";
     const { data: trip, error: tripError } = await scoped.from("trips").select("id, departure_date, content").eq("id", body.trip_id).maybeSingle();
     if (tripError || !trip) return json({ error: "TRIP_NOT_READABLE" }, 403);
     const requestedItems = Array.isArray(body.items) ? body.items : [];
@@ -369,19 +471,35 @@ Deno.serve(async (request) => {
       unique.set(key, preferSharedTargetCandidate(unique.get(key), candidate));
     }
     const uniqueResults = new Map<string, WeatherResult>();
-    for (const [key, candidate] of [...unique.entries()].slice(0, 10)) {
-      uniqueResults.set(key, await getForecastForCandidate(admin, candidate));
+    const targets = [...unique.entries()].slice(0, 10);
+    for (let offset = 0; offset < targets.length; offset += 5) {
+      const group = targets.slice(offset, offset + 5);
+      const groupResults = await Promise.all(group.map(async ([key, candidate]) =>
+        [key, await getForecastForCandidate(admin, candidate)] as const));
+      for (const [key, result] of groupResults) uniqueResults.set(key, result);
     }
     const results = candidates.map((candidate) => {
       const result = uniqueResults.get(`${candidate.placeId}|${candidate.forecastDate}`);
       return result ? { ...result, request_id: candidate.cardId } : {
         request_id: candidate.cardId, place_id: candidate.placeId, forecast_date: candidate.forecastDate,
-        status: "waiting" as const, message: "等候預報更新",
+        status: "unavailable" as const, message: "未取得有效天氣回應，請稍後重試",
       };
     });
     return json({ results });
   } catch (error) {
     const message = error instanceof Error ? error.message : "WEATHER_SERVICE_FAILED";
-    return json({ error: message.startsWith("Missing ") ? "WEATHER_SERVICE_NOT_CONFIGURED" : "WEATHER_SERVICE_FAILED" }, 500);
+    const missingVariable = /^Missing ([A-Z0-9_]+)$/.exec(message)?.[1];
+    logWeatherDiagnostic(
+      missingVariable ? "environment_variable_missing" : "request_failed",
+      traceId,
+      stage,
+      missingVariable
+        ? { variable: missingVariable, configured: false, error_code: "WEATHER_SERVICE_NOT_CONFIGURED" }
+        : { error_code: safeErrorCode(error) },
+    );
+    return json({ error: missingVariable ? "WEATHER_SERVICE_NOT_CONFIGURED" : "WEATHER_SERVICE_FAILED" }, 500);
   }
-});
+};
+
+if (import.meta.main) Deno.serve(handleRequest);
+export { getCoordinates, safeErrorCode };

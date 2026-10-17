@@ -893,10 +893,39 @@ export const ItineraryPage = ({
         copyTimeValidation.arrivalTime,
         copyTimeValidation.departureTime,
       );
+      let routeFailures = 0;
+      for (const dayNumber of copyTargetDays) {
+        const dayKey = String(dayNumber);
+        const previousItems = stableDaysData[dayKey] ?? [];
+        let nextItems = nextDaysData[dayKey] ?? [];
+        const copiedItem = nextItems.find((item) =>
+          !previousItems.some((previousItem) => previousItem.id === item.id),
+        );
+        if (!copiedItem?.id) continue;
+        const copiedIndex = nextItems.findIndex((item) => item.id === copiedItem.id);
+        const routeSegments = getTravelSegmentsNeedingEstimate(nextItems, copiedIndex);
+        for (const { originIndex, destinationIndex } of routeSegments) {
+          const origin = nextItems[originIndex];
+          const destination = nextItems[destinationIndex];
+          const mode = getPreferredTravelMode(origin);
+          try {
+            const estimate = await requestTravelEstimate(origin, destination, mode, dayNumber);
+            nextItems = nextItems.map((item, index) => index === originIndex
+              ? { ...item, travelModeToNext: mode, travelToNext: estimate }
+              : item);
+          } catch {
+            routeFailures += 1;
+          }
+        }
+        nextDaysData[dayKey] = nextItems;
+      }
       await onSaveTripDetail({
         ...trip,
         content: { ...trip.content, daysData: nextDaysData },
       });
+      setAutoRouteError(routeFailures > 0
+        ? `行程已複製，但有 ${routeFailures} 段路線自動查詢失敗；可在交通工具頁面重試。`
+        : null);
       const copiedDays = [...copyTargetDays].sort((left, right) => left - right);
       setCopySource(null);
       setCopyTargetDays([]);
@@ -1447,6 +1476,7 @@ export const ItineraryPage = ({
     origin: ItineraryItem,
     destination: ItineraryItem,
     mode: TravelMode,
+    dayNumber = activeDay,
   ): Promise<SavedTravelEstimate> => {
     const result = await getRouteEstimate(supabase, {
       tripId: trip.id,
@@ -1455,7 +1485,7 @@ export const ItineraryPage = ({
       mode,
       departureTime: origin.departureTime || origin.time,
       tripDepartureDate: trip.departureDate,
-      activeDay,
+      activeDay: dayNumber,
     });
 
     return {

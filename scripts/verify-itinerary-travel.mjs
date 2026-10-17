@@ -15,6 +15,10 @@ import {
   removeExpiredTravelEstimates,
 } from "../src/utils/itineraryTravel.ts";
 import { sanitizeStoredTripRecord } from "../src/storage/tripStorage.ts";
+import {
+  copyItineraryItemToDays,
+  createItineraryCopy,
+} from "../src/utils/itineraryOrder.ts";
 
 const placeA = { placeId: "ChIJ-place-a" };
 const placeB = { placeId: "ChIJ-place-b" };
@@ -166,4 +170,31 @@ const expiredRecord = sanitizeStoredTripRecord({
 assert.equal(expiredRecord.detail.content.daysData["1"][0].travelToNext, undefined);
 assert.equal(expiredRecord.detail.content.daysData["1"][0].travelModeToNext, "drive");
 
-console.log("行程交通區段、快取失效與時間警告驗證通過。");
+const weatherEnabledSource = {
+  ...origin,
+  id: "source-id",
+  showWeather: true,
+  travelModeToNext: "drive",
+};
+const copiedItem = createItineraryCopy(weatherEnabledSource, "10:00", "11:10", () => "copy-id");
+assert.equal(copiedItem.id, "copy-id");
+assert.equal(copiedItem.showWeather, true);
+assert.equal(copiedItem.place?.placeId, placeA.placeId);
+assert.equal(copiedItem.travelToNext, undefined);
+assert.equal(copiedItem.travelModeToNext, undefined);
+
+const copiedDays = copyItineraryItemToDays(
+  { "2": [destination] },
+  [2],
+  weatherEnabledSource,
+  "10:00",
+  "11:10",
+  () => "copy-id",
+);
+assert.equal(copiedDays["2"][0].id, "copy-id");
+assert.equal(copiedDays["2"][0].showWeather, true);
+assert.deepEqual(getTravelSegmentsNeedingEstimate(copiedDays["2"], 0), [
+  { originIndex: 0, destinationIndex: 1 },
+]);
+
+console.log("行程交通區段、複製後天氣設定、路線重新估算與時間警告驗證通過。");

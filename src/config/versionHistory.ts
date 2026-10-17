@@ -14,6 +14,25 @@ export type VersionHistoryItem = {
 
 export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
+    version: "3.10.1",
+    date: "2026-10-17",
+    isMandatoryRelease: false,
+    notes: [
+      "新增行程卡片天氣預報、地點座標快取與天氣快取。",
+      "加入背景定期更新，並在地點座標改變時保護天氣快取一致性。",
+    ],
+  },
+  {
+    version: "3.9.29",
+    date: "2026-10-10",
+    isMandatoryRelease: true,
+    notes: [
+      "修正三天行程日期按鈕分界：三天歸入首日／中間日配色規則。",
+      "少於三天行程維持全白底；當天或選取日期只增加細紅框，不改變原有底色。",
+      "最低支援版本維持 3.9.27，沿用既有 PWA 更新接管與離線同步規則。",
+    ],
+  },
+  {
     version: "3.9.28",
     date: "2026-10-10",
     isMandatoryRelease: false,
