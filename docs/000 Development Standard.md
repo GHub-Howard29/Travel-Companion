@@ -421,6 +421,10 @@ AI 需更新：
 
 `public/app-version.json` 必須與上述欄位一致，且不可被 PWA precache 快取；Service Worker 偵測更新時會先讀取此檔案，確認最新版版本號真的不同後才顯示更新提示。
 
+PWA 更新接管硬性規則：不得只依 `app-version.json`、`registration.active` 或 metadata 宣告更新成功。必須同時核對頁面顯示版本、`registration.active`、`waiting`、`installing` 與 `navigator.serviceWorker.controller`。若新版 worker 已 `active` 但 controller 尚未對齊，只能進入 `ready-to-reload`，不得直接 reload、不得寫入已更新版本紀錄，也不得顯示會讓使用者無限重複的「重試更新」。只有 controller 已接管後才可宣告完成；接管逾時須提供明確的「重新載入套用新版」入口。修改更新流程時，必須通過 `npm run verify:v3924-update-handoff` 與 `npm run verify:v3913-update-race`，並保留真實瀏覽器 handoff 證據。
+
+天氣正式鏈路硬性規則：本機 Edge Function 成功不代表正式天氣鏈路成功。正式發布前必須分別驗證 endpoint／授權、Google Places 座標、座標快取、Open-Meteo、lease／RPC、天氣快取寫入及 APP 顯示；沒有正式合資格卡片的 `fresh`／`stale` 結果時，不得宣告正式天氣端到端驗收通過。失敗診斷只能使用安全錯誤碼與 opaque trace ID，不得記錄 API key、Authorization、Trip 內容、place ID、原始 provider body 或 secret 值。
+
 強制更新原則：
 
 Travel Companion 是旅行中使用的 Offline First App，因此預設不強制更新。

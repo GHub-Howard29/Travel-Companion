@@ -480,6 +480,15 @@ export const ItineraryPage = ({
     void requestTripWeather(supabase, trip.id, trip.departureDate, daysData)
       .then((results) => {
         if (cancelled) return;
+        for (const result of results) {
+          if (result.diagnostic_code || result.trace_id) {
+            console.warn("天氣更新診斷結果。", {
+              request_id: result.request_id,
+              error_code: result.diagnostic_code ?? null,
+              trace_id: result.trace_id ?? null,
+            });
+          }
+        }
         setWeatherByCardId(storeWeatherForecastResults(trip.id, results));
       })
       .catch(() => {

@@ -358,6 +358,10 @@ export const useAppUpdate = () => {
 
   const update = useCallback(async (beforeUpdate?: () => Promise<void>) => {
     if (updateInProgressRef.current) return;
+    if (updatePhase === "ready-to-reload") {
+      reloadOnce();
+      return;
+    }
     if (!policy.hasUpdate) {
       setStoredAppVersion(APP_VERSION);
       setReleaseNoticeVisible(false);
@@ -416,8 +420,8 @@ export const useAppUpdate = () => {
         !registration.waiting &&
         !registration.installing;
       if (activatedReplacement) {
-        setStoredAppVersion(latestMetadata.version);
-        reloadOnce();
+        setUpdateError("新版已準備完成，請按「重新載入套用新版」完成更新。\n目前頁面尚未確認由新版接管。\n");
+        setUpdatePhase("ready-to-reload");
         return;
       }
 
@@ -442,18 +446,17 @@ export const useAppUpdate = () => {
       const handoffState = await handoffPromise;
 
       if (handoffState === "controlled") {
-        setStoredAppVersion(latestMetadata.version);
         reloadOnce();
         return;
       }
 
       if (handoffState === "active" && registration.active) {
-        setStoredAppVersion(latestMetadata.version);
-        reloadOnce();
+        setUpdateError("新版已準備完成，請按「重新載入套用新版」完成更新。\n目前頁面尚未確認由新版接管。\n");
+        setUpdatePhase("ready-to-reload");
         return;
       }
 
-      setUpdateError("新版尚未完成接管，請稍後重試更新；目前版本仍可正常使用。");
+      setUpdateError("新版接管確認逾時；請稍後再按「馬上更新」，不要連續重複點擊。\n目前版本仍可正常使用。");
       setUpdatePhase("idle");
     } catch (error) {
       console.warn("PWA Service Worker update failed.", error);
@@ -469,9 +472,9 @@ export const useAppUpdate = () => {
     }
   }, [
     checkVersionPolicy,
-    latestMetadata.version,
     policy.hasUpdate,
     reloadOnce,
+    updatePhase,
   ]);
 
   const dismiss = useCallback(() => {

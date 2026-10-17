@@ -16,6 +16,8 @@ export interface WeatherForecastItem {
     precipitation_probability_max: number | null;
   };
   message?: string;
+  diagnostic_code?: string;
+  trace_id?: string;
 }
 
 const WEATHER_CODES: Record<number, { label: string; icon: string }> = {
@@ -147,7 +149,13 @@ export const requestTripWeather = async (
       body: { trip_id: tripId, items: batch },
       timeout: 60_000,
     });
-    if (error) throw new Error("天氣資料暫時無法讀取。");
+    if (error) {
+      console.warn("天氣 Edge Function 呼叫失敗。", {
+        error_code: "WEATHER_FUNCTION_INVOKE_FAILED",
+        http_status: error.context instanceof Response ? error.context.status : null,
+      });
+      throw new Error("天氣資料暫時無法讀取。");
+    }
     if (Array.isArray(data?.results)) results.push(...data.results as WeatherForecastItem[]);
   }
 

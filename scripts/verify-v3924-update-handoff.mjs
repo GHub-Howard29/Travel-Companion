@@ -29,14 +29,29 @@ assert.match(
 
 assert.match(
   updateHook,
-  /const activatedReplacement =[\s\S]*registration\.active !== previousController[\s\S]*!registration\.waiting[\s\S]*!registration\.installing[\s\S]*setStoredAppVersion\(latestMetadata\.version\)[\s\S]*reloadOnce\(\)/,
-  "新版已 active 但舊頁面仍由舊 controller 控制時，必須直接重新載入，不可要求第二次點擊",
+  /const activatedReplacement =[\s\S]*registration\.active !== previousController[\s\S]*!registration\.waiting[\s\S]*!registration\.installing[\s\S]*setUpdatePhase\("ready-to-reload"\)/,
+  "新版已 active 但尚未確認 controller 對齊時，必須進入明確的 ready-to-reload 狀態，不可直接 reload",
 );
 
 assert.match(
   updateHook,
   /const checkForHandoff = \(\) => \{[\s\S]*const state = getState\(\);[\s\S]*if \(state\) finish\(state\)/,
-  "handoff 檢查應立即接受 active 狀態，不可固定等待 timeout",
+  "handoff 檢查必須同時監聽 worker 狀態與 controller 狀態",
+);
+
+assert.match(
+  updateHook,
+  /新版已準備完成，請按「重新載入套用新版」完成更新。/,
+  "active 但 controller 尚未對齊時，必須提供明確的重新載入入口",
+);
+
+const activatedReplacementBlock = updateHook.match(
+  /if \(activatedReplacement\) \{([\s\S]*?)\n      \}/,
+)?.[1] ?? "";
+assert.doesNotMatch(
+  activatedReplacementBlock,
+  /reloadOnce\(\)/,
+  "active replacement 不得在未確認 controller 對齊前自動 reload",
 );
 
 assert.doesNotMatch(

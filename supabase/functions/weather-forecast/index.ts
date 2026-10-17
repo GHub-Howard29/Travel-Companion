@@ -93,6 +93,8 @@ interface WeatherResult {
     precipitation_probability_max: number | null;
   };
   message?: string;
+  diagnostic_code?: string;
+  trace_id?: string;
 }
 
 const makeCandidate = (tripId: string, departureDate: string, dayNumber: number, card: unknown): Candidate | null => {
@@ -283,6 +285,10 @@ const getForecastForCandidate = async (
 ): Promise<WeatherResult> => {
   const requestId = candidate.cardId;
   const traceId = crypto.randomUUID();
+  let diagnosticCode: string | undefined;
+  const diagnosticFields = () => diagnosticCode
+    ? { diagnostic_code: diagnosticCode, trace_id: traceId }
+    : {};
   const { data: previous } = await admin.from("weather_daily_forecasts").select("*")
     .eq("place_id", candidate.placeId).eq("forecast_date", candidate.forecastDate).maybeSingle();
   const now = new Date();
@@ -329,6 +335,7 @@ const getForecastForCandidate = async (
           if (releaseError) throw new Error("WEATHER_CACHE_WRITE_FAILED");
         } catch (error) {
           const errorCode = safeErrorCode(error);
+          diagnosticCode = errorCode;
           logWeatherDiagnostic("forecast_refresh_failed", traceId, "forecast_fetch_or_cache_write", {
             error_code: errorCode,
           });
@@ -345,8 +352,9 @@ const getForecastForCandidate = async (
         }
       }
     } catch (error) {
+      diagnosticCode = safeErrorCode(error);
       logWeatherDiagnostic("forecast_refresh_failed", traceId, "coordinate_or_lease", {
-        error_code: safeErrorCode(error),
+        error_code: diagnosticCode,
       });
     }
   }
@@ -366,6 +374,7 @@ const getForecastForCandidate = async (
   if (!stillUsable) return {
     request_id: requestId, place_id: candidate.placeId, forecast_date: candidate.forecastDate,
     status: "unavailable", message: "暫時無法取得天氣",
+    ...diagnosticFields(),
   };
   const isStale = Date.parse(latest.fetched_at) <= Date.now() - 24 * 3600000;
   return {

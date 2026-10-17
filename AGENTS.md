@@ -18,3 +18,14 @@
 
 # 本專案回覆語言偏好
 - 所有回覆皆使用繁體中文。
+
+# PWA 更新接管硬性規則
+- 不得只依 `app-version.json`、`registration.active` 或 metadata 宣告更新成功；必須同時核對頁面顯示版本、`registration.active`、`waiting`、`installing` 與 `navigator.serviceWorker.controller`。
+- `registration.active` 但 `navigator.serviceWorker.controller !== registration.active` 時，只能進入 `ready-to-reload`，不得直接 `reload`、不得寫入「已更新」版本紀錄、不得顯示可無限重複的「重試更新」。
+- 只有確認新版 controller 已接管後，才可自動 reload 或宣告更新完成；接管逾時必須提供明確的「重新載入套用新版」恢復入口。
+- 任何修改 `useAppUpdate`、Service Worker、版本 metadata 或發布流程的工作，都必須更新並通過 `npm run verify:v3924-update-handoff` 與 `npm run verify:v3913-update-race`；不得以靜態 metadata、單純 reload 或單次本機頁面載入取代 active/controller handoff 證據。
+
+# 天氣正式鏈路驗證硬性規則
+- 本機 Edge Function 成功不代表正式天氣鏈路成功；正式發布前必須區分 endpoint／授權、Google Places 座標、座標快取、Open-Meteo、lease／RPC、天氣快取寫入及 APP 顯示結果。
+- 沒有正式環境合資格天氣卡片的實際 `fresh` 或 `stale` 結果時，不得宣告正式天氣端到端驗收通過；`results=[]`、OPTIONS 200、未授權 401 或空結果只算邊界／路由驗證。
+- 天氣失敗只能回傳安全診斷碼與 opaque trace ID；不得回傳或記錄 API key、Authorization、Trip 內容、place ID、原始 provider body 或 secret 值。
