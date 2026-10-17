@@ -1,11 +1,11 @@
 {
-  "version": "3.10.4",
+  "version": "3.10.5",
   "minimumSupportedVersion": "3.9.27",
   "releaseDate": "2026-10-18",
   "releaseNotes": [
-    "修正天氣 Edge Function 請求逾時時無回應，補上後端逾時邊界與安全診斷碼。",
-    "天氣批次部分失敗時保留各卡片結果，不再因單批逾時丟失整體回應。",
-    "補正版本歷史部署流程，確保 V3.10.2 與已發布版本完整顯示。"
+    "修正 weather-forecast CORS 白名單遺漏 x-travel-companion-client-id，讓正式 APP 能送出實際 POST。",
+    "保留既有 Edge Function 逾時、安全診斷碼、批次回應與版本歷史修正。",
+    "不修改 migration、正式資料或 secrets。"
   ],
   "forceUpdate": false
 }
