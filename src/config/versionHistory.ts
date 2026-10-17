@@ -14,6 +14,15 @@ export type VersionHistoryItem = {
 
 export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
+    version: "3.10.3",
+    date: "2026-10-18",
+    isMandatoryRelease: false,
+    notes: [
+      "修正 PWA 更新接管時的誤重載與重試更新循環。",
+      "補上天氣更新的安全診斷碼與 opaque trace ID。",
+    ],
+  },
+  {
     version: "3.10.2",
     date: "2026-10-18",
     isMandatoryRelease: false,

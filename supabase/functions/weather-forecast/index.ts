@@ -16,6 +16,19 @@ const env = (name: string) => {
   if (!value) throw new Error(`Missing ${name}`);
   return value;
 };
+const WEATHER_CANDIDATE_TIMEOUT_MS = 35_000;
+const WEATHER_TRIP_READ_TIMEOUT_MS = 10_000;
+const withTimeout = async <T>(promise: Promise<T>, timeoutMs: number, errorCode: string): Promise<T> => {
+  let timeoutId: number | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error(errorCode)), timeoutMs);
+  });
+  try {
+    return await Promise.race([promise, timeout]);
+  } finally {
+    if (timeoutId !== undefined) clearTimeout(timeoutId);
+  }
+};
 const logWeatherDiagnostic = (
   event: string,
   traceId: string,
@@ -39,7 +52,7 @@ const safeErrorCode = (error: unknown) => {
     "PLACE_DETAILS_RESPONSE_ERROR", "PLACE_DETAILS_INVALID_COORDINATES", "PLACE_DETAILS_RETRY_COOLDOWN",
     "WEATHER_SERVICE_NOT_CONFIGURED", "WEATHER_LEASE_FAILED", "WEATHER_CACHE_WRITE_FAILED",
     "OPEN_METEO_FAILED", "OPEN_METEO_RATE_LIMITED", "OPEN_METEO_TIMEOUT", "OPEN_METEO_INVALID_RESPONSE",
-    "ARRIVAL_TIME_PASSED", "WEATHER_SERVICE_FAILED",
+    "ARRIVAL_TIME_PASSED", "WEATHER_SERVICE_FAILED", "WEATHER_REQUEST_TIMEOUT",
   ]);
   if (knownCodes.has(message) || /^(?:PLACE_DETAILS|OPEN_METEO)_HTTP_[1-5][0-9]{2}$/.test(message)) return message;
   return "UNCLASSIFIED_ERROR";
@@ -281,10 +294,9 @@ const fetchForecast = async (latitude: number, longitude: number, forecastDate: 
 };
 
 const getForecastForCandidate = async (
-  admin: WeatherSupabaseClient, candidate: Candidate,
+  admin: WeatherSupabaseClient, candidate: Candidate, traceId = crypto.randomUUID(),
 ): Promise<WeatherResult> => {
   const requestId = candidate.cardId;
-  const traceId = crypto.randomUUID();
   let diagnosticCode: string | undefined;
   const diagnosticFields = () => diagnosticCode
     ? { diagnostic_code: diagnosticCode, trace_id: traceId }
@@ -460,7 +472,11 @@ const handleRequest = async (request: Request) => {
     const body = await request.json();
     if (!isRecord(body) || typeof body.trip_id !== "string" || !body.trip_id.trim()) return json({ error: "INVALID_REQUEST" }, 400);
     stage = "trip_read";
-    const { data: trip, error: tripError } = await scoped.from("trips").select("id, departure_date, content").eq("id", body.trip_id).maybeSingle();
+    const { data: trip, error: tripError } = await withTimeout(
+      scoped.from("trips").select("id, departure_date, content").eq("id", body.trip_id).maybeSingle(),
+      WEATHER_TRIP_READ_TIMEOUT_MS,
+      "WEATHER_REQUEST_TIMEOUT",
+    );
     if (tripError || !trip) return json({ error: "TRIP_NOT_READABLE" }, 403);
     const requestedItems = Array.isArray(body.items) ? body.items : [];
     const candidates: Candidate[] = [];
@@ -483,8 +499,30 @@ const handleRequest = async (request: Request) => {
     const targets = [...unique.entries()].slice(0, 10);
     for (let offset = 0; offset < targets.length; offset += 5) {
       const group = targets.slice(offset, offset + 5);
-      const groupResults = await Promise.all(group.map(async ([key, candidate]) =>
-        [key, await getForecastForCandidate(admin, candidate)] as const));
+      const groupResults = await Promise.all(group.map(async ([key, candidate]) => {
+        const traceId = crypto.randomUUID();
+        try {
+          return [key, await withTimeout(
+            getForecastForCandidate(admin, candidate, traceId),
+            WEATHER_CANDIDATE_TIMEOUT_MS,
+            "WEATHER_REQUEST_TIMEOUT",
+          )] as const;
+        } catch (error) {
+          const errorCode = safeErrorCode(error);
+          logWeatherDiagnostic("forecast_request_failed", traceId, "candidate_timeout", {
+            error_code: errorCode,
+          });
+          return [key, {
+            request_id: candidate.cardId,
+            place_id: candidate.placeId,
+            forecast_date: candidate.forecastDate,
+            status: "unavailable" as const,
+            message: "暫時無法取得天氣",
+            diagnostic_code: errorCode,
+            trace_id: traceId,
+          }] as const;
+        }
+      }));
       for (const [key, result] of groupResults) uniqueResults.set(key, result);
     }
     const results = candidates.map((candidate) => {

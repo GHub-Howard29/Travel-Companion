@@ -147,14 +147,22 @@ export const requestTripWeather = async (
     const batch = targetGroups.slice(offset, offset + 10).flat();
     const { data, error } = await supabase.functions.invoke("weather-forecast", {
       body: { trip_id: tripId, items: batch },
-      timeout: 60_000,
+      timeout: 45_000,
     });
     if (error) {
       console.warn("天氣 Edge Function 呼叫失敗。", {
         error_code: "WEATHER_FUNCTION_INVOKE_FAILED",
         http_status: error.context instanceof Response ? error.context.status : null,
       });
-      throw new Error("天氣資料暫時無法讀取。");
+      results.push(...batch.map((item) => ({
+        request_id: item.card_id,
+        place_id: item.place_id,
+        forecast_date: item.forecast_date,
+        status: "unavailable" as const,
+        message: "天氣服務逾時，請稍後重試",
+        diagnostic_code: "WEATHER_FUNCTION_INVOKE_FAILED",
+      })));
+      continue;
     }
     if (Array.isArray(data?.results)) results.push(...data.results as WeatherForecastItem[]);
   }
