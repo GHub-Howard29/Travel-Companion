@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 const updateHook = readFileSync("src/hooks/useAppUpdate.ts", "utf8");
 const appVersion = readFileSync("src/config/appVersion.ts", "utf8");
 
-assert.match(appVersion, /APP_VERSION = "3\.10\.6"/);
+assert.match(appVersion, /APP_VERSION = "3\.10\.7"/);
 
 assert.match(
   updateHook,
@@ -75,4 +75,4 @@ assert.match(
   "新版 ready 判斷必須以當次 registration.waiting 為準，不可使用過期全域旗標",
 );
 
-console.log("V3.10.6 PWA 主動更新檢查與 active-worker handoff regression 通過.");
+console.log("V3.10.7 PWA 主動更新檢查與 active-worker handoff regression 通過.");

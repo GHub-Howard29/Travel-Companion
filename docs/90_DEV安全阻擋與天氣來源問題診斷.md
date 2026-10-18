@@ -2,7 +2,7 @@
 
 > 建立日期：2026-10-18
 > 最新更新：2026-10-18
-> 狀態：原始碼與文件修正已提交至 `develop`；尚未部署正式環境，未修改正式資料庫。
+> 狀態：原始碼與文件修正已提交至 `develop`；2026-10-18 已完成正式 migration、Edge Function 與前端部署。
 
 ## 五、目前進度與後續步驟
 
@@ -15,15 +15,14 @@
 - 已透過 Supabase SQL Editor 唯讀查明最新 Trip 的士林 D1／D2／D3 差異；沒有執行正式資料寫入。
 - 已通過天氣靜態契約、TypeScript、完整 production build、PWA 與瀏覽器安全檢查。
 
-### 尚待執行
+### 部署後續與待驗證
 
-1. 先核對正式 migration、Edge Function 與前端版本一致性，特別是 `20261018100000_v3101_weather_source_url.sql`。
-2. 取得正式部署授權後，依序套用 migration、部署 `weather-forecast`、建置並部署前端；不直接套用整份 `db diff`。
-3. 部署後重新查詢士林 D1／D2／D3，確認三筆皆有 `fetched_at`、`weather_code`、`timezone`，且 `last_refresh_error` 為空。
-4. 以正式環境真實行程做單卡與跨日複製驗收；確認來源連結包含正確座標與日期，並確認舊快取 fallback 不再連到無關首頁。
-5. 若仍發生 unavailable，依 `diagnostic_code`／`trace_id` 與 Edge Logs 追查，不以重複操作成功取代證據。
+1. 已完成正式 migration、`weather-forecast` Edge Function 與前端部署；未直接套用整份 `db diff`。
+2. 既有正式快取仍可能缺少 `source_url`；需在登入正式網站後重新載入行程，確認成功取得的新資料會保存實際查詢網址。
+3. 以正式環境真實行程做單卡與跨日複製驗收；確認來源連結包含正確座標與日期，並確認舊快取 fallback 不再連到無關首頁。
+4. 若仍發生 unavailable，依 `diagnostic_code`／`trace_id` 與 Edge Logs 追查，不以重複操作成功取代證據。
 
-未經明確授權，不執行正式 migration、Edge Function 部署、Git tag、release 或 production smoke 寫入。
+未經明確授權，不執行新的正式 migration、Edge Function 部署、Git tag、release 或 production smoke 寫入。
 
 ## 一、DEV 資料庫安全硬阻擋
 
@@ -39,7 +38,7 @@ DEV 模式不得連線正式 Supabase。`src/App.tsx` 在建立 Supabase client 
 
 舊 localStorage／資料庫快取若缺少 `source_url` 與有效座標，不得猜測地點，也不得顯示會讓人誤認為已定位的首頁連結；UI 顯示「舊快取缺少查詢位置，重新取得後可開啟實際查詢頁」。`CC BY 4.0` 授權標示維持保留。
 
-`20261018100000_v3101_weather_source_url.sql` 是待部署的 schema 變更；在正式 migration 套用前，既有正式快取不會自動具備可追溯來源。
+`20261018100000_v3101_weather_source_url.sql` 已於 2026-10-18 套用至正式資料庫；既有正式快取不會自動補上 `source_url`，須在下次成功重新取得天氣後才會具備可追溯來源。
 
 ## 三、來源選單排版
 
@@ -58,3 +57,14 @@ DEV 模式不得連線正式 Supabase。`src/App.tsx` 在建立 Supabase client 
 3. 前端回應的 `diagnostic_code`／`trace_id` 與 Edge Function 對應紀錄。
 
 不得以重新複製一次成功，取代上述證據；也不得為了查詢而寫入正式資料或修改使用者行程。
+
+## 五、Supabase Advisor 安全提醒（待後續安全掃描再審查）
+
+2026-10-18 正式 Supabase Advisor 掃描發現下列既存提醒。這些項目不是本次 Open-Meteo 來源網址、天氣快取租約或 DEV 硬阻擋修正的必要阻擋項，因此本次只記錄，不直接修改正式權限或資料庫結構。
+
+- `public.weather_daily_forecasts`、`public.weather_place_coordinates`：RLS 已啟用但沒有政策。需先確認前端是否只能透過 Edge Function／service role 存取，再決定是否建立最小權限政策；不可為了消除警示而直接開放資料。
+- 三個既有 `SECURITY DEFINER` 函式仍可由 `authenticated` 執行：`tc_delete_trip`、`tc_read_trip_participant_email_map`、`tc_schedule_storage_deletion`。後續需逐一檢查呼叫邊界、資料範圍與 `EXECUTE` 權限。
+- `pg_net` 位於 `public` schema：需評估是否能移至非公開 schema，並確認既有排程／HTTP 呼叫不受影響。
+- Supabase Auth 的洩漏密碼防護尚未啟用：後續應評估啟用時機、現有登入流程與使用者影響。
+
+下次安全掃描或 Supabase Advisor 複查時，必須重新取得最新結果，逐項標註「仍存在／已修正／接受風險／需要設計決策」，不可直接沿用本次快照。未完成審查前，不得宣稱上述警示已解決。

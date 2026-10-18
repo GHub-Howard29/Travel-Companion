@@ -30,6 +30,7 @@
 - [x] V3.10.4：2026-10-18 完成發布。修正正式天氣 Edge Function 請求逾時無回應、天氣批次失敗丟失結果，以及 V3.10.2 未隨後續前端部署出現在版本歷史的問題。`develop`／`main` 發布 commit 為 `a1fd7bd`，annotated tag 為 `v3.10.4`，`weather-forecast` ACTIVE version 5，GitHub Pages commit 為 `1f7ddb4`；公開 metadata／首頁 HTTP 200，bundle 已確認包含 3.10.2、3.10.3、3.10.4，CORS／未授權邊界 smoke 通過。正式真實行程單卡／跨行程端到端驗收仍待有合資格資料後進行。詳見《[86_V3.10.4_天氣逾時與版本歷史修正版發布前核准清單](86_V3.10.4_天氣逾時與版本歷史修正版發布前核准清單.md)》。
 - [x] V3.10.5：已作為目前正式基準完成 source commit／tag `da2977c`／`v3.10.5`；修正正式 weather-forecast CORS 白名單遺漏 `x-travel-companion-client-id`。3.10.6 RC 的公開 smoke 仍須重新核對，不以本機 Git 證據代替。
 - [x] V3.10.6：2026-10-18 完成正式發布。RC 實機確認第一天／最後一天互相複製、可預報範圍與超過 10 天不提供預報；正式 `main`／`develop`／tag 均為 `39521fc`／`v3.10.6`，GitHub Pages `95c00eb`，`weather-forecast` ACTIVE version `7`，公開 metadata／首頁／bundle、CORS 與未授權邊界 smoke 通過。本版未修改 migration、正式資料或 secrets。完整紀錄見《[89_V3.10.6_RC驗證與發布紀錄](89_V3.10.6_RC驗證與發布紀錄.md)》。
+- [ ] V3.10.7 RC：DEV 安全硬阻擋、Open-Meteo 來源網址保存與舊快取 fallback、天氣 lease 回寫修正、來源選單窄螢幕修正，以及 Supabase Advisor 待審查項目已整理；待完整 build、文件連結、RC 線上 smoke 與使用者實測後，再決定是否建立正式 tag／合併 main。
 - [ ] V3.11.1：建立完整 build 的驗證群組與耗時基線，整併驗證入口與失敗報告，不縮減 release build；既有 V3.9.3 總啟動量測已確認存在，本版不重複新增程式內埋點。V3.9.24 的 Service Worker 真實跨版本更新驗證已完成，不再列為本版驗證債。
 - [ ] V3.11.2：沿用既有總啟動量測，分段量測離線冷啟動約 30 秒的 Service Worker、navigation、session、Trip 快取、localStorage、IndexedDB 與首個可操作畫面瓶頸，再依證據決定是否修正；不新增遠端 telemetry。
 - [ ] V3.11.3：以 loopback fixture 與瀏覽器／viewport 模擬建立零費用 Playwright 響應式回歸基礎。
@@ -39,7 +40,7 @@
 ## 目前待修與待驗
 
 - [ ] V3.10.6 天氣跨日異常：在本機 Supabase／Docker 可讀取後，唯讀比對 Day 1／Day 2／Day 3 的卡片、日期、地點、天氣快取與 diagnostic trace；目前不可用歷史 dump 代替最新資料庫紀錄，也不可為查詢寫入正式資料。規則與欄位清單見《[90_DEV安全阻擋與天氣來源問題診斷](90_DEV安全阻擋與天氣來源問題診斷.md)》。
-- [ ] Open-Meteo `source_url` migration `20261018100000_v3101_weather_source_url.sql`：完成正式部署前核准、migration／Edge Function／前端版本一致性檢查；未經明確發布授權不得套用。
+- [x] Open-Meteo `source_url` migration `20261018100000_v3101_weather_source_url.sql`：已完成正式部署與版本一致性檢查；既有舊快取不自動補寫 `source_url`，需在線上重新成功取得天氣後驗證新來源網址。
 
 - [x] BUG012（V3.9.15）：多人帳本 Realtime 即時同步已完成；`expenses` Realtime publication、事件後重新抓取與 30 秒輪詢備援均已驗證。
 - [x] BUG033（V3.9.15）：個人／共用帳本文案條件已修正；只有共用帳本且存在其他成員可代記帳時顯示提示。
