@@ -142,7 +142,25 @@ const screenLoadingFallback = (
 // --- 初始化 Supabase 雲端客戶端 ---
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+const isLoopbackSupabaseUrl = (value: unknown): boolean => {
+  if (typeof value !== "string" || !value.trim()) return false;
+  try {
+    const hostname = new URL(value).hostname.toLowerCase();
+    return hostname === "localhost" || hostname === "[::1]" || hostname === "::1" ||
+      /^127\.(?:25[0-5]|2[0-4]\d|1?\d?\d)(?:\.(?:25[0-5]|2[0-4]\d|1?\d?\d)){2}$/.test(hostname);
+  } catch {
+    return false;
+  }
+};
+
+// DEV 一律只能連線本機 Supabase；避免把測試帳號或測試資料送到正式資料庫。
+const isDevProductionSupabaseBlocked = Boolean(
+  import.meta.env.DEV && supabaseUrl?.trim() && !isLoopbackSupabaseUrl(supabaseUrl),
+);
+
 const supabase =
+  !isDevProductionSupabaseBlocked &&
   supabaseUrl?.trim() && supabaseAnonKey?.trim()
     ? createClient(supabaseUrl, supabaseAnonKey, {
         global: {
@@ -155,8 +173,7 @@ const supabase =
 type ConfiguredSupabaseClient = NonNullable<typeof supabase>;
 const isLocalTestLoginEnabled = Boolean(
   import.meta.env.DEV &&
-  supabaseUrl &&
-  ["localhost", "127.0.0.1"].includes(new URL(supabaseUrl).hostname),
+  isLoopbackSupabaseUrl(supabaseUrl),
 );
 
 const isIosStandalonePwa = () => {
@@ -220,6 +237,20 @@ export default function App() {
   }, []);
 
   if (!supabase) {
+    if (isDevProductionSupabaseBlocked) {
+      return (
+        <main className="flex min-h-screen items-center justify-center bg-slate-50 px-6 text-slate-800">
+          <section className="w-full max-w-lg rounded-2xl border border-red-200 bg-white p-6 shadow-sm">
+            <h1 className="text-xl font-semibold text-red-800">DEV 已停止</h1>
+            <p className="mt-3 leading-7 text-slate-600">
+              DEV 模式禁止連線正式 Supabase，已停止建立資料庫連線。請將
+              <code className="mx-1 rounded bg-slate-100 px-1.5 py-0.5 text-sm">VITE_SUPABASE_URL</code>
+              設為 localhost 或 127.0.0.1 的本機 Supabase 後再啟動。
+            </p>
+          </section>
+        </main>
+      );
+    }
     return (
       <main className="flex min-h-screen items-center justify-center bg-slate-50 px-6 text-slate-800">
         <section className="w-full max-w-lg rounded-2xl border border-amber-200 bg-white p-6 shadow-sm">

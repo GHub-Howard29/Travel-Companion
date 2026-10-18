@@ -105,7 +105,7 @@ import {
 } from "../services/itineraryCoverPhotoService";
 import { ITINERARY_COVER_BUCKET } from "../constants/appConstants";
 import { ITINERARY_COVER_CACHE_NAME } from "../services/itineraryCoverOfflineCache";
-import { getWeatherDescription, getWeatherReminders, isLongRangeForecast, loadWeatherForecastCache, requestTripWeather, storeWeatherForecastResults, type WeatherForecastItem } from "../services/weatherForecastService";
+import { getOpenMeteoSourceUrl, getWeatherDescription, getWeatherReminders, isLongRangeForecast, loadWeatherForecastCache, requestTripWeather, storeWeatherForecastResults, type WeatherForecastItem } from "../services/weatherForecastService";
 import { getItineraryCoverPaths } from "../utils/itineraryCoverPhoto";
 import { RichTextColorEditor } from "./RichTextColorEditor";
 import { RichTextDisplay } from "./RichTextDisplay";
@@ -2476,8 +2476,12 @@ export const ItineraryPage = ({
                             <summary className="cursor-pointer list-none font-semibold text-emerald-700 underline underline-offset-2">
                               資料來源
                             </summary>
-                            <div className="absolute right-0 z-10 mt-1 flex min-w-max flex-col gap-2 rounded-lg border border-slate-200 bg-white p-3 text-xs shadow-lg">
-                              <a href="https://open-meteo.com/" target="_blank" rel="noreferrer" className="text-emerald-700 underline underline-offset-2">Open-Meteo 天氣資料</a>
+                            <div className="absolute left-0 right-auto z-20 mt-1 flex w-72 max-w-[calc(100vw-2rem)] flex-col gap-2 break-words rounded-lg border border-slate-200 bg-white p-3 text-xs shadow-lg sm:left-auto sm:right-0">
+                              {getOpenMeteoSourceUrl(weather) ? (
+                                <a href={getOpenMeteoSourceUrl(weather) ?? undefined} target="_blank" rel="noreferrer" className="text-emerald-700 underline underline-offset-2">Open-Meteo 天氣資料</a>
+                              ) : (
+                                <span className="text-slate-500">Open-Meteo 天氣資料（舊快取缺少查詢位置，重新取得後可開啟實際查詢頁）</span>
+                              )}
                               <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noreferrer" className="text-emerald-700 underline underline-offset-2">CC BY 4.0 授權（資料已整理／翻譯）</a>
                             </div>
                           </details>

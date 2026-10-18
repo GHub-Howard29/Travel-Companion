@@ -38,6 +38,9 @@
 
 ## 目前待修與待驗
 
+- [ ] V3.10.6 天氣跨日異常：在本機 Supabase／Docker 可讀取後，唯讀比對 Day 1／Day 2／Day 3 的卡片、日期、地點、天氣快取與 diagnostic trace；目前不可用歷史 dump 代替最新資料庫紀錄，也不可為查詢寫入正式資料。規則與欄位清單見《[90_DEV安全阻擋與天氣來源問題診斷](90_DEV安全阻擋與天氣來源問題診斷.md)》。
+- [ ] Open-Meteo `source_url` migration `20261018100000_v3101_weather_source_url.sql`：完成正式部署前核准、migration／Edge Function／前端版本一致性檢查；未經明確發布授權不得套用。
+
 - [x] BUG012（V3.9.15）：多人帳本 Realtime 即時同步已完成；`expenses` Realtime publication、事件後重新抓取與 30 秒輪詢備援均已驗證。
 - [x] BUG033（V3.9.15）：個人／共用帳本文案條件已修正；只有共用帳本且存在其他成員可代記帳時顯示提示。
 - [x] Mobile Crop UI（V3.9.15）：手機照片裁切二次畫面已改為滿高 modal，裁切區限制垂直尺寸、縮放控制不橫向溢出、確認操作保持可見，且開啟照片 modal 時底層行程頁不再跟著捲動。

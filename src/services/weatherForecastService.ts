@@ -9,6 +9,9 @@ export interface WeatherForecastItem {
   status: "fresh" | "stale" | "waiting" | "unavailable" | "long_range" | "ineligible";
   fetched_at?: string;
   timezone?: string;
+  latitude?: number;
+  longitude?: number;
+  source_url?: string;
   weather?: {
     weather_code: number | null;
     temperature_2m_max: number | null;
@@ -19,6 +22,38 @@ export interface WeatherForecastItem {
   diagnostic_code?: string;
   trace_id?: string;
 }
+
+const OPEN_METEO_DOCS_ORIGIN = "open-meteo.com";
+const OPEN_METEO_DAILY_FIELDS = "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max";
+
+const isCoordinatePair = (latitude: unknown, longitude: unknown): latitude is number =>
+  typeof latitude === "number" && Number.isFinite(latitude) && latitude >= -90 && latitude <= 90 &&
+  typeof longitude === "number" && Number.isFinite(longitude) && longitude >= -180 && longitude <= 180;
+
+const isTrustedOpenMeteoUrl = (value: unknown): value is string => {
+  if (typeof value !== "string" || !value) return false;
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && url.hostname === OPEN_METEO_DOCS_ORIGIN;
+  } catch {
+    return false;
+  }
+};
+
+/** Build the exact Open-Meteo documentation query used by the weather request. */
+export const getOpenMeteoSourceUrl = (weather?: Pick<WeatherForecastItem, "forecast_date" | "latitude" | "longitude" | "source_url">): string | null => {
+  if (isTrustedOpenMeteoUrl(weather?.source_url)) return weather.source_url;
+  if (!weather || !isCoordinatePair(weather.latitude, weather.longitude) || !/^\d{4}-\d{2}-\d{2}$/.test(weather.forecast_date)) {
+    return null;
+  }
+  const url = new URL("https://open-meteo.com/en/docs");
+  url.search = new URLSearchParams({
+    latitude: String(weather.latitude), longitude: String(weather.longitude), daily: OPEN_METEO_DAILY_FIELDS,
+    start_date: weather.forecast_date, end_date: weather.forecast_date, timezone: "auto", temperature_unit: "celsius",
+    models: "best_match", cell_selection: "land",
+  }).toString();
+  return url.toString();
+};
 
 const WEATHER_CODES: Record<number, { label: string; icon: string }> = {
   0: { label: "晴朗", icon: "☀️" },

@@ -103,6 +103,9 @@ interface WeatherResult {
   status: "fresh" | "stale" | "waiting" | "unavailable" | "long_range" | "ineligible";
   fetched_at?: string;
   timezone?: string;
+  latitude?: number;
+  longitude?: number;
+  source_url?: string;
   weather?: {
     weather_code: number | null;
     temperature_2m_max: number | null;
@@ -113,6 +116,17 @@ interface WeatherResult {
   diagnostic_code?: string;
   trace_id?: string;
 }
+
+const OPEN_METEO_DAILY_FIELDS = "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max";
+const makeOpenMeteoSourceUrl = (latitude: number, longitude: number, forecastDate: string) => {
+  const url = new URL("https://open-meteo.com/en/docs");
+  url.search = new URLSearchParams({
+    latitude: String(latitude), longitude: String(longitude), daily: OPEN_METEO_DAILY_FIELDS,
+    start_date: forecastDate, end_date: forecastDate, timezone: "auto", temperature_unit: "celsius",
+    models: "best_match", cell_selection: "land",
+  }).toString();
+  return url.toString();
+};
 
 const makeCandidate = (tripId: string, departureDate: string, dayNumber: number, card: unknown): Candidate | null => {
   if (!isRecord(card) || card.showWeather !== true || !isRecord(card.place) ||
@@ -254,7 +268,7 @@ const getCoordinates = async (admin: WeatherSupabaseClient, placeId: string, tra
 const fetchForecast = async (latitude: number, longitude: number, forecastDate: string) => {
   const url = new URL("https://api.open-meteo.com/v1/forecast");
   url.search = new URLSearchParams({
-    latitude: String(latitude), longitude: String(longitude), daily: "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max",
+    latitude: String(latitude), longitude: String(longitude), daily: OPEN_METEO_DAILY_FIELDS,
     start_date: forecastDate, end_date: forecastDate, timezone: "auto", temperature_unit: "celsius",
     models: "best_match", cell_selection: "land",
   }).toString();
@@ -289,6 +303,9 @@ const fetchForecast = async (latitude: number, longitude: number, forecastDate: 
     return typeof value === "number" && Number.isFinite(value) ? value : null;
   };
   return {
+    latitude,
+    longitude,
+    source_url: makeOpenMeteoSourceUrl(latitude, longitude, forecastDate),
     timezone: payload.timezone,
     weather_code: numberAt("weather_code"),
     temperature_2m_max: numberAt("temperature_2m_max"),
@@ -345,25 +362,28 @@ const getForecastForCandidate = async (
             });
             return { request_id: requestId, place_id: candidate.placeId, forecast_date: candidate.forecastDate, status: "ineligible", message: "已超過景點到達時間" };
           }
-          const { error: releaseError } = await admin.rpc("tc_weather_release_lease", {
+          const { data: releaseSucceeded, error: releaseError } = await admin.rpc("tc_weather_release_lease", {
             p_place_id: candidate.placeId, p_forecast_date: candidate.forecastDate, p_token: token,
             p_success: true, p_forecast: { ...forecast, ...coords },
           });
-          if (releaseError) throw new Error("WEATHER_CACHE_WRITE_FAILED");
+          // RPC may return HTTP 200 with a false result when no row was updated.
+          // Treat that as a write failure instead of leaving a UTC placeholder row.
+          if (releaseError || releaseSucceeded !== true) throw new Error("WEATHER_CACHE_WRITE_FAILED");
         } catch (error) {
           const errorCode = safeErrorCode(error);
           diagnosticCode = errorCode;
           logWeatherDiagnostic("forecast_refresh_failed", traceId, "forecast_fetch_or_cache_write", {
             error_code: errorCode,
           });
-          const { error: releaseError } = await admin.rpc("tc_weather_release_lease", {
+          const { data: failureReleaseSucceeded, error: releaseError } = await admin.rpc("tc_weather_release_lease", {
             p_place_id: candidate.placeId, p_forecast_date: candidate.forecastDate, p_token: token,
             p_success: false, p_error: errorCode,
           });
-          if (releaseError) {
+          if (releaseError || failureReleaseSucceeded !== true) {
             logWeatherDiagnostic("forecast_lease_release_failed", traceId, "forecast_lease_release", {
               error_code: "WEATHER_LEASE_RELEASE_FAILED",
-              database_code: releaseError.code ?? null,
+              database_code: releaseError?.code ?? null,
+              rpc_returned_true: failureReleaseSucceeded === true,
             });
           }
         }
@@ -408,6 +428,7 @@ const getForecastForCandidate = async (
   return {
     request_id: requestId, place_id: candidate.placeId, forecast_date: candidate.forecastDate,
     status: isStale ? "stale" : "fresh", fetched_at: latest.fetched_at, timezone: latest.timezone,
+    latitude: latest.latitude, longitude: latest.longitude, source_url: latest.source_url,
     weather: {
       weather_code: latest.weather_code,
       temperature_2m_max: latest.temperature_2m_max,
