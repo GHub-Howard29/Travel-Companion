@@ -1,10 +1,11 @@
 {
-  "version": "3.10.5",
+  "version": "3.10.6",
   "minimumSupportedVersion": "3.9.27",
   "releaseDate": "2026-10-18",
   "releaseNotes": [
-    "修正 weather-forecast CORS 白名單遺漏 x-travel-companion-client-id，讓正式 APP 能送出實際 POST。",
-    "保留既有 Edge Function 逾時、安全診斷碼、批次回應與版本歷史修正。",
+    "修正複製行程卡片後天氣請求的同步競態與重複請求。",
+    "區分天氣更新中的租約狀態，並以單次短暫重試收斂批次天氣更新。",
+    "沿用 V3.9 已驗證的 PWA 更新接管方案，3.10.6 才套用本次新版接管流程。",
     "不修改 migration、正式資料或 secrets。"
   ],
   "forceUpdate": false
