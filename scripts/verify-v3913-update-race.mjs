@@ -7,13 +7,15 @@ const updateHook = readFileSync(resolve(root, "src/hooks/useAppUpdate.ts"), "utf
 const updatePrompt = readFileSync(resolve(root, "src/components/UpdatePrompt.tsx"), "utf8");
 const revisionNotice = readFileSync(resolve(root, "src/components/TripDataRevisionNotice.tsx"), "utf8");
 const app = readFileSync(resolve(root, "src/App.tsx"), "utf8");
+const appVersion = readFileSync(resolve(root, "src/config/appVersion.ts"), "utf8");
+
+assert.match(appVersion, /APP_VERSION = "3\.10\.6"/);
 
 for (const phase of [
   "syncing-data",
   "checking-metadata",
   "downloading",
   "waiting-control",
-  "ready-to-reload",
 ]) {
   assert.match(updateHook, new RegExp(phase));
 }
@@ -23,13 +25,20 @@ assert.match(updateHook, /waitForServiceWorkerHandoff/);
 assert.match(updateHook, /activeWorker === controller/);
 assert.match(updateHook, /await updateServiceWorker\(false\)/);
 assert.doesNotMatch(updateHook, /await updateServiceWorker\(true\)/);
-assert.match(updateHook, /新版已準備完成，請按「重新載入套用新版」完成更新。/);
-assert.match(updateHook, /setUpdatePhase\("ready-to-reload"\)/);
+assert.match(
+  updateHook,
+  /if \(activatedReplacement\) \{[\s\S]*setStoredAppVersion\(latestMetadata\.version\)[\s\S]*reloadOnce\(\)/,
+);
+assert.match(
+  updateHook,
+  /if \(handoffState === "active" && registration\.active\) \{[\s\S]*setStoredAppVersion\(latestMetadata\.version\)[\s\S]*reloadOnce\(\)/,
+);
+assert.doesNotMatch(updateHook, /ready-to-reload/);
 assert.match(updateHook, /navigator\.onLine\s*\?\s*"更新處理發生錯誤/);
 assert.match(updatePrompt, /正在同步行程資料…/);
 assert.match(updatePrompt, /正在下載新版…/);
 assert.match(updatePrompt, /等待新版接管…/);
-assert.match(updatePrompt, /重新載入套用新版/);
+assert.doesNotMatch(updatePrompt, /ready-to-reload/);
 assert.match(updateHook, /await beforeUpdate\(\)/);
 assert.match(updateHook, /行程資料同步尚未完成/);
 assert.doesNotMatch(

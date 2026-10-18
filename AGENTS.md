@@ -20,9 +20,11 @@
 - 所有回覆皆使用繁體中文。
 
 # PWA 更新接管硬性規則
-- 不得只依 `app-version.json`、`registration.active` 或 metadata 宣告更新成功；必須同時核對頁面顯示版本、`registration.active`、`waiting`、`installing` 與 `navigator.serviceWorker.controller`。
-- `registration.active` 但 `navigator.serviceWorker.controller !== registration.active` 時，只能進入 `ready-to-reload`，不得直接 `reload`、不得寫入「已更新」版本紀錄、不得顯示可無限重複的「重試更新」。
-- 只有確認新版 controller 已接管後，才可自動 reload 或宣告更新完成；接管逾時必須提供明確的「重新載入套用新版」恢復入口。
+- 必須沿用 V3.9.24／V3.9.27 已驗證的更新接管方案；不得以延長等待時間或新增第二次「重試更新」點擊取代接管狀態修正。
+- 驗證更新時仍必須同時核對頁面顯示版本、`registration.active`、`waiting`、`installing` 與 `navigator.serviceWorker.controller`；單一 metadata 或單次載入結果不足以證明流程正常。
+- 當新版 worker 已是 activated replacement（`registration.active !== previousController`、狀態為 `activated`，且沒有 `waiting`／`installing`），由 `useAppUpdate` 唯一 reload owner 寫入最新版本並直接 reload；不得轉入 `ready-to-reload` 或要求使用者再次點擊。
+- `handoffState === "active"` 且 `registration.active` 已確認為 activated 時，沿用同一個唯一 reload owner 直接 reload；`skipWaiting` 只能送出一次，避免重複接管競態。
+- 只有上述已驗證的 active／controlled 狀態可以完成更新；真正 timeout／error 必須保留目前版本並停止本次流程，不得宣告已更新。不得以靜態 metadata、單純 reload 或延長 timeout 取代 active／handoff 證據。
 - 任何修改 `useAppUpdate`、Service Worker、版本 metadata 或發布流程的工作，都必須更新並通過 `npm run verify:v3924-update-handoff` 與 `npm run verify:v3913-update-race`；不得以靜態 metadata、單純 reload 或單次本機頁面載入取代 active/controller handoff 證據。
 
 # 天氣正式鏈路驗證硬性規則

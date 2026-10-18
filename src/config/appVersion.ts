@@ -1,17 +1,18 @@
 /** App 發布版本設定；須與 public/app-version.json 保持一致。 */
-export const APP_VERSION = "3.10.5";
+export const APP_VERSION = "3.10.6";
 
 /**
  * 最近一次已發布版本；此版本必須存在於 versionHistory.ts。
  * production build 會驗證這個規則，避免升版後遺漏版本歷史。
  */
-export const PREVIOUS_RELEASE_VERSION = "3.10.4";
+export const PREVIOUS_RELEASE_VERSION = "3.10.5";
 
 export const RELEASE_DATE = "2026-10-18";
 
 export const RELEASE_NOTES = [
-  "修正 weather-forecast CORS 白名單遺漏 x-travel-companion-client-id，讓正式 APP 能送出實際 POST。",
-  "保留既有 Edge Function 逾時、安全診斷碼、批次回應與版本歷史修正。",
+  "修正複製行程卡片後天氣請求的同步競態與重複請求。",
+  "區分天氣更新中的租約狀態，並以單次短暫重試收斂批次天氣更新。",
+  "沿用 V3.9 已驗證的 PWA 更新接管方案，3.10.6 才套用本次新版接管流程。",
   "不修改 migration、正式資料或 secrets。",
 ];
 

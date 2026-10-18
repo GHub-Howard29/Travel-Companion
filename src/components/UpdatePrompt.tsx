@@ -44,9 +44,7 @@ export function UpdatePrompt({
     : isMandatoryUpdate
       ? "本次更新必須安裝才能繼續使用"
       : "可以馬上更新，也可以稍後再更新";
-  const primaryActionLabel = updatePhase === "ready-to-reload"
-    ? "重新載入套用新版"
-    : isChecking
+  const primaryActionLabel = isChecking
       ? updatePhase === "syncing-data"
         ? "正在同步行程資料…"
         : updatePhase === "downloading"

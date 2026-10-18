@@ -76,6 +76,12 @@ export const getWeatherReminders = (weather: WeatherForecastItem["weather"]): st
 };
 
 const WEATHER_CACHE_KEY = "travel-companion-weather-forecast-v1";
+const WEATHER_REQUEST_RETRY_DELAY_MS = 1_000;
+const weatherRequestsInFlight = new Map<string, Promise<WeatherForecastItem[]>>();
+
+const waitForWeatherRetry = () => new Promise<void>((resolve) => {
+  globalThis.setTimeout(resolve, WEATHER_REQUEST_RETRY_DELAY_MS);
+});
 
 export const loadWeatherForecastCache = (tripId: string): Record<string, WeatherForecastItem> => {
   if (typeof window === "undefined") return {};
@@ -120,7 +126,7 @@ export const storeWeatherForecastResults = (
   return merged;
 };
 
-export const requestTripWeather = async (
+const requestTripWeatherOnce = async (
   supabase: SupabaseClient,
   tripId: string,
   departureDate: string,
@@ -170,8 +176,7 @@ export const requestTripWeather = async (
   const resultsByRequestId = new Map(results.map((result) => [result.request_id, result]));
   return items.map((item) => {
     const result = resultsByRequestId.get(item.card_id);
-    if (result?.place_id === item.place_id && result.forecast_date === item.forecast_date &&
-      result.status !== "waiting") return result;
+    if (result?.place_id === item.place_id && result.forecast_date === item.forecast_date) return result;
     return {
       request_id: item.card_id,
       place_id: item.place_id,
@@ -180,4 +185,43 @@ export const requestTripWeather = async (
       message: "未取得有效天氣回應，請稍後重試",
     };
   });
+};
+
+/**
+ * 同一份 Trip 快照只允許一個天氣請求；複製卡片造成的連續 render 不得重複打同一批資料。
+ * Edge Function 回報同步／租約忙碌時，只做一次短暫重試，避免無限重試與放大請求量。
+ */
+export const requestTripWeather = (
+  supabase: SupabaseClient,
+  tripId: string,
+  departureDate: string,
+  daysData: Record<string, ItineraryItem[]>,
+): Promise<WeatherForecastItem[]> => {
+  const fingerprint = Object.entries(daysData)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .flatMap(([dayKey, cards]) => cards.map((card) => {
+      const forecastDate = getItineraryDayDate(departureDate, Number(dayKey));
+      return `${dayKey}:${card.id ?? ""}:${card.place?.placeId ?? ""}:${forecastDate ?? ""}:${card.showWeather ? "1" : "0"}`;
+    }))
+    .sort()
+    .join(";");
+  const requestKey = `${tripId}|${departureDate}|${fingerprint}`;
+  const existing = weatherRequestsInFlight.get(requestKey);
+  if (existing) return existing;
+
+  const request = (async () => {
+    const firstResults = await requestTripWeatherOnce(supabase, tripId, departureDate, daysData);
+    const shouldRetry = firstResults.some((result) =>
+      result.status === "waiting" || result.diagnostic_code === "WEATHER_CARD_NOT_FOUND",
+    );
+    if (!shouldRetry) return firstResults;
+    await waitForWeatherRetry();
+    return requestTripWeatherOnce(supabase, tripId, departureDate, daysData);
+  })();
+  weatherRequestsInFlight.set(requestKey, request);
+  const clearRequest = () => {
+    if (weatherRequestsInFlight.get(requestKey) === request) weatherRequestsInFlight.delete(requestKey);
+  };
+  void request.then(clearRequest, clearRequest);
+  return request;
 };

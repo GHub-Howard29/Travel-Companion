@@ -14,6 +14,15 @@ export type VersionHistoryItem = {
 
 export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
+    version: "3.10.5",
+    date: "2026-10-18",
+    isMandatoryRelease: false,
+    notes: [
+      "修正正式 weather-forecast CORS 白名單遺漏 x-travel-companion-client-id。",
+      "保留既有 Edge Function 逾時、安全診斷碼、批次回應與 PWA 更新接管修正。",
+    ],
+  },
+  {
     version: "3.10.4",
     date: "2026-10-18",
     isMandatoryRelease: false,

@@ -24,8 +24,7 @@ export type AppUpdatePhase =
   | "syncing-data"
   | "checking-metadata"
   | "downloading"
-  | "waiting-control"
-  | "ready-to-reload";
+  | "waiting-control";
 const RELEASE_NOTICE_STORAGE_KEY = "travel_companion_seen_app_version";
 const VERSION_POLICY_STORAGE_KEY = "travel_companion_app_version_policy";
 
@@ -358,10 +357,6 @@ export const useAppUpdate = () => {
 
   const update = useCallback(async (beforeUpdate?: () => Promise<void>) => {
     if (updateInProgressRef.current) return;
-    if (updatePhase === "ready-to-reload") {
-      reloadOnce();
-      return;
-    }
     if (!policy.hasUpdate) {
       setStoredAppVersion(APP_VERSION);
       setReleaseNoticeVisible(false);
@@ -420,8 +415,8 @@ export const useAppUpdate = () => {
         !registration.waiting &&
         !registration.installing;
       if (activatedReplacement) {
-        setUpdateError("新版已準備完成，請按「重新載入套用新版」完成更新。\n目前頁面尚未確認由新版接管。\n");
-        setUpdatePhase("ready-to-reload");
+        setStoredAppVersion(latestMetadata.version);
+        reloadOnce();
         return;
       }
 
@@ -451,8 +446,8 @@ export const useAppUpdate = () => {
       }
 
       if (handoffState === "active" && registration.active) {
-        setUpdateError("新版已準備完成，請按「重新載入套用新版」完成更新。\n目前頁面尚未確認由新版接管。\n");
-        setUpdatePhase("ready-to-reload");
+        setStoredAppVersion(latestMetadata.version);
+        reloadOnce();
         return;
       }
 
@@ -472,9 +467,9 @@ export const useAppUpdate = () => {
     }
   }, [
     checkVersionPolicy,
+    latestMetadata.version,
     policy.hasUpdate,
     reloadOnce,
-    updatePhase,
   ]);
 
   const dismiss = useCallback(() => {

@@ -57,6 +57,10 @@ const safeErrorCode = (error: unknown) => {
   if (knownCodes.has(message) || /^(?:PLACE_DETAILS|OPEN_METEO)_HTTP_[1-5][0-9]{2}$/.test(message)) return message;
   return "UNCLASSIFIED_ERROR";
 };
+const WEATHER_CARD_NOT_FOUND = "WEATHER_CARD_NOT_FOUND";
+const WEATHER_CACHE_UNAVAILABLE = "WEATHER_CACHE_UNAVAILABLE";
+const WEATHER_REFRESH_COOLDOWN = "WEATHER_REFRESH_COOLDOWN";
+const WEATHER_REFRESH_IN_PROGRESS = "WEATHER_REFRESH_IN_PROGRESS";
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value) && typeof value === "object" && !Array.isArray(value);
 const isValidDate = (value: unknown): value is string => {
@@ -298,6 +302,7 @@ const getForecastForCandidate = async (
 ): Promise<WeatherResult> => {
   const requestId = candidate.cardId;
   let diagnosticCode: string | undefined;
+  let leaseBusy = false;
   const diagnosticFields = () => diagnosticCode
     ? { diagnostic_code: diagnosticCode, trace_id: traceId }
     : {};
@@ -362,6 +367,8 @@ const getForecastForCandidate = async (
             });
           }
         }
+      } else {
+        leaseBusy = true;
       }
     } catch (error) {
       diagnosticCode = safeErrorCode(error);
@@ -383,9 +390,18 @@ const getForecastForCandidate = async (
   const stillUsable = Boolean(coordinatesMatch && latest?.fetched_at &&
     Date.parse(latest.fetched_at) > Date.now() - 48 * 3600000 &&
     typeof latest.timezone === "string" && latest.timezone.length > 0);
+  if (!stillUsable && leaseBusy) return {
+    request_id: requestId, place_id: candidate.placeId, forecast_date: candidate.forecastDate,
+    status: "waiting", message: "天氣資料正在更新，請稍候",
+    diagnostic_code: WEATHER_REFRESH_IN_PROGRESS,
+    ...diagnosticFields(),
+  };
   if (!stillUsable) return {
     request_id: requestId, place_id: candidate.placeId, forecast_date: candidate.forecastDate,
     status: "unavailable", message: "暫時無法取得天氣",
+    diagnostic_code: diagnosticCode ?? (
+      failedRecently ? WEATHER_REFRESH_COOLDOWN : WEATHER_CACHE_UNAVAILABLE
+    ),
     ...diagnosticFields(),
   };
   const isStale = Date.parse(latest.fetched_at) <= Date.now() - 24 * 3600000;
@@ -480,6 +496,7 @@ const handleRequest = async (request: Request) => {
     if (tripError || !trip) return json({ error: "TRIP_NOT_READABLE" }, 403);
     const requestedItems = Array.isArray(body.items) ? body.items : [];
     const candidates: Candidate[] = [];
+    const rejectedItems: WeatherResult[] = [];
     for (const item of requestedItems.slice(0, 100)) {
       if (!isRecord(item) || !Number.isInteger(item.day_number) || !isValidDate(item.forecast_date) ||
         typeof item.card_id !== "string" || typeof item.place_id !== "string") continue;
@@ -488,7 +505,19 @@ const handleRequest = async (request: Request) => {
         placeId: item.place_id, forecastDate: item.forecast_date, arrivalTime: "",
       };
       const verified = getStoredCandidate(trip as Record<string, unknown>, candidate);
-      if (verified) candidates.push(verified);
+      if (verified) {
+        candidates.push(verified);
+      } else {
+        // 不回傳 card／place 內容；只回傳安全診斷碼，避免前端將「卡片不存在」誤判成服務逾時。
+        rejectedItems.push({
+          request_id: candidate.cardId,
+          place_id: candidate.placeId,
+          forecast_date: candidate.forecastDate,
+          status: "unavailable",
+          message: "行程卡片資料尚未同步，請重新載入後再試",
+          diagnostic_code: WEATHER_CARD_NOT_FOUND,
+        });
+      }
     }
     const unique = new Map<string, Candidate>();
     for (const candidate of candidates) {
@@ -525,13 +554,13 @@ const handleRequest = async (request: Request) => {
       }));
       for (const [key, result] of groupResults) uniqueResults.set(key, result);
     }
-    const results = candidates.map((candidate) => {
+    const results = [...rejectedItems, ...candidates.map((candidate) => {
       const result = uniqueResults.get(`${candidate.placeId}|${candidate.forecastDate}`);
       return result ? { ...result, request_id: candidate.cardId } : {
         request_id: candidate.cardId, place_id: candidate.placeId, forecast_date: candidate.forecastDate,
         status: "unavailable" as const, message: "未取得有效天氣回應，請稍後重試",
       };
-    });
+    })];
     return json({ results });
   } catch (error) {
     const message = error instanceof Error ? error.message : "WEATHER_SERVICE_FAILED";

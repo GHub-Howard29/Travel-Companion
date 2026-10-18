@@ -2,6 +2,9 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 const updateHook = readFileSync("src/hooks/useAppUpdate.ts", "utf8");
+const appVersion = readFileSync("src/config/appVersion.ts", "utf8");
+
+assert.match(appVersion, /APP_VERSION = "3\.10\.6"/);
 
 assert.match(
   updateHook,
@@ -29,8 +32,14 @@ assert.match(
 
 assert.match(
   updateHook,
-  /const activatedReplacement =[\s\S]*registration\.active !== previousController[\s\S]*!registration\.waiting[\s\S]*!registration\.installing[\s\S]*setUpdatePhase\("ready-to-reload"\)/,
-  "新版已 active 但尚未確認 controller 對齊時，必須進入明確的 ready-to-reload 狀態，不可直接 reload",
+  /const activatedReplacement =[\s\S]*registration\.active !== previousController[\s\S]*!registration\.waiting[\s\S]*!registration\.installing[\s\S]*setStoredAppVersion\(latestMetadata\.version\)[\s\S]*reloadOnce\(\)/,
+  "新版已 active 但舊頁面仍由舊 controller 控制時，必須直接重新載入，不可要求第二次點擊",
+);
+
+assert.match(
+  updateHook,
+  /timeoutMs = 12000/,
+  "PWA handoff 應沿用已通過實機驗證的 12 秒狀態判定窗口，不以延長等待掩蓋流程問題",
 );
 
 assert.match(
@@ -41,17 +50,17 @@ assert.match(
 
 assert.match(
   updateHook,
-  /新版已準備完成，請按「重新載入套用新版」完成更新。/,
-  "active 但 controller 尚未對齊時，必須提供明確的重新載入入口",
+  /if \(handoffState === "active" && registration\.active\) \{[\s\S]*setStoredAppVersion\(latestMetadata\.version\)[\s\S]*reloadOnce\(\)/,
+  "active worker handoff 應直接套用並重新載入，不可要求第二次點擊",
 );
 
 const activatedReplacementBlock = updateHook.match(
   /if \(activatedReplacement\) \{([\s\S]*?)\n      \}/,
 )?.[1] ?? "";
-assert.doesNotMatch(
+assert.match(
   activatedReplacementBlock,
-  /reloadOnce\(\)/,
-  "active replacement 不得在未確認 controller 對齊前自動 reload",
+  /setStoredAppVersion\(latestMetadata\.version\)[\s\S]*reloadOnce\(\)/,
+  "active replacement 必須由唯一更新流程直接套用並重新載入",
 );
 
 assert.doesNotMatch(
@@ -66,4 +75,4 @@ assert.match(
   "新版 ready 判斷必須以當次 registration.waiting 為準，不可使用過期全域旗標",
 );
 
-console.log("V3.9.24 PWA 主動更新檢查與 active-worker handoff regression 通過.");
+console.log("V3.10.6 PWA 主動更新檢查與 active-worker handoff regression 通過.");
