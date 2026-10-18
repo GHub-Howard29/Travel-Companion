@@ -362,13 +362,80 @@ const getForecastForCandidate = async (
             });
             return { request_id: requestId, place_id: candidate.placeId, forecast_date: candidate.forecastDate, status: "ineligible", message: "已超過景點到達時間" };
           }
+          // Capture predicate diagnostics immediately before the release RPC. Log booleans only:
+          // never log Place IDs, coordinates, lease tokens, raw errors, or forecast payloads.
+          const [releaseRowResult, releaseCoordinatesResult] = await Promise.all([
+            admin.from("weather_daily_forecasts")
+              .select("refresh_lease_token, latitude, longitude")
+              .eq("place_id", candidate.placeId).eq("forecast_date", candidate.forecastDate).maybeSingle(),
+            admin.from("weather_place_coordinates")
+              .select("latitude, longitude, status, expires_at")
+              .eq("place_id", candidate.placeId).maybeSingle(),
+          ]);
+          const releaseRow = releaseRowResult.data;
+          const releaseCoordinates = releaseCoordinatesResult.data;
+          const releaseDiagnostics = {
+            row_exists: Boolean(releaseRow),
+            lease_token_matches: releaseRow?.refresh_lease_token === token,
+            coordinate_row_exists: Boolean(releaseCoordinates),
+            coordinate_status_valid: releaseCoordinates?.status === "valid",
+            coordinate_not_expired: Boolean(releaseCoordinates?.expires_at &&
+              Date.parse(releaseCoordinates.expires_at) > Date.now()),
+            forecast_latitude_matches_coordinate_cache: releaseRow?.latitude === releaseCoordinates?.latitude,
+            forecast_longitude_matches_coordinate_cache: releaseRow?.longitude === releaseCoordinates?.longitude,
+            payload_latitude_matches_coordinate_cache: coords.latitude === releaseCoordinates?.latitude,
+            payload_longitude_matches_coordinate_cache: coords.longitude === releaseCoordinates?.longitude,
+            forecast_timezone_present: typeof forecast.timezone === "string" && forecast.timezone.length > 0,
+            forecast_source_url_valid: typeof forecast.source_url === "string" &&
+              forecast.source_url.startsWith("https://open-meteo.com/en/docs"),
+            forecast_weather_code_present: typeof forecast.weather_code === "number",
+            forecast_temperature_max_present: typeof forecast.temperature_2m_max === "number",
+            forecast_temperature_min_present: typeof forecast.temperature_2m_min === "number",
+            forecast_precipitation_probability_present:
+              typeof forecast.precipitation_probability_max === "number",
+            diagnostic_query_error: Boolean(releaseRowResult.error || releaseCoordinatesResult.error),
+          };
           const { data: releaseSucceeded, error: releaseError } = await admin.rpc("tc_weather_release_lease", {
             p_place_id: candidate.placeId, p_forecast_date: candidate.forecastDate, p_token: token,
             p_success: true, p_forecast: { ...forecast, ...coords },
           });
-          // RPC may return HTTP 200 with a false result when no row was updated.
-          // Treat that as a write failure instead of leaving a UTC placeholder row.
-          if (releaseError || releaseSucceeded !== true) throw new Error("WEATHER_CACHE_WRITE_FAILED");
+          // Keep SQL/RPC errors distinct from a successful RPC returning false.
+          if (releaseError || releaseSucceeded !== true) {
+            const [postRowResult, postCoordinatesResult] = await Promise.all([
+              admin.from("weather_daily_forecasts")
+                .select("refresh_lease_token, latitude, longitude, fetched_at, timezone, source_url")
+                .eq("place_id", candidate.placeId).eq("forecast_date", candidate.forecastDate).maybeSingle(),
+              admin.from("weather_place_coordinates")
+                .select("latitude, longitude, status, expires_at")
+                .eq("place_id", candidate.placeId).maybeSingle(),
+            ]);
+            const postRow = postRowResult.data;
+            const postCoordinates = postCoordinatesResult.data;
+            const postReleaseDiagnostics = {
+              post_row_exists: Boolean(postRow),
+              post_lease_token_matches: postRow?.refresh_lease_token === token,
+              post_fetched_at_present: Boolean(postRow?.fetched_at),
+              post_timezone_present: typeof postRow?.timezone === "string" && postRow.timezone.length > 0,
+              post_source_url_present: typeof postRow?.source_url === "string" && postRow.source_url.length > 0,
+              post_coordinate_row_exists: Boolean(postCoordinates),
+              post_coordinate_status_valid: postCoordinates?.status === "valid",
+              post_coordinate_not_expired: Boolean(postCoordinates?.expires_at &&
+                Date.parse(postCoordinates.expires_at) > Date.now()),
+              post_forecast_latitude_matches_coordinate_cache: postRow?.latitude === postCoordinates?.latitude,
+              post_forecast_longitude_matches_coordinate_cache: postRow?.longitude === postCoordinates?.longitude,
+              post_payload_latitude_matches_coordinate_cache: coords.latitude === postCoordinates?.latitude,
+              post_payload_longitude_matches_coordinate_cache: coords.longitude === postCoordinates?.longitude,
+              post_diagnostic_query_error: Boolean(postRowResult.error || postCoordinatesResult.error),
+            };
+            logWeatherDiagnostic("forecast_cache_release_failed", traceId, "forecast_cache_write", {
+              error_code: releaseError ? "WEATHER_CACHE_RELEASE_RPC_ERROR" : "WEATHER_CACHE_RELEASE_RETURNED_FALSE",
+              database_code: releaseError?.code ?? null,
+              rpc_returned_true: releaseSucceeded === true,
+              ...releaseDiagnostics,
+              ...postReleaseDiagnostics,
+            });
+            throw new Error("WEATHER_CACHE_WRITE_FAILED");
+          }
         } catch (error) {
           const errorCode = safeErrorCode(error);
           diagnosticCode = errorCode;

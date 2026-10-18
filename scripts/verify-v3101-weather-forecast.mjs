@@ -13,6 +13,8 @@ const coordinateMigration = read("../supabase/migrations/20261015120000_v3101_we
 const scheduleMigration = read("../supabase/migrations/20261016140000_v3101_weather_refresh_schedule.sql");
 const scheduledRefreshMigration = read("../supabase/migrations/20261017100000_v3101_weather_scheduled_refresh_acl_fix.sql");
 const sourceUrlMigration = read("../supabase/migrations/20261018100000_v3101_weather_source_url.sql");
+const releaseLockMigration = read("../supabase/migrations/20261018140000_v3101_weather_release_lock_order.sql");
+const releaseLeaseRegression = read("../scripts/test-weather-release-lease.sql");
 const config = read("../supabase/config.toml");
 
 assert.match(tripTypes, /showWeather\?: boolean/);
@@ -54,6 +56,18 @@ assert.match(edgeFunction, /latest\?\.latitude === currentCoordinates\.latitude/
 assert.match(edgeFunction, /tc_weather_claim_lease/);
 assert.match(edgeFunction, /tc_weather_release_lease/);
 assert.match(edgeFunction, /releaseSucceeded !== true/);
+assert.match(edgeFunction, /forecast_cache_release_failed/);
+assert.match(edgeFunction, /WEATHER_CACHE_RELEASE_RPC_ERROR/);
+assert.match(edgeFunction, /WEATHER_CACHE_RELEASE_RETURNED_FALSE/);
+assert.match(edgeFunction, /database_code: releaseError\?\.code \?\? null/);
+assert.match(edgeFunction, /rpc_returned_true: releaseSucceeded === true/);
+assert.match(edgeFunction, /forecast_timezone_present/);
+assert.match(edgeFunction, /forecast_source_url_valid/);
+assert.match(edgeFunction, /forecast_precipitation_probability_present/);
+assert.match(edgeFunction, /post_lease_token_matches/);
+assert.match(edgeFunction, /post_coordinate_status_valid/);
+assert.match(edgeFunction, /post_payload_latitude_matches_coordinate_cache/);
+assert.match(edgeFunction, /post_diagnostic_query_error/);
 assert.match(edgeFunction, /failureReleaseSucceeded !== true/);
 assert.match(edgeFunction, /preferSharedTargetCandidate/);
 assert.match(targetSelection, /if \(!next\.arrivalTime\) return next/);
@@ -116,6 +130,12 @@ assert.match(sourceUrlMigration, /add column if not exists source_url/);
 assert.match(sourceUrlMigration, /source_url text/);
 assert.match(sourceUrlMigration, /open-meteo\.com\/en\/docs/);
 assert.doesNotMatch(sourceUrlMigration, /refresh_lease_token = p_token and refresh_lease_until > v_now/);
+assert.match(releaseLockMigration, /from public\.weather_place_coordinates[\s\S]*?for share[\s\S]*?from public\.weather_daily_forecasts[\s\S]*?for update/i);
+assert.match(releaseLockMigration, /v_now := clock_timestamp\(\)/);
+assert.match(releaseLockMigration, /v_coordinates\.expires_at > clock_timestamp\(\)/);
+assert.match(releaseLeaseRegression, /TEST_WEATHER_LEASE_REPLACED/);
+assert.match(releaseLeaseRegression, /TEST_WEATHER_STATUS_CHANGED/);
+assert.match(releaseLeaseRegression, /TEST_WEATHER_TTL_EXPIRED/);
 assert.match(config, /\[functions\.weather-forecast\][\s\S]*?verify_jwt = false/);
 
 console.log("V3.10.1 weather forecast: frontend contract, cache isolation, lease, authorization and attribution static checks passed.");
