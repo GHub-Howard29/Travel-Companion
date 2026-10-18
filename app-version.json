@@ -1,12 +1,12 @@
 {
-  "version": "3.10.6",
+  "version": "3.10.7",
   "minimumSupportedVersion": "3.9.27",
   "releaseDate": "2026-10-18",
   "releaseNotes": [
-    "修正複製行程卡片後天氣請求的同步競態與重複請求。",
-    "區分天氣更新中的租約狀態，並以單次短暫重試收斂批次天氣更新。",
-    "沿用 V3.9 已驗證的 PWA 更新接管方案，3.10.6 才套用本次新版接管流程。",
-    "不修改 migration、正式資料或 secrets。"
+    "加入 DEV 非 loopback Supabase 連線硬阻擋，避免測試帳號誤觸正式資料庫。",
+    "保存 Open-Meteo 實際查詢來源網址，舊快取缺欄位時提供安全 fallback。",
+    "修正天氣 lease 回寫結果判斷、過期租約清理與來源選單窄螢幕溢位。",
+    "整理 Supabase Advisor 安全提醒，列入後續安全掃描與權限審查。"
   ],
   "forceUpdate": false
 }
