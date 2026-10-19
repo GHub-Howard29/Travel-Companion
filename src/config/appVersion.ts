@@ -7,12 +7,13 @@ export const APP_VERSION = "3.10.7";
  */
 export const PREVIOUS_RELEASE_VERSION = "3.10.6";
 
-export const RELEASE_DATE = "2026-10-18";
+export const RELEASE_DATE = "2026-10-20";
 
 export const RELEASE_NOTES = [
   "加入 DEV 非 loopback Supabase 連線硬阻擋，避免測試帳號誤觸正式資料庫。",
   "保存 Open-Meteo 實際查詢來源網址，舊快取缺欄位時提供安全 fallback。",
   "修正天氣 lease 回寫結果判斷、過期租約清理與來源選單窄螢幕溢位。",
+  "依目的地當地日期與到達時間判斷天氣預報資格，避免跨時區誤判。",
   "整理 Supabase Advisor 安全提醒，列入後續安全掃描與權限審查。",
 ];
 

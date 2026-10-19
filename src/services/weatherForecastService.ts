@@ -147,6 +147,10 @@ export const storeWeatherForecastResults = (
   const merged = { ...existing };
   for (const result of results) {
     if (result.weather && result.fetched_at) merged[result.request_id] = result;
+    else if (result.status === "ineligible" && merged[result.request_id]?.forecast_date === result.forecast_date &&
+      merged[result.request_id]?.weather && merged[result.request_id]?.fetched_at) merged[result.request_id] = {
+      ...merged[result.request_id], message: result.message ?? "到達時間已到，不更新天氣；顯示上次資料",
+    };
     else if ((result.status === "unavailable" || result.status === "waiting") &&
       merged[result.request_id]?.forecast_date === result.forecast_date) merged[result.request_id] = {
       ...merged[result.request_id], message: result.message ?? "更新失敗，顯示上次資料",
@@ -236,11 +240,15 @@ export const requestTripWeather = (
     .sort(([left], [right]) => left.localeCompare(right))
     .flatMap(([dayKey, cards]) => cards.map((card) => {
       const forecastDate = getItineraryDayDate(departureDate, Number(dayKey));
-      return `${dayKey}:${card.id ?? ""}:${card.place?.placeId ?? ""}:${forecastDate ?? ""}:${card.showWeather ? "1" : "0"}`;
+      return `${dayKey}:${card.id ?? ""}:${card.place?.placeId ?? ""}:${forecastDate ?? ""}:${card.time ?? ""}:${card.showWeather ? "1" : "0"}`;
     }))
     .sort()
     .join(";");
   const requestKey = `${tripId}|${departureDate}|${fingerprint}`;
+  const hasWeatherTargets = Object.values(daysData).some((cards) => cards.some((card) =>
+    card.showWeather === true && Boolean(card.id) && Boolean(card.place?.placeId),
+  ));
+  if (!hasWeatherTargets) return Promise.resolve([]);
   const existing = weatherRequestsInFlight.get(requestKey);
   if (existing) return existing;
 
@@ -249,9 +257,12 @@ export const requestTripWeather = (
     const shouldRetry = firstResults.some((result) =>
       result.status === "waiting" || result.diagnostic_code === "WEATHER_CARD_NOT_FOUND",
     );
-    if (!shouldRetry) return firstResults;
-    await waitForWeatherRetry();
-    return requestTripWeatherOnce(supabase, tripId, departureDate, daysData);
+    return shouldRetry
+      ? await (async () => {
+        await waitForWeatherRetry();
+        return requestTripWeatherOnce(supabase, tripId, departureDate, daysData);
+      })()
+      : firstResults;
   })();
   weatherRequestsInFlight.set(requestKey, request);
   const clearRequest = () => {

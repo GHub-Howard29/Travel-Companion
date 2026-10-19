@@ -1,5 +1,6 @@
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2.108.2";
 import { preferSharedTargetCandidate, type WeatherCandidate } from "./target-selection.ts";
+import { getDestinationLocalEligibility } from "./timezone-eligibility.ts";
 
 type WeatherSupabaseClient = SupabaseClient;
 
@@ -18,8 +19,8 @@ const env = (name: string) => {
 };
 const WEATHER_CANDIDATE_TIMEOUT_MS = 35_000;
 const WEATHER_TRIP_READ_TIMEOUT_MS = 10_000;
-const withTimeout = async <T>(promise: Promise<T>, timeoutMs: number, errorCode: string): Promise<T> => {
-  let timeoutId: number | undefined;
+const withTimeout = async <T>(promise: PromiseLike<T>, timeoutMs: number, errorCode: string): Promise<T> => {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<never>((_, reject) => {
     timeoutId = setTimeout(() => reject(new Error(errorCode)), timeoutMs);
   });
@@ -77,20 +78,6 @@ const dayDate = (departureDate: string, dayNumber: number) => {
 };
 const dateDistance = (from: string, to: string) =>
   Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86400000);
-const dateAtTimezone = (date: Date, timezone: string) => {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit",
-  }).formatToParts(date);
-  const get = (type: string) => parts.find((part) => part.type === type)?.value ?? "";
-  return `${get("year")}-${get("month")}-${get("day")}`;
-};
-const timeAtTimezone = (date: Date, timezone: string) => {
-  const parts = new Intl.DateTimeFormat("en-GB", {
-    timeZone: timezone, hour: "2-digit", minute: "2-digit", hourCycle: "h23",
-  }).formatToParts(date);
-  const get = (type: string) => parts.find((part) => part.type === type)?.value ?? "00";
-  return `${get("hour")}:${get("minute")}`;
-};
 const isCoordinate = (latitude: unknown, longitude: unknown) =>
   typeof latitude === "number" && Number.isFinite(latitude) && latitude >= -90 && latitude <= 90 &&
   typeof longitude === "number" && Number.isFinite(longitude) && longitude >= -180 && longitude <= 180;
@@ -314,6 +301,56 @@ const fetchForecast = async (latitude: number, longitude: number, forecastDate: 
   };
 };
 
+const fetchDestinationTimezone = async (latitude: number, longitude: number): Promise<string> => {
+  const url = new URL("https://api.open-meteo.com/v1/forecast");
+  url.search = new URLSearchParams({
+    latitude: String(latitude), longitude: String(longitude), daily: OPEN_METEO_DAILY_FIELDS,
+    forecast_days: "1", timezone: "auto", temperature_unit: "celsius",
+    models: "best_match", cell_selection: "land",
+  }).toString();
+  let lastError = "OPEN_METEO_FAILED";
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const response = await fetch(url, { signal: AbortSignal.timeout(8000) });
+      if (!response.ok) {
+        lastError = response.status === 429 ? "OPEN_METEO_RATE_LIMITED" : `OPEN_METEO_HTTP_${response.status}`;
+        if (attempt === 0 && (response.status >= 500 || response.status === 429)) {
+          await new Promise((resolve) => setTimeout(resolve, 300));
+          continue;
+        }
+        throw new Error(lastError);
+      }
+      const payload: unknown = await response.json();
+      if (isRecord(payload) && typeof payload.timezone === "string" && payload.timezone.length > 0 &&
+        isRecord(payload.daily) && Array.isArray(payload.daily.time) && payload.daily.time.length > 0) {
+        return payload.timezone;
+      }
+      throw new Error("OPEN_METEO_INVALID_RESPONSE");
+    } catch (error) {
+      if (error instanceof Error && error.message.startsWith("OPEN_METEO_HTTP_4")) throw error;
+      lastError = error instanceof Error && error.message === "OPEN_METEO_INVALID_RESPONSE"
+        ? error.message
+        : error instanceof Error && error.name === "TimeoutError" ? "OPEN_METEO_TIMEOUT" : lastError;
+      if (attempt === 0) await new Promise((resolve) => setTimeout(resolve, 300));
+    }
+  }
+  throw new Error(lastError);
+};
+
+const destinationTimezoneLookups = new Map<string, Promise<string>>();
+const getDestinationTimezone = (latitude: number, longitude: number): Promise<string> => {
+  const key = `${latitude},${longitude}`;
+  const existing = destinationTimezoneLookups.get(key);
+  if (existing) return existing;
+  const lookup = fetchDestinationTimezone(latitude, longitude);
+  destinationTimezoneLookups.set(key, lookup);
+  const clearLookup = () => {
+    if (destinationTimezoneLookups.get(key) === lookup) destinationTimezoneLookups.delete(key);
+  };
+  void lookup.then(clearLookup, clearLookup);
+  return lookup;
+};
+
 const getForecastForCandidate = async (
   admin: WeatherSupabaseClient, candidate: Candidate, traceId = crypto.randomUUID(),
 ): Promise<WeatherResult> => {
@@ -326,13 +363,19 @@ const getForecastForCandidate = async (
   const { data: previous } = await admin.from("weather_daily_forecasts").select("*")
     .eq("place_id", candidate.placeId).eq("forecast_date", candidate.forecastDate).maybeSingle();
   const now = new Date();
-  const cachedTimezone = typeof previous?.timezone === "string" ? previous.timezone : null;
-  const currentLocalDate = cachedTimezone ? dateAtTimezone(now, cachedTimezone) : now.toISOString().slice(0, 10);
-  const daysAhead = dateDistance(currentLocalDate, candidate.forecastDate);
-  if (daysAhead < 0) return { request_id: requestId, place_id: candidate.placeId, forecast_date: candidate.forecastDate, status: "ineligible", message: "行程日期已過" };
-  if (daysAhead > 10) return { request_id: requestId, place_id: candidate.placeId, forecast_date: candidate.forecastDate, status: "long_range", message: `尚未開放天氣預報，預計 ${daysAhead - 10} 天後提供` };
-  if (cachedTimezone && daysAhead === 0 && candidate.arrivalTime && timeAtTimezone(now, cachedTimezone) >= candidate.arrivalTime) {
-    return { request_id: requestId, place_id: candidate.placeId, forecast_date: candidate.forecastDate, status: "ineligible", message: "已超過景點到達時間" };
+  const cachedTimezone = previous?.fetched_at && typeof previous.timezone === "string" && previous.timezone.length > 0
+    ? previous.timezone
+    : null;
+  // An initial placeholder timezone (for example UTC before the first successful fetch) is not authoritative.
+  // Without a successful forecast timezone, UTC only bounds the request window; it never decides arrival eligibility.
+  const cachedEligibility = cachedTimezone
+    ? getDestinationLocalEligibility(now, candidate.forecastDate, candidate.arrivalTime, cachedTimezone)
+    : null;
+  const eligibilityBlocksRefresh = cachedEligibility !== null && cachedEligibility !== "eligible";
+  if (cachedEligibility === null) {
+    const utcDaysAhead = dateDistance(now.toISOString().slice(0, 10), candidate.forecastDate);
+    if (utcDaysAhead < -1) return { request_id: requestId, place_id: candidate.placeId, forecast_date: candidate.forecastDate, status: "ineligible", message: "行程日期已過" };
+    if (utcDaysAhead > 11) return { request_id: requestId, place_id: candidate.placeId, forecast_date: candidate.forecastDate, status: "long_range", message: "尚未開放天氣預報" };
   }
   const usable = previous?.fetched_at && Date.parse(previous.fetched_at) > now.getTime() - 48 * 3600000 &&
     typeof previous.timezone === "string" && previous.timezone.length > 0;
@@ -340,13 +383,30 @@ const getForecastForCandidate = async (
   const ageSinceAttempt = previous?.last_refresh_attempt_at ? now.getTime() - Date.parse(previous.last_refresh_attempt_at) : Number.POSITIVE_INFINITY;
   const failedRecently = Boolean(previous?.last_refresh_failed_at && Date.parse(previous.last_refresh_failed_at) > now.getTime() - 3600000);
   const failedAndRetryAllowed = Boolean(previous?.last_refresh_failed_at) && !failedRecently;
-  const shouldRefresh = failedRecently ? false : (!usable || failedAndRetryAllowed ||
+  const shouldRefresh = eligibilityBlocksRefresh ? false : (failedRecently ? false : (!usable || failedAndRetryAllowed ||
     (!previous?.last_refresh_failed_at && ageSinceSuccess >= 6 * 3600000 &&
-      (ageSinceSuccess >= 24 * 3600000 || ageSinceAttempt >= 6 * 3600000)));
+      (ageSinceSuccess >= 24 * 3600000 || ageSinceAttempt >= 6 * 3600000))));
 
   if (shouldRefresh) {
     try {
       const coords = await getCoordinates(admin, candidate.placeId, traceId);
+      if (!cachedTimezone) {
+        const destinationTimezone = await getDestinationTimezone(coords.latitude, coords.longitude);
+        const initialEligibility = getDestinationLocalEligibility(
+          new Date(), candidate.forecastDate, candidate.arrivalTime, destinationTimezone,
+        );
+        if (initialEligibility !== "eligible") {
+          return {
+            request_id: requestId, place_id: candidate.placeId, forecast_date: candidate.forecastDate,
+            status: initialEligibility === "long_range" ? "long_range" : "ineligible",
+            message: initialEligibility === "date_passed"
+              ? "目的地當地行程日期已過"
+              : initialEligibility === "arrival_passed"
+                ? "已超過目的地當地到達時間"
+                : "尚未開放天氣預報",
+          };
+        }
+      }
       const { data: token, error: leaseError } = await admin.rpc("tc_weather_claim_lease", {
         p_place_id: candidate.placeId, p_forecast_date: candidate.forecastDate,
       });
@@ -354,13 +414,24 @@ const getForecastForCandidate = async (
       if (typeof token === "string" && token) {
         try {
           const forecast = await fetchForecast(coords.latitude, coords.longitude, candidate.forecastDate);
-          if (candidate.arrivalTime && dateAtTimezone(now, forecast.timezone) === candidate.forecastDate &&
-            timeAtTimezone(now, forecast.timezone) >= candidate.arrivalTime) {
+          const destinationEligibility = getDestinationLocalEligibility(
+            new Date(), candidate.forecastDate, candidate.arrivalTime, forecast.timezone,
+          );
+          if (destinationEligibility !== "eligible") {
+            const ineligible = destinationEligibility === "date_passed" || destinationEligibility === "arrival_passed";
             await admin.rpc("tc_weather_release_lease", {
               p_place_id: candidate.placeId, p_forecast_date: candidate.forecastDate, p_token: token,
-              p_success: false, p_error: "ARRIVAL_TIME_PASSED",
+              p_success: false, p_error: ineligible ? "ARRIVAL_TIME_PASSED" : "FORECAST_OUT_OF_RANGE",
             });
-            return { request_id: requestId, place_id: candidate.placeId, forecast_date: candidate.forecastDate, status: "ineligible", message: "已超過景點到達時間" };
+            return {
+              request_id: requestId, place_id: candidate.placeId, forecast_date: candidate.forecastDate,
+              status: ineligible ? "ineligible" : "long_range",
+              message: destinationEligibility === "date_passed"
+                ? "目的地當地行程日期已過"
+                : destinationEligibility === "arrival_passed"
+                  ? "已超過目的地當地到達時間"
+                  : "尚未開放天氣預報",
+            };
           }
           // Capture predicate diagnostics immediately before the release RPC. Log booleans only:
           // never log Place IDs, coordinates, lease tokens, raw errors, or forecast payloads.
@@ -477,6 +548,13 @@ const getForecastForCandidate = async (
   const stillUsable = Boolean(coordinatesMatch && latest?.fetched_at &&
     Date.parse(latest.fetched_at) > Date.now() - 48 * 3600000 &&
     typeof latest.timezone === "string" && latest.timezone.length > 0);
+  if (!stillUsable && eligibilityBlocksRefresh) return {
+    request_id: requestId, place_id: candidate.placeId, forecast_date: candidate.forecastDate,
+    status: cachedEligibility === "long_range" ? "long_range" : "ineligible",
+    message: cachedEligibility === "long_range"
+      ? "尚未開放天氣預報"
+      : "到達時間已到或行程日期已過，且沒有可顯示的有效天氣快取",
+  };
   if (!stillUsable && leaseBusy) return {
     request_id: requestId, place_id: candidate.placeId, forecast_date: candidate.forecastDate,
     status: "waiting", message: "天氣資料正在更新，請稍候",
@@ -502,7 +580,9 @@ const getForecastForCandidate = async (
       temperature_2m_min: latest.temperature_2m_min,
       precipitation_probability_max: latest.precipitation_probability_max,
     },
-    ...(latest.last_refresh_failed_at && isStale ? { message: "更新失敗，顯示上次資料" } : {}),
+    ...(eligibilityBlocksRefresh
+      ? { message: "目前不更新天氣；顯示上次成功取得的資料" }
+      : latest.last_refresh_failed_at && isStale ? { message: "更新失敗，顯示上次資料" } : {}),
   };
 };
 
@@ -533,8 +613,11 @@ const handleRequest = async (request: Request) => {
           for (const card of cards) {
             const candidate = makeCandidate(trip.id, trip.departure_date, dayNumber, card);
             if (candidate) {
-              const daysAhead = dateDistance(new Date().toISOString().slice(0, 10), candidate.forecastDate);
-              if (daysAhead >= 0 && daysAhead <= 10) candidates.push(candidate);
+              // The cron scan has no destination timezone until the weather cache is consulted.
+              // Include the adjacent UTC dates conservatively; getForecastForCandidate makes the
+              // authoritative 0–10 day decision in the destination timezone.
+              const utcDaysAhead = dateDistance(new Date().toISOString().slice(0, 10), candidate.forecastDate);
+              if (utcDaysAhead >= -1 && utcDaysAhead <= 11) candidates.push(candidate);
             }
           }
         }
