@@ -2,7 +2,7 @@
 
 > 本文件只保留未完成、待補驗或待評估工作；不累積 `[x]` 歷史。
 >
-> 目前狀態以《[14_專案現況總覽](14_專案現況總覽.md)》為準。最後整理：2026-10-19。
+> 目前狀態以《[14_專案現況總覽](14_專案現況總覽.md)》為準。最後整理：2026-10-20。
 
 ## 後續候選版本
 
@@ -30,7 +30,7 @@
 - [x] V3.10.4：2026-10-18 完成發布。修正正式天氣 Edge Function 請求逾時無回應、天氣批次失敗丟失結果，以及 V3.10.2 未隨後續前端部署出現在版本歷史的問題。`develop`／`main` 發布 commit 為 `a1fd7bd`，annotated tag 為 `v3.10.4`，`weather-forecast` ACTIVE version 5，GitHub Pages commit 為 `1f7ddb4`；公開 metadata／首頁 HTTP 200，bundle 已確認包含 3.10.2、3.10.3、3.10.4，CORS／未授權邊界 smoke 通過。正式真實行程單卡／跨行程端到端驗收仍待有合資格資料後進行。詳見《[86_V3.10.4_天氣逾時與版本歷史修正版發布前核准清單](86_V3.10.4_天氣逾時與版本歷史修正版發布前核准清單.md)》。
 - [x] V3.10.5：已作為目前正式基準完成 source commit／tag `da2977c`／`v3.10.5`；修正正式 weather-forecast CORS 白名單遺漏 `x-travel-companion-client-id`。3.10.6 RC 的公開 smoke 仍須重新核對，不以本機 Git 證據代替。
 - [x] V3.10.6：2026-10-18 完成正式發布。RC 實機確認第一天／最後一天互相複製、可預報範圍與超過 10 天不提供預報；正式 `main`／`develop`／tag 均為 `39521fc`／`v3.10.6`，GitHub Pages `95c00eb`，`weather-forecast` ACTIVE version `7`，公開 metadata／首頁／bundle、CORS 與未授權邊界 smoke 通過。本版未修改 migration、正式資料或 secrets。完整紀錄見《[89_V3.10.6_RC驗證與發布紀錄](89_V3.10.6_RC驗證與發布紀錄.md)》。
-- [x] V3.10.7 RC：DEV 安全硬阻擋、Open-Meteo 來源網址保存與舊快取 fallback、天氣 lease 回寫診斷及來源選單窄螢幕修正已完成；原多日天氣回寫阻擋於 2026-10-19 實機驗收後解除。根因為 JSONB 座標數值往返序列化與 SQL double precision 完全相等比較不相容；已新增 `20261019180000_v3107_weather_release_precision_fix.sql`，以 `1e-7` 度容差處理序列化誤差，同時保留 lease token、座標狀態與 TTL 驗證。本機 transaction + rollback 回歸通過；使用者實機新增三個新座標地點，D1–D5 共 15 個地點日期全部成功取得天氣。2026-10-19 已將此 migration 套用正式資料庫並核對遠端 ledger，正式 `weather-forecast` Edge Function 也已重新部署至 ACTIVE version 12（原 version 11）。App 正式版仍為 V3.10.6；本次未更新 GitHub Pages、未建立正式 tag、未合併 `main`。詳細進度見《[91_V3.10.7_RC驗證與發布紀錄](91_V3.10.7_RC驗證與發布紀錄.md)》及《[92_V3.10.7_多日天氣快取回寫追查計畫](92_V3.10.7_多日天氣快取回寫追查計畫.md)》。
+- [x] V3.10.7：2026-10-20 正式發布完成。除 DEV 安全硬阻擋、Open-Meteo 來源網址／舊快取 fallback、天氣 lease 回寫精度修正外，新增目的地當地日期與到達時間資格判斷。正式網站台灣、日本兩筆實機測試通過；三個新座標地點 D1–D5 共 15 個日期成功取得天氣。完整 build、時區回歸、天氣契約、ESLint、Deno check 與公開資產 smoke 通過。正式 migration `20261019180000_v3107_weather_release_precision_fix.sql` 已套用，`weather-forecast` ACTIVE version 13；`develop`／`main`／tag `v3.10.7` 指向 `bdd6e01`，GitHub Pages `29e95ff`，workflow `39289021173` 成功。完整結案見《[91_V3.10.7_RC驗證與發布紀錄](91_V3.10.7_RC驗證與發布紀錄.md)》、《[92_V3.10.7_多日天氣快取回寫追查計畫](92_V3.10.7_多日天氣快取回寫追查計畫.md)》與《[93_天氣目的地時區判斷修正紀錄](93_天氣目的地時區判斷修正紀錄.md)》。
 - [ ] V3.11.1：建立完整 build 的驗證群組與耗時基線，整併驗證入口與失敗報告，不縮減 release build；既有 V3.9.3 總啟動量測已確認存在，本版不重複新增程式內埋點。V3.9.24 的 Service Worker 真實跨版本更新驗證已完成，不再列為本版驗證債。
 - [ ] V3.11.2：沿用既有總啟動量測，分段量測離線冷啟動約 30 秒的 Service Worker、navigation、session、Trip 快取、localStorage、IndexedDB 與首個可操作畫面瓶頸，再依證據決定是否修正；不新增遠端 telemetry。
 - [ ] V3.11.3：以 loopback fixture 與瀏覽器／viewport 模擬建立零費用 Playwright 響應式回歸基礎。
@@ -39,7 +39,7 @@
 
 ## 目前待修與待驗
 
-- [ ] V3.10.6 天氣跨日異常：在本機 Supabase／Docker 可讀取後，唯讀比對 Day 1／Day 2／Day 3 的卡片、日期、地點、天氣快取與 diagnostic trace；目前不可用歷史 dump 代替最新資料庫紀錄，也不可為查詢寫入正式資料。規則與欄位清單見《[90_DEV安全阻擋與天氣來源問題診斷](90_DEV安全阻擋與天氣來源問題診斷.md)》。
+- [x] V3.10.6／V3.10.7 天氣跨日與多日快取異常：已由 V3.10.7 的 lease 回寫精度修正及目的地當地時間判斷修正處理；三個新座標地點 D1–D5 共 15 個日期，以及台灣、日本正式網站驗收均通過。若未來再次發生，依新 trace 與最新資料重新診斷，不沿用舊 dump 推定。歷史線索見《[90_DEV安全阻擋與天氣來源問題診斷](90_DEV安全阻擋與天氣來源問題診斷.md)》與 V3.10.7 結案文件。
 - [x] Open-Meteo `source_url` migration `20261018100000_v3101_weather_source_url.sql`：已完成正式部署與版本一致性檢查；既有舊快取不自動補寫 `source_url`，需在線上重新成功取得天氣後驗證新來源網址。
 
 - [x] BUG012（V3.9.15）：多人帳本 Realtime 即時同步已完成；`expenses` Realtime publication、事件後重新抓取與 30 秒輪詢備援均已驗證。
