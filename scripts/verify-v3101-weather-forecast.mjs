@@ -12,8 +12,8 @@ const migration = read("../supabase/migrations/20261015090000_v3101_weather_cach
 const coordinateMigration = read("../supabase/migrations/20261015120000_v3101_weather_coordinate_integrity.sql");
 const scheduleMigration = read("../supabase/migrations/20261016140000_v3101_weather_refresh_schedule.sql");
 const scheduledRefreshMigration = read("../supabase/migrations/20261017100000_v3101_weather_scheduled_refresh_acl_fix.sql");
-const sourceUrlMigration = read("../supabase/migrations/20261018100000_v3101_weather_source_url.sql");
-const releaseLockMigration = read("../supabase/migrations/20261018140000_v3101_weather_release_lock_order.sql");
+const sourceUrlMigration = read("../supabase/migrations/20261018085239_v3101_weather_source_url.sql");
+const releaseLockMigration = read("../supabase/migrations/20261019180000_v3107_weather_release_precision_fix.sql");
 const releaseLeaseRegression = read("../scripts/test-weather-release-lease.sql");
 const config = read("../supabase/config.toml");
 

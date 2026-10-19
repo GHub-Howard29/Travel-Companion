@@ -1,6 +1,5 @@
--- Serialize successful weather-cache write-back with coordinate-state changes.
--- Keep the lock order consistent with tc_weather_store_coordinates: coordinates first,
--- then the forecast/lease row. Re-check the coordinate TTL after acquiring both locks.
+-- V3.10.7: prevent false weather-cache write-back failures caused by JSONB float round-trip drift.
+-- Serialize successful write-back with coordinate-state changes and re-check coordinate TTL.
 create or replace function public.tc_weather_release_lease(
   p_place_id text,
   p_forecast_date date,
@@ -30,8 +29,14 @@ begin
 
     v_now := clock_timestamp();
     if v_coordinates.status <> 'valid'
-      or v_coordinates.latitude is distinct from (p_forecast->>'latitude')::double precision
-      or v_coordinates.longitude is distinct from (p_forecast->>'longitude')::double precision
+      or v_coordinates.latitude is null
+      or v_coordinates.longitude is null
+      or p_forecast->>'latitude' is null
+      or p_forecast->>'longitude' is null
+      -- JSONB numeric serialization can round a double-precision coordinate by a few ULPs.
+      -- Accept only sub-meter serialization noise; meaningful coordinate changes still fail closed.
+      or abs(v_coordinates.latitude - (p_forecast->>'latitude')::double precision) > 0.0000001
+      or abs(v_coordinates.longitude - (p_forecast->>'longitude')::double precision) > 0.0000001
       or v_coordinates.expires_at is null
       or v_coordinates.expires_at <= v_now then
       return false;

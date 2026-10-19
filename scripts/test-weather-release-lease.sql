@@ -23,12 +23,13 @@ BEGIN
     v_lat := CASE v_place
       WHEN 'TEST_WEATHER_DIAG_A' THEN 22.6
       WHEN 'TEST_WEATHER_DIAG_B' THEN 23.0
-      ELSE 23.8
+      -- Precision-sensitive real-world coordinates reproduce JSONB float round-trip drift.
+      ELSE 22.5749333
     END;
     v_lon := CASE v_place
       WHEN 'TEST_WEATHER_DIAG_A' THEN 120.2
       WHEN 'TEST_WEATHER_DIAG_B' THEN 120.3
-      ELSE 120.9
+      ELSE 120.3471544
     END;
 
     INSERT INTO public.weather_place_coordinates (
