@@ -1,20 +1,18 @@
 /** App 發布版本設定；須與 public/app-version.json 保持一致。 */
-export const APP_VERSION = "3.10.7";
+export const APP_VERSION = "3.10.8";
 
 /**
  * 最近一次已發布版本；此版本必須存在於 versionHistory.ts。
  * production build 會驗證這個規則，避免升版後遺漏版本歷史。
  */
-export const PREVIOUS_RELEASE_VERSION = "3.10.6";
+export const PREVIOUS_RELEASE_VERSION = "3.10.7";
 
 export const RELEASE_DATE = "2026-10-20";
 
 export const RELEASE_NOTES = [
-  "加入 DEV 非 loopback Supabase 連線硬阻擋，避免測試帳號誤觸正式資料庫。",
-  "保存 Open-Meteo 實際查詢來源網址，舊快取缺欄位時提供安全 fallback。",
-  "修正天氣 lease 回寫結果判斷、過期租約清理與來源選單窄螢幕溢位。",
-  "依目的地當地日期與到達時間判斷天氣預報資格，避免跨時區誤判。",
-  "整理 Supabase Advisor 安全提醒，列入後續安全掃描與權限審查。",
+  "依天氣文案定稿收合無預報狀態，並統一離線、更新等待與異常提示。",
+  "有可顯示預報時才呈現 Open-Meteo 來源、CC BY 4.0 授權及資料修改說明。",
+  "最後更新時間改依預報目的地時區顯示，並附上時區名稱。",
 ];
 
 /** 目前版本發布時保存的更新政策；不隨執行中客戶端是否已達最低版本而改變。 */

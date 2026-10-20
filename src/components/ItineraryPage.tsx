@@ -105,7 +105,7 @@ import {
 } from "../services/itineraryCoverPhotoService";
 import { ITINERARY_COVER_BUCKET } from "../constants/appConstants";
 import { ITINERARY_COVER_CACHE_NAME } from "../services/itineraryCoverOfflineCache";
-import { getOpenMeteoSourceUrl, getWeatherDescription, getWeatherReminders, isLongRangeForecast, loadWeatherForecastCache, requestTripWeather, storeWeatherForecastResults, type WeatherForecastItem } from "../services/weatherForecastService";
+import { getWeatherDescription, getWeatherReminders, isLongRangeForecast, loadWeatherForecastCache, requestTripWeather, storeWeatherForecastResults, type WeatherForecastItem } from "../services/weatherForecastService";
 import { getItineraryCoverPaths } from "../utils/itineraryCoverPhoto";
 import { RichTextColorEditor } from "./RichTextColorEditor";
 import { RichTextDisplay } from "./RichTextDisplay";
@@ -470,8 +470,8 @@ export const ItineraryPage = ({
     if (!isOnline) {
       setWeatherByCardId(Object.fromEntries(enabledCards.map(({ card }) => {
         const item = cachedForCurrentDates[card.id!];
-        if (item?.weather && item.fetched_at) return [card.id!, { ...item, message: "離線，顯示上次成功取得的資料" }];
-        return [card.id!, { ...waiting[card.id!], status: "unavailable" as const, message: "離線，暫時無法取得天氣" }];
+        if (item?.weather && item.fetched_at) return [card.id!, { ...item, message: "網路離線中，目前顯示的是歷史資料" }];
+        return [card.id!, { ...waiting[card.id!], status: "unavailable" as const, message: "網路離線中，恢復網路後將嘗試自動更新" }];
       })));
       return;
     }
@@ -2450,6 +2450,24 @@ export const ItineraryPage = ({
                     const forecast = weather?.weather;
                     const description = getWeatherDescription(forecast?.weather_code);
                     const reminders = getWeatherReminders(forecast);
+                    let statusMessage = weather?.message ?? "天氣預報系統異常，請通知系統管理員處理";
+                    if (!isOnline) {
+                      statusMessage = weather?.weather ? "網路離線中，目前顯示的是歷史資料" : "網路離線中，恢復網路後將嘗試自動更新";
+                    } else if (weather?.status === "waiting") {
+                      statusMessage = "請稍後，系統將嘗試自動更新";
+                    } else if (weather?.diagnostic_code === "WEATHER_REFRESH_COOLDOWN") {
+                      statusMessage = "請稍後，系統將在 1 小時內嘗試自動更新";
+                    } else if (weather?.status === "long_range") {
+                      const dateParts = new Intl.DateTimeFormat("en-CA", { timeZone: weather.timezone || "UTC", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date());
+                      const part = (type: string) => dateParts.find((entry) => entry.type === type)?.value ?? "";
+                      const destinationToday = part("year") + "-" + part("month") + "-" + part("day");
+                      const daysAhead = Math.round((Date.parse(weather.forecast_date + "T00:00:00Z") - Date.parse(destinationToday + "T00:00:00Z")) / 86400000);
+                      statusMessage = "目前尚未開放天氣預報，預計 " + Math.max(1, daysAhead - 11) + " 天後提供";
+                    } else if (weather?.status === "ineligible") {
+                      statusMessage = "預報已超過有效期限，系統已停止更新天氣資料";
+                    } else if (weather?.status === "unavailable") {
+                      statusMessage = "天氣預報系統異常，請通知系統管理員處理";
+                    }
                     return (
                       <>
                         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
@@ -2463,7 +2481,14 @@ export const ItineraryPage = ({
                                 <span>降雨機率 {forecast.precipitation_probability_max}%</span>
                               )}
                             </>
-                          ) : <span>{weather?.message ?? "等候預報更新"}</span>}
+                          ) : (
+                            <details className="weather-status-disclosure relative max-w-full" data-weather-status-disclosure>
+                              <summary aria-label="查看天氣狀態詳情" title="查看天氣狀態詳情" className="flex h-6 min-w-8 cursor-pointer list-none items-center justify-center rounded-md px-2 text-slate-500 hover:bg-slate-200/70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-600">⋯</summary>
+                              <div className="absolute left-0 z-30 mt-1 w-72 max-w-[calc(100vw-2rem)] break-words rounded-lg border border-slate-200 bg-white p-3 text-xs font-normal text-slate-700 shadow-lg">
+                                {statusMessage}
+                              </div>
+                            </details>
+                          )}
                           {weather?.weather && weather.fetched_at && (
                             <span className="text-slate-500">
                               最後更新：{new Intl.DateTimeFormat("zh-TW", {
@@ -2472,33 +2497,30 @@ export const ItineraryPage = ({
                               }).format(new Date(weather.fetched_at))}
                             </span>
                           )}
-                          <details className="weather-source-disclosure relative" data-weather-source-disclosure>
-                            <summary className="cursor-pointer list-none font-semibold text-emerald-700 underline underline-offset-2">
-                              資料來源
-                            </summary>
-                            <div className="absolute left-0 right-auto z-20 mt-1 flex w-72 max-w-[calc(100vw-2rem)] flex-col gap-2 break-words rounded-lg border border-slate-200 bg-white p-3 text-xs shadow-lg sm:left-auto sm:right-0">
-                              {getOpenMeteoSourceUrl(weather) ? (
-                                <a href={getOpenMeteoSourceUrl(weather) ?? undefined} target="_blank" rel="noreferrer" className="text-emerald-700 underline underline-offset-2">Open-Meteo 天氣資料</a>
-                              ) : (
-                                <span className="text-slate-500">Open-Meteo 天氣資料（舊快取缺少查詢位置，重新取得後可開啟實際查詢頁）</span>
+                          {weather?.message && forecast && <p className="mt-1 w-full">{weather.message}</p>}
+                          {forecast && weather && isLongRangeForecast(weather.forecast_date, weather.timezone) && <p className="mt-1 w-full">長期預報，仍可能變動</p>}
+                          {reminders.length > 0 && (
+                            <div className="mt-1 w-full font-medium text-amber-800">
+                              <p>{reminders[0]}</p>
+                              {reminders.length > 1 && (
+                                <details className="mt-1">
+                                  <summary className="cursor-pointer">還有 {reminders.length - 1} 項提醒</summary>
+                                  <ul className="mt-1 list-inside list-disc">{reminders.slice(1).map((reminder) => <li key={reminder}>{reminder}</li>)}</ul>
+                                </details>
                               )}
-                              <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noreferrer" className="text-emerald-700 underline underline-offset-2">CC BY 4.0 授權（資料已整理／翻譯）</a>
                             </div>
-                          </details>
-                        </div>
-                        {weather?.message && forecast && <p className="mt-1">{weather.message}</p>}
-                        {forecast && weather && isLongRangeForecast(weather.forecast_date, weather.timezone) && <p className="mt-1">長期預報，仍可能變動</p>}
-                        {reminders.length > 0 && (
-                          <div className="mt-1 font-medium text-amber-800">
-                            <p>{reminders[0]}</p>
-                            {reminders.length > 1 && (
-                              <details className="mt-1">
-                                <summary className="cursor-pointer">還有 {reminders.length - 1} 項提醒</summary>
-                                <ul className="mt-1 list-inside list-disc">{reminders.slice(1).map((reminder) => <li key={reminder}>{reminder}</li>)}</ul>
-                              </details>
-                            )}
+                          )}
+                          {forecast && (
+  <details className="weather-source-disclosure relative" data-weather-source-disclosure>
+    <summary className="cursor-pointer list-none font-semibold text-emerald-700 underline underline-offset-2">資料來源</summary>
+    <div className="absolute left-0 right-auto z-20 mt-1 flex w-72 max-w-[calc(100vw-2rem)] flex-col gap-2 break-words rounded-lg border border-slate-200 bg-white p-3 text-xs shadow-lg sm:left-auto sm:right-0">
+      <a href="https://open-meteo.com/?utm_source=chatgpt.com" target="_blank" rel="noreferrer" className="text-emerald-700 underline underline-offset-2">天氣資料來源：Open-Meteo.com</a>
+      <p>依 <a href="https://creativecommons.org/licenses/by/4.0/?utm_source=chatgpt.com" target="_blank" rel="noreferrer" className="text-emerald-700 underline underline-offset-2">CC BY 4.0 國際授權條款</a> 授權使用。</p>
+      <span>資料已經過整理、翻譯及格式調整。</span>
+    </div>
+  </details>
+)}
                           </div>
-                        )}
                       </>
                     );
                   })()}

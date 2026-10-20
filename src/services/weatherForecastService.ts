@@ -114,6 +114,15 @@ const WEATHER_CACHE_KEY = "travel-companion-weather-forecast-v1";
 const WEATHER_REQUEST_RETRY_DELAY_MS = 1_000;
 const weatherRequestsInFlight = new Map<string, Promise<WeatherForecastItem[]>>();
 
+/** UTC date may differ from a destination's local date by one day; only short-circuit dates that are certainly past. */
+const isDefinitelyPastForecastDate = (forecastDate: string, now = new Date()): boolean => {
+  const todayUtc = now.toISOString().slice(0, 10);
+  const daysAhead = Math.round(
+    (Date.parse(`${forecastDate}T00:00:00Z`) - Date.parse(`${todayUtc}T00:00:00Z`)) / 86400000,
+  );
+  return daysAhead < -1;
+};
+
 const waitForWeatherRetry = () => new Promise<void>((resolve) => {
   globalThis.setTimeout(resolve, WEATHER_REQUEST_RETRY_DELAY_MS);
 });
@@ -181,8 +190,20 @@ const requestTripWeatherOnce = async (
       : []);
   });
   if (!items.length) return [];
-  const targets = new Map<string, typeof items>();
-  for (const item of items) {
+
+  const expiredItems = items.filter((item) => isDefinitelyPastForecastDate(item.forecast_date));
+  const activeItems = items.filter((item) => !isDefinitelyPastForecastDate(item.forecast_date));
+  const expiredResults: WeatherForecastItem[] = expiredItems.map((item) => ({
+    request_id: item.card_id,
+    place_id: item.place_id,
+    forecast_date: item.forecast_date,
+    status: "ineligible",
+    message: "行程日期已過，停止更新天氣",
+  }));
+  if (!activeItems.length) return expiredResults;
+
+  const targets = new Map<string, typeof activeItems>();
+  for (const item of activeItems) {
     const key = `${item.place_id}|${item.forecast_date}`;
     targets.set(key, [...(targets.get(key) ?? []), item]);
   }
@@ -257,12 +278,20 @@ export const requestTripWeather = (
     const shouldRetry = firstResults.some((result) =>
       result.status === "waiting" || result.diagnostic_code === "WEATHER_CARD_NOT_FOUND",
     );
-    return shouldRetry
+    const finalResults = shouldRetry
       ? await (async () => {
         await waitForWeatherRetry();
         return requestTripWeatherOnce(supabase, tripId, departureDate, daysData);
       })()
       : firstResults;
+
+    // A second lease-busy response has no automatic retry scheduled by this effect; never leave the UI in a permanent waiting state.
+    return finalResults.map((result) => result.status === "waiting" ? {
+      ...result,
+      status: "unavailable" as const,
+      message: "天氣資料仍在更新，請稍後重新開啟行程",
+      diagnostic_code: result.diagnostic_code ?? "WEATHER_REFRESH_IN_PROGRESS",
+    } : result);
   })();
   weatherRequestsInFlight.set(requestKey, request);
   const clearRequest = () => {

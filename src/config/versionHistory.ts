@@ -14,6 +14,16 @@ export type VersionHistoryItem = {
 
 export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
+    version: "3.10.7",
+    date: "2026-10-20",
+    isMandatoryRelease: false,
+    notes: [
+      "修正天氣預報資格依目的地當地日期與到達時間判斷。",
+      "完成天氣快取回寫精度修正與正式發布。",
+    ],
+  },
+
+  {
     version: "3.10.6",
     date: "2026-10-18",
     isMandatoryRelease: false,
