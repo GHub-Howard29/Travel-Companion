@@ -38,7 +38,15 @@ DEV 模式不得連線正式 Supabase。`src/App.tsx` 在建立 Supabase client 
 
 舊 localStorage／資料庫快取若缺少 `source_url` 與有效座標，不得猜測地點，也不得顯示會讓人誤認為已定位的首頁連結；UI 顯示「舊快取缺少查詢位置，重新取得後可開啟實際查詢頁」。`CC BY 4.0` 授權標示維持保留。
 
-`20261018100000_v3101_weather_source_url.sql` 已於 2026-10-18 套用至正式資料庫；既有正式快取不會自動補上 `source_url`，須在下次成功重新取得天氣後才會具備可追溯來源。
+`20261018100000_v3101_weather_source_url.sql` 已於 2026-10-18 套用至正式資料庫；既有正式快取不會自動補上 `source_url`，須在下次成功重新取得天氣後才會具備可追溯來源。正式 migration ledger 的實際版本為 `20261018085239_v3101_weather_source_url.sql`。
+
+### Drizz.li 地名頁（評估完成、尚未實作）
+
+Drizz.li URL 必須以獨立欄位／快取保存，不能寫入 `weather_daily_forecasts.source_url`；該欄位的正式資料庫 constraint 僅允許 Open-Meteo 文件網址。沒有距離不超過 1,000 公尺的合格地名候選時，維持原有 Open-Meteo 來源連結，不退回只有座標的 Drizz.li 頁。正式 schema／migration 檢查、公開 API 與頁面測試及後續待辦見《[94_Drizzli_地名天氣連結評估與測試紀錄](94_Drizzli_地名天氣連結評估與測試紀錄.md)》。本項尚未修改程式或正式環境。
+
+### Weather.com 外部地點連結（評估已終止，尚未實作）
+
+Weather.com 的 API 方案不符合本專案「排除固定費用或僅限期試用」的硬性條件：官方定價列出受企業資格限制的 30 天試用與 Standard 年約 USD 500／月，因此不採用 API／自動化地點解析。公開頁測試找到士林與京都具名預報頁，但直接拼接地名 URL 會 404，座標 URL 會導向行政區頁；中文景點、同名地點與一般 Chrome 清除 Cookie／跨地區重開未完整驗證。條款對個人非商業用途及未授權自動化有約束，純外部連結在 Travel-Companion 使用情境的授權未確認。完整證據見《[98_Weather.com_外部天氣連結可行性評估](98_Weather.com_外部天氣連結可行性評估.md)》。使用者已於 2026-10-20 指示終止圖形化天氣評估，因此本項不再補測或推進；沒有合格外部具名頁時維持 Open-Meteo 來源連結。
 
 ## 三、來源選單排版
 
