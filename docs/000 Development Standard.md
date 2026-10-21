@@ -261,40 +261,19 @@ src/App.tsx
 
 完成每一個可獨立驗證的 Step：
 
-```text
-npm run build
+1. 依變更範圍執行必要的 lint、測試與 build。
+2. 檢查 `git status` 與 `git diff`，確認沒有混入不相關或既有未提交變更。
+3. 只有 Product Owner 明確要求時，才執行 commit 或 push；不得將 `git add .`、commit 或 push 當成每個 Step 的自動流程。
 
-↓
+Git 分支、同步及操作安全條件依根目錄 `AGENTS.md` 執行。
 
-git add .
-
-↓
-
-git commit
-
-↓
-
-git push
-```
-
-只有：
-
-- 換電腦
-- Branch Behind
-- Diverged
-- Remote 更新
-
-才需要：
-
-```text
-git pull
-```
+工作開始前的 `git fetch`、分支 upstream 檢查與安全同步條件，以根目錄 `AGENTS.md` 為準。不得僅因換電腦、分支落後或遠端更新，就直接執行未檢查的 `git pull`；若工作目錄有未提交變更或分支狀態不符合安全條件，先停止並保留現況。
 
 Git Commit：
 
 一律繁體中文。
 
-文件或程式修改完成且驗證通過後，由 Codex 直接建立 Git Commit。
+文件或程式修改完成且驗證通過後，只有 Product Owner 明確要求時才建立 Git Commit；不得把驗證通過視為自動授權。Git／分支同步與安全操作以根目錄 `AGENTS.md` 為準。
 
 Commit 完成後，Codex 必須回報實際使用的中文 Commit 訊息。
 
@@ -314,9 +293,7 @@ Supabase migration 與雙電腦同步一律依 `docs/81_Supabase_雙電腦_Migra
 npm run build
 ```
 
-Build 成功：
-
-直接 Commit。
+Build 成功代表該項建置檢查通過，不代表自動授權 commit、push、合併或部署；Git 發布動作依本文件「Git Workflow」與根目錄 `AGENTS.md` 的授權規則執行。
 
 若 Build 失敗：
 
@@ -395,8 +372,8 @@ AI 需更新：
 
 - **Git 版本標籤**：Git 中指向正式版本 commit 的帶註解版本標籤；文件使用中文「Git 版本標籤」，指令區塊保留 `git tag`。
 - **發布狀態**：App 的部署進度，使用「發布候選」、「待手動部署」或「已發布」，不得以 Git 版本標籤代稱。
-- 標準順序為：合併至 `main`、完成 lint／build、推送 `main`、建立並推送 Git 版本標籤、手動部署、Product Owner 回報結果、更新發布狀態。
-- Git 版本標籤可在部署前建立並推送；只有收到部署成功回報後，文件才可將發布狀態更新為「已發布」。
+- 發布的概念順序為：核准後合併至 `main`、完成 lint／build、核准後推送 `main`、核准後建立並推送 Git 版本標籤、手動部署、Product Owner 回報結果、更新發布狀態。此順序是流程說明，不構成執行授權。
+- 合併、push、建立／推送標籤與部署均須遵守根目錄 `AGENTS.md` 及 Product Owner 的明確授權；不得因進入發布流程而視為已取得授權。只有收到部署成功回報後，文件才可將發布狀態更新為「已發布」。
 
 - 已發布版本的版本號、更新內容、版本歷史與發布紀錄不可回寫或重編；後續發現問題必須建立新的版本處理。
 - 已套用至正式 Supabase 的 migration 視為不可回寫歷程。修正 schema、RLS 或資料結果時，必須建立新的向前修復 migration；正式資料備份只供災難復原，不作為一般發布回退。
@@ -421,9 +398,9 @@ AI 需更新：
 
 `public/app-version.json` 必須與上述欄位一致，且不可被 PWA precache 快取；Service Worker 偵測更新時會先讀取此檔案，確認最新版版本號真的不同後才顯示更新提示。
 
-PWA 更新接管硬性規則：不得只依 `app-version.json`、`registration.active` 或 metadata 宣告更新成功。必須同時核對頁面顯示版本、`registration.active`、`waiting`、`installing` 與 `navigator.serviceWorker.controller`。若新版 worker 已 `active` 但 controller 尚未對齊，只能進入 `ready-to-reload`，不得直接 reload、不得寫入已更新版本紀錄，也不得顯示會讓使用者無限重複的「重試更新」。只有 controller 已接管後才可宣告完成；接管逾時須提供明確的「重新載入套用新版」入口。修改更新流程時，必須通過 `npm run verify:v3924-update-handoff` 與 `npm run verify:v3913-update-race`，並保留真實瀏覽器 handoff 證據。
+PWA 更新接管硬性規則由根目錄 `AGENTS.md` 唯一維護。本文件不另列接管狀態、reload owner 或競態處理的副本；凡修改 Service Worker、`useAppUpdate`、版本 metadata 或發布更新流程，必須先讀取並完整遵守 `AGENTS.md` 的規則與指定驗證命令。
 
-天氣正式鏈路硬性規則：本機 Edge Function 成功不代表正式天氣鏈路成功。正式發布前必須分別驗證 endpoint／授權、Google Places 座標、座標快取、Open-Meteo、lease／RPC、天氣快取寫入及 APP 顯示；沒有正式合資格卡片的 `fresh`／`stale` 結果時，不得宣告正式天氣端到端驗收通過。失敗診斷只能使用安全錯誤碼與 opaque trace ID，不得記錄 API key、Authorization、Trip 內容、place ID、原始 provider body 或 secret 值。
+天氣正式鏈路驗收與診斷安全硬性規則由根目錄 `AGENTS.md` 唯一維護。本文件不另立第二套驗收條件；涉及正式天氣鏈路時，必須依 `AGENTS.md` 核對正式 endpoint／授權、座標、快取、provider、lease／RPC 與 APP 顯示，並遵守診斷資料的安全限制。
 
 強制更新原則：
 
@@ -496,30 +473,16 @@ AI 不可自行新增需求。
 
 # 十三、AI Behavior（AI 行為準則）
 
-已定案內容：
+AI 的專案延續、授權、安全停止線與回覆行為，依根目錄 `AGENTS.md` 執行；文件維護觸發條件與 Checklist 依 `docs/08_開發規範.md` 執行。本節不另維護重複的代理行為規則。
 
-不得重新分析。
+若同一 Coding Style 被提醒兩次以上，將其視為專案工程規範並在後續程式修改中一致遵守；若需將其提升為正式長期規則，應更新本文件的對應 Coding Standards 章節。
 
-不得重新提出已否決方案。
+每個 Step 的回報至少包含：
 
-不得推翻已確認設計。
-
-應直接延續開發。
-
-若同一 Coding Style 被提醒兩次以上：
-
-視為專案永久規範。
-
-後續所有程式自動遵守。
-
-完成每個 Step：
-
-固定提供：
-
-- Build 狀態
+- Build／相關驗證狀態
 - Regression Check
-- 文件整理提醒（僅在 Product Owner 要求或明顯需要時）
-- Git Commit（繁體中文）
+- 文件整理提醒（依 `docs/08_開發規範.md` 的觸發條件）
+- Git 狀態與授權需求；只有明確授權並實際完成 commit 時，才回報繁體中文 Commit 訊息
 
 ---
 
@@ -546,17 +509,7 @@ AI 不得將：
 
 # 十五、專案延續原則（Project Continuity）
 
-同一專案的新對話：
-
-視為延續上一個已定案狀態。
-
-不得重新分析。
-
-不得重新設計。
-
-不得推翻既有架構。
-
-應直接延續。
+同一專案的新對話應延續目前已定案狀態與既有架構。具體代理延續行為、工作開始前的狀態檢查及安全停止條件，以根目錄 `AGENTS.md` 為準；本節不另維護重複指示。
 
 ---
 
