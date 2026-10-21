@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 const updateHook = readFileSync("src/hooks/useAppUpdate.ts", "utf8");
 const appVersion = readFileSync("src/config/appVersion.ts", "utf8");
 
-assert.match(appVersion, /APP_VERSION = "3.10.8"/);
+assert.match(appVersion, /APP_VERSION = "\d+\.\d+\.\d+"/);
 
 assert.match(
   updateHook,

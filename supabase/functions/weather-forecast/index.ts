@@ -585,7 +585,7 @@ const getForecastForCandidate = async (
       precipitation_probability_max: latest.precipitation_probability_max,
     },
     ...(eligibilityBlocksRefresh
-      ? { message: isStale
+      ? { message: cachedEligibility === "date_passed" || cachedEligibility === "arrival_passed"
         ? "預報已超過有效期限，目前顯示的是歷史資料"
         : "目前不更新天氣；顯示上次成功取得的資料" }
       : latest.last_refresh_failed_at && isStale ? { message: "更新失敗，顯示上次資料" } : {}),

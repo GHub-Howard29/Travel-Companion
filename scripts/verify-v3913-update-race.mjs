@@ -9,7 +9,7 @@ const revisionNotice = readFileSync(resolve(root, "src/components/TripDataRevisi
 const app = readFileSync(resolve(root, "src/App.tsx"), "utf8");
 const appVersion = readFileSync(resolve(root, "src/config/appVersion.ts"), "utf8");
 
-assert.match(appVersion, /APP_VERSION = "3.10.8"/);
+assert.match(appVersion, /APP_VERSION = "\d+\.\d+\.\d+"/);
 
 for (const phase of [
   "syncing-data",

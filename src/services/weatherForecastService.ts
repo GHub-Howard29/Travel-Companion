@@ -182,7 +182,7 @@ export const loadWeatherForecastCache = (tripId: string): Record<string, Weather
         if (item.weather && item.fetched_at && ageMs < 48 * 3600000) return [[cardId, {
           ...item,
           status: ageMs >= 24 * 3600000 ? "stale" as const : "fresh" as const,
-          ...(ageMs >= 24 * 3600000 ? { message: "預報已超過有效期限，目前顯示的是歷史資料" } : {}),
+          message: "預報已超過有效期限，目前顯示的是歷史資料",
         }]];
         return [[cardId, {
           ...item,
@@ -216,9 +216,7 @@ export const storeWeatherForecastResults = (
       ...merged[result.request_id],
       refresh_stopped: true,
       arrival_time: result.arrival_time ?? merged[result.request_id].arrival_time,
-      message: merged[result.request_id].status === "stale"
-        ? "預報已超過有效期限，目前顯示的是歷史資料"
-        : result.message ?? "目前不更新天氣；顯示上次成功取得的資料",
+      message: "預報已超過有效期限，目前顯示的是歷史資料",
     };
     else if ((result.status === "unavailable" || result.status === "waiting") &&
       merged[result.request_id]?.forecast_date === result.forecast_date) merged[result.request_id] = {
