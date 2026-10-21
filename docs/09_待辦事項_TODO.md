@@ -42,6 +42,9 @@
 
 - [x] V3.10.6／V3.10.7 天氣跨日與多日快取異常：已由 V3.10.7 的 lease 回寫精度修正及目的地當地時間判斷修正處理；三個新座標地點 D1–D5 共 15 個日期，以及台灣、日本正式網站驗收均通過。若未來再次發生，依新 trace 與最新資料重新診斷，不沿用舊 dump 推定。歷史線索見《[90_DEV安全阻擋與天氣來源問題診斷](90_DEV安全阻擋與天氣來源問題診斷.md)》與 V3.10.7 結案文件。
 - [x] Open-Meteo `source_url` migration `20261018100000_v3101_weather_source_url.sql`：已完成正式部署與版本一致性檢查；既有舊快取不自動補寫 `source_url`，需在線上重新成功取得天氣後驗證新來源網址。
+- [ ] 正式天氣端到端驗收：使用真實行程完成單卡與跨日／複製情境，確認成功更新後 `source_url` 含正確座標與日期，舊快取缺欄位時不會連到錯誤首頁；若再次 unavailable，保存 `diagnostic_code`、`trace_id` 與 Edge Logs 證據。對應診斷紀錄：《[90_DEV安全阻擋與天氣來源問題診斷](90_DEV安全阻擋與天氣來源問題診斷.md)》。
+- [ ] Supabase Advisor 安全複查：重新取得最新掃描結果，確認 `weather_daily_forecasts`／`weather_place_coordinates` 的 RLS 存取邊界、三個 `SECURITY DEFINER` 函式的呼叫範圍與 `EXECUTE` 權限、`pg_net` schema 位置及 Auth 洩漏密碼防護；逐項標記仍存在／已修正／接受風險／需決策。先只做證據與設計評估，未經明確授權不修改正式權限、schema 或 Auth 設定。來源：《[90_DEV安全阻擋與天氣來源問題診斷](90_DEV安全阻擋與天氣來源問題診斷.md)》。
+- [ ] Weathernews 外部天氣連結採用門檻（僅在未來重新考慮整合時啟動）：先取得明確適用於 `weathernews.jp` 的官方條款／外部深連結政策，並確認官方地點搜尋或穩定 URL 產生規則；必要時取得書面許可。完成前維持 Open-Meteo 來源連結，不改程式、schema 或部署。評估證據：《[99_三站圖形化天氣連結評估總結與建議](99_三站圖形化天氣連結評估總結與建議.md)》與《[100_Weathernews_外部天氣連結可行性評估](100_Weathernews_外部天氣連結可行性評估.md)》。
 
 - [x] BUG012（V3.9.15）：多人帳本 Realtime 即時同步已完成；`expenses` Realtime publication、事件後重新抓取與 30 秒輪詢備援均已驗證。
 - [x] BUG033（V3.9.15）：個人／共用帳本文案條件已修正；只有共用帳本且存在其他成員可代記帳時顯示提示。
