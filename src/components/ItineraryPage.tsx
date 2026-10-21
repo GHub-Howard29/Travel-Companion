@@ -276,15 +276,16 @@ export const ItineraryPage = ({
   }, [copySource, isManageMode, isOrderMode, isTimeAdjustmentMode, onManageModeChange]);
 
   useEffect(() => {
-    const closeWeatherSourceDisclosure = (event: PointerEvent) => {
+    const closeWeatherDisclosures = (event: PointerEvent) => {
       if (!(event.target instanceof Node)) return;
-      document.querySelectorAll<HTMLDetailsElement>("details[data-weather-source-disclosure][open]")
-        .forEach((details) => {
-          if (!details.contains(event.target as Node)) details.open = false;
-        });
+      document.querySelectorAll<HTMLDetailsElement>(
+        "details[data-weather-source-disclosure][open], details[data-weather-status-disclosure][open]",
+      ).forEach((details) => {
+        if (!details.contains(event.target as Node)) details.open = false;
+      });
     };
-    document.addEventListener("pointerdown", closeWeatherSourceDisclosure);
-    return () => document.removeEventListener("pointerdown", closeWeatherSourceDisclosure);
+    document.addEventListener("pointerdown", closeWeatherDisclosures);
+    return () => document.removeEventListener("pointerdown", closeWeatherDisclosures);
   }, []);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
@@ -465,7 +466,8 @@ export const ItineraryPage = ({
     }]));
     const cachedForCurrentDates = Object.fromEntries(enabledCards.flatMap(({ card, forecastDate }) => {
       const item = cached[card.id!];
-      return item?.forecast_date === forecastDate ? [[card.id!, item]] : [];
+      return item?.forecast_date === forecastDate && item.place_id === card.place?.placeId &&
+        (!item.refresh_stopped || item.arrival_time === (card.time ?? "")) ? [[card.id!, item]] : [];
     }));
     if (!isOnline) {
       setWeatherByCardId(Object.fromEntries(enabledCards.map(({ card }) => {

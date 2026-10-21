@@ -19,6 +19,10 @@ export interface WeatherForecastItem {
     precipitation_probability_max: number | null;
   };
   message?: string;
+  /** Prevent further requests after destination-local arrival eligibility has expired. */
+  refresh_stopped?: boolean;
+  /** Arrival time associated with a terminal eligibility result, used to invalidate it after edits. */
+  arrival_time?: string;
   diagnostic_code?: string;
   trace_id?: string;
 }
@@ -170,8 +174,24 @@ export const loadWeatherForecastCache = (tripId: string): Record<string, Weather
     } | null;
     if (parsed?.tripId !== tripId || !parsed.items) return {};
     const now = Date.now();
-    return Object.fromEntries(Object.entries(parsed.items).flatMap(([cardId, item]) => {
+    return Object.fromEntries(Object.entries(parsed.items).flatMap(([cardId, item]): [string, WeatherForecastItem][] => {
       const ageMs = item.fetched_at ? now - Date.parse(item.fetched_at) : Number.POSITIVE_INFINITY;
+      // Keep terminal eligibility even after weather values age out, so reopening the itinerary
+      // never repeats a request for the same date/place/arrival time.
+      if (item.refresh_stopped) {
+        if (item.weather && item.fetched_at && ageMs < 48 * 3600000) return [[cardId, {
+          ...item,
+          status: ageMs >= 24 * 3600000 ? "stale" as const : "fresh" as const,
+          ...(ageMs >= 24 * 3600000 ? { message: "預報已超過有效期限，目前顯示的是歷史資料" } : {}),
+        }]];
+        return [[cardId, {
+          ...item,
+          status: "ineligible" as const,
+          weather: undefined,
+          fetched_at: undefined,
+          message: "預報已超過有效期限，系統已停止更新天氣資料",
+        }]];
+      }
       if (!item.weather || ageMs >= 48 * 3600000) return [];
       return [[cardId, {
         ...item,
@@ -194,6 +214,8 @@ export const storeWeatherForecastResults = (
     else if (result.status === "ineligible" && merged[result.request_id]?.forecast_date === result.forecast_date &&
       merged[result.request_id]?.weather && merged[result.request_id]?.fetched_at) merged[result.request_id] = {
       ...merged[result.request_id],
+      refresh_stopped: true,
+      arrival_time: result.arrival_time ?? merged[result.request_id].arrival_time,
       message: merged[result.request_id].status === "stale"
         ? "預報已超過有效期限，目前顯示的是歷史資料"
         : result.message ?? "目前不更新天氣；顯示上次成功取得的資料",
@@ -224,21 +246,35 @@ const requestTripWeatherOnce = async (
     const forecastDate = getItineraryDayDate(departureDate, dayNumber);
     if (!forecastDate) return [];
     return cards.flatMap((card) => card.showWeather === true && card.id && card.place?.placeId
-      ? [{ card_id: card.id, place_id: card.place.placeId, day_number: dayNumber, forecast_date: forecastDate }]
+      ? [{
+        card_id: card.id, place_id: card.place.placeId, day_number: dayNumber, forecast_date: forecastDate,
+        arrival_time: card.time ?? "",
+      }]
       : []);
   });
   if (!items.length) return [];
 
-  const expiredItems = items.filter((item) => isDefinitelyPastForecastDate(item.forecast_date));
-  const activeItems = items.filter((item) => !isDefinitelyPastForecastDate(item.forecast_date));
+  const cached = loadWeatherForecastCache(tripId);
+  const stoppedItems = items.filter((item) => {
+    const previous = cached[item.card_id];
+    return previous?.refresh_stopped === true && previous.forecast_date === item.forecast_date &&
+      previous.place_id === item.place_id && previous.arrival_time === item.arrival_time;
+  });
+  const stoppedIds = new Set(stoppedItems.map((item) => item.card_id));
+  const stoppedResults = stoppedItems.map((item) => cached[item.card_id]);
+  const pendingItems = items.filter((item) => !stoppedIds.has(item.card_id));
+  const expiredItems = pendingItems.filter((item) => isDefinitelyPastForecastDate(item.forecast_date));
+  const activeItems = pendingItems.filter((item) => !isDefinitelyPastForecastDate(item.forecast_date));
   const expiredResults: WeatherForecastItem[] = expiredItems.map((item) => ({
     request_id: item.card_id,
     place_id: item.place_id,
     forecast_date: item.forecast_date,
     status: "ineligible",
-    message: "行程日期已過，停止更新天氣",
+    refresh_stopped: true,
+    arrival_time: item.arrival_time,
+    message: "預報已超過有效期限，系統已停止更新天氣資料",
   }));
-  if (!activeItems.length) return expiredResults;
+  if (!activeItems.length) return [...stoppedResults, ...expiredResults];
 
   const targets = new Map<string, typeof activeItems>();
   for (const item of activeItems) {
@@ -272,14 +308,19 @@ const requestTripWeatherOnce = async (
   }
 
   const resultsByRequestId = new Map(results.map((result) => [result.request_id, result]));
-  return [...expiredResults, ...activeItems.map((item) => {
+  return [...stoppedResults, ...expiredResults, ...activeItems.map((item) => {
     const result = resultsByRequestId.get(item.card_id);
-    if (result?.place_id === item.place_id && result.forecast_date === item.forecast_date) return result;
+    if (result?.place_id === item.place_id && result.forecast_date === item.forecast_date) return {
+      ...result,
+      arrival_time: item.arrival_time,
+      ...(result.status === "ineligible" ? { refresh_stopped: true } : {}),
+    };
     return {
       request_id: item.card_id,
       place_id: item.place_id,
       forecast_date: item.forecast_date,
       status: "unavailable" as const,
+      arrival_time: item.arrival_time,
       message: "未取得有效天氣回應，請稍後重試",
     };
   })];
@@ -287,7 +328,7 @@ const requestTripWeatherOnce = async (
 
 /**
  * 同一份 Trip 快照只允許一個天氣請求；複製卡片造成的連續 render 不得重複打同一批資料。
- * Edge Function 回報同步／租約忙碌時，只做一次短暫重試，避免無限重試與放大請求量。
+ * Edge Function 回報同步／租約忙碌或卡片尚未同步時，只對該等候項目做一次短暫重試；已完成或已停止更新的卡片不重送。
  */
 export const requestTripWeather = (
   supabase: SupabaseClient,
@@ -313,13 +354,20 @@ export const requestTripWeather = (
 
   const request = (async () => {
     const firstResults = await requestTripWeatherOnce(supabase, tripId, departureDate, daysData);
-    const shouldRetry = firstResults.some((result) =>
+    const retryIds = new Set(firstResults.filter((result) =>
       result.status === "waiting" || result.diagnostic_code === "WEATHER_CARD_NOT_FOUND",
-    );
-    const finalResults = shouldRetry
+    ).map((result) => result.request_id));
+    const finalResults = retryIds.size > 0
       ? await (async () => {
         await waitForWeatherRetry();
-        return requestTripWeatherOnce(supabase, tripId, departureDate, daysData);
+        const retryDaysData = Object.fromEntries(Object.entries(daysData).map(([dayKey, cards]) => [
+          dayKey, cards.filter((card) => Boolean(card.id && retryIds.has(card.id))),
+        ]).filter(([, cards]) => cards.length > 0));
+        const retryResults = await requestTripWeatherOnce(supabase, tripId, departureDate, retryDaysData);
+        return [
+          ...firstResults.filter((result) => !retryIds.has(result.request_id)),
+          ...retryResults,
+        ];
       })()
       : firstResults;
 

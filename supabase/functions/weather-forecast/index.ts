@@ -100,6 +100,7 @@ interface WeatherResult {
     precipitation_probability_max: number | null;
   };
   message?: string;
+  refresh_stopped?: boolean;
   diagnostic_code?: string;
   trace_id?: string;
 }
@@ -374,7 +375,10 @@ const getForecastForCandidate = async (
   const eligibilityBlocksRefresh = cachedEligibility !== null && cachedEligibility !== "eligible";
   if (cachedEligibility === null) {
     const utcDaysAhead = dateDistance(now.toISOString().slice(0, 10), candidate.forecastDate);
-    if (utcDaysAhead < -1) return { request_id: requestId, place_id: candidate.placeId, forecast_date: candidate.forecastDate, status: "ineligible", message: "行程日期已過" };
+    if (utcDaysAhead < -1) return {
+      request_id: requestId, place_id: candidate.placeId, forecast_date: candidate.forecastDate,
+      status: "ineligible", refresh_stopped: true, message: "預報已超過有效期限，系統已停止更新天氣資料",
+    };
     if (utcDaysAhead > 11) return { request_id: requestId, place_id: candidate.placeId, forecast_date: candidate.forecastDate, status: "long_range", message: "尚未開放天氣預報" };
   }
   const usable = previous?.fetched_at && Date.parse(previous.fetched_at) > now.getTime() - 48 * 3600000 &&
@@ -399,11 +403,10 @@ const getForecastForCandidate = async (
           return {
             request_id: requestId, place_id: candidate.placeId, forecast_date: candidate.forecastDate,
             status: initialEligibility === "long_range" ? "long_range" : "ineligible",
-            message: initialEligibility === "date_passed"
-              ? "目的地當地行程日期已過"
-              : initialEligibility === "arrival_passed"
-                ? "已超過目的地當地到達時間"
-                : "尚未開放天氣預報",
+            ...(initialEligibility === "long_range" ? {} : { refresh_stopped: true }),
+            message: initialEligibility === "date_passed" || initialEligibility === "arrival_passed"
+              ? "預報已超過有效期限，系統已停止更新天氣資料"
+              : "尚未開放天氣預報",
           };
         }
       }
@@ -426,11 +429,10 @@ const getForecastForCandidate = async (
             return {
               request_id: requestId, place_id: candidate.placeId, forecast_date: candidate.forecastDate,
               status: ineligible ? "ineligible" : "long_range",
-              message: destinationEligibility === "date_passed"
-                ? "目的地當地行程日期已過"
-                : destinationEligibility === "arrival_passed"
-                  ? "已超過目的地當地到達時間"
-                  : "尚未開放天氣預報",
+              ...(ineligible ? { refresh_stopped: true } : {}),
+              message: ineligible
+                ? "預報已超過有效期限，系統已停止更新天氣資料"
+                : "尚未開放天氣預報",
             };
           }
           // Capture predicate diagnostics immediately before the release RPC. Log booleans only:
@@ -551,9 +553,10 @@ const getForecastForCandidate = async (
   if (!stillUsable && eligibilityBlocksRefresh) return {
     request_id: requestId, place_id: candidate.placeId, forecast_date: candidate.forecastDate,
     status: cachedEligibility === "long_range" ? "long_range" : "ineligible",
+    ...(cachedEligibility === "long_range" ? {} : { refresh_stopped: true }),
     message: cachedEligibility === "long_range"
       ? "尚未開放天氣預報"
-      : "到達時間已到或行程日期已過，且沒有可顯示的有效天氣快取",
+      : "預報已超過有效期限，系統已停止更新天氣資料",
   };
   if (!stillUsable && leaseBusy) return {
     request_id: requestId, place_id: candidate.placeId, forecast_date: candidate.forecastDate,
@@ -573,6 +576,7 @@ const getForecastForCandidate = async (
   return {
     request_id: requestId, place_id: candidate.placeId, forecast_date: candidate.forecastDate,
     status: isStale ? "stale" : "fresh", fetched_at: latest.fetched_at, timezone: latest.timezone,
+    ...(eligibilityBlocksRefresh ? { refresh_stopped: true } : {}),
     latitude: latest.latitude, longitude: latest.longitude, source_url: latest.source_url,
     weather: {
       weather_code: latest.weather_code,
@@ -581,7 +585,9 @@ const getForecastForCandidate = async (
       precipitation_probability_max: latest.precipitation_probability_max,
     },
     ...(eligibilityBlocksRefresh
-      ? { message: "目前不更新天氣；顯示上次成功取得的資料" }
+      ? { message: isStale
+        ? "預報已超過有效期限，目前顯示的是歷史資料"
+        : "目前不更新天氣；顯示上次成功取得的資料" }
       : latest.last_refresh_failed_at && isStale ? { message: "更新失敗，顯示上次資料" } : {}),
   };
 };
