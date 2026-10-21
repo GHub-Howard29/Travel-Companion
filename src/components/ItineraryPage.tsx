@@ -106,6 +106,7 @@ import {
 import { ITINERARY_COVER_BUCKET } from "../constants/appConstants";
 import { ITINERARY_COVER_CACHE_NAME } from "../services/itineraryCoverOfflineCache";
 import { getWeatherDescription, getWeatherReminders, isLongRangeForecast, loadWeatherForecastCache, requestTripWeather, storeWeatherForecastResults, type WeatherForecastItem } from "../services/weatherForecastService";
+import { formatWeatherFetchedAt } from "../utils/weatherTime";
 import { getItineraryCoverPaths } from "../utils/itineraryCoverPhoto";
 import { RichTextColorEditor } from "./RichTextColorEditor";
 import { RichTextDisplay } from "./RichTextDisplay";
@@ -2491,10 +2492,7 @@ export const ItineraryPage = ({
                           )}
                           {weather?.weather && weather.fetched_at && (
                             <span className="text-slate-500">
-                              最後更新：{new Intl.DateTimeFormat("zh-TW", {
-                                month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit",
-                                hour12: false, timeZone: "Asia/Taipei",
-                              }).format(new Date(weather.fetched_at))}
+                              最後更新：{formatWeatherFetchedAt(weather.fetched_at, weather.timezone)}
                             </span>
                           )}
                           {weather?.message && forecast && <p className="mt-1 w-full">{weather.message}</p>}
