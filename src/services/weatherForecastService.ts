@@ -89,6 +89,41 @@ const WEATHER_CODES: Record<number, { label: string; icon: string }> = {
 export const getWeatherDescription = (code: number | null | undefined) =>
   typeof code === "number" ? WEATHER_CODES[code] ?? { label: "天氣狀況暫無資料", icon: "🌡️" } : { label: "天氣狀況暫無資料", icon: "🌡️" };
 
+/** Use a familiar geographic label instead of a technical time-zone name. */
+export const getWeatherTimezoneLabel = (timezone?: string): string => {
+  if (!timezone) return "目的地時間";
+  const labels: Record<string, string> = {
+    "Asia/Taipei": "台北時間",
+    "Asia/Shanghai": "北京時間",
+    "Asia/Tokyo": "東京時間",
+    "Asia/Seoul": "首爾時間",
+    "Asia/Hong_Kong": "香港時間",
+    "Asia/Singapore": "新加坡時間",
+    "Asia/Bangkok": "曼谷時間",
+    "Asia/Kuala_Lumpur": "吉隆坡時間",
+    "Asia/Manila": "馬尼拉時間",
+    "Asia/Jakarta": "雅加達時間",
+    "Europe/London": "倫敦時間",
+    "Europe/Paris": "巴黎時間",
+    "Europe/Rome": "羅馬時間",
+    "Europe/Berlin": "柏林時間",
+    "Europe/Madrid": "馬德里時間",
+    "Europe/Amsterdam": "阿姆斯特丹時間",
+    "Australia/Sydney": "雪梨時間",
+    "Australia/Melbourne": "墨爾本時間",
+    "Pacific/Auckland": "奧克蘭時間",
+    "America/New_York": "美東時間",
+    "America/Detroit": "美東時間",
+    "America/Chicago": "美中時間",
+    "America/Denver": "美山時間",
+    "America/Los_Angeles": "美西時間",
+    "America/Vancouver": "加拿大西岸時間",
+  };
+  if (labels[timezone]) return labels[timezone];
+  const city = timezone.split("/").at(-1)?.replaceAll("_", " ").trim();
+  return city ? `${city}時間` : "目的地時間";
+};
+
 export const isLongRangeForecast = (forecastDate: string, timezone?: string): boolean => {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: timezone || "UTC", year: "numeric", month: "2-digit", day: "2-digit",
@@ -158,7 +193,10 @@ export const storeWeatherForecastResults = (
     if (result.weather && result.fetched_at) merged[result.request_id] = result;
     else if (result.status === "ineligible" && merged[result.request_id]?.forecast_date === result.forecast_date &&
       merged[result.request_id]?.weather && merged[result.request_id]?.fetched_at) merged[result.request_id] = {
-      ...merged[result.request_id], message: result.message ?? "到達時間已到，不更新天氣；顯示上次資料",
+      ...merged[result.request_id],
+      message: merged[result.request_id].status === "stale"
+        ? "預報已超過有效期限，目前顯示的是歷史資料"
+        : result.message ?? "目前不更新天氣；顯示上次成功取得的資料",
     };
     else if ((result.status === "unavailable" || result.status === "waiting") &&
       merged[result.request_id]?.forecast_date === result.forecast_date) merged[result.request_id] = {
@@ -234,7 +272,7 @@ const requestTripWeatherOnce = async (
   }
 
   const resultsByRequestId = new Map(results.map((result) => [result.request_id, result]));
-  return items.map((item) => {
+  return [...expiredResults, ...activeItems.map((item) => {
     const result = resultsByRequestId.get(item.card_id);
     if (result?.place_id === item.place_id && result.forecast_date === item.forecast_date) return result;
     return {
@@ -244,7 +282,7 @@ const requestTripWeatherOnce = async (
       status: "unavailable" as const,
       message: "未取得有效天氣回應，請稍後重試",
     };
-  });
+  })];
 };
 
 /**
