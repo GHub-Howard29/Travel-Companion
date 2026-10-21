@@ -7,7 +7,7 @@ export const APP_VERSION = "3.10.8";
  */
 export const PREVIOUS_RELEASE_VERSION = "3.10.7";
 
-export const RELEASE_DATE = "2026-10-20";
+export const RELEASE_DATE = "2026-10-21";
 
 export const RELEASE_NOTES = [
   "依天氣文案定稿收合無預報狀態，並統一離線、更新等待與異常提示。",

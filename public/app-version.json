@@ -1,7 +1,7 @@
 {
   "version": "3.10.8",
   "minimumSupportedVersion": "3.9.27",
-  "releaseDate": "2026-10-20",
+  "releaseDate": "2026-10-21",
   "releaseNotes": [
     "依天氣文案定稿收合無預報狀態，並統一離線、更新等待與異常提示。",
     "有可顯示預報時才呈現 Open-Meteo 來源、CC BY 4.0 授權及資料修改說明。",
