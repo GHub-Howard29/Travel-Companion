@@ -2444,7 +2444,7 @@ export const ItineraryPage = ({
               ) : (
                 <>
               {event.showWeather === true && (
-                <div className={`mb-3 rounded-lg border px-3 py-2 text-xs ${weatherByCardId[event.id ?? ""]?.status === "stale" ? "border-amber-200 bg-amber-50 text-amber-800" : (weatherByCardId[event.id ?? ""]?.status === "long_range" || (weatherByCardId[event.id ?? ""] && isLongRangeForecast(weatherByCardId[event.id ?? ""].forecast_date, weatherByCardId[event.id ?? ""].timezone))) ? "border-slate-100 bg-slate-50 text-slate-600 opacity-80" : "border-sky-100 bg-sky-50/70 text-slate-700"}`} aria-live="polite">
+                <div className={`mb-3 rounded-lg border px-3 py-2 text-xs ${weatherByCardId[event.id ?? ""]?.status === "stale" ? "border-amber-200 bg-amber-50 text-amber-800" : (weatherByCardId[event.id ?? ""]?.status === "long_range" || (weatherByCardId[event.id ?? ""] && isLongRangeForecast(weatherByCardId[event.id ?? ""].forecast_date, weatherByCardId[event.id ?? ""].timezone))) ? "border-emerald-100 bg-emerald-50 text-slate-600" : "border-sky-100 bg-sky-50 text-slate-700"}`} aria-live="polite">
                   {(() => {
                     const storedWeather = weatherByCardId[event.id ?? ""];
                     const weather = storedWeather?.place_id === event.place?.placeId &&
@@ -2486,7 +2486,7 @@ export const ItineraryPage = ({
                           ) : (
                             <details className="weather-status-disclosure relative max-w-full" data-weather-status-disclosure>
                               <summary aria-label="查看天氣狀態詳情" title="查看天氣狀態詳情" className="flex h-6 min-w-8 cursor-pointer list-none items-center justify-center rounded-md px-2 text-slate-500 hover:bg-slate-200/70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-600">⋯</summary>
-                              <div className="absolute left-0 z-30 mt-1 w-72 max-w-[calc(100vw-2rem)] break-words rounded-lg border border-slate-200 bg-white p-3 text-xs font-normal text-slate-700 shadow-lg">
+                              <div className="absolute left-0 z-30 mt-1 w-72 max-w-[calc(100vw-2rem)] break-words rounded-lg border border-emerald-100 bg-emerald-50 p-3 text-xs font-normal text-slate-700 shadow-lg">
                                 {statusMessage}
                               </div>
                             </details>
