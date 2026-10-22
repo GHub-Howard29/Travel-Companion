@@ -110,10 +110,13 @@ const statusMode = async () => {
   }, null, 2));
 };
 
-const writeLocalFile = (path, content, requiredMarker) => {
+const writeLocalFile = (path, content, requiredMarkers) => {
   if (existsSync(path)) {
     const current = readFileSync(path, "utf8");
-    if (!current.includes(requiredMarker)) {
+    const hasLocalSupabaseUrl = current.split(/\r?\n/).some((line) =>
+      requiredMarkers.some((marker) => line.startsWith(marker))
+    );
+    if (!hasLocalSupabaseUrl) {
       throw new Error(`拒絕覆寫不屬於本機回歸的檔案：${path}`);
     }
     return false;
@@ -127,7 +130,10 @@ const prepareMode = async () => {
   const envCreated = writeLocalFile(
     resolve(root, ".env.local"),
     `VITE_SUPABASE_URL=${apiUrl}\nVITE_SUPABASE_ANON_KEY=${anonKey}\n`,
-    "VITE_SUPABASE_URL=http://127.0.0.1:",
+    [
+      "VITE_SUPABASE_URL=http://127.0.0.1:",
+      "VITE_SUPABASE_URL=http://localhost:",
+    ],
   );
   const functionEnvPath = resolve(root, "supabase/.env.local");
   const tokenSecret = "v391-local-aes-gcm-token-key-32b";

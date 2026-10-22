@@ -127,8 +127,10 @@ Git 同步後，依第 2 節核對本機 Supabase 狀態與 migration 清單。�
 - **Migration 管理結構與資料庫權限；Seed／fixture 檔案管理可重現的標準測試資料。** 兩者都必須納入 Git，不能把本機 Docker volume 或資料庫 dump 當作兩台電腦的同步來源。
 - git pull 只更新檔案，不會自動更新本機資料庫，也不會自動載入新測試資料。
 - 測試資料必須是明確挑選的合成資料或已去識別化資料；不得直接把正式資料庫 dump、真實使用者資料、Auth token、secret 或 Storage 檔案本體放進 Seed／fixture。
-- **目前尚未建立可供乾淨重建使用的 Seed 基準。** supabase/config.toml 的 [db.seed] enabled 目前為 false，雖然設定了 ./seed.sql 路徑，但 repository 中尚無 supabase/seed.sql。在建立並驗證標準測試資料之前，不得宣稱 supabase db reset 能載入本專案的標準測試資料。
+- **Seed 已在公司電腦乾淨重建時成功執行，但完整回歸驗收尚未通過。** `supabase/seed.sql` 目前只建立最小合成測試旅程；`supabase/config.toml` 的 `[db.seed] enabled` 仍維持 `false`，需以 `--sql-paths ./seed.sql` 明確指定。公司電腦的 reset 與 Seed 執行成功，但 `npm run regression:local:verify` 在 Trip 檢查時逾時，因此目前只能確認 Migration 與指定 Seed 成功套用，不能宣稱整體回歸測試已通過。本機回歸測試帳號需在重建後另行透過 `npm run regression:local:prepare` 建立。
 - 專案現況紀錄曾指出本機 supabase db reset 因容器初始化錯誤連續失敗，之後改以備份 dump 還原本機資料。因此執行任何 reset 前，必須先確認目前本機資料是否需要保留、備份是否有效，以及目標確實是本機 disposable database；不可把 reset 當作日常同步指令。
+- **2026-10-22 公司電腦盤點與備份：** 本機與遠端 migration history 的 47 筆版本一致；本機資料庫有 6 筆旅程、52 筆費用、91 筆其他資訊、270 筆清單項目、8 個 Auth 使用者、5 筆管理者資料，Storage 有 2 個 bucket、0 個物件。使用者已確認這台公司電腦的本機資料可丟棄。執行 reset 前已先建立本機 `postgres` 資料庫的完整 custom-format 備份，存放於 `%LOCALAPPDATA%\Travel-Companion\backups\travel-companion-local-20261022-154640.dump`（1,090,823 bytes；SHA-256 `2EF896887C3FE00E4726676BEA1B5E7C87A63C673F75E06EF37AF4296DF28106`），備份檔不在 Git 目錄內。`pg_restore --list` 成功讀取備份目錄，並已還原到隔離的臨時資料庫比對主要資料筆數：旅程 6、費用 52、其他資訊 91、清單 270、Auth 使用者 8、管理者 5、Storage bucket 2、Storage 物件 0、migration 記錄 47，與原資料庫一致；臨時資料庫已清除。由於本機 `pg_cron` 綁定 `postgres` 資料庫，隔離還原驗證副本排除了 `pg_cron` 擴充與其排程中繼資料；原始備份檔未排除這些內容。此結果足以驗證主要應用資料可還原，但不是整個 Supabase Docker stack 的重建驗證。備份目錄 ACL 已限制為目前使用者、SYSTEM 與本機 Administrators。其後已在 2026-10-22 執行 `supabase db reset --local --sql-paths ./seed.sql`，47 筆 Migration 與指定 Seed 均成功套用；`npm run regression:local:prepare` 成功，`npm run regression:local:status` 顯示 Supabase ready、Auth HTTP 200、Edge Function HTTP 200。`npm run regression:local:verify` 目前仍失敗：檢查 Trip 時逾時（`The operation was aborted due to timeout`）；Vite 狀態為未啟動（`viteHttpStatus: null`）。因此乾淨重建已完成，但回歸驗證尚未通過；需先診斷 Trip 檢查逾時原因，不可宣稱整體流程驗收完成。`supabase/config.toml` 的 Seed 設定仍維持關閉，這次是透過 `--sql-paths ./seed.sql` 明確指定 Seed。
+- **Seed 驗證紀錄：** 初期曾在現有本機資料庫以 BEGIN／ROLLBACK 交易檢查 `supabase/seed.sql`，因同 ID 旅程已存在而回報 `INSERT 0 0`。之後在 2026-10-22 的乾淨本機 reset 中，指定 Seed 已成功執行；但由於後續 `regression:local:verify` 仍在 Trip 檢查時逾時，完整回歸驗收尚未完成。
 
 ### 7.2 建立與維護標準測試資料
 
@@ -147,5 +149,18 @@ Git 同步後，依第 2 節核對本機 Supabase 狀態與 migration 清單。�
 - **只有標準測試資料基準有變更：** pull 後，依該 fixture／Seed 的專用更新與驗證步驟更新本機資料。若目前只有 supabase db reset 能可靠套用整套 Seed，必須先確認本機資料可丟棄或已備份，再 reset。
 - **需要驗證完整乾淨重建時：** 在確認安全的本機環境執行 npx supabase db reset，確認所有 Migration 與標準測試資料均成功建立；這是可重現性驗證，不是每次開工必做步驟。
 - A、B 不得各自手動建立不同版本的標準測試資料。資料基準的唯一來源是 Git 中經審查的 Migration 與 Seed／fixture；每台電腦各自重建或套用，不直接複製 Docker volume。
+
+### 7.4 `.env.local` 本機設定與家裡電腦首次 reset 後確認
+
+- **兩台電腦的 `.env.local` 是各自的本機設定，不是 Git 同步資料。** 不要把公司電腦的專案根目錄 `.env.local` 或 `supabase/.env.local` 直接複製到家裡電腦覆蓋原檔。
+- 專案根目錄 `.env.local` 可能包含 `VITE_SUPABASE_URL` 與 `VITE_SUPABASE_ANON_KEY`；家裡電腦必須使用家裡本機 Supabase 的 URL／key，不可因複製公司檔案而指向公司或遠端環境。檢查時只回報變數名稱、URL 主機與連接埠、是否存在／格式是否有效；不得輸出 key 的值。
+- `supabase/.env.local` 可能包含 Google Maps 測試 API Key、`WIKIMEDIA_CONTACT_URL`、`COMMONS_PRECISION_TOKEN_SECRET` 等 Edge Function 本機環境變數。家裡電腦應保留自己的設定；依程式實際需求補上缺少的變數，不要整份覆蓋，也不可將 secret、API key 寫入 Git、Seed／fixture 或一般診斷輸出。對密鑰只檢查變數是否存在及是否符合格式，不顯示值。
+- 若回歸準備腳本因既有 `.env.local` 拒絕執行，先檢查腳本的本機 URL 辨識規則與檔案內容（密鑰遮蔽）；不可為了通過檢查直接刪除或覆蓋原檔。`localhost` 與 `127.0.0.1` 都是合法 loopback 主機，但不得接受正式環境或其他遠端 URL。
+- **家裡電腦第一次乾淨 `db reset` 後必須執行確認，不得視為 reset 成功就完成同步：**
+  1. 確認主機與專案路徑，並確認操作目標是家裡電腦的本機 Supabase；reset 前先確認本機資料可丟棄或已完成可還原備份，取得使用者明確核准後才可執行破壞性 reset。
+  2. 確認所有 Migration 與 Seed 執行成功，並檢查 `npm run regression:local:prepare`、`npm run regression:local:status` 的結果；prepare／status 若失敗，停止並保留錯誤，不要自動重試 reset。
+  3. 檢查兩個 `.env.local` 的必要變數是否齊全、根目錄 Supabase URL 是否指向家裡電腦的 loopback 本機服務、Edge Function 所需環境變數是否存在。診斷輸出必須遮蔽 key／secret。
+  4. 執行 `npm run regression:local:verify` 與必要的應用程式檢查；若任一步失敗或逾時，立即停止、記錄失敗步驟與錯誤，不要 commit／push，也不要宣稱家裡電腦同步驗收完成。先診斷原因，獲准後再重試。
+  5. 將確認結果記錄在專案文件／交接紀錄中；只有 Migration、Seed、環境設定檢查與必要驗證均通過，才可把家裡電腦首次 reset 視為驗收完成。
 
 **啟用 Seed 的完成條件：** 已建立合成測試資料基準、檢查不含正式資料／秘密、確認 Migration + Seed 可在乾淨本機資料庫成功執行，並驗證必要的 RLS／權限與應用程式測試。完成前維持目前 Seed 關閉，不以 db reset 嘗試碰運氣。
