@@ -119,3 +119,33 @@ Git 同步後，依第 2 節核對本機 Supabase 狀態與 migration 清單。�
 - Supabase CLI 產生的角色預設權限／系統角色 grant 差異需人工判讀，不得自動套用。
 
 若未來查到新的正式 schema 變更，先建立可追蹤的 migration，再讓每台電腦各自套用；不要在兩台電腦上各自手動修改資料庫。
+
+## 7. 本機測試資料版本控制與重建基準
+
+### 7.1 原則與目前狀態
+
+- **Migration 管理結構與資料庫權限；Seed／fixture 檔案管理可重現的標準測試資料。** 兩者都必須納入 Git，不能把本機 Docker volume 或資料庫 dump 當作兩台電腦的同步來源。
+- git pull 只更新檔案，不會自動更新本機資料庫，也不會自動載入新測試資料。
+- 測試資料必須是明確挑選的合成資料或已去識別化資料；不得直接把正式資料庫 dump、真實使用者資料、Auth token、secret 或 Storage 檔案本體放進 Seed／fixture。
+- **目前尚未建立可供乾淨重建使用的 Seed 基準。** supabase/config.toml 的 [db.seed] enabled 目前為 false，雖然設定了 ./seed.sql 路徑，但 repository 中尚無 supabase/seed.sql。在建立並驗證標準測試資料之前，不得宣稱 supabase db reset 能載入本專案的標準測試資料。
+- 專案現況紀錄曾指出本機 supabase db reset 因容器初始化錯誤連續失敗，之後改以備份 dump 還原本機資料。因此執行任何 reset 前，必須先確認目前本機資料是否需要保留、備份是否有效，以及目標確實是本機 disposable database；不可把 reset 當作日常同步指令。
+
+### 7.2 建立與維護標準測試資料
+
+1. 先依測試需求定義最小且穩定的合成資料集，確認所需資料表、外鍵、RLS、角色／Auth 依賴與 Storage 需求；不可直接複製正式資料作為基準。
+2. 將可重現的資料建立 SQL 或 fixture 放在明確、受 Git 管理的位置。若採用 Supabase Seed，使用 supabase/seed.sql，並在驗證完成後才啟用 [db.seed] enabled = true；若資料依賴 Auth 使用者、Storage 物件或外部服務，須另外定義安全、可重現的建立與清理方式，不能假設 Seed 會自動複製這些內容。
+3. 修改標準測試資料時，必須同步更新對應的 Seed／fixture 檔案與必要測試，檢查 Git diff，並以乾淨本機資料庫驗證資料能重建；不得只在 Studio 手動改資料，然後認為另一台電腦也會取得變更。
+4. 只有在本機資料可丟棄、已確認備份／保留需求，且 Migration 與 Seed 已準備完成時，才執行 npx supabase db reset。驗證 Migration 與 Seed 都成功後，才可將檔案 commit／push；不得在正式環境執行 reset。
+5. 測試資料版本變更與相關 Migration／測試一起納入 Git。依專案既有 Git 安全流程提交並推送後，另一台電腦 pull 到相同 commit，才能取得相同的版本控制檔案。
+
+### 7.3 A／B 電腦的日常同步規則
+
+- **同步流程完成前的公司電腦限制：** 目前工作階段的指定作業電腦是公司電腦。每次開始本同步專案的後續工作前，必須先從實際執行環境確認主機識別；目前已確認基準為 Windows `COMPUTERNAME=TPEPC-TM7503-01`、`USERDOMAIN=NICE-GREEN`，專案路徑 `D:\\Project\\Travel-Companion`。若主機名稱／網域或路徑不符、無法確認，立即停止，不得繼續此同步流程，先向使用者確認。
+- **解除限制的必要條件：** 標準測試資料版本、Seed／fixture、乾淨重建與驗證流程均已完成、納入 Git 並推送；家裡電腦已 pull 到相同版本，並依流程完成本機 reset／同步與驗證成功。僅文件完成、公司電腦單機測試成功或已 push，都不足以解除限制。完成前每次都要重新確認公司電腦身份。
+- **每次開始工作前：** 依本文件第 2 節核對 Git；涉及資料庫時，再檢查本機 Supabase 狀態與 Migration 清單。不要假設 pull 後本機資料庫已更新。
+- **只有 schema 有新增 Migration：** 審查待套用 SQL 後，依風險規則執行 npx supabase migration up --local，再跑 lint 與相關測試；一般不需要 reset。
+- **只有標準測試資料基準有變更：** pull 後，依該 fixture／Seed 的專用更新與驗證步驟更新本機資料。若目前只有 supabase db reset 能可靠套用整套 Seed，必須先確認本機資料可丟棄或已備份，再 reset。
+- **需要驗證完整乾淨重建時：** 在確認安全的本機環境執行 npx supabase db reset，確認所有 Migration 與標準測試資料均成功建立；這是可重現性驗證，不是每次開工必做步驟。
+- A、B 不得各自手動建立不同版本的標準測試資料。資料基準的唯一來源是 Git 中經審查的 Migration 與 Seed／fixture；每台電腦各自重建或套用，不直接複製 Docker volume。
+
+**啟用 Seed 的完成條件：** 已建立合成測試資料基準、檢查不含正式資料／秘密、確認 Migration + Seed 可在乾淨本機資料庫成功執行，並驗證必要的 RLS／權限與應用程式測試。完成前維持目前 Seed 關閉，不以 db reset 嘗試碰運氣。
