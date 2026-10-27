@@ -443,9 +443,15 @@ export const ItineraryPage = ({
   }, [coverTargetIndex]);
 
   const weatherDaysDataRef = useRef(trip.content.daysData);
+  const weatherTripRef = useRef(trip);
+  const onSaveTripDetailRef = useRef(onSaveTripDetail);
   useEffect(() => {
     weatherDaysDataRef.current = trip.content.daysData;
-  }, [trip.content.daysData]);
+    weatherTripRef.current = trip;
+  }, [trip, trip.content.daysData]);
+  useEffect(() => {
+    onSaveTripDetailRef.current = onSaveTripDetail;
+  }, [onSaveTripDetail]);
 
   useEffect(() => {
     const daysData = weatherDaysDataRef.current;
@@ -480,7 +486,7 @@ export const ItineraryPage = ({
     setWeatherByCardId(Object.fromEntries(enabledCards.map(({ card }) => [card.id!, cachedForCurrentDates[card.id!] ?? waiting[card.id!]])));
     let cancelled = false;
     void requestTripWeather(supabase, trip.id, trip.departureDate, daysData)
-      .then((results) => {
+      .then(async (results) => {
         if (cancelled) return;
         for (const result of results) {
           if (result.diagnostic_code || result.trace_id) {
@@ -491,7 +497,44 @@ export const ItineraryPage = ({
             });
           }
         }
-        setWeatherByCardId(storeWeatherForecastResults(trip.id, results));
+        const storedResults = storeWeatherForecastResults(trip.id, results);
+        setWeatherByCardId(storedResults);
+        if (!hasEditPermission || !navigator.onLine) return;
+
+        // Only disable cards after the server confirms ineligibility and no usable weather remains.
+        const cardIdsToDisable = new Set(results.flatMap((result) => {
+          const cached = storedResults[result.request_id];
+          if (result.status !== "ineligible" || (cached?.weather && cached?.fetched_at)) return [];
+          return [result.request_id];
+        }));
+        if (cardIdsToDisable.size === 0) return;
+
+        const latestTrip = weatherTripRef.current;
+        const latestDaysData = latestTrip.content.daysData;
+        let changed = false;
+        const nextDaysData = Object.fromEntries(Object.entries(latestDaysData).map(([dayKey, cards]) => [
+          dayKey,
+          cards.map((card) => {
+            if (!card.id || !cardIdsToDisable.has(card.id) || card.showWeather !== true ||
+              !card.place?.placeId || !results.some((result) => result.request_id === card.id &&
+                result.place_id === card.place?.placeId && result.forecast_date === getItineraryDayDate(latestTrip.departureDate, Number(dayKey)) &&
+                result.arrival_time === (card.time ?? ""))) {
+              return card;
+            }
+            changed = true;
+            return { ...card, showWeather: false };
+          }),
+        ]));
+        if (!changed) return;
+
+        try {
+          await onSaveTripDetailRef.current({
+            ...latestTrip,
+            content: { ...latestTrip.content, daysData: nextDaysData },
+          });
+        } catch (error) {
+          console.warn("已過期且無可用天氣的卡片未能安全取消顯示；行程資料保持不變。", error);
+        }
       })
       .catch(() => {
         if (cancelled) return;
@@ -502,7 +545,7 @@ export const ItineraryPage = ({
         }])));
       });
     return () => { cancelled = true; };
-  }, [isOnline, supabase, trip.content.daysData, trip.departureDate, trip.id]);
+  }, [hasEditPermission, isOnline, supabase, trip.content.daysData, trip.departureDate, trip.id]);
 
   const currentDayEvents = trip.content.daysData[String(activeDay)] || [];
   const displayedDayEvents = (isOrderMode ? orderDraft : currentDayEvents)
@@ -2444,7 +2487,7 @@ export const ItineraryPage = ({
               ) : (
                 <>
               {event.showWeather === true && (
-                <div className={`mb-3 rounded-lg border px-3 py-2 text-xs ${weatherByCardId[event.id ?? ""]?.status === "stale" ? "border-amber-200 bg-amber-50 text-amber-800" : (weatherByCardId[event.id ?? ""]?.status === "long_range" || (weatherByCardId[event.id ?? ""] && isLongRangeForecast(weatherByCardId[event.id ?? ""].forecast_date, weatherByCardId[event.id ?? ""].timezone))) ? "border-emerald-100 bg-emerald-50 text-slate-600" : "border-sky-100 bg-sky-50 text-slate-700"}`} aria-live="polite">
+                <div className="mb-3 rounded-lg border border-sky-100 bg-sky-50 px-3 py-2 text-xs text-slate-700" aria-live="polite">
                   {(() => {
                     const storedWeather = weatherByCardId[event.id ?? ""];
                     const weather = storedWeather?.place_id === event.place?.placeId &&
