@@ -153,15 +153,7 @@ const WEATHER_CACHE_KEY = "travel-companion-weather-forecast-v1";
 const WEATHER_REQUEST_RETRY_DELAY_MS = 1_000;
 const weatherRequestsInFlight = new Map<string, Promise<WeatherForecastItem[]>>();
 
-/** UTC date may differ from a destination's local date by one day; only short-circuit dates that are certainly past. */
-const isDefinitelyPastForecastDate = (forecastDate: string, now = new Date()): boolean => {
-  const todayUtc = now.toISOString().slice(0, 10);
-  const daysAhead = Math.round(
-    (Date.parse(`${forecastDate}T00:00:00Z`) - Date.parse(`${todayUtc}T00:00:00Z`)) / 86400000,
-  );
-  return daysAhead < -1;
-};
-
+/** Destination-local eligibility and remote-cache availability must be checked by the Edge Function. */
 const waitForWeatherRetry = () => new Promise<void>((resolve) => {
   globalThis.setTimeout(resolve, WEATHER_REQUEST_RETRY_DELAY_MS);
 });
@@ -255,24 +247,19 @@ const requestTripWeatherOnce = async (
   const cached = loadWeatherForecastCache(tripId);
   const stoppedItems = items.filter((item) => {
     const previous = cached[item.card_id];
-    return previous?.refresh_stopped === true && previous.forecast_date === item.forecast_date &&
+    const stopMatches = previous?.refresh_stopped === true && previous.forecast_date === item.forecast_date &&
       previous.place_id === item.place_id && previous.arrival_time === item.arrival_time;
+    // A terminal local cache only suppresses a request while its weather remains displayable.
+    // Once local weather expires, ask the Edge Function to re-check destination eligibility and remote cache.
+    const cacheAgeMs = previous?.fetched_at ? Date.now() - Date.parse(previous.fetched_at) : Number.POSITIVE_INFINITY;
+    return Boolean(stopMatches && previous?.weather && previous.fetched_at && cacheAgeMs < 48 * 3600000);
   });
   const stoppedIds = new Set(stoppedItems.map((item) => item.card_id));
   const stoppedResults = stoppedItems.map((item) => cached[item.card_id]);
   const pendingItems = items.filter((item) => !stoppedIds.has(item.card_id));
-  const expiredItems = pendingItems.filter((item) => isDefinitelyPastForecastDate(item.forecast_date));
-  const activeItems = pendingItems.filter((item) => !isDefinitelyPastForecastDate(item.forecast_date));
-  const expiredResults: WeatherForecastItem[] = expiredItems.map((item) => ({
-    request_id: item.card_id,
-    place_id: item.place_id,
-    forecast_date: item.forecast_date,
-    status: "ineligible",
-    refresh_stopped: true,
-    arrival_time: item.arrival_time,
-    message: "預報已超過有效期限，系統已停止更新天氣資料",
-  }));
-  if (!activeItems.length) return [...stoppedResults, ...expiredResults];
+  // Let the Edge Function check destination-local eligibility and any usable remote cache before disabling a card.
+  const activeItems = pendingItems;
+  if (!activeItems.length) return stoppedResults;
 
   const targets = new Map<string, typeof activeItems>();
   for (const item of activeItems) {
@@ -306,7 +293,7 @@ const requestTripWeatherOnce = async (
   }
 
   const resultsByRequestId = new Map(results.map((result) => [result.request_id, result]));
-  return [...stoppedResults, ...expiredResults, ...activeItems.map((item) => {
+  return [...stoppedResults, ...activeItems.map((item) => {
     const result = resultsByRequestId.get(item.card_id);
     if (result?.place_id === item.place_id && result.forecast_date === item.forecast_date) return {
       ...result,

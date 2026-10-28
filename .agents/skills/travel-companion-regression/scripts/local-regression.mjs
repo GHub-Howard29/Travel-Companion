@@ -427,7 +427,7 @@ const main = async () => {
   if (mode === "browser-insufficient-fixture") return browserInsufficientFixtureMode();
   if (mode === "verify") return verifyMode();
   await verifyMode();
-  run("npm", ["run", "lint", "--", "--ignore-pattern", "supabase/.temp/start-secrets"]);
+  run("npm", ["run", "lint", "--", "--ignore-pattern", "supabase/.temp/start-secrets", "--ignore-pattern", ".worktrees/**"]);
   run("npm", ["run", "build"]);
 };
 

@@ -127,12 +127,23 @@ Git 同步後，依第 2 節核對本機 Supabase 狀態與 migration 清單。�
 - **Migration 管理結構與資料庫權限；Seed／fixture 檔案管理可重現的標準測試資料。** 兩者都必須納入 Git，不能把本機 Docker volume 或資料庫 dump 當作兩台電腦的同步來源。
 - git pull 只更新檔案，不會自動更新本機資料庫，也不會自動載入新測試資料。
 - 測試資料必須是明確挑選的合成資料或已去識別化資料；不得直接把正式資料庫 dump、真實使用者資料、Auth token、secret 或 Storage 檔案本體放進 Seed／fixture。
-- **Seed 已在公司電腦乾淨重建時成功執行，但完整回歸驗收尚未通過。** `supabase/seed.sql` 目前只建立最小合成測試旅程；`supabase/config.toml` 的 `[db.seed] enabled` 仍維持 `false`，需以 `--sql-paths ./seed.sql` 明確指定。公司電腦的 reset 與 Seed 執行成功，但 `npm run regression:local:verify` 在 Trip 檢查時逾時，因此目前只能確認 Migration 與指定 Seed 成功套用，不能宣稱整體回歸測試已通過。本機回歸測試帳號需在重建後另行透過 `npm run regression:local:prepare` 建立。
+- **目前回歸驗收狀態（2026-10-28 更新）：** `supabase/seed.sql` 仍只建立最小合成測試旅程；`supabase/config.toml` 的 `[db.seed] enabled` 維持 `false`，乾淨重建時必須明確使用 `--sql-paths ./seed.sql`。公司電腦 2026-10-22 的 Migration + Seed 乾淨重建已成功；後續診斷確認 `regression:local:verify` 當時逾時的原因是本機 Edge Functions runtime 未啟動，而非 Trip fixture 缺失。啟動 `supabase functions serve travel-route --env-file supabase/.env.local` 後，`npm run regression:local:verify` 已通過；之後 `npm run regression:local:full` 也曾以 exit code 0 通過（包含回歸驗證、Commons 契約、ESLint 與 build）。Lint 需排除 `.worktrees/**`，避免巢狀 worktree 的 TypeScript 設定干擾根目錄檢查；相關腳本目前有一項未提交修改，尚未同步到另一台電腦。這些結果只代表公司電腦當時的本機程式與合成 fixture 驗證，不代表家裡電腦同步驗收完成，也不代表 APP 所有人工 UI、跨裝置或正式環境情境已通過。2026-10-28 再次唯讀核對，本機 `supabase/migrations` 有 47 個 SQL 檔，`npx supabase migration list --local` 也回報 47 筆，版本集合完全一致、無缺檔或未套用版本；但 `npx supabase status` 同時列出部分服務已停止（包含 Edge Runtime），因此目前不能把本機服務狀態判為全數就緒，也不應為了重測而重跑已通過的完整回歸。
 - 專案現況紀錄曾指出本機 supabase db reset 因容器初始化錯誤連續失敗，之後改以備份 dump 還原本機資料。因此執行任何 reset 前，必須先確認目前本機資料是否需要保留、備份是否有效，以及目標確實是本機 disposable database；不可把 reset 當作日常同步指令。
-- **2026-10-22 公司電腦盤點與備份：** 本機與遠端 migration history 的 47 筆版本一致；本機資料庫有 6 筆旅程、52 筆費用、91 筆其他資訊、270 筆清單項目、8 個 Auth 使用者、5 筆管理者資料，Storage 有 2 個 bucket、0 個物件。使用者已確認這台公司電腦的本機資料可丟棄。執行 reset 前已先建立本機 `postgres` 資料庫的完整 custom-format 備份，存放於 `%LOCALAPPDATA%\Travel-Companion\backups\travel-companion-local-20261022-154640.dump`（1,090,823 bytes；SHA-256 `2EF896887C3FE00E4726676BEA1B5E7C87A63C673F75E06EF37AF4296DF28106`），備份檔不在 Git 目錄內。`pg_restore --list` 成功讀取備份目錄，並已還原到隔離的臨時資料庫比對主要資料筆數：旅程 6、費用 52、其他資訊 91、清單 270、Auth 使用者 8、管理者 5、Storage bucket 2、Storage 物件 0、migration 記錄 47，與原資料庫一致；臨時資料庫已清除。由於本機 `pg_cron` 綁定 `postgres` 資料庫，隔離還原驗證副本排除了 `pg_cron` 擴充與其排程中繼資料；原始備份檔未排除這些內容。此結果足以驗證主要應用資料可還原，但不是整個 Supabase Docker stack 的重建驗證。備份目錄 ACL 已限制為目前使用者、SYSTEM 與本機 Administrators。其後已在 2026-10-22 執行 `supabase db reset --local --sql-paths ./seed.sql`，47 筆 Migration 與指定 Seed 均成功套用；`npm run regression:local:prepare` 成功，`npm run regression:local:status` 顯示 Supabase ready、Auth HTTP 200、Edge Function HTTP 200。`npm run regression:local:verify` 目前仍失敗：檢查 Trip 時逾時（`The operation was aborted due to timeout`）；Vite 狀態為未啟動（`viteHttpStatus: null`）。因此乾淨重建已完成，但回歸驗證尚未通過；需先診斷 Trip 檢查逾時原因，不可宣稱整體流程驗收完成。`supabase/config.toml` 的 Seed 設定仍維持關閉，這次是透過 `--sql-paths ./seed.sql` 明確指定 Seed。
-- **Seed 驗證紀錄：** 初期曾在現有本機資料庫以 BEGIN／ROLLBACK 交易檢查 `supabase/seed.sql`，因同 ID 旅程已存在而回報 `INSERT 0 0`。之後在 2026-10-22 的乾淨本機 reset 中，指定 Seed 已成功執行；但由於後續 `regression:local:verify` 仍在 Trip 檢查時逾時，完整回歸驗收尚未完成。
+- **2026-10-22 公司電腦盤點與備份：** 本機與遠端 migration history 當時的 47 筆版本一致；本機資料庫有 6 筆旅程、52 筆費用、91 筆其他資訊、270 筆清單項目、8 個 Auth 使用者、5 筆管理者資料，Storage 有 2 個 bucket、0 個物件。使用者已確認這台公司電腦的本機資料可丟棄。執行 reset 前已先建立本機 `postgres` 資料庫的完整 custom-format 備份，存放於 `%LOCALAPPDATA%\Travel-Companion\backups\travel-companion-local-20261022-154640.dump`（1,090,823 bytes；SHA-256 `2EF896887C3FE00E4726676BEA1B5E7C87A63C673F75E06EF37AF4296DF28106`），備份檔不在 Git 目錄內。`pg_restore --list` 成功讀取備份目錄，並已還原到隔離的臨時資料庫比對主要資料筆數：旅程 6、費用 52、其他資訊 91、清單 270、Auth 使用者 8、管理者 5、Storage bucket 2、Storage 物件 0、migration 記錄 47，與原資料庫一致；臨時資料庫已清除。由於本機 `pg_cron` 綁定 `postgres` 資料庫，隔離還原驗證副本排除了 `pg_cron` 擴充與其排程中繼資料；原始備份檔未排除這些內容。此結果足以驗證主要應用資料可還原，但不是整個 Supabase Docker stack 的重建驗證。備份目錄 ACL 已限制為目前使用者、SYSTEM 與本機 Administrators。2026-10-22 執行 `supabase db reset --local --sql-paths ./seed.sql`，47 筆 Migration 與指定 Seed 均成功套用，`npm run regression:local:prepare` 亦成功。其後查明 `regression:local:verify` 當時 Trip timeout 的原因是本機 Edge Functions runtime 未啟動；啟動 `travel-route` runtime 後，`regression:local:verify` 通過，後續 `regression:local:full` 也以 exit code 0 通過。`supabase/config.toml` 的 Seed 設定維持關閉，乾淨重建以 `--sql-paths ./seed.sql` 明確指定 Seed。
+- **Seed 驗證紀錄：** 初期曾在現有本機資料庫以 BEGIN／ROLLBACK 交易檢查 `supabase/seed.sql`，因同 ID 旅程已存在而回報 `INSERT 0 0`。之後在 2026-10-22 的乾淨本機 reset 中，指定 Seed 已成功執行。先前記錄的 Trip 檢查逾時已由啟動 `travel-route` Edge Function runtime 排除；`regression:local:verify` 及 `regression:local:full` 後續均已通過。下一個有效驗收步驟不是重跑這些已通過測試，而是將公司電腦驗證過的標準測試資料／腳本納入 Git、同步至家裡電腦後執行家裡電腦專屬核對。
 
 ### 7.2 建立與維護標準測試資料
+
+**標準執行順序（不得跳過，也不得重跑已由同一 commit／相同測試輸入證實通過的項目）：**
+
+1. 先確認公司電腦主機識別、工作目錄、分支、upstream、工作樹及遠端差異；本機有未提交變更或遠端有新提交時，先保留並比對差異，不得直接 pull、stash、reset 或覆寫。
+2. 將需要共用的程式碼、Migration、Seed／fixture、驗收腳本與本文件變更納入同一個清楚可辨識的 Git 版本。確認 Seed／fixture 只含合成資料，且腳本不輸出 secret。
+3. 公司電腦的 DB 工作只在本機 loopback Supabase 執行。先看 `npx supabase status`（輸出不可直接貼入文件或聊天，因可能包含 keys／secrets）及 `npx supabase migration list --local`；只有存在已審查的新 Migration 才考慮 `migration up --local`。乾淨重建只作為明確要求的可重現性驗證，不作為一般同步方法；任何 `db reset` 都需先再次確認可丟棄／備份與明確授權。
+4. 公司電腦以最小必要測試證明本版：有程式／Migration／Seed 變動時才跑受影響的專用測試；乾淨重建流程則記錄 reset、Migration、Seed、fixture prepare、service status、回歸及 build 結果。已在相同內容上通過的 `regression:local:verify`／`regression:local:full` 不因新對話而自動重跑。
+5. 將版本控制檔案推送後，家裡電腦 pull 到**相同 commit**；家裡電腦需獨立確認主機、工作樹、upstream、Migration ledger、Seed／fixture、各自 `.env.local` 與本機服務。首次乾淨重建必須按 7.4 的安全門檻處理，不能複製公司 `.env.local`、Docker volume 或 DB dump 作為日常同步。
+6. 家裡電腦只執行未完成或尚無證據的驗收項；已由文件／測試輸出證實通過的項目標記為「沿用既有證據」，不得再次測試。兩台電腦的 `HEAD`／測試資料版本一致，必要驗證通過並保存證據後，才可判定版本控制與同步流程完成。
+
+以上順序補充既有操作細則，原本 1～5 項資料集／Seed 維護規則接續適用。
 
 1. 先依測試需求定義最小且穩定的合成資料集，確認所需資料表、外鍵、RLS、角色／Auth 依賴與 Storage 需求；不可直接複製正式資料作為基準。
 2. 將可重現的資料建立 SQL 或 fixture 放在明確、受 Git 管理的位置。若採用 Supabase Seed，使用 supabase/seed.sql，並在驗證完成後才啟用 [db.seed] enabled = true；若資料依賴 Auth 使用者、Storage 物件或外部服務，須另外定義安全、可重現的建立與清理方式，不能假設 Seed 會自動複製這些內容。
@@ -143,7 +154,7 @@ Git 同步後，依第 2 節核對本機 Supabase 狀態與 migration 清單。�
 ### 7.3 A／B 電腦的日常同步規則
 
 - **同步流程完成前的公司電腦限制：** 目前工作階段的指定作業電腦是公司電腦。每次開始本同步專案的後續工作前，必須先從實際執行環境確認主機識別；目前已確認基準為 Windows `COMPUTERNAME=TPEPC-TM7503-01`、`USERDOMAIN=NICE-GREEN`，專案路徑 `D:\\Project\\Travel-Companion`。若主機名稱／網域或路徑不符、無法確認，立即停止，不得繼續此同步流程，先向使用者確認。
-- **解除限制的必要條件：** 標準測試資料版本、Seed／fixture、乾淨重建與驗證流程均已完成、納入 Git 並推送；家裡電腦已 pull 到相同版本，並依流程完成本機 reset／同步與驗證成功。僅文件完成、公司電腦單機測試成功或已 push，都不足以解除限制。完成前每次都要重新確認公司電腦身份。
+- **解除限制的必要條件：** 標準測試資料版本、Seed／fixture、乾淨重建與驗證流程均已完成、納入 Git 並推送；家裡電腦已 pull 到相同版本，並依流程完成本機 Migration／Seed／fixture／環境核對與必要的本機驗證成功。只有需要證明乾淨重建可重現時才執行 reset；日常同步不必例行 reset。僅文件完成、公司電腦單機測試成功或已 push，都不足以解除限制。完成前每次都要重新確認公司電腦身份。
 - **每次開始工作前：** 依本文件第 2 節核對 Git；涉及資料庫時，再檢查本機 Supabase 狀態與 Migration 清單。不要假設 pull 後本機資料庫已更新。
 - **只有 schema 有新增 Migration：** 審查待套用 SQL 後，依風險規則執行 npx supabase migration up --local，再跑 lint 與相關測試；一般不需要 reset。
 - **只有標準測試資料基準有變更：** pull 後，依該 fixture／Seed 的專用更新與驗證步驟更新本機資料。若目前只有 supabase db reset 能可靠套用整套 Seed，必須先確認本機資料可丟棄或已備份，再 reset。
