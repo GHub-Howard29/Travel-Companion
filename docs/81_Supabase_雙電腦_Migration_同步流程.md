@@ -175,3 +175,42 @@ Git 同步後，依第 2 節核對本機 Supabase 狀態與 migration 清單。�
   5. 將確認結果記錄在專案文件／交接紀錄中；只有 Migration、Seed、環境設定檢查與必要驗證均通過，才可把家裡電腦首次 reset 視為驗收完成。
 
 **啟用 Seed 的完成條件：** 已建立合成測試資料基準、檢查不含正式資料／秘密、確認 Migration + Seed 可在乾淨本機資料庫成功執行，並驗證必要的 RLS／權限與應用程式測試。完成前維持目前 Seed 關閉，不以 db reset 嘗試碰運氣。
+
+### 7.5 家用電腦首次同步驗收紀錄（2026-10-29）
+
+- **環境／版本：** 家用電腦 `Howard-NewPC`，專案 `D:\Project\Travel-Companion`，分支 `develop`；`HEAD` 與 `origin/develop` 均為 `fb99b0f1d3424de88284b5cfe392798ae555b0e5`，工作樹在本次作業開始前乾淨。`supabase/seed.sql`、回歸腳本及本流程文件均已由目前 Git 版本追蹤。
+- **重建前保護／備份處置：** 作業期間曾建立本機 custom-format 備份，但使用者已明確要求不保留；該備份檔已刪除，並確認路徑不存在。後續不得自行建立或保留備份，除非使用者另行要求。
+- **乾淨重建：** 2026-10-29 執行 `npx supabase db reset --local --sql-paths ./seed.sql` 成功；47 個 Migration 全數套用，Seed 成功執行。reset 後 `npx supabase migration list --local` 的本機／連線版本清單一致；另以 SQL 比對 `supabase/migrations` 檔案集合與本機 `supabase_migrations.schema_migrations`，檔案 47、已套用 47，無缺漏或額外版本。合成旅程 `group-tour-2026-10` 存在 1 筆。
+- **家用環境與驗證：** `npm run regression:local:prepare` exit code 0（loopback-only；未建立或覆寫兩個 env 檔）；`npm run regression:local:status` exit code 0，Supabase ready、Auth HTTP 200、Edge HTTP 200、fixture env 存在；`npm run regression:local:verify` exit code 0，Trip、Commons batch 與 Commons contract 驗證通過。REST 根端點 HTTP 200、Auth health HTTP 200。根目錄 `.env.local` 使用 `localhost:54321`；僅記錄必要環境變數名稱，未輸出 key／secret 值。
+- **服務狀態／限制：** `npx supabase status` 顯示本機 setup running，但 `supabase_imgproxy_travel-companion` 與 `supabase_pooler_travel-companion` 停止；這兩項不影響本輪 Migration／Seed／回歸驗證結果，若使用到相應功能需另行啟動驗證。`viteHttpStatus` 在 regression status 中為 null，故本輪沒有宣稱 Vite UI 端到端測試通過。未重跑公司電腦已以相同版本通過的 `regression:local:full`。
+- **結論：** 家用電腦首次本機 Migration／Seed 乾淨重建與規定的 prepare／status／verify 已通過；目前可將雙電腦版本控制與本機資料庫首次同步的必要驗收標記為完成。此結論不代表正式環境部署、Storage 物件同步、完整 UI／跨裝置人工測試或已停止服務所涉及功能均已驗收。本次未對正式 Supabase 執行寫入、未修改 Secrets，未進行 Git commit／push。
+
+## 7.6 雙電腦本機資料庫同步入口（2026-10-29）
+
+在 `develop` 分支取得最新 Git 版本後，兩台電腦都使用同一個入口更新自己的本機測試資料庫：
+
+```powershell
+npm run db:sync:local
+```
+
+此命令依序執行：
+
+1. 確認目前分支為 `develop`，並檢查 Supabase API URL 是 `localhost`、`127.0.0.1` 或 `::1`；無法確認本機端點時立即停止。
+2. 執行 `npx supabase migration up --local`，只套用尚未執行的 Migration；不執行 `db reset`、不刪除資料、不連線正式資料庫。
+3. 執行 `npm run regression:local:prepare`，將版本控制中的標準合成 Trip fixture 與本機回歸測試帳號準備到本機資料庫；既有 `.env.local` 檔案不會因同步而重建覆蓋。
+4. 執行 `npm run regression:local:verify`，驗證本機 grants、測試帳號登入、Trip fixture 與 Edge Function 合約。
+
+### 每台電腦的使用順序
+
+1. 確認工作樹與分支狀態；若有未提交變更，先保留並處理衝突，不可為了同步而覆蓋。
+2. 在 `develop` 分支取得已提交的最新版本（通常是 `git pull --ff-only origin develop`）。
+3. 執行 `npm run db:sync:local`。
+4. 只有命令最後回報 `synchronized: true` 且驗證通過，才視為該電腦已同步標準 schema 與回歸 fixture；失敗時依錯誤停止排查，不要以 `db reset` 作為補救。
+
+### 同步範圍與限制
+
+- Migration、`supabase/seed.sql`、`public/trips/group-tour-2026-10.json`、同步腳本與驗收文件都必須先 commit/push 到共用 Git 分支，另一台才取得相同版本。
+- 此入口同步的是版本控制中的 schema 與標準回歸 fixture，不會複製另一台電腦任意手動新增的旅程、費用、清單、登入 session、Storage 檔案或 Docker volume。
+- 需要共用的新測試案例，應以合成 fixture／可重複執行的腳本明確版本化，並納入回歸驗收；不可將整個本機資料庫 dump 當成同步機制。
+- 本機 `imgproxy`、`pooler` 等非回歸流程必要服務若停止，應按實際功能另行驗證；此入口通過不代表完整 UI E2E 或所有 Supabase 服務均已驗收。
+- 此入口不會自動執行 `git pull`，因拉取程式碼可能與未提交工作衝突；Git 更新與資料庫更新刻意分成兩個有明確檢查點的步驟。
