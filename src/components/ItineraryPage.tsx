@@ -2495,6 +2495,12 @@ export const ItineraryPage = ({
                     const forecast = weather?.weather;
                     const description = getWeatherDescription(forecast?.weather_code);
                     const reminders = getWeatherReminders(forecast);
+                    const isLongRangeForecastWithWeather = Boolean(
+                      forecast && weather && isLongRangeForecast(weather.forecast_date, weather.timezone),
+                    );
+                    const forecastMessage = isLongRangeForecastWithWeather
+                      ? "目前為長期預報，請於出發前再次確認天氣"
+                      : weather?.message;
                     let statusMessage = weather?.message ?? "天氣預報系統異常，請通知系統管理員處理";
                     if (!isOnline) {
                       statusMessage = weather?.weather ? "網路離線中，目前顯示的是歷史資料" : "網路離線中，恢復網路後將嘗試自動更新";
@@ -2542,8 +2548,7 @@ export const ItineraryPage = ({
                               }).format(new Date(weather.fetched_at))}（{getWeatherTimezoneLabel(weather.timezone)}）
                             </span>
                           )}
-                          {weather?.message && forecast && <p className="mt-1 w-full">{weather.message}</p>}
-                          {forecast && weather && isLongRangeForecast(weather.forecast_date, weather.timezone) && <p className="mt-1 w-full">長期預報，仍可能變動</p>}
+                          {forecastMessage && forecast && <p className="mt-1 w-full">{forecastMessage}</p>}
                           {reminders.length > 0 && (
                             <div className="mt-1 w-full font-medium text-amber-800">
                               <p>{reminders[0]}</p>

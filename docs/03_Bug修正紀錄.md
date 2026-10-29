@@ -69,9 +69,9 @@
 - 根因判定（確定）：**V3.10.9 修正了 Git 中的 Edge Function 原始碼，但發布流程只部署 GitHub Pages 前端，明確沒有部署正式 Edge Function**。因此正式 Supabase 持續執行 V3.10.8 的 version 14，仍可回傳已廢棄文案；前端則把後端 `message` 作為預設顯示內容，將該舊回應呈現在畫面上。正式部署原始碼與 Git 修正內容的直接比對，以及 V3.10.9 發布紀錄對「未部署 Edge Function」的明確記載，兩者共同確定根因。日誌未保存 response body，因此無法事後證明截圖那次 HTTP 回應的每個欄位；但發布遺漏、正式服務可達的舊文案分支、前端顯示路徑均已有直接證據，根因判斷不依賴推測 localStorage 或瀏覽器快取。
 - 影響：使用者可能看到已撤回或未依定稿呈現的文案，並誤判預報資料狀態。
 - 建議處理：以 W01–W23 作為唯一文案來源，釐清每個後端狀態到文案的映射；移除已撤回訊息的可達分支，校正 W15 前端文字；加入靜態檢查／契約測試，避免舊文案重新進入程式與正式 bundle。部署後以指定卡片情境檢查實際回應與 UI。
-- 實作電腦硬性限制：BUG036 的程式修正／實作僅允許在電腦名稱 `TPEPC-TM7503-01` 執行。若開始實作時的實際電腦名稱不是 `TPEPC-TM7503-01`，必須停止，不得修改 BUG036 相關程式碼；`HOWARD-NEWPC` 僅可整理文件、執行本次 Git 文件提交／推送與交接，不得實作 BUG036 或部署正式環境。
-- 執行順序與交接：本次 `HOWARD-NEWPC` 完成根因記錄與交接文件後 commit/push `develop`；接著由 `TPEPC-TM7503-01` 同步 `develop`，先完成 BUG034、BUG035、BUG036、BUG037 回歸測試。回歸通過後，仍僅由 `TPEPC-TM7503-01` 修正 BUG036、部署正式 `weather-forecast` Edge Function，核對正式部署原始碼／版本與 Git 修正一致，並以實際 API response 和正式 UI 驗證。GitHub Pages 成功不代表 Edge Function 已更新；兩項部署需分別確認。
-- 狀態：已定位來源碼與文案對照缺口；正式畫面實際回應關聯及部署版本差異待補驗，未實作。BUG036 實作明確交由 `TPEPC-TM7503-01`，不得在其他電腦實作。
+- 電腦限制變更（2026-10-30）：Product Owner 明確解除原先僅允許在 `TPEPC-TM7503-01` 實作的限制，理由是兩台電腦的工作目錄均為乾淨狀態；因此可在目前的 `HOWARD-NEWPC` 實作，不再因主機名稱阻擋本地程式修改。此變更只解除 BUG036 的實作主機限制，不代表正式環境部署已獲授權。
+- 執行順序與交接：先確認本機與 `origin/develop` 同步，再完成 BUG034、BUG035、BUG036、BUG037 的相關回歸測試。程式修正與本機驗證完成後，仍須依正式發布流程，分別核對 GitHub Pages 與正式 `weather-forecast` Edge Function；正式部署原始碼／版本必須與 Git 修正一致，並以實際 API response 和正式 UI 驗證。GitHub Pages 成功不代表 Edge Function 已更新。
+- 狀態：已於 `HOWARD-NEWPC` 開始實作；本機契約測試、完整建置及相關回歸完成後，仍需正式 Edge Function 部署與正式 API／UI 驗收。
 
 ### BUG037：長期預報的天氣欄位底色不符合已定案規則
 
