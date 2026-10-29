@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "fixtureId": "tc-test-sync-example",
+  "version": 3,
+  "status": "active",
+  "sourceHost": "TPEPC-TM7503-01",
+  "exportedAt": "2026-10-29T09:52:36.330Z",
+  "tables": [
+    "trips",
+    "checklists",
+    "checklist_items",
+    "expenses",
+    "exchange_purchases",
+    "other_info_items"
+  ],
+  "counts": {
+    "trips": 1,
+    "checklists": 1,
+    "checklist_items": 1,
+    "expenses": 1,
+    "exchange_purchases": 0,
+    "other_info_items": 0
+  },
+  "checksum": "8fb27afabdd3602753eb392d47df16d23ce23d2856e15ae390e78a5caaf3e7af",
+  "note": "Synthetic test data only. Import is restricted to local loopback Supabase."
+}

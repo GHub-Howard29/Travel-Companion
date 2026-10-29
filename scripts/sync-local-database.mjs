@@ -33,16 +33,19 @@ try {
   if (branch !== "develop") {
     throw new Error(`目前分支為「${branch}」，本流程只允許在 develop 執行。請先自行確認並切換到正確分支。`);
   }
-  console.log("[sync-local] 步驟 1/4：確認分支與本機 Supabase 安全範圍");
+  console.log("[sync-local] 步驟 1/5：確認分支與本機 Supabase 安全範圍");
   assertLocalSupabase();
 
-  console.log("[sync-local] 步驟 2/4：只套用尚未執行的 Migration（不執行 reset、不刪除資料）");
+  console.log("[sync-local] 步驟 2/5：只套用尚未執行的 Migration（不執行 reset、不刪除資料）");
   run("npx", ["supabase", "migration", "up", "--local"]);
 
-  console.log("[sync-local] 步驟 3/4：依版本控制中的 fixture 更新標準合成測試資料");
+  console.log("[sync-local] 步驟 3/5：匯入已驗證且允許載入的版本化合成測試資料；遇到內容衝突會回滾並停止");
+  run("npm", ["run", "testdata:import:all"]);
+
+  console.log("[sync-local] 步驟 4/5：依版本控制中的標準 fixture 準備本機回歸測試資料");
   run("npm", ["run", "regression:local:prepare"]);
 
-  console.log("[sync-local] 步驟 4/4：驗證資料庫權限、測試登入、Trip fixture 與 Edge Function 契約");
+  console.log("[sync-local] 步驟 5/5：驗證資料庫權限、測試登入、Trip fixture 與 Edge Function 契約");
   run("npm", ["run", "regression:local:verify"]);
 
   console.log(JSON.stringify({
@@ -50,9 +53,9 @@ try {
     branch,
     database: "local loopback only",
     migrations: "pending migrations applied; no reset",
-    fixture: "version-controlled synthetic baseline prepared",
+    fixture: "version-controlled synthetic fixtures imported; standard regression baseline prepared",
     verification: "passed",
-    limitations: "This synchronizes the schema and declared regression fixture, not arbitrary ad-hoc rows created during manual testing.",
+    limitations: "This imports only validated active/regression_pending synthetic fixtures and prepares the standard regression fixture; it does not synchronize arbitrary or unmarked manual-test rows.",
   }, null, 2));
 } catch (error) {
   console.error(`[sync-local] 失敗並停止：${error?.stderr?.toString().trim() || error.message || error}`);

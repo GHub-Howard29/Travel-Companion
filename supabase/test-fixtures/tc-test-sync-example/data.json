@@ -1,0 +1,76 @@
+{
+  "trips": [
+    {
+      "content": {
+        "__testFixture": true,
+        "days": [
+          1
+        ],
+        "fixtureDescription": "Dedicated synthetic fixture for validating safe test-data handoff between developer computers."
+      },
+      "created_at": "2026-10-29T05:00:00+00:00",
+      "currency_config": {
+        "code": "JPY",
+        "symbol": "￥"
+      },
+      "departure_date": "2026-11-15",
+      "id": "tc-test-sync-example",
+      "is_public": false,
+      "participants": [],
+      "sidebar_config": [
+        {
+          "id": "checklist",
+          "title": "測試清單",
+          "type": "checklist"
+        },
+        {
+          "id": "expense",
+          "title": "測試記帳",
+          "type": "expense"
+        }
+      ],
+      "title": "Travel-Companion 合成測試接力行程",
+      "updated_at": "2026-10-29T05:00:00+00:00"
+    }
+  ],
+  "checklists": [
+    {
+      "created_at": "2026-10-29T05:00:00+00:00",
+      "id": "05f8f7c4-72f6-45c8-9d0b-f41a8e1df123",
+      "scope": "shared",
+      "title": "跨電腦同步驗收清單",
+      "trip_id": "tc-test-sync-example",
+      "updated_at": "2026-10-29T05:00:00+00:00"
+    }
+  ],
+  "checklist_items": [
+    {
+      "category": "跨電腦同步",
+      "checklist_id": "05f8f7c4-72f6-45c8-9d0b-f41a8e1df123",
+      "client_item_id": "tc-handoff-item-001",
+      "created_at": "2026-10-29T05:00:00+00:00",
+      "deleted_at": null,
+      "id": "de5487a2-1f93-4d7f-8929-0d3260f4cc01",
+      "is_checked": true,
+      "label": "確認合成測試行程可在另一台電腦載入",
+      "sort_order": 0,
+      "updated_at": "2026-10-29T09:52:00.478045+00:00"
+    }
+  ],
+  "expenses": [
+    {
+      "amount": 100,
+      "client_item_id": "tc-handoff-expense-001",
+      "created_at": "2026-10-29T05:00:00+00:00",
+      "currency": "JPY",
+      "deleted_at": null,
+      "expense_date": "2026-10-29",
+      "payer": "合成測試者",
+      "title": "合成測試費用",
+      "trip_id": "tc-test-sync-example",
+      "updated_at": "2026-10-29T05:00:00+00:00"
+    }
+  ],
+  "exchange_purchases": [],
+  "other_info_items": []
+}

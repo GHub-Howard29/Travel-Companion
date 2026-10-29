@@ -197,8 +197,9 @@ npm run db:sync:local
 
 1. 確認目前分支為 `develop`，並檢查 Supabase API URL 是 `localhost`、`127.0.0.1` 或 `::1`；無法確認本機端點時立即停止。
 2. 執行 `npx supabase migration up --local`，只套用尚未執行的 Migration；不執行 `db reset`、不刪除資料、不連線正式資料庫。
-3. 執行 `npm run regression:local:prepare`，將版本控制中的標準合成 Trip fixture 與本機回歸測試帳號準備到本機資料庫；既有 `.env.local` 檔案不會因同步而重建覆蓋。
-4. 執行 `npm run regression:local:verify`，驗證本機 grants、測試帳號登入、Trip fixture 與 Edge Function 合約。
+3. 執行 `npm run testdata:import:all`，先驗證版本控制中的 fixture，只匯入 `active`／`regression_pending` 資料；相同列保持不變、內容衝突中止，不會刪除既有本機資料。
+4. 執行 `npm run regression:local:prepare`，將標準合成 Trip fixture 與本機回歸測試帳號準備到本機資料庫；既有 `.env.local` 檔案不會因同步而重建覆蓋。
+5. 執行 `npm run regression:local:verify`，驗證本機 grants、測試帳號登入、Trip fixture 與 Edge Function 合約。
 
 ### 每台電腦的使用順序
 
@@ -214,3 +215,6 @@ npm run db:sync:local
 - 需要共用的新測試案例，應以合成 fixture／可重複執行的腳本明確版本化，並納入回歸驗收；不可將整個本機資料庫 dump 當成同步機制。
 - 本機 `imgproxy`、`pooler` 等非回歸流程必要服務若停止，應按實際功能另行驗證；此入口通過不代表完整 UI E2E 或所有 Supabase 服務均已驗收。
 - 此入口不會自動執行 `git pull`，因拉取程式碼可能與未提交工作衝突；Git 更新與資料庫更新刻意分成兩個有明確檢查點的步驟。
+- 若本機手動測試新增／修改了合成測試行程，需先確保 Trip ID 為 `tc-test-<name>` 且 `content.__testFixture=true`，再執行 `npm run testdata:handoff`。檢查 `supabase/test-fixtures/` 的差異與敏感資料後，由使用者自行決定是否 commit/push；不得直接推送未審查的測試資料。
+- 另一台電腦 pull 到已審查的 fixture 後執行 `npm run db:sync:local`，同步入口會先驗證並匯入 fixture，再跑標準回歸驗證。遇到同鍵不同內容會停止，不以最後寫入者覆蓋；不會自動合併衝突或刪除另一台的列。
+- 2026-10-29 公司電腦本機驗證通過：專用 `tc-test-sync-example` fixture 能匯入及冪等重複匯入；`testdata:handoff` 偵測一筆合成資料變更並遞增版本；衝突測試在同一 checklist item 內容不同時中止。整合後 `npm run db:sync:local` 回報 `synchronized: true`。家用電腦尚未 pull／驗證此新版本，因此跨電腦端到端流程仍待補驗。

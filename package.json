@@ -83,7 +83,9 @@
     "release:v364:cleanup": "node scripts/prepare-v364-release.mjs cleanup",
     "db:sync:local": "node scripts/sync-local-database.mjs",
     "testdata:export": "node scripts/testdata-sync.mjs export",
-    "testdata:validate": "node scripts/testdata-sync.mjs validate"
+    "testdata:validate": "node scripts/testdata-sync.mjs validate",
+    "testdata:import:all": "node scripts/testdata-sync.mjs import:all",
+    "testdata:handoff": "node scripts/testdata-sync.mjs handoff"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
