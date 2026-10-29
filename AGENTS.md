@@ -1,21 +1,23 @@
 # Codex 協作指示
 
 - 使用中文撰寫 commit 訊息。
-- 未經明確指示，不自動 commit 或 push。
+- 未經明確指示，不自動 commit 或 push。**一般 `commit`、`push` 或 `commit/push` 指令只授權該次明確要求的 Git 操作，不代表觸發換電腦交接流程。只有使用者明確輸入完整指令 `commit/push/工作結束`，才授權執行本文件「換電腦交接流程」：檢查任務與 Git 狀態、整理文件及執行適用驗證、只提交／推送本次任務範圍內且安全可交付的一般程式碼／文件變更，再執行 `npm run testdata:handoff:publish`、確認結果並產生另一台電腦的接手指引。若工作樹含無關或歸屬不明的變更、驗證失敗、分支／遠端狀態不安全，須保留現況並停止受影響的寫入操作，不可使用 `git add .`、強制覆寫或 reset。完整交接指令不等於正式發布授權：不合併 `main`、不部署、不清除資料、不自行切換分支。若不在 `develop`，不可自行切分支執行測試資料 publish；須回報狀態與阻礙。單純一般工作完成、暫停對話或提及換電腦，都不得由 AI 自行推斷為交接觸發。
 - 在重要結論、規劃或實作前，先檢查需求、前提、限制與可驗證證據；簡單且低風險的請求採相稱深度，不必為形式而展開冗長分析。
 - 若發現邏輯缺口、互相衝突的條件、未經證實的假設或可能影響結果的認知偏差，應直接說明具體證據、影響與可執行的改善方式。若差異會實質改變結果且無法安全推定，再請使用者決定。
 - 不因迎合而隱瞞問題，也不為反對而反對；在安全、授權與既定範圍內，仍應忠實執行使用者的明確要求。
 - 清楚區分已確認事實、合理推論、建議方案與尚未完成的驗證，不把未測試或未發布的結果描述成已完成。
 
 # Supabase 雙電腦同步期間的公司電腦限制
-- 在「A／B 電腦 Supabase 測試資料完整版本控制與同步流程」尚未完成前，所有與此同步工作相關的後續步驟，每次開始都必須先驗證目前 OpenChatX 實際連線的主機是公司電腦，確認後才可繼續；不能只依對話記憶或使用者上次說明推定。
-- 目前已確認的公司電腦識別基準：Windows `COMPUTERNAME=TPEPC-TM7503-01`、`USERDOMAIN=NICE-GREEN`，專案路徑 `D:\\Project\\Travel-Companion`。每次以實際執行環境重新檢查主機名稱／網域及專案路徑；任一不符、無法讀取或有疑義時，立即停止同步工作並向使用者確認，不得在家裡電腦上繼續執行公司電腦階段。
-- 此限制只有在標準測試資料版本、Seed／fixture、完整重建與驗證流程均已納入 Git 並推送，且家裡電腦已成功 pull 到相同版本、依文件完成本機 reset／同步並驗證成功後，才可解除。解除前不得因文件已寫好或公司電腦上的單機驗證通過就提前取消限制。
+- 「A／B 電腦 Supabase 測試資料完整版本控制與同步流程」已完成公司電腦端核心流程驗證，並已進入家用電腦同步與交接自動化階段。後續應依目前指定的 OpenChatX 主機及實際 Git 狀態繼續處理文件／程式整合，不因連線主機不是公司電腦就一律停止；但不得把家用電腦上的本機測試結果誤報為公司電腦證據，也不得在未確認前操作另一台電腦。
+- 公司電腦識別基準仍為 Windows `COMPUTERNAME=TPEPC-TM7503-01`、`USERDOMAIN=NICE-GREEN`，專案路徑 `D:\\Project\\Travel-Companion`。只有明確執行公司電腦專屬命令、讀取公司電腦本機資料庫或宣稱公司端新驗證結果時，才必須確認實際主機識別；主機不符時，只能停止該公司端操作，不能阻止在家用電腦繼續做可安全完成的整合工作。
+- 兩台電腦各自的本機標準同步／回歸入口已驗證通過；真正 A→B→A 雙向交接、兩端各自新增資料合併與生命週期端到端驗收仍待真實事件發生時補驗，不刻意製造新測試資料。
 
 # 每次開始工作前：Git 與 Supabase 核對
 - 每次開始任何專案任務，先在專案根目錄檢查 `git status --short --branch`、目前分支與 upstream；再執行 `git fetch origin`，確認本機與遠端差異。不得因任務看似只改文件就跳過。
 - 若工作目錄乾淨、目前分支是 `develop`，且遠端只有可安全 fast-forward 的新提交，允許直接執行 `git pull --ff-only origin develop`，然後確認最新 commit 與工作目錄狀態。
 - 若工作目錄有未提交修改或 untracked 檔案，先判斷是否屬於本次任務；一般任務不得自動切分支、stash、覆寫或 reset，應保留現況並回報。唯一例外是使用者已明確下達「進行發布流程」，且逐一檢視後確認所有待提交變更均屬於本次發布候選時，可依標準發布流程只 stage 明確檔案並提交；任何無關或歸屬不明的變更都必須停止。一般任務若目前分支不是 `develop`，不得自行切換。標準發布流程則可在工作樹乾淨、分支／upstream 已核對、遠端差異可安全處理且目前階段要求時，依序切換 `develop`／`main`；不得因發布需要而忽略遠端分歧、強制覆寫或 reset。沒有 upstream 或本機與遠端分歧時，仍須停止並回報差異，先處理安全同步方案。
+- 雙電腦合成測試資料交接共用既有 `testdata-sync.mjs`，不建立第二套發布流程。接收端仍由 `npm run db:sync:local` 自動執行 `npm run testdata:handoff` 偵測及驗證；來源端有合格 fixture 變更時使用 `npm run testdata:handoff:publish`，在 develop／upstream、工作樹、fixture 驗證、精確檔案白名單及遠端快轉安全條件全部通過後，才自動 stage fixture manifest/data、commit、push origin/develop。有任何非預期檔案、敏感資料、衝突、分支／upstream 異常或遠端分歧即停止；不自動 pull、reset、merge main、部署或清除資料。無變更則略過 commit/push。完整雙向交接、兩端各自新增資料的合併及生命週期驗收，待真實需求發生時補驗，不刻意製造測試資料。
+- **換電腦交接流程（僅由完整指令觸發）：** 只有使用者明確輸入 `commit/push/工作結束` 才執行完整交接；一般 `commit`、`push`、`commit/push`、單次工作完成、暫停對話或提及換電腦都不觸發。收到完整指令後，先檢查分支/upstream、遠端差異與工作樹，確認哪些變更屬於本次交接；整理相關文件並執行適用驗證，僅對本次任務範圍內、驗證合格且無無關／歸屬不明變更的一般程式碼與文件進行精確 stage、commit、push。不可用 `git add .`，不可覆蓋、reset、強制推送或自動切換分支。之後在 `develop` 直接執行 `npm run testdata:handoff:publish`；不可先執行 `npm run testdata:handoff`，避免先產生 fixture 差異而觸發安全停止。此 publish 入口自行判斷有無合格 fixture 變更，無變更就略過 commit/push；有變更時只有安全檢查全數通過才會精確提交／推送 fixture。若不在 `develop`、本機 Supabase 不可用、存在無關／歸屬不明變更、驗證失敗或 Git／fixture 安全檢查失敗，停止受影響的寫入操作並回報未完成項目，不可繞過檢查或宣稱已同步。最後提供一般 commit/push、fixture 交接、剩餘未提交內容與接收端接手指引。此流程不是正式發布：不合併 `main`、不部署、不清除資料；一般 commit/push 指令本身仍不授權執行本流程。
 - Git pull 只同步檔案，不代表 Supabase 本機資料庫已同步。若任務涉及資料庫或 migration，另行檢查 `npx supabase status` 與 `npx supabase migration list --local`；確認 Docker／本機 Supabase 正常後，檢視所有待套用 migration SQL，再決定是否執行 `npx supabase migration up --local`。
 - 套用可能刪除／重建資料、改變欄位型別或主鍵、刪欄位／索引、改寫資料、影響附件關聯的 migration 前，必須先建立可辨識且可還原的本機資料備份，並確認備份檔存在且非空。若無法可靠備份、無法確認還原方式，或 migration 會影響 Supabase Storage 物件，先停止並回報，不得冒險執行。一般純新增且不破壞既有資料的 migration 仍須先檢視 SQL 與驗證條件。
 - 不得自動執行 `db reset`、刪除 Docker volume、`migration repair`、`db push --linked` 或其他正式環境寫入操作；正式 Supabase 的部署、資料修復或其他不可逆操作必須先取得使用者明確核准。

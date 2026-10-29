@@ -197,14 +197,25 @@ npm run db:sync:local
 
 1. 確認目前分支為 `develop`，並檢查 Supabase API URL 是 `localhost`、`127.0.0.1` 或 `::1`；無法確認本機端點時立即停止。
 2. 執行 `npx supabase migration up --local`，只套用尚未執行的 Migration；不執行 `db reset`、不刪除資料、不連線正式資料庫。
-3. 執行 `npm run testdata:import:all`，先驗證版本控制中的 fixture，只匯入 `active`／`regression_pending` 資料；相同列保持不變、內容衝突中止，不會刪除既有本機資料。
-4. 執行 `npm run regression:local:prepare`，將標準合成 Trip fixture 與本機回歸測試帳號準備到本機資料庫；既有 `.env.local` 檔案不會因同步而重建覆蓋。
-5. 執行 `npm run regression:local:verify`，驗證本機 grants、測試帳號登入、Trip fixture 與 Edge Function 合約。
+3. 自動執行 `npm run testdata:handoff`，掃描明確標記為合成資料的 `tc-test-` 行程，與 fixture 比對並執行敏感資料、checksum 及檔案狀態檢查。只有無變更或可安全更新時才繼續；基準缺失、人工修改、staged/deleted、格式錯誤或衝突時會安全停止並顯示原因。
+4. 執行 `npm run testdata:import:all`，先驗證版本控制中的 fixture，只匯入 `active`／`regression_pending` 資料；相同列保持不變、內容衝突中止，不會刪除既有本機資料。
+5. 執行 `npm run regression:local:prepare`，將標準合成 Trip fixture 與本機回歸測試帳號準備到本機資料庫；既有 `.env.local` 檔案不會因同步而重建覆蓋。
+6. 執行 `npm run regression:local:verify`，驗證本機 grants、測試帳號登入、Trip fixture 與 Edge Function 合約。
 
-### 每台電腦的使用順序
+一般 `npm run testdata:handoff` 模式只偵測及驗證 fixture，不會自動 stage、commit 或 push。**只有使用者明確輸入完整指令 `commit/push/工作結束`，才啟動完整換電腦交接流程。** 單獨的 `commit`、`push`、`commit/push`，或只是完成任務、暫停對話、提到換電腦，都不觸發完整交接。收到完整指令後，先檢查 Git／工作樹、整理文件並執行適用驗證，只精確提交／推送本次任務範圍內且驗證合格的一般程式碼與文件；存在無關或歸屬不明變更、驗證失敗或 Git 狀態不安全時，保留現況並停止受影響的寫入操作。接著在 `develop` 直接執行 `npm run testdata:handoff:publish`，不可先執行一般 handoff，避免先產生 fixture 工作樹差異而觸發安全停止。此入口會先 fetch 遠端並確認分支為 `develop`、upstream 為 `origin/develop`、本機與遠端提交一致，且沒有既有 staged 變更或 fixture 變更。原有未 staged 的非 fixture 修改可以保留，但交接前後狀態必須一致。fixture 安全檢查通過且 Git 差異僅包含本次產生的 fixture `manifest.json`／`data.json` 時，才會自動 stage、commit 並 push。遠端有新提交、分支分歧、非預期／已追蹤／staged／刪除檔案或敏感資料時即停止，不會自動 pull、reset、merge `main` 或部署。無變更則略過 commit/push。最後回報一般變更與 fixture 交接狀態、未完成事項及接收端指引。此流程不合併 `main`、不部署、不清除資料，也不允許自行切分支。
 
-1. 確認工作樹與分支狀態；若有未提交變更，先保留並處理衝突，不可為了同步而覆蓋。
-2. 在 `develop` 分支取得已提交的最新版本（通常是 `git pull --ff-only origin develop`）。
+### 來源端與接收端的交接順序
+
+**來源端（有新的合成測試資料要交接）：**
+
+1. 在 `develop` 執行 `npm run testdata:handoff:publish`。
+2. 有合格 fixture 變更且全部安全檢查通過時，入口會自動 commit/push `origin/develop`；若沒有變更，則不建立空 commit。
+3. 若結果因安全檢查停止，依輸出處理工作樹、fixture 或遠端差異後再執行，不可手動繞過檢查。
+
+**接收端（取得另一台已推送的 fixture）：**
+
+1. 確認目前在 `develop`，沒有會被覆蓋的未提交工作，且遠端可安全快轉。
+2. 執行 `git pull --ff-only origin develop`。
 3. 執行 `npm run db:sync:local`。
 4. 只有命令最後回報 `synchronized: true` 且驗證通過，才視為該電腦已同步標準 schema 與回歸 fixture；失敗時依錯誤停止排查，不要以 `db reset` 作為補救。
 
@@ -215,6 +226,8 @@ npm run db:sync:local
 - 需要共用的新測試案例，應以合成 fixture／可重複執行的腳本明確版本化，並納入回歸驗收；不可將整個本機資料庫 dump 當成同步機制。
 - 本機 `imgproxy`、`pooler` 等非回歸流程必要服務若停止，應按實際功能另行驗證；此入口通過不代表完整 UI E2E 或所有 Supabase 服務均已驗收。
 - 此入口不會自動執行 `git pull`，因拉取程式碼可能與未提交工作衝突；Git 更新與資料庫更新刻意分成兩個有明確檢查點的步驟。
-- 若本機手動測試新增／修改了合成測試行程，需先確保 Trip ID 為 `tc-test-<name>` 且 `content.__testFixture=true`，再執行 `npm run testdata:handoff`。檢查 `supabase/test-fixtures/` 的差異與敏感資料後，由使用者自行決定是否 commit/push；不得直接推送未審查的測試資料。
-- 另一台電腦 pull 到已審查的 fixture 後執行 `npm run db:sync:local`，同步入口會先驗證並匯入 fixture，再跑標準回歸驗證。遇到同鍵不同內容會停止，不以最後寫入者覆蓋；不會自動合併衝突或刪除另一台的列。
-- 2026-10-29 公司電腦本機驗證通過：專用 `tc-test-sync-example` fixture 能匯入及冪等重複匯入；`testdata:handoff` 偵測一筆合成資料變更並遞增版本；衝突測試在同一 checklist item 內容不同時中止。整合後 `npm run db:sync:local` 回報 `synchronized: true`。家用電腦尚未 pull／驗證此新版本，因此跨電腦端到端流程仍待補驗。
+- 當 `npm run db:sync:local` 執行時，入口會自動呼叫 `testdata:handoff` 偵測並驗證可交接的合成測試資料；不需要使用者另外記住這個指令。只有標記為合成資料的 `tc-test-` 行程會被掃描，不會自動匯出未標記或真實行程。
+- `npm run testdata:handoff` 保留唯讀 Git 行為；需要自動交接時改用 `npm run testdata:handoff:publish`，由共用腳本在安全檢查通過後精確 stage fixture 檔案、建立繁體中文 commit 並 push `origin/develop`。此行為只處理合成測試資料，不是正式發布流程，也不會 merge `main` 或部署。
+- 另一台電腦取得已審查的 fixture 版本後，只需依既有流程執行 `npm run db:sync:local`；入口會先做本機交接偵測，再驗證及匯入 fixture，最後執行標準回歸驗證。相同資料保持不變；同鍵不同內容、handoff 基準缺失或檔案狀態不安全時會中止並顯示原因，不會以最後寫入者覆蓋或刪除另一台資料。
+- **2026-10-29 驗收狀態更新：**公司與家用電腦均已在 `develop` 上執行 `npm run db:sync:local`，回報 `synchronized: true` 且標準本機回歸驗證通過。家用電腦 fixture 核心資料與版本控制 fixture 相符。這證明兩台電腦各自的標準 migration／fixture 匯入／回歸入口已通過；不代表已完成真正的 A→B→A 雙向交接、兩台各自新增不同資料時的合併，或 `released`／`archived` 生命週期端到端驗收。這些情境不刻意製造測試，待真實交接需求發生時依實際證據補驗。
+- **自動化整合狀態：**`db:sync:local` 已串接唯讀模式的 `testdata:handoff`；來源端另有 `testdata:handoff:publish`，在明確的 Git／fixture 安全條件通過後自動 commit/push。兩者共用同一個 `testdata-sync.mjs`，不建立第二套發布流程；偵測到非預期檔案、已追蹤修改、staged/deleted、基準不一致、內容衝突、敏感資料或遠端差異時停止。

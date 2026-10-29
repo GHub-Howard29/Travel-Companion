@@ -67,9 +67,43 @@ function runGit(args) {
   ).trim();
 }
 
+function runGitRaw(args) {
+  return execFileSync(
+    process.platform === "win32" ? "git.exe" : "git",
+    args,
+    { encoding: "utf8", cwd: root, maxBuffer: 2 * 1024 * 1024, shell: process.platform === "win32" },
+  );
+}
+
 function assertDevelopBranch() {
   const branch = runGit(["branch", "--show-current"]);
   if (branch !== "develop") throw new Error(`本流程只允許在 develop 執行；目前分支為「${branch}」。`);
+}
+
+function getHandoffGitStatus() {
+  return runGitRaw(["status", "--porcelain=v1", "--untracked-files=all"])
+    .split(/\r?\n/)
+    .filter(Boolean);
+}
+
+function assertHandoffGitState() {
+  const branch = runGit(["branch", "--show-current"]);
+  if (branch !== "develop") throw new Error(`安全停止：測試資料交接只允許在 develop；目前分支「${branch}」。`);
+  const upstream = runGit(["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"]);
+  if (upstream !== "origin/develop") throw new Error(`安全停止：develop upstream 必須是 origin/develop；目前是「${upstream}」。`);
+  runGit(["fetch", "--quiet", "origin", "develop"]);
+  const status = getHandoffGitStatus();
+  if (status.some((line) => line[0] !== " " && line[0] !== "?")) {
+    throw new Error("安全停止：發現既有 staged 變更；請先處理 index，避免被交接提交帶入。");
+  }
+  if (status.some((line) => line.includes("supabase/test-fixtures/"))) {
+    throw new Error("安全停止：handoff 開始前已有 fixture 變更，避免覆寫或提交其他操作的資料。");
+  }
+  const counts = runGit(["rev-list", "--left-right", "--count", "HEAD...origin/develop"]).split(/\s+/).map(Number);
+  if (counts.length !== 2 || counts.some((value) => !Number.isFinite(value)) || counts[0] !== 0 || counts[1] !== 0) {
+    throw new Error("安全停止：本機 develop 與 origin/develop 不一致；請先人工核對，不自動 pull、覆寫或 reset。");
+  }
+  return status;
 }
 
 function assertLocalOnly() {
@@ -488,8 +522,9 @@ async function importAllFixtures() {
   }, null, 2));
 }
 
-async function handoff() {
-  assertDevelopBranch();
+async function handoff({ autoCommitPush = false } = {}) {
+  const baselineGitStatus = autoCommitPush ? assertHandoffGitState() : null;
+  if (!autoCommitPush) assertDevelopBranch();
   assertLocalOnly();
   const sql = `select json_build_object(
     'fixtures', coalesce(json_agg(json_build_object('id', id) order by id), '[]'::json)
@@ -505,13 +540,64 @@ async function handoff() {
     await validateFixture(path.relative(root, fixtureDirectory(item.id)));
     await recordHandoffState(item.id);
   }
+  const changed = results.some((item) => item.result !== "unchanged");
+  let gitResult = { committed: false, pushed: false };
+  if (autoCommitPush && changed) {
+    const fixturePaths = [...new Set(results
+      .filter((item) => item.result !== "unchanged")
+      .map((item) => `supabase/test-fixtures/${item.fixtureId}`))];
+    const changedPaths = getHandoffGitStatus();
+    const allowed = new Set(fixturePaths.flatMap((directory) => [
+      `${directory}/manifest.json`,
+      `${directory}/data.json`,
+    ]));
+    const expectedNewPaths = new Set([...allowed].flatMap((file) => [`?? ${file}`, ` M ${file}`]));
+    const changedBaseline = baselineGitStatus.filter((line) => !changedPaths.includes(line));
+    const unexpectedNewPaths = changedPaths.filter((line) =>
+      !baselineGitStatus.includes(line) && !expectedNewPaths.has(line));
+    const reportedAllowedFiles = new Set(changedPaths
+      .filter((line) => expectedNewPaths.has(line))
+      .map((line) => line.slice(3)));
+    if (changedBaseline.length || unexpectedNewPaths.length || reportedAllowedFiles.size !== allowed.size ||
+        [...allowed].some((file) => !reportedAllowedFiles.has(file))) {
+      throw new Error(`安全停止：handoff 後 Git 差異超出本次 fixture 白名單。基線變更：${changedBaseline.join(", ") || "無"}；非預期新增：${unexpectedNewPaths.join(", ") || "無"}。`);
+    }
+    for (const directory of fixturePaths) await validateFixture(directory);
+    for (const directory of fixturePaths) {
+      runGit(["add", "--", `${directory}/manifest.json`, `${directory}/data.json`]);
+    }
+    const stagedPaths = runGit(["diff", "--cached", "--name-only"])
+      .split(/\r?\n/)
+      .filter(Boolean);
+    if (stagedPaths.length !== allowed.size || stagedPaths.some((file) => !allowed.has(file))) {
+      throw new Error("安全停止：stage 後的檔案超出精確 fixture 白名單；不會 commit 或 push。");
+    }
+    runGit(["diff", "--cached", "--check"]);
+    runGit(["commit", "-m", "同步雙電腦合成測試資料"]);
+    const remaining = getHandoffGitStatus();
+    if (remaining.length !== baselineGitStatus.length ||
+        baselineGitStatus.some((line) => !remaining.includes(line))) {
+      throw new Error("已建立 fixture commit，但工作樹狀態與交接前基線不同；停止 push，請人工檢查。");
+    }
+    const aheadBehind = runGit(["rev-list", "--left-right", "--count", "HEAD...origin/develop"]).split(/\s+/).map(Number);
+    if (aheadBehind.length !== 2 || aheadBehind[0] !== 1 || aheadBehind[1] !== 0) {
+      throw new Error("已建立 fixture commit，但遠端 develop 已變更或本機分支狀態不符合預期；停止 push，請人工檢查。");
+    }
+    runGit(["push", "origin", "develop"]);
+    gitResult = { committed: true, pushed: true, files: stagedPaths };
+  }
   console.log(JSON.stringify({
     handoff: true,
     scanned: candidates.length,
     results,
-    nextStep: results.some((item) => item.result !== "unchanged")
-      ? "請檢查 supabase/test-fixtures 的差異；確認後由使用者自行 commit/push，另一台 pull 後執行 npm run db:sync:local。"
-      : "沒有需要保存的新測試資料；不用匯出或提交。",
+    git: gitResult,
+    nextStep: autoCommitPush
+      ? changed
+        ? "fixture 已通過安全檢查並自動 commit/push；接收電腦執行 git pull --ff-only origin develop，再執行 npm run db:sync:local。"
+        : "沒有需要交接的 fixture 變更；略過 commit/push。"
+      : changed
+        ? "偵測到 fixture 變更；此模式不會自動 stage/commit/push。請使用 npm run testdata:handoff:publish 啟動具安全檢查的自動交接。"
+        : "沒有需要保存的新測試資料；不用匯出或提交。",
   }, null, 2));
 }
 
@@ -521,7 +607,8 @@ try {
   else if (command === "validate" && argument) await validateFixture(argument);
   else if (command === "import:all" && !argument) await importAllFixtures();
   else if (command === "handoff" && !argument) await handoff();
-  else throw new Error("用法：npm run testdata:export -- tc-test-example；npm run testdata:validate -- supabase/test-fixtures/tc-test-example；npm run testdata:import:all；npm run testdata:handoff");
+  else if (command === "handoff:publish" && !argument) await handoff({ autoCommitPush: true });
+  else throw new Error("用法：npm run testdata:export -- tc-test-example；npm run testdata:validate -- supabase/test-fixtures/tc-test-example；npm run testdata:import:all；npm run testdata:handoff；npm run testdata:handoff:publish");
 } catch (error) {
   console.error(`[testdata-sync] 停止：${error?.stderr?.toString().trim() || error.message || error}`);
   process.exitCode = 1;

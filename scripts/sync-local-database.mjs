@@ -39,13 +39,16 @@ try {
   console.log("[sync-local] 步驟 2/5：只套用尚未執行的 Migration（不執行 reset、不刪除資料）");
   run("npx", ["supabase", "migration", "up", "--local"]);
 
-  console.log("[sync-local] 步驟 3/5：匯入已驗證且允許載入的版本化合成測試資料；遇到內容衝突會回滾並停止");
+  console.log("[sync-local] 步驟 3/6：偵測並驗證本機合成測試資料交接；只產生 fixture，不自動 stage／commit／push");
+  run("npm", ["run", "testdata:handoff"]);
+
+  console.log("[sync-local] 步驟 4/6：匯入已驗證且允許載入的版本化合成測試資料；遇到內容衝突會回滾並停止");
   run("npm", ["run", "testdata:import:all"]);
 
-  console.log("[sync-local] 步驟 4/5：依版本控制中的標準 fixture 準備本機回歸測試資料");
+  console.log("[sync-local] 步驟 5/6：依版本控制中的標準 fixture 準備本機回歸測試資料");
   run("npm", ["run", "regression:local:prepare"]);
 
-  console.log("[sync-local] 步驟 5/5：驗證資料庫權限、測試登入、Trip fixture 與 Edge Function 契約");
+  console.log("[sync-local] 步驟 6/6：驗證資料庫權限、測試登入、Trip fixture 與 Edge Function 契約");
   run("npm", ["run", "regression:local:verify"]);
 
   console.log(JSON.stringify({
