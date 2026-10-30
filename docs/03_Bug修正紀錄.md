@@ -4,14 +4,9 @@
 >
 > 重整前的完整 BUG001～BUG031 內容原檔保留於《[archive/bug-history/03_Bug修正紀錄_完整歷史](archive/bug-history/03_Bug修正紀錄_完整歷史.md)》，沒有刪除。
 >
-> 最後整理：2026-10-28
+> 最後整理：2026-10-30
 
 ## 未修正
-
-### BUG007：帳本排序方式
-
-- 現況：帳本依建立時間遞增排序，最新資料顯示在最下方。
-- 狀態：待 Product Owner 確認預期排序與對現有瀏覽習慣的影響後再實作。
 
 ### BUG032：離線前未開啟 Trip 時照片未預載
 
@@ -35,6 +30,7 @@
 
 ### BUG034：V3.10.8 發布紀錄混入 V3.10.9 內容
 
+- 回歸測試（2026-10-30，HOWARD-NEWPC／Travel-Companion `develop`）：確認 V3.10.8 與 V3.10.9 分別保留於 `docs/101_V3.10.8_正式發布紀錄.md`、`docs/102_V3.10.9_正式發布紀錄.md`，`docs/101` 的交叉參照指向獨立 V3.10.9 紀錄；`npm run verify:release-history` 通過，`npm run verify:docs-links` 通過（121 份 Markdown、245 個本地目標）。本次未改寫版本歷史、未執行 Git commit/push 或發布操作。判定：文件邊界與連結回歸通過。
 - 問題：`docs/101_V3.10.8_正式發布紀錄.md` 的主體標題／初始發布範圍屬於 V3.10.8，但文件後段另加入 V3.10.9 修正發布紀錄，包含 V3.10.9 的 Git 提交、部署 workflow、公開版本 metadata 與驗收狀態，導致單一版本文件的名稱與內容不一致。
 - 證據：唯讀檢查 `main` 與 `develop` 的同名文件均確認存在此混入；GitHub commit `c7652a7`／完整 SHA `c7652a782d9696b3f5857b51b16641f4d7de7a21` 的標題為「發布 V3.10.9 天氣歷史快取提示修正」，而 `f9a3b51594fe6240c84afe9030d2cfd6ce3075eb` 的提交訊息為「更新 V3.10.9 正式部署與驗收紀錄」。
 - 影響：查閱者可能將不同版本的原始程式、部署範圍、Edge Function 版本及驗收結論錯誤地歸屬至 V3.10.8，降低發布追溯的可靠性。
@@ -46,6 +42,7 @@
 
 ### BUG035：天氣卡片過期且無可用快取時未自動取消顯示天氣
 
+- 回歸測試（2026-10-30，HOWARD-NEWPC／本機隔離驗證）：`npm run verify:v3101-weather-forecast` 通過，涵蓋 `ineligible` 回應、仍有快取時保留顯示、請求輸入一致性與 `showWeather: false` 經既有 `onSaveTripDetail` 儲存路徑的靜態契約；`npm run test:weather-timezone-eligibility` 通過，涵蓋目的地時區資格；完整 `npm run build` 通過（含 TypeScript 與現有回歸）。本次未啟動 Vite／瀏覽器 UI、未建立或改寫 Trip fixture、未連接正式天氣 API，因此跨裝置與真實行程 E2E 仍待補驗。判定：本機自動化回歸通過，UI／跨裝置與正式環境未驗證。
 - 問題：行程卡片已超過目的地當地預報資格時間，且沒有可用的快取天氣資料時，畫面仍保留天氣欄位／三個點狀態提示，而不是自動取消「顯示天氣」勾選並隱藏整個天氣欄位。
 - 預期：只有同時符合「卡片已過期」及「沒有可用天氣快取」才自動將該卡片 `showWeather` 設為 `false`；卡片尚未過期時仍走既有天氣載入流程。若有可顯示的歷史天氣資料，不得只因停止更新而自動取消勾選。日期、到達時間或地點變更後，應重新評估資格；不應自行重新勾選。
 - 程式證據：`src/components/ItineraryPage.tsx` 天氣載入 effect（約第 450–480 行）會依 `showWeather === true` 建立啟用卡片，讀取瀏覽器天氣快取，並將無快取卡片進入等待／請求流程；目前此流程沒有將 `showWeather` 自動設為 `false`。行程卡片渲染區約第 2446 行只以 `event.showWeather === true` 決定天氣欄位是否顯示。
@@ -59,6 +56,7 @@
 
 ### BUG036：天氣文案未完全遵循定稿與仍出現舊訊息
 
+- 回歸測試（2026-10-30，HOWARD-NEWPC／本機隔離驗證）：`npm run verify:v3101-weather-forecast` 通過，確認前後端 W15 使用定稿「目前為長期預報，請於出發前再次確認天氣」，前端不再產生「長期預報，仍可能變動」，Edge Function 不含已撤回的「目前不更新天氣；顯示上次成功取得的資料」分支；`npm run build` 的 `verify:weather-forecast-bundle` 通過，確認定稿文案存在於產物且已撤回文案不存在於前端 JavaScript；Deno `deno check supabase/functions/weather-forecast/index.ts` 通過。**正式 Supabase ACTIVE version／部署原始碼、正式 API response 與正式 UI 本輪均未查驗／未呼叫**，不得據此宣告 BUG036 正式環境已修正；正式部署仍須另行授權並按流程核對。判定：Git 本機原始碼與前端 bundle 契約通過；正式 Edge Function／API／UI 待驗。
 - 問題：正式畫面出現使用者已要求移除的「目前不更新天氣；顯示上次成功取得的資料」；另外，定稿 W15「目前為長期預報，請於出發前再次確認天氣」與前端實際顯示的「長期預報，仍可能變動」不一致。
 - 定稿依據：`docs/95_天氣文案校稿與逐項確認紀錄.md` 的 W01–W23 為文案索引；W15 已定稿為「目前為長期預報，請於出發前再次確認天氣」。需遵守文案適用狀態，不得只因文字曾在舊版本出現就沿用。
 - 前端證據：`src/components/ItineraryPage.tsx` 約第 2455–2472 行，`statusMessage` 預設取自 `weather.message`，再依狀態覆蓋訊息；若後端回傳不在前端覆蓋條件中的舊 `message`，前端會保留並顯示它。約第 2503 行仍直接渲染「長期預報，仍可能變動」，與 W15 定稿不一致。
@@ -84,17 +82,24 @@
 - 本機驗證：`npm run verify:v3101-weather-forecast` 已通過，並以完整 `npm run build` 通過專項與既有回歸、目的地時區資格測試、TypeScript、production build 及 browser-security。未執行正式部署；正式網站 UI 與裝置實測待發布流程補驗。
 - 狀態：程式修正與本機自動化驗證完成；未部署，待既有發布流程驗收。
 
-## 暫緩補驗
+## 已解除／不再列入待驗
 
-依 Product Owner 指示，iOS 相關實機補驗目前排除，不列入近期消項目標。
+### BUG007：帳本排序方式
 
-| 編號 | 主題 | 剩餘範圍 |
-|---|---|---|
-| BUG003 | 手機附件拍照／相簿／檔案選擇 | Android 已通過；僅剩 iOS |
-| BUG009 | iOS 安裝 PWA 引導 | iOS Safari 與加入主畫面 |
-| BUG010 | iOS 照片同步失敗 | iOS IndexedDB、Canvas、Storage 與背景切換 |
-| BUG011 | Android 附件拍照入口 | Android 已通過；僅剩 iOS |
-| BUG015 | Android PWA／iOS Safari 更新提示 | Android 已通過；僅剩 iOS Safari |
+- 解除日期：2026-10-30。
+- 解除原因：重新檢查 `src/components/expense/ExpenseScreen.tsx` 與 `src/hooks/useExpenseBook.ts` 後，確認目前帳本已採記帳日期分頁，依記帳日期由新到舊排列；同一日期內再依建立時間由新到舊排列。新增記帳可自行選擇日期，沒有強制依建立時間輸入的限制。原 BUG007 所述「最新資料顯示於最下方」與現行實作不符，判定為先前已解除但文件未同步更新，不需要修改程式。
+- 處理：自近期未修正清單及 TODO 移除 BUG007；完整歷史檔保留原始立案文字，供追溯。
+
+### iOS 實機待驗管理決策：BUG003、BUG009、BUG010、BUG011、BUG015
+
+- 決策日期：2026-10-30。
+- 處理原則：上述功能已實作；因目前沒有 iOS 實體設備，過去保留的 iOS 待驗項目不再作為近期待辦或未結案 Bug。這不代表已取得 iOS 實機測試通過證據，也不宣稱 iOS 已驗證。
+- 後續處理：若實際使用者回報 iOS 問題，依具體裝置、iOS／Safari 版本、操作步驟及錯誤證據重新立案，評估影響與修正範圍；不沿用舊的「無設備待驗」項目持續追蹤。
+- BUG003：保留歷史上已實作的新增／編輯帳目拍照與相簿入口；未來有具體 iOS 回報再調查。
+- BUG009：保留歷史上已實作的 iOS Safari「分享 → 加入主畫面」安裝引導；未來有具體 iOS 回報再調查。
+- BUG010：保留歷史上已實作的 `upload_failed` 本機照片關聯恢復與重試處理；原始 iOS 上傳失敗根因沒有 iOS 實機證據，不再以待測方式追蹤，未來有具體回報再調查。
+- BUG011：保留歷史上已實作的 Android 新增／編輯帳目拍照與相簿雙入口；2026-09-26 Android PWA 實機回歸已通過。原先僅剩 iOS 實機驗證，現不再因缺少設備列為待驗；未來有具體 iOS 回報再調查。
+- BUG015：保留歷史上已實作的更新提示與 Service Worker 更新流程；未來有具體 iOS 回報再調查。
 
 已完成驗證與舊修正紀錄移至《[archive/bug-history/03_Bug修正紀錄_完整歷史](archive/bug-history/03_Bug修正紀錄_完整歷史.md)》與版本更新紀錄保存。
 
