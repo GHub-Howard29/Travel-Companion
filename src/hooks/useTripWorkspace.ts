@@ -13,7 +13,10 @@ import {
   isHistoricalTrip,
   sortTripsByDateDesc,
 } from "../utils/tripHelpers";
-import { getParticipantAliasByEmail } from "../utils/participantUtils";
+import {
+  getParticipantAliasByEmail,
+  mergeParticipantEmailMaps,
+} from "../utils/participantUtils";
 import { toPersonalBookTripId } from "../storage/expenseStorage";
 import { createPermission } from "../permissions/permission";
 import { mapRole } from "../permissions/roleMapper";
@@ -155,10 +158,10 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
   const isUsingSharedExpenseBook = canUseExpense && hasEditPermission;
   const expenseMembers =
     isUsingSharedExpenseBook || !userEmail ? currentMembers : [userEmail];
-  const participantEmailMap =
-    selectedTripMeta?.participantEmailMap ??
-    currentTrip?.content.participantEmailMap ??
-    {};
+  const participantEmailMap = mergeParticipantEmailMaps(
+    selectedTripMeta?.participantEmailMap,
+    currentTrip?.content.participantEmailMap,
+  );
   const currentUserParticipantName = (() => {
     const participantName = getParticipantAliasByEmail(
       userEmail,

@@ -26,14 +26,26 @@ assert.match(
 
 assert.match(
   updateHook,
-  /const hasActivatedReplacement = \(\) =>[\s\S]*registration\.active !== previousController[\s\S]*registration\.active\.state === "activated"/,
-  "已 active 的新版 worker 必須視為已準備完成，不可等待不存在的 waiting/installing worker",
+  /const hasActivatedReplacement = \(\) =>\s*hasStableActivatedReplacement\(registration, previousController\)/,
+  "只有 active 已替代舊 controller 且 waiting／installing 都已清空時，才可視為穩定替代 worker",
 );
 
 assert.match(
   updateHook,
-  /const activatedReplacement =[\s\S]*registration\.active !== previousController[\s\S]*!registration\.waiting[\s\S]*!registration\.installing[\s\S]*setStoredAppVersion\(latestMetadata\.version\)[\s\S]*reloadOnce\(\)/,
-  "新版已 active 但舊頁面仍由舊 controller 控制時，必須直接重新載入，不可要求第二次點擊",
+  /const activatedReplacement = hasStableActivatedReplacement\([\s\S]*registration,[\s\S]*previousController,[\s\S]*\)[\s\S]*setPendingUpdateVersion\(latestMetadata\.version\)[\s\S]*reloadOnce\(\)/,
+  "新版已 active 但舊頁面仍由舊 controller 控制時，必須先記錄待套用版本並直接重新載入",
+);
+
+assert.match(
+  updateHook,
+  /const expectedWorker = registration\.waiting;[\s\S]*if \(!expectedWorker\)[\s\S]*新版尚未進入可接管狀態/,
+  "SKIP_WAITING 只能針對確實存在的 waiting worker；installing 不可當成可接管目標",
+);
+
+assert.match(
+  updateHook,
+  /setPendingUpdateVersion\(latestMetadata\.version\)[\s\S]*await updateServiceWorker\(false\)/,
+  "發出單次 SKIP_WAITING 前必須保存待套用版本，讓新 document 能在舊頁面 handoff 逾時後確認更新",
 );
 
 assert.match(
@@ -50,8 +62,8 @@ assert.match(
 
 assert.match(
   updateHook,
-  /if \(handoffState === "active" && registration\.active\) \{[\s\S]*setStoredAppVersion\(latestMetadata\.version\)[\s\S]*reloadOnce\(\)/,
-  "active worker handoff 應直接套用並重新載入，不可要求第二次點擊",
+  /if \(handoffState === "active" && registration\.active\?\.state === "activated"\) \{[\s\S]*reloadOnce\(\)/,
+  "active worker handoff 必須確認 activated，再由唯一 reload owner 重新載入",
 );
 
 const activatedReplacementBlock = updateHook.match(
@@ -59,7 +71,7 @@ const activatedReplacementBlock = updateHook.match(
 )?.[1] ?? "";
 assert.match(
   activatedReplacementBlock,
-  /setStoredAppVersion\(latestMetadata\.version\)[\s\S]*reloadOnce\(\)/,
+  /setPendingUpdateVersion\(latestMetadata\.version\)[\s\S]*reloadOnce\(\)/,
   "active replacement 必須由唯一更新流程直接套用並重新載入",
 );
 

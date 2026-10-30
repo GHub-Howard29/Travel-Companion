@@ -1,10 +1,9 @@
 {
-  "version": "3.10.10",
+  "version": "3.10.11",
   "minimumSupportedVersion": "3.9.27",
-  "releaseDate": "2026-10-30",
+  "releaseDate": "2026-10-31",
   "releaseNotes": [
-    "新增額外天氣網站連結。",
-    "已知顯示問題修正。"
+    "修正 Android App 更新後無法自動重新載入新版的問題。"
   ],
   "forceUpdate": false
 }
