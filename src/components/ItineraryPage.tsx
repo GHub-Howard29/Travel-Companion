@@ -105,7 +105,7 @@ import {
 } from "../services/itineraryCoverPhotoService";
 import { ITINERARY_COVER_BUCKET } from "../constants/appConstants";
 import { ITINERARY_COVER_CACHE_NAME } from "../services/itineraryCoverOfflineCache";
-import { getWeatherDescription, getWeatherReminders, getWeatherTimezoneLabel, isLongRangeForecast, loadWeatherForecastCache, requestTripWeather, storeWeatherForecastResults, type WeatherForecastItem } from "../services/weatherForecastService";
+import { getWeatherDescription, getWeatherReminders, getWeatherTimezoneLabel, getWeathernewsForecastUrl, isLongRangeForecast, loadWeatherForecastCache, requestTripWeather, storeWeatherForecastResults, type WeatherForecastItem } from "../services/weatherForecastService";
 import { getItineraryCoverPaths } from "../utils/itineraryCoverPhoto";
 import { RichTextColorEditor } from "./RichTextColorEditor";
 import { RichTextDisplay } from "./RichTextDisplay";
@@ -2549,6 +2549,19 @@ export const ItineraryPage = ({
                             </span>
                           )}
                           {forecastMessage && forecast && <p className="mt-1 w-full">{forecastMessage}</p>}
+                          {(() => {
+                            const weathernewsUrl = getWeathernewsForecastUrl(weather);
+                            return weathernewsUrl && (
+                              <a
+                                href={weathernewsUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-sky-700 underline underline-offset-2"
+                              >
+                                Weathernews 預報
+                              </a>
+                            );
+                          })()}
                           {reminders.length > 0 && (
                             <div className="mt-1 w-full font-medium text-amber-800">
                               <p>{reminders[0]}</p>

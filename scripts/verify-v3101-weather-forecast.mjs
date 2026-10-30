@@ -81,6 +81,11 @@ assert.match(timezoneEligibility, /timeAtTimezone\(now, timezone\) >= arrivalTim
 assert.match(weatherService, /WEATHER_CARD_NOT_FOUND/);
 assert.match(weatherService, /WEATHER_REQUEST_RETRY_DELAY_MS/);
 assert.match(weatherService, /getOpenMeteoSourceUrl/);
+assert.match(weatherService, /export const getWeathernewsForecastUrl/);
+assert.match(weatherService, /https:\/\/weathernews\.jp\/onebox\/\$\{weather\.latitude\}\/\$\{weather\.longitude\}\//);
+assert.match(itinerary, /getWeathernewsForecastUrl\(weather\)/);
+assert.match(itinerary, /Weathernews 預報/);
+assert.match(itinerary, /target="_blank"[\s\S]*?rel="noopener noreferrer"/);
 assert.match(weatherService, /return null/);
 assert.match(itinerary, /max-w-\[calc\(100vw-2rem\)\]/);
 assert.match(itinerary, /className="mb-3 rounded-lg border border-sky-100 bg-sky-50 px-3 py-2 text-xs text-slate-700"/);

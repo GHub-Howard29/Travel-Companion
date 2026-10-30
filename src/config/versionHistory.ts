@@ -14,6 +14,15 @@ export type VersionHistoryItem = {
 
 export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
+    version: "3.10.9",
+    date: "2026-10-21",
+    isMandatoryRelease: false,
+    notes: [
+      "修正目的地日期／到達時間已過時的 W09 歷史天氣提示與停止更新狀態。",
+      "此版本僅部署前端及版本 metadata；正式 weather-forecast Edge Function 未隨版更新，相關正式驗收債另行追蹤。",
+    ],
+  },
+  {
     version: "3.10.8",
     date: "2026-10-21",
     isMandatoryRelease: false,

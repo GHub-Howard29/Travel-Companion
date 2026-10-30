@@ -34,6 +34,11 @@ const isCoordinatePair = (latitude: unknown, longitude: unknown): latitude is nu
   typeof latitude === "number" && Number.isFinite(latitude) && latitude >= -90 && latitude <= 90 &&
   typeof longitude === "number" && Number.isFinite(longitude) && longitude >= -180 && longitude <= 180;
 
+export const getWeathernewsForecastUrl = (weather?: Pick<WeatherForecastItem, "latitude" | "longitude">): string | null => {
+  if (!weather || !isCoordinatePair(weather.latitude, weather.longitude)) return null;
+  return `https://weathernews.jp/onebox/${weather.latitude}/${weather.longitude}/`;
+};
+
 const isTrustedOpenMeteoUrl = (value: unknown): value is string => {
   if (typeof value !== "string" || !value) return false;
   try {
