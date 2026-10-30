@@ -69,7 +69,7 @@
 - 建議處理：以 W01–W23 作為唯一文案來源，釐清每個後端狀態到文案的映射；移除已撤回訊息的可達分支，校正 W15 前端文字；加入靜態檢查／契約測試，避免舊文案重新進入程式與正式 bundle。部署後以指定卡片情境檢查實際回應與 UI。
 - 電腦限制變更（2026-10-30）：Product Owner 明確解除原先僅允許在 `TPEPC-TM7503-01` 實作的限制，理由是兩台電腦的工作目錄均為乾淨狀態；因此可在目前的 `HOWARD-NEWPC` 實作，不再因主機名稱阻擋本地程式修改。此變更只解除 BUG036 的實作主機限制，不代表正式環境部署已獲授權。
 - 執行順序與交接：先確認本機與 `origin/develop` 同步，再完成 BUG034、BUG035、BUG036、BUG037 的相關回歸測試。程式修正與本機驗證完成後，仍須依正式發布流程，分別核對 GitHub Pages 與正式 `weather-forecast` Edge Function；正式部署原始碼／版本必須與 Git 修正一致，並以實際 API response 和正式 UI 驗證。GitHub Pages 成功不代表 Edge Function 已更新。
-- 狀態：已於 `HOWARD-NEWPC` 開始實作；本機契約測試、完整建置及相關回歸完成後，仍需正式 Edge Function 部署與正式 API／UI 驗收。
+- 狀態修正（2026-10-31）：BUG036 的後端與前端文案修正已完成 Git commit `9a08bd9`（2026-10-30），並已包含於 V3.10.10 Git tag；V3.10.10 正式發布紀錄記載 `weather-forecast` 已部署至 ACTIVE version 15。故 BUG036 不應再標示為「待正式部署」；目前僅保留 ACTIVE version 15 的正式部署原始碼 SHA／Git commit 對照，以及指定 API response、正式 UI 驗收待確認。現有資料未保存 version 15 的部署原始碼 SHA 與指定 API response，不能推定已完整驗收，也不能據此要求再次部署。
 
 ### BUG037：長期預報的天氣欄位底色不符合已定案規則
 
