@@ -1,3 +1,22 @@
+export const mergeParticipantEmailMaps = (
+  ...maps: Array<Record<string, string> | null | undefined>
+): Record<string, string> => {
+  const merged = new Map<string, string>();
+
+  for (const map of maps) {
+    for (const [participant, email] of Object.entries(map ?? {})) {
+      const normalizedParticipant = participant.trim();
+      const normalizedEmail = email.trim().toLowerCase();
+      if (normalizedParticipant && normalizedEmail.includes("@")) {
+        // Later sources are more authoritative (current Trip detail over cached metadata).
+        merged.set(normalizedParticipant, normalizedEmail);
+      }
+    }
+  }
+
+  return Object.fromEntries(merged);
+};
+
 export const getParticipantAliasByEmail = (
   email: string | null | undefined,
   participantEmailMap: Record<string, string>,

@@ -16,6 +16,7 @@ import {
   type AppUpdatePolicy,
   type AppVersionMetadata,
 } from "../utils/appVersionPolicy";
+import { hasStableActivatedReplacement } from "../utils/serviceWorkerUpdatePolicy";
 
 type UpdateServiceWorker = (reloadPage?: boolean) => Promise<void>;
 export type AppUpdatePromptMode = "update" | "releaseNotice";
@@ -27,6 +28,7 @@ export type AppUpdatePhase =
   | "waiting-control";
 const RELEASE_NOTICE_STORAGE_KEY = "travel_companion_seen_app_version";
 const VERSION_POLICY_STORAGE_KEY = "travel_companion_app_version_policy";
+const PENDING_UPDATE_VERSION_KEY = "travel_companion_pending_update_version";
 
 const getRuntimeDisplayMode = () => {
   const standaloneNavigator = navigator as Navigator & { standalone?: boolean };
@@ -44,6 +46,22 @@ const getRuntimeDisplayMode = () => {
 const getStoredAppVersion = () => localStorage.getItem(RELEASE_NOTICE_STORAGE_KEY);
 const setStoredAppVersion = (version: string) => {
   localStorage.setItem(RELEASE_NOTICE_STORAGE_KEY, version);
+};
+const setPendingUpdateVersion = (version: string) => {
+  localStorage.setItem(PENDING_UPDATE_VERSION_KEY, version);
+};
+const getPendingUpdateVersion = () => localStorage.getItem(PENDING_UPDATE_VERSION_KEY);
+const clearPendingUpdateVersion = () => {
+  localStorage.removeItem(PENDING_UPDATE_VERSION_KEY);
+};
+
+const confirmPendingUpdateForCurrentBundle = () => {
+  const pendingVersion = getPendingUpdateVersion();
+  if (pendingVersion !== APP_VERSION) return false;
+
+  setStoredAppVersion(APP_VERSION);
+  clearPendingUpdateVersion();
+  return true;
 };
 const getStoredVersionPolicy = (): AppVersionMetadata | null => {
   try {
@@ -153,11 +171,7 @@ const waitForUpdateWorkerReady = (
   timeoutMs = 30000,
 ) => {
   const hasActivatedReplacement = () =>
-    Boolean(
-      registration.active &&
-      registration.active !== previousController &&
-      registration.active.state === "activated",
-    );
+    hasStableActivatedReplacement(registration, previousController);
 
   if (isWorkerReady() || registration.waiting || hasActivatedReplacement()) {
     return Promise.resolve(true);
@@ -256,6 +270,9 @@ export const useAppUpdate = () => {
     }
     return storedVersion !== APP_VERSION;
   });
+  useEffect(() => {
+    confirmPendingUpdateForCurrentBundle();
+  }, []);
   const updateServiceWorkerRef = useRef<UpdateServiceWorker | null>(null);
   const registrationRef = useRef<ServiceWorkerRegistration | null>(null);
   const updateInProgressRef = useRef(false);
@@ -408,14 +425,12 @@ export const useAppUpdate = () => {
         return;
       }
       setHasPreparedUpdate(true);
-      const activatedReplacement =
-        registration.active &&
-        registration.active !== previousController &&
-        registration.active.state === "activated" &&
-        !registration.waiting &&
-        !registration.installing;
+      const activatedReplacement = hasStableActivatedReplacement(
+        registration,
+        previousController,
+      );
       if (activatedReplacement) {
-        setStoredAppVersion(latestMetadata.version);
+        setPendingUpdateVersion(latestMetadata.version);
         reloadOnce();
         return;
       }
@@ -427,13 +442,22 @@ export const useAppUpdate = () => {
         return;
       }
 
-      const expectedWorker = registration.waiting ?? registration.installing;
+      const expectedWorker = registration.waiting;
+      if (!expectedWorker) {
+        setUpdateError("新版尚未進入可接管狀態，請稍後再試；目前版本仍可正常使用。");
+        setUpdatePhase("idle");
+        return;
+      }
       setUpdatePhase("waiting-control");
       const handoffPromise = waitForServiceWorkerHandoff(
         registration,
         previousController,
         expectedWorker,
       );
+
+      // 記錄待套用版本而非已更新版本；即使舊頁面未觀察到 handoff，
+      // 若 worker 隨後成功啟用，新 document 仍可確認版本並完成紀錄。
+      setPendingUpdateVersion(latestMetadata.version);
 
       // vite-plugin-pwa 的 prompt 模式在此只需要送出一次 SKIP_WAITING。
       // reload 由本 hook 在確認新 worker 已 active／接管後統一控制，避免重複觸發競態。
@@ -445,8 +469,7 @@ export const useAppUpdate = () => {
         return;
       }
 
-      if (handoffState === "active" && registration.active) {
-        setStoredAppVersion(latestMetadata.version);
+      if (handoffState === "active" && registration.active?.state === "activated") {
         reloadOnce();
         return;
       }

@@ -2,7 +2,7 @@
 
 > 本文件只保留未完成、待補驗或待評估工作；不累積 `[x]` 歷史。
 >
-> 目前狀態以《[14_專案現況總覽](14_專案現況總覽.md)》為準。最後整理：2026-10-30。
+> 目前狀態以《[14_專案現況總覽](14_專案現況總覽.md)》為準。最後整理：2026-10-31。
 
 ## 已確認 BUG 待處理
 
@@ -10,6 +10,10 @@
 - [x] **BUG035：卡片過期且無可用天氣快取時未自動取消天氣勾選。** 已實作：僅在 Edge Function 明確回報 `ineligible` 且合併後快取無可用天氣／`fetched_at` 時，才於卡片 ID、地點、目的地日期和到達時間都仍一致的條件下自動取消勾選；由既有 `onSaveTripDetail` 路徑儲存並沿用遠端變更檢查／版本衝突保護。服務端需判定目的地當地資格及遠端快取，前端不再只依 UTC 日期自行推定無快取。本機專用天氣契約、ESLint、`git diff --check` 與完整 `npm run build` 已通過；正式／跨裝置端到端驗收尚待執行。詳細見《[03_Bug修正紀錄](03_Bug修正紀錄.md)》。
 - [ ] **BUG036：正式 Edge Function 尚未部署文案修正，仍可能回傳已拋棄訊息。** 已確認 V3.10.9 只部署 GitHub Pages，未部署 `weather-forecast`；正式 ACTIVE version 14 仍含舊訊息可達分支。BUG036 的本機前後端文案契約、bundle 檢查與 Deno check 已通過；依 Product Owner 2026-10-30 決策，本次發布流程可部署既有 Git 修正的 `weather-forecast` Edge Function，部署後核對正式部署版本／原始碼與 Git 一致，再以實際 API response 驗證 W15 定稿文案。正式資料庫 migration、資料修復與 Secrets 變更不在本次授權範圍。GitHub Pages 與 Supabase Edge Function 必須分別驗證；正式 API／UI 結果仍需依證據記錄。詳細見《[03_Bug修正紀錄](03_Bug修正紀錄.md)》與《[95_天氣文案校稿與逐項確認紀錄](95_天氣文案校稿與逐項確認紀錄.md)》。
 - [x] **BUG037：長期預報天氣欄位底色錯誤。** 天氣欄位外層容器已固定為淺藍底色；只有三個點展開的額外訊息保留淺綠底色。`npm run verify:v3101-weather-forecast` 與完整 `npm run build` 已通過；未部署，正式網站 UI／實機驗收仍待發布流程完成。詳細見《[03_Bug修正紀錄](03_Bug修正紀錄.md)》。
+
+## 發布後待修與待驗
+
+- [ ] **V3.10.11 PWA 更新接管修正（發布後由下一版驗證）：** V3.10.10 是目前有問題的舊版，無法使用它本身驗證 V3.10.11 新寫入的更新流程；因此本版發布前以專項狀態測試、TypeScript、ESLint、production build 作程式層驗證，Android 真實跨版本更新驗收不列為 V3.10.11 發布前阻擋。V3.10.11 部署後，需在下一個版本（暫定 V3.10.12）加入／保留可觀測版本，讓目前已更新至 V3.10.11 的 Android PWA 實際執行 V3.10.11 → V3.10.12 更新，再驗證單次 SKIP_WAITING、active／controller handoff、自動 reload、新 document 顯示 3.10.12、pending marker 清除，且不出現接管逾時、白畫面或需手動重啟。此驗收結果用來判定 V3.10.11 更新機制修正是否真正有效。詳見《[103_V3.10.10_Android_PWA更新後自動重新載入異常診斷](103_V3.10.10_Android_PWA更新後自動重新載入異常診斷紀錄.md)》。
 
 ## 後續候選版本
 

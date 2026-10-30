@@ -27,11 +27,11 @@ assert.match(updateHook, /await updateServiceWorker\(false\)/);
 assert.doesNotMatch(updateHook, /await updateServiceWorker\(true\)/);
 assert.match(
   updateHook,
-  /if \(activatedReplacement\) \{[\s\S]*setStoredAppVersion\(latestMetadata\.version\)[\s\S]*reloadOnce\(\)/,
+  /if \(activatedReplacement\) \{[\s\S]*setPendingUpdateVersion\(latestMetadata\.version\)[\s\S]*reloadOnce\(\)/,
 );
 assert.match(
   updateHook,
-  /if \(handoffState === "active" && registration\.active\) \{[\s\S]*setStoredAppVersion\(latestMetadata\.version\)[\s\S]*reloadOnce\(\)/,
+  /if \(handoffState === "active" && registration\.active\?\.state === "activated"\) \{[\s\S]*reloadOnce\(\)/,
 );
 assert.doesNotMatch(updateHook, /ready-to-reload/);
 assert.match(updateHook, /navigator\.onLine\s*\?\s*"更新處理發生錯誤/);
