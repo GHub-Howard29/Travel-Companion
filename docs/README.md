@@ -39,6 +39,11 @@ Travel Companion 是以 Trip 為核心的 Offline First 旅行管理 PWA，使�
 - [外部圖形化天氣連結評估總結](99_三站圖形化天氣連結評估總結與建議.md)：前三站方案已終止，Weathernews 後續候選仍需確認條款與 URL 穩定性。
 - [未帶產品版本號文件的歸類討論清單](文件歸類待討論.md)：列出本次未搬遷文件、建議分類與待決定事項。
 
+## Supabase 同步流程
+
+- [Supabase 雙電腦 Migration 同步流程](81_Supabase_雙電腦_Migration_同步流程.md)：目前操作原則與同步流程設定完成備註。
+- [Supabase 同步設定與驗證歷史](archive/supabase-sync/81_雙電腦同步實際驗證紀錄.md)：保留設計建立與逐次驗證歷程。
+
 ## 歷史版本與發布證據
 
 - [版本更新紀錄](archive/07_版本更新紀錄.md)：已發布版本帳冊。

@@ -153,8 +153,8 @@ Git 同步後，依第 2 節核對本機 Supabase 狀態與 migration 清單。�
 
 ### 7.3 A／B 電腦的日常同步規則
 
-- **同步流程完成前的公司電腦限制：** 目前工作階段的指定作業電腦是公司電腦。每次開始本同步專案的後續工作前，必須先從實際執行環境確認主機識別；目前已確認基準為 Windows `COMPUTERNAME=TPEPC-TM7503-01`、`USERDOMAIN=NICE-GREEN`，專案路徑 `D:\\Project\\Travel-Companion`。若主機名稱／網域或路徑不符、無法確認，立即停止，不得繼續此同步流程，先向使用者確認。
-- **解除限制的必要條件：** 標準測試資料版本、Seed／fixture、乾淨重建與驗證流程均已完成、納入 Git 並推送；家裡電腦已 pull 到相同版本，並依流程完成本機 Migration／Seed／fixture／環境核對與必要的本機驗證成功。只有需要證明乾淨重建可重現時才執行 reset；日常同步不必例行 reset。僅文件完成、公司電腦單機測試成功或已 push，都不足以解除限制。完成前每次都要重新確認公司電腦身份。
+- **同步流程設定建立工作已完成，原先為此流程建立的公司電腦專屬限制已解除。** 後續依實際指定的 OpenChatX 主機與一般 Git／Supabase 安全規則操作，不因主機是公司或家用電腦而一律停止；只有執行特定主機的本機資料庫操作或宣稱該主機的新驗證結果時，才確認實際主機識別。
+- **尚待實證：** 實際操作產生新的資料庫資料後，兩端同步版本確認及自動化交接尚未實證；真實 A→B→A 交接、不同資料合併與生命週期端到端驗收亦未完成。歷史設計與測試證據見《[Supabase 雙電腦同步流程設定與驗證歷史](archive/supabase-sync/81_雙電腦同步實際驗證紀錄.md)》及《[雙電腦測試資料生命週期設計](archive/supabase-sync/82_雙電腦測試資料生命週期設計.md)》。
 - **每次開始工作前：** 依本文件第 2 節核對 Git；涉及資料庫時，再檢查本機 Supabase 狀態與 Migration 清單。不要假設 pull 後本機資料庫已更新。
 - **只有 schema 有新增 Migration：** 審查待套用 SQL 後，依風險規則執行 npx supabase migration up --local，再跑 lint 與相關測試；一般不需要 reset。
 - **只有標準測試資料基準有變更：** pull 後，依該 fixture／Seed 的專用更新與驗證步驟更新本機資料。若目前只有 supabase db reset 能可靠套用整套 Seed，必須先確認本機資料可丟棄或已備份，再 reset。
@@ -176,14 +176,11 @@ Git 同步後，依第 2 節核對本機 Supabase 狀態與 migration 清單。�
 
 **啟用 Seed 的完成條件：** 已建立合成測試資料基準、檢查不含正式資料／秘密、確認 Migration + Seed 可在乾淨本機資料庫成功執行，並驗證必要的 RLS／權限與應用程式測試。完成前維持目前 Seed 關閉，不以 db reset 嘗試碰運氣。
 
-### 7.5 家用電腦首次同步驗收紀錄（2026-10-29）
+### 7.5 同步流程設定完成備註
 
-- **環境／版本：** 家用電腦 `Howard-NewPC`，專案 `D:\Project\Travel-Companion`，分支 `develop`；`HEAD` 與 `origin/develop` 均為 `fb99b0f1d3424de88284b5cfe392798ae555b0e5`，工作樹在本次作業開始前乾淨。`supabase/seed.sql`、回歸腳本及本流程文件均已由目前 Git 版本追蹤。
-- **重建前保護／備份處置：** 作業期間曾建立本機 custom-format 備份，但使用者已明確要求不保留；該備份檔已刪除，並確認路徑不存在。後續不得自行建立或保留備份，除非使用者另行要求。
-- **乾淨重建：** 2026-10-29 執行 `npx supabase db reset --local --sql-paths ./seed.sql` 成功；47 個 Migration 全數套用，Seed 成功執行。reset 後 `npx supabase migration list --local` 的本機／連線版本清單一致；另以 SQL 比對 `supabase/migrations` 檔案集合與本機 `supabase_migrations.schema_migrations`，檔案 47、已套用 47，無缺漏或額外版本。合成旅程 `group-tour-2026-10` 存在 1 筆。
-- **家用環境與驗證：** `npm run regression:local:prepare` exit code 0（loopback-only；未建立或覆寫兩個 env 檔）；`npm run regression:local:status` exit code 0，Supabase ready、Auth HTTP 200、Edge HTTP 200、fixture env 存在；`npm run regression:local:verify` exit code 0，Trip、Commons batch 與 Commons contract 驗證通過。REST 根端點 HTTP 200、Auth health HTTP 200。根目錄 `.env.local` 使用 `localhost:54321`；僅記錄必要環境變數名稱，未輸出 key／secret 值。
-- **服務狀態／限制：** `npx supabase status` 顯示本機 setup running，但 `supabase_imgproxy_travel-companion` 與 `supabase_pooler_travel-companion` 停止；這兩項不影響本輪 Migration／Seed／回歸驗證結果，若使用到相應功能需另行啟動驗證。`viteHttpStatus` 在 regression status 中為 null，故本輪沒有宣稱 Vite UI 端到端測試通過。未重跑公司電腦已以相同版本通過的 `regression:local:full`。
-- **結論：** 家用電腦首次本機 Migration／Seed 乾淨重建與規定的 prepare／status／verify 已通過；目前可將雙電腦版本控制與本機資料庫首次同步的必要驗收標記為完成。此結論不代表正式環境部署、Storage 物件同步、完整 UI／跨裝置人工測試或已停止服務所涉及功能均已驗收。本次未對正式 Supabase 執行寫入、未修改 Secrets，未進行 Git commit／push。
+> **雙電腦同步流程設定建立工作已完成，原先為此流程建立的公司電腦專屬限制已解除。** 實際操作產生新的資料庫資料後，兩端同步版本確認及自動化交接尚未實證；此備註不代表完整 A→B→A 交接、不同資料合併或生命週期自動化已驗收。
+>
+> 設計、逐次測試輸出與歷史工作紀錄已移至《[Supabase 雙電腦同步流程設定與驗證歷史](archive/supabase-sync/81_雙電腦同步實際驗證紀錄.md)》及《[雙電腦測試資料生命週期設計](archive/supabase-sync/82_雙電腦測試資料生命週期設計.md)》。日常使用仍依本節前述的同步入口、來源端／接收端操作順序與安全限制辦理。
 
 ## 7.6 雙電腦本機資料庫同步入口（2026-10-29）
 
@@ -229,5 +226,3 @@ npm run db:sync:local
 - 當 `npm run db:sync:local` 執行時，入口會自動呼叫 `testdata:handoff` 偵測並驗證可交接的合成測試資料；不需要使用者另外記住這個指令。只有標記為合成資料的 `tc-test-` 行程會被掃描，不會自動匯出未標記或真實行程。
 - `npm run testdata:handoff` 保留唯讀 Git 行為；需要自動交接時改用 `npm run testdata:handoff:publish`，由共用腳本在安全檢查通過後精確 stage fixture 檔案、建立繁體中文 commit 並 push `origin/develop`。此行為只處理合成測試資料，不是正式發布流程，也不會 merge `main` 或部署。
 - 另一台電腦取得已審查的 fixture 版本後，只需依既有流程執行 `npm run db:sync:local`；入口會先做本機交接偵測，再驗證及匯入 fixture，最後執行標準回歸驗證。相同資料保持不變；同鍵不同內容、handoff 基準缺失或檔案狀態不安全時會中止並顯示原因，不會以最後寫入者覆蓋或刪除另一台資料。
-- **2026-10-29 驗收狀態更新：**公司與家用電腦均已在 `develop` 上執行 `npm run db:sync:local`，回報 `synchronized: true` 且標準本機回歸驗證通過。家用電腦 fixture 核心資料與版本控制 fixture 相符。這證明兩台電腦各自的標準 migration／fixture 匯入／回歸入口已通過；不代表已完成真正的 A→B→A 雙向交接、兩台各自新增不同資料時的合併，或 `released`／`archived` 生命週期端到端驗收。這些情境不刻意製造測試，待真實交接需求發生時依實際證據補驗。
-- **自動化整合狀態：**`db:sync:local` 已串接唯讀模式的 `testdata:handoff`；來源端另有 `testdata:handoff:publish`，在明確的 Git／fixture 安全條件通過後自動 commit/push。兩者共用同一個 `testdata-sync.mjs`，不建立第二套發布流程；偵測到非預期檔案、已追蹤修改、staged/deleted、基準不一致、內容衝突、敏感資料或遠端差異時停止。
