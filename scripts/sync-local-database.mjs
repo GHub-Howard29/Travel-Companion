@@ -1,6 +1,11 @@
 ﻿import { execFileSync } from "node:child_process";
 import process from "node:process";
 
+// Supabase CLI telemetry file replacement can fail with EPERM on Windows when
+// security software locks ~/.supabase/telemetry.json. This workflow is local-only
+// and does not need CLI telemetry, so disable it for all child CLI processes.
+process.env.SUPABASE_TELEMETRY_DISABLED = "1";
+
 const run = (command, args, options = {}) => execFileSync(
   process.platform === "win32" && ["npm", "npx"].includes(command) ? `${command}.cmd` : command,
   args,
