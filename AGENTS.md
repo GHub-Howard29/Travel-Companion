@@ -54,7 +54,9 @@
 - 當新版 worker 已是 activated replacement（`registration.active !== previousController`、狀態為 `activated`，且沒有 `waiting`／`installing`），由 `useAppUpdate` 唯一 reload owner 寫入最新版本並直接 reload；不得轉入 `ready-to-reload` 或要求使用者再次點擊。
 - `handoffState === "active"` 且 `registration.active` 已確認為 activated 時，沿用同一個唯一 reload owner 直接 reload；`skipWaiting` 只能送出一次，避免重複接管競態。
 - 只有上述已驗證的 active／controlled 狀態可以完成更新；真正 timeout／error 必須保留目前版本並停止本次流程，不得宣告已更新。不得以靜態 metadata、單純 reload 或延長 timeout 取代 active／handoff 證據。
-- 任何修改 `useAppUpdate`、Service Worker、版本 metadata 或發布流程的工作，都必須更新並通過 `npm run verify:v3924-update-handoff` 與 `npm run verify:v3913-update-race`；不得以靜態 metadata、單純 reload 或單次本機頁面載入取代 active/controller handoff 證據。
+- 每次 `npm run build` 必須執行 `npm run verify:pwa-update-policy`，檢查目前 App／package／公開 metadata 版本與更新設定一致，以及 Vite PWA prompt／Workbox 關鍵設定符合基線。此腳本只做設定一致性與 build 子測試掛載檢查，不重複實作版本演算法或 Worker lifecycle 測試。
+- PWA 行為測試由既有專責腳本負責：`verify:update-policy`（版本政策演算法）、`verify:v3924-update-handoff`（主動更新與 handoff）、`verify:v31011-pwa-reload-confirmation`（stable replacement、waiting-only、pending marker／新頁面確認）、`verify:v3913-update-race`（更新與行程修訂競態）。這些項目必須保留在 build 鏈中；避免在新測試複製相同案例。若未來經 Product Owner 核准更動政策，才同步調整相關測試與規格。
+- 任何修改 `useAppUpdate`、Service Worker、版本 metadata 或發布流程的工作，除 build 內的 `verify:pwa-update-policy` 外，都必須更新並通過 `npm run verify:v3924-update-handoff`、`npm run verify:v31011-pwa-reload-confirmation` 與 `npm run verify:v3913-update-race`；不得以靜態 metadata、單純 reload 或單次本機頁面載入取代 active/controller handoff 證據。
 
 # 天氣正式鏈路驗證硬性規則
 - 本機 Edge Function 成功不代表正式天氣鏈路成功；正式發布前必須區分 endpoint／授權、Google Places 座標、座標快取、Open-Meteo、lease／RPC、天氣快取寫入及 APP 顯示結果。
