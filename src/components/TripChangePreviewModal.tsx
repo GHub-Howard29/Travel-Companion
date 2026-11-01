@@ -1,7 +1,7 @@
 import {
   CalendarDays,
+  Check,
   Image,
-  RefreshCw,
   Settings,
   X,
 } from "lucide-react";
@@ -16,10 +16,11 @@ interface TripChangePreviewModalProps {
   isOpen: boolean;
   summary: TripChangePreviewSummary | null;
   isLoading: boolean;
+  isConfirming?: boolean;
   error: string | null;
-  willApplyPreparedUpdate?: boolean;
+  hasNewChanges?: boolean;
   onClose: () => void;
-  onReload: () => void;
+  onConfirm: () => void;
 }
 
 const categoryMeta: Record<
@@ -97,10 +98,11 @@ export const TripChangePreviewModal = ({
   isOpen,
   summary,
   isLoading,
+  isConfirming = false,
   error,
-  willApplyPreparedUpdate = false,
+  hasNewChanges = false,
   onClose,
-  onReload,
+  onConfirm,
 }: TripChangePreviewModalProps) => {
   if (!isOpen) return null;
 
@@ -121,7 +123,7 @@ export const TripChangePreviewModal = ({
               變更摘要
             </h2>
             <p className="mt-0.5 text-xs text-slate-500">
-              顯示自上次載入後的主要變更類別與數量
+              顯示自上次確認後的變更類別與數量
             </p>
           </div>
           <button
@@ -135,7 +137,17 @@ export const TripChangePreviewModal = ({
         </header>
 
         <div className="space-y-4 p-4">
-          {isLoading && (
+          {hasNewChanges && (
+            <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-800" role="status">
+              收到新的變更，摘要已更新。
+            </div>
+          )}
+          {isLoading && summary && (
+            <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800" role="status">
+              正在更新最新統計，請稍候...
+            </div>
+          )}
+          {isLoading && !summary && (
             <div className="rounded-xl border border-slate-200 bg-white p-5 text-center text-sm text-slate-500">
               正在整理變更摘要...
             </div>
@@ -145,7 +157,7 @@ export const TripChangePreviewModal = ({
             <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
               <p className="text-sm font-bold text-amber-950">暫時無法取得變更摘要</p>
               <p className="mt-1 text-xs leading-5 text-amber-800">
-                {error} 你仍可重新載入取得最新資料。
+                {error} 資料同步會在背景重試；請稍後再開啟摘要確認。
               </p>
             </div>
           )}
@@ -154,7 +166,7 @@ export const TripChangePreviewModal = ({
             <>
               <div className="rounded-xl border border-blue-100 bg-blue-50 p-4">
                 <p className="text-sm font-bold text-blue-950">
-                  自上次載入後共有 {summary.totalChanges} 項變更
+                  自上次確認後共有 {summary.totalChanges} 項變更
                 </p>
                 <div className="mt-2 space-y-1 text-xs leading-5 text-blue-800">
                   <p>最近更新：{formatChangedAt(summary.lastChangedAt)}</p>
@@ -174,34 +186,22 @@ export const TripChangePreviewModal = ({
                     已偵測到遠端更新
                   </p>
                   <p className="mt-1 text-xs leading-5 text-slate-500">
-                    這次更新沒有可顯示的分類摘要。重新載入後仍會取得最新資料。
+                    這次更新沒有可顯示的分類摘要；安全可合併的卡片仍會在背景同步。
                   </p>
                 </div>
               )}
             </>
           )}
 
-          <p className="text-xs leading-5 text-slate-500">
-            此頁只顯示需要重新載入的行程、照片與旅程設定摘要；帳本、共同／私人清單、其他資訊與外幣換算使用各自同步流程，不列入此處。
-          </p>
-
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm font-bold text-slate-700"
-            >
-              稍後再說
-            </button>
-            <button
-              type="button"
-              onClick={onReload}
-              className="inline-flex items-center justify-center gap-2 rounded-lg bg-orange-600 px-4 py-3 text-sm font-bold text-white hover:bg-orange-700"
-            >
-              <RefreshCw size={16} />
-              {willApplyPreparedUpdate ? "重新載入並套用新版" : "確認並重新載入"}
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={isConfirming || isLoading || Boolean(error)}
+            className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-orange-600 px-4 py-3 text-sm font-bold text-white hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <Check size={16} />
+            {isConfirming ? "正在確認..." : hasNewChanges ? "確認最新摘要" : "確認"}
+          </button>
         </div>
       </section>
     </div>

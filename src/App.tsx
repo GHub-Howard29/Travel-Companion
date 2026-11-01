@@ -290,7 +290,6 @@ function ConfiguredApp({
     updateError,
     isChecking,
     updatePhase,
-    hasPreparedUpdate,
     update,
     dismiss,
   } = useAppUpdate();
@@ -382,13 +381,15 @@ function ConfiguredApp({
     isTripMasterLocked,
     isChangePreviewOpen,
     isChangePreviewLoading,
+    isConfirmingPreview: isConfirmingTripDataPreview,
     changePreviewSummary,
     changePreviewError,
+    hasNewChangesDuringPreview: hasNewTripDataChangesDuringPreview,
     checkForRemoteTripChange,
     openChangePreview,
     closeChangePreview,
     showConflict: showTripVersionConflict,
-    snooze: snoozeTripDataNotice,
+    confirmNotice: confirmTripDataNotice,
     reload: reloadForTripDataChange,
   } = useTripDataRevision({
     supabase,
@@ -1450,9 +1451,8 @@ function ConfiguredApp({
       <TripDataRevisionNotice
         kind={updateAvailable ? null : tripDataNoticeKind}
         isOnline={isOnline}
-        willApplyPreparedUpdate={hasPreparedUpdate && updateAvailable}
         onPreviewChanges={openChangePreview}
-        onSnooze={snoozeTripDataNotice}
+        onConfirm={confirmTripDataNotice}
         onReload={reloadForTripDataChange}
       />
 
@@ -1460,10 +1460,11 @@ function ConfiguredApp({
         isOpen={isChangePreviewOpen}
         summary={changePreviewSummary}
         isLoading={isChangePreviewLoading}
+        isConfirming={isConfirmingTripDataPreview}
         error={changePreviewError}
-        willApplyPreparedUpdate={hasPreparedUpdate && updateAvailable}
+        hasNewChanges={hasNewTripDataChangesDuringPreview}
         onClose={closeChangePreview}
-        onReload={reloadForTripDataChange}
+        onConfirm={confirmTripDataNotice}
       />
 
       {/* 主內容呈現區 */}
@@ -1506,6 +1507,8 @@ function ConfiguredApp({
                 trip={currentTrip}
                 activeDay={activeDay}
                 hasEditPermission={canEditTripMaster}
+                isSignedIn={isSignedIn}
+                isHistoricalTripReadOnly={isSharedTripReadOnly}
                 isOnline={isOnline}
                 onActiveDayChange={setActiveDay}
                 otherInfoFolders={(currentTrip.content.otherInfoFolders ?? getFolders(selectedTripId)).filter((folder) => folder.isVisible !== false).filter((folder) => {

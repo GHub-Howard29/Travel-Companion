@@ -5,6 +5,8 @@ import {
 } from "../storage/tripStorage.ts";
 import type { TripDeletionTombstone } from "./tripCloudService.ts";
 import { isProtectedSeedTripId } from "../constants/appConstants.ts";
+import { clearItinerarySyncState, readItinerarySyncState, writeItinerarySyncState } from "../storage/itinerarySyncStorage.ts";
+import { reconcilePendingItinerarySyncState } from "./itinerarySync.ts";
 
 export interface TripReconciliationDecision {
   storedRecords: StoredTripRecord[];
@@ -50,8 +52,57 @@ export const decideTripReconciliation = (
     state.lastDeletionRevision,
   );
 
+  const cloudRecordsById = new Map(cloudRecords.map((record) => [record.meta.id, record]));
+  const reconciledRecords = storedRecords.flatMap((record) => {
+    const cloudRecord = cloudRecordsById.get(record.meta.id);
+    // Confirmed deletion or revoked cloud access always wins over local pending data.
+    if (tombstoneIds.has(record.meta.id) || (!cloudRecord && removedIds.has(record.meta.id))) {
+      clearItinerarySyncState(record.meta.id);
+      return [];
+    }
+    if (!cloudRecord) return [record];
+
+    const itineraryState = readItinerarySyncState(record.meta.id);
+    if (!itineraryState || (itineraryState.status !== "pending" && itineraryState.status !== "conflict")) {
+      return [cloudRecord];
+    }
+
+    const reconciliation = itineraryState.status === "conflict"
+      ? { status: "conflict" as const, state: itineraryState }
+      : reconcilePendingItinerarySyncState(
+          itineraryState,
+          cloudRecord.detail.content.daysData,
+          cloudRecord.updatedAt,
+        );
+    if (itineraryState.revision === readItinerarySyncState(record.meta.id)?.revision) {
+      writeItinerarySyncState(reconciliation.state);
+    }
+
+    return [{
+      ...cloudRecord,
+      detail: {
+        ...cloudRecord.detail,
+        content: {
+          ...cloudRecord.detail.content,
+          ...record.detail.content,
+          daysData: reconciliation.status === "already-synced"
+            ? cloudRecord.detail.content.daysData
+            : reconciliation.state.pendingDaysData,
+        },
+      },
+      updatedAt: reconciliation.state.status === "synced" ? cloudRecord.updatedAt : record.updatedAt,
+      cloudUpdatedAt: cloudRecord.updatedAt,
+    }];
+  });
+  const recordsById = new Map(reconciledRecords.map((record) => [record.meta.id, record]));
+  cloudRecords.forEach((record) => {
+    if (!recordsById.has(record.meta.id) && !removedIds.has(record.meta.id)) {
+      recordsById.set(record.meta.id, record);
+    }
+  });
+
   return {
-    storedRecords: storedRecords.filter((record) => !removedIds.has(record.meta.id)),
+    storedRecords: Array.from(recordsById.values()),
     cleanupTripIds,
     nextState: {
       schemaVersion: TRIP_CACHE_SCHEMA_VERSION,

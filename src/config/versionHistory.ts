@@ -14,6 +14,15 @@ export type VersionHistoryItem = {
 
 export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
+    version: "3.10.11",
+    date: "2026-10-31",
+    isMandatoryRelease: false,
+    notes: [
+      "修正 Android PWA 更新後無法自動重新載入新版的問題。",
+      "修正九州歷史共用帳本紀錄者顯示。",
+    ],
+  },
+  {
     version: "3.10.10",
     date: "2026-10-30",
     isMandatoryRelease: false,

@@ -54,18 +54,15 @@ assert.match(revisionHook, /fromUpdatedAt:/);
 assert.match(notice, />\s*預覽變更\s*</);
 assert.match(notice, /onPreviewChanges/);
 assert.match(modal, /變更摘要/);
-assert.match(modal, /顯示自上次載入後的主要變更類別與數量/);
+assert.match(modal, /顯示自上次確認後的變更類別與數量/);
 assert.match(modal, /每日行程/);
 assert.match(modal, /照片附件/);
 assert.match(modal, /其他設定/);
-assert.match(
-  modal,
-  /帳本、共同／私人清單、其他資訊與外幣換算使用各自同步流程，不列入此處/,
-);
 assert.doesNotMatch(modal, /before\/after|JSON 差異|舊照片|新照片/);
 
 assert.match(service, /trip_change_journal/);
-assert.match(service, /\.gt\("revision", window\.fromRevision\)/);
+assert.match(service, /\.gt\("revision", baseline\.revision\)/);
+assert.match(service, /\.lte\("revision", window\.toRevision\)/);
 assert.match(service, /APP_SOURCE_CLIENT_ID/);
 assert.match(service, /row\.source_client_id !== APP_SOURCE_CLIENT_ID/);
 assert.match(service, /"itinerary"/);
