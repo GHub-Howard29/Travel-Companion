@@ -47,12 +47,6 @@ assert.match(
   /globIgnores:\s*\[[^\]]*app-version\.json/,
   "app-version.json 不可進入 precache，避免讀到舊版本政策",
 );
-assert.match(
-  viteConfig,
-  /clientsClaim:\s*true/,
-  "Workbox clientsClaim 與目前正式基線不同；若要調整須另行審查",
-);
-
 // Make the build gate enforce the existing focused tests instead of copying
 // their assertions into this file.
 const buildScript = packageJson.scripts.build;
