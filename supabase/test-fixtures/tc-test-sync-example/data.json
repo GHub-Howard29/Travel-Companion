@@ -3,10 +3,179 @@
     {
       "content": {
         "__testFixture": true,
+        "checklistData": [
+          {
+            "category": "必備證件",
+            "id": "shared_copy_mvxpucde_0",
+            "label": "護照正本（確認效期大於 6 個月）",
+            "updatedAt": "2026-11-01T10:57:32.450Z"
+          },
+          {
+            "category": "必備證件",
+            "id": "shared_copy_mvxpucde_1",
+            "label": "團體換匯日幣（準備個人自費/購物部分即可）",
+            "updatedAt": "2026-11-01T10:57:32.450Z"
+          },
+          {
+            "category": "跟團專屬",
+            "id": "shared_copy_mvxpucde_2",
+            "label": "給導遊領隊的每日小費（依旅行社規定準備）",
+            "updatedAt": "2026-11-01T10:57:32.450Z"
+          },
+          {
+            "category": "隨身行李",
+            "id": "shared_copy_mvxpucde_3",
+            "label": "舒適好走的球鞋（多個神社與峽谷步道需步行）",
+            "updatedAt": "2026-11-01T10:57:32.450Z"
+          },
+          {
+            "category": "隨身行李",
+            "id": "shared_copy_mvxpucde_4",
+            "label": "薄外套或輕便雨具（秋季阿蘇山區早晚溫差較大）",
+            "updatedAt": "2026-11-01T10:57:32.450Z"
+          }
+        ],
         "days": [
           1
         ],
-        "fixtureDescription": "Dedicated synthetic fixture for validating safe test-data handoff between developer computers."
+        "daysData": {
+          "1": [
+            {
+              "departureTime": "10:00",
+              "desc": "A 裝置-1",
+              "id": "aa9ef85c-5d92-4aa5-b1ad-34b01decac5b",
+              "location": "",
+              "time": "09:00",
+              "title": "A 裝置修改",
+              "type": "景點",
+              "typeColor": "bg-purple-50 text-purple-700 border-purple-200"
+            },
+            {
+              "departureTime": "",
+              "desc": "B 裝置",
+              "id": "05f356c9-07ef-4aaf-985d-43caaef75319",
+              "location": "",
+              "time": "",
+              "title": "B 裝置修改",
+              "type": "景點",
+              "typeColor": "bg-purple-50 text-purple-700 border-purple-200"
+            }
+          ]
+        },
+        "fixtureDescription": "Dedicated synthetic fixture for local two-account itinerary sync validation.",
+        "mode": "guided",
+        "otherInfoFolders": [
+          {
+            "createdAt": "2026-10-31T17:37:53.709Z",
+            "id": "other-info-attractions",
+            "isSystem": true,
+            "isVisible": true,
+            "order": 1,
+            "parentId": null,
+            "title": "景點",
+            "tripId": "tc-test-sync-example",
+            "updatedAt": "2026-10-31T17:37:53.709Z"
+          },
+          {
+            "createdAt": "2026-10-31T17:37:53.709Z",
+            "id": "other-info-flights",
+            "isSystem": true,
+            "isVisible": true,
+            "order": 2,
+            "parentId": null,
+            "title": "機票",
+            "tripId": "tc-test-sync-example",
+            "updatedAt": "2026-10-31T17:37:53.709Z"
+          },
+          {
+            "createdAt": "2026-10-31T17:37:53.709Z",
+            "id": "other-info-hotels",
+            "isSystem": true,
+            "isVisible": true,
+            "order": 3,
+            "parentId": null,
+            "title": "飯店",
+            "tripId": "tc-test-sync-example",
+            "updatedAt": "2026-10-31T17:37:53.709Z"
+          },
+          {
+            "createdAt": "2026-10-31T17:37:53.709Z",
+            "id": "other-info-transport",
+            "isSystem": true,
+            "isVisible": true,
+            "order": 4,
+            "parentId": null,
+            "title": "交通",
+            "tripId": "tc-test-sync-example",
+            "updatedAt": "2026-10-31T17:37:53.709Z"
+          },
+          {
+            "createdAt": "2026-10-31T17:37:53.709Z",
+            "id": "other-info-tickets",
+            "isSystem": true,
+            "isVisible": true,
+            "order": 5,
+            "parentId": null,
+            "title": "票券",
+            "tripId": "tc-test-sync-example",
+            "updatedAt": "2026-10-31T17:37:53.709Z"
+          },
+          {
+            "createdAt": "2026-10-31T17:37:53.709Z",
+            "id": "other-info-insurance",
+            "isSystem": true,
+            "isVisible": true,
+            "order": 6,
+            "parentId": null,
+            "title": "保險",
+            "tripId": "tc-test-sync-example",
+            "updatedAt": "2026-10-31T17:37:53.709Z"
+          },
+          {
+            "createdAt": "2026-10-31T17:37:53.709Z",
+            "id": "other-info-visa",
+            "isSystem": true,
+            "isVisible": true,
+            "order": 7,
+            "parentId": null,
+            "title": "簽證",
+            "tripId": "tc-test-sync-example",
+            "updatedAt": "2026-10-31T17:37:53.709Z"
+          },
+          {
+            "createdAt": "2026-10-31T17:37:53.709Z",
+            "id": "other-info-food",
+            "isSystem": true,
+            "isVisible": true,
+            "order": 8,
+            "parentId": null,
+            "title": "美食",
+            "tripId": "tc-test-sync-example",
+            "updatedAt": "2026-10-31T17:37:53.709Z"
+          },
+          {
+            "createdAt": "2026-10-31T17:37:53.709Z",
+            "id": "other-info-shopping",
+            "isSystem": true,
+            "isVisible": true,
+            "order": 9,
+            "parentId": null,
+            "title": "購物",
+            "tripId": "tc-test-sync-example",
+            "updatedAt": "2026-10-31T17:37:53.709Z"
+          },
+          {
+            "createdAt": "2026-10-31T17:37:53.709Z",
+            "id": "other-info-other",
+            "isSystem": true,
+            "isVisible": true,
+            "order": 99,
+            "parentId": null,
+            "title": "其他",
+            "tripId": "tc-test-sync-example",
+            "updatedAt": "2026-10-31T17:37:53.709Z"
+          }
+        ]
       },
       "created_at": "2026-10-29T05:00:00+00:00",
       "currency_config": {
@@ -24,13 +193,28 @@
           "type": "checklist"
         },
         {
+          "id": "trip_special_info",
+          "title": "領隊導遊聯絡資訊",
+          "type": "otherInfo"
+        },
+        {
           "id": "expense",
           "title": "測試記帳",
           "type": "expense"
+        },
+        {
+          "id": "exchange_rate",
+          "title": "外幣換算",
+          "type": "exchangeRate"
+        },
+        {
+          "id": "itinerary",
+          "title": "每日行程",
+          "type": "itinerary"
         }
       ],
       "title": "Travel-Companion 合成測試接力行程",
-      "updated_at": "2026-10-29T05:00:00+00:00"
+      "updated_at": "2026-11-01T10:57:32.760629+00:00"
     }
   ],
   "checklists": [
@@ -45,16 +229,76 @@
   ],
   "checklist_items": [
     {
+      "category": "隨身行李",
+      "checklist_id": "05f8f7c4-72f6-45c8-9d0b-f41a8e1df123",
+      "client_item_id": "shared_copy_mvxpucde_4",
+      "created_at": "2026-11-01T10:57:33.332558+00:00",
+      "deleted_at": null,
+      "id": "341ce0bf-4940-41ae-bd55-7165f0397650",
+      "is_checked": false,
+      "label": "薄外套或輕便雨具（秋季阿蘇山區早晚溫差較大）",
+      "sort_order": 4,
+      "updated_at": "2026-11-01T10:57:33.332558+00:00"
+    },
+    {
+      "category": "隨身行李",
+      "checklist_id": "05f8f7c4-72f6-45c8-9d0b-f41a8e1df123",
+      "client_item_id": "shared_copy_mvxpucde_3",
+      "created_at": "2026-11-01T10:57:33.332558+00:00",
+      "deleted_at": null,
+      "id": "4b0934c1-f9ca-410d-a9a1-0241b73b1178",
+      "is_checked": false,
+      "label": "舒適好走的球鞋（多個神社與峽谷步道需步行）",
+      "sort_order": 3,
+      "updated_at": "2026-11-01T10:57:33.332558+00:00"
+    },
+    {
+      "category": "必備證件",
+      "checklist_id": "05f8f7c4-72f6-45c8-9d0b-f41a8e1df123",
+      "client_item_id": "shared_copy_mvxpucde_1",
+      "created_at": "2026-11-01T10:57:33.332558+00:00",
+      "deleted_at": null,
+      "id": "d1b7a405-2ac6-433b-b8fd-725f590b0001",
+      "is_checked": true,
+      "label": "團體換匯日幣（準備個人自費/購物部分即可）",
+      "sort_order": 1,
+      "updated_at": "2026-11-01T10:57:41.985017+00:00"
+    },
+    {
       "category": "跨電腦同步",
       "checklist_id": "05f8f7c4-72f6-45c8-9d0b-f41a8e1df123",
       "client_item_id": "tc-handoff-item-001",
       "created_at": "2026-10-29T05:00:00+00:00",
-      "deleted_at": null,
+      "deleted_at": "2026-11-01T10:57:33.381+00:00",
       "id": "de5487a2-1f93-4d7f-8929-0d3260f4cc01",
       "is_checked": true,
       "label": "確認合成測試行程可在另一台電腦載入",
       "sort_order": 0,
-      "updated_at": "2026-10-29T09:52:00.478045+00:00"
+      "updated_at": "2026-11-01T10:57:33.475979+00:00"
+    },
+    {
+      "category": "必備證件",
+      "checklist_id": "05f8f7c4-72f6-45c8-9d0b-f41a8e1df123",
+      "client_item_id": "shared_copy_mvxpucde_0",
+      "created_at": "2026-11-01T10:57:33.332558+00:00",
+      "deleted_at": null,
+      "id": "f7d2a5e3-2207-4c1f-a34e-52b426179467",
+      "is_checked": true,
+      "label": "護照正本（確認效期大於 6 個月）",
+      "sort_order": 0,
+      "updated_at": "2026-11-01T10:57:39.706393+00:00"
+    },
+    {
+      "category": "跟團專屬",
+      "checklist_id": "05f8f7c4-72f6-45c8-9d0b-f41a8e1df123",
+      "client_item_id": "shared_copy_mvxpucde_2",
+      "created_at": "2026-11-01T10:57:33.332558+00:00",
+      "deleted_at": null,
+      "id": "f8807a4d-c271-47e0-bdb6-6f4a507b6cf0",
+      "is_checked": false,
+      "label": "給導遊領隊的每日小費（依旅行社規定準備）",
+      "sort_order": 2,
+      "updated_at": "2026-11-01T10:57:33.332558+00:00"
     }
   ],
   "expenses": [
