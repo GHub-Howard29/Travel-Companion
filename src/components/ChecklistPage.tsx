@@ -119,7 +119,7 @@ export const ChecklistPage = ({
     }
   }, [checklistData, isLocalUserChecklist]);
 
-  const { items, syncStatus, toggleChecklistItem, reorderChecklistItems } =
+  const { items, syncStatus, isUserSyncing, toggleChecklistItem, reorderChecklistItems } =
     useChecklistState(
       tripId,
       checklistSeedData,
@@ -655,7 +655,7 @@ export const ChecklistPage = ({
         {!isSharedTripReadOnly && canSyncSharedChecklist && (
           <p className="mt-3 text-xs font-medium text-slate-500">
             {!isOnline && "離線，變更暫存本機"}
-            {isOnline && syncStatus === "syncing" && "同步中"}
+            {isOnline && isUserSyncing && "同步中"}
             {isOnline && syncStatus === "synced" && "已同步"}
             {isOnline && syncStatus === "error" && "同步失敗，已保留本機變更"}
             {isOnline && syncStatus === "local" && "目前資料先保存於本機。"}

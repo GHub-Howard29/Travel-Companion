@@ -159,14 +159,13 @@ export const useTripDataRevision = ({
       if (requestId !== previewRequestRef.current) return;
       setChangePreviewSummary(summary);
       setChangePreviewError(null);
+      setHasNewChangesDuringPreview(false);
       previewedRevisionRef.current = latestRevision.revision;
       if (summary.totalChanges === 0) {
-        // Keep the preview open if the user explicitly opened it. A zero-net
-        // state clears the notice only when the preview was not already open.
+        // Preserve the open preview and show the final net-zero result in place.
         suppressNoticeRef.current = true;
         changePreviewWindowRef.current = null;
         setHasNewChangesDuringPreview(false);
-        setChangePreviewSummary(null);
         if (!isChangePreviewOpen) {
           setNoticeKind((current) => current === "available" ? null : current);
         }
@@ -224,16 +223,14 @@ export const useTripDataRevision = ({
         return;
       }
       // Revalidate access even when a zero-net summary suppresses the normal notice.
-      if (suppressNoticeRef.current) return;
-      // Workspace reconciliation applies safe remote data automatically;
-      // this notice never reloads the page or blocks ordinary card editing.
-      setNoticeKind((current) =>
-        current === "revoked" || current === "conflict" ? current : "available",
-      );
+      if (suppressNoticeRef.current || isChangePreviewOpen) return;
+      // Workspace reconciliation applies safe remote data automatically.
+      // Preserve an already-visible notice instead of cycling its UI state.
+      setNoticeKind((current) => current ?? "available");
     } catch (error) {
       console.warn("Failed to revalidate Trip access after revision", error);
     }
-  }, [onReconcileTrips, supabase]);
+  }, [isChangePreviewOpen, onReconcileTrips, supabase]);
 
   const scheduleNotice = useCallback(() => {
     pendingNoticeRef.current = true;
@@ -268,11 +265,12 @@ export const useTripDataRevision = ({
       };
       setChangePreviewError(null);
       suppressNoticeRef.current = false;
-      if (isChangePreviewOpen) setHasNewChangesDuringPreview(true);
-      // Calculate the net result immediately after receiving a newer revision.
-      // A zero-net result clears the notice without requiring a manual preview.
-      void refreshOpenChangePreview();
-      scheduleNotice();
+      if (isChangePreviewOpen) {
+        setHasNewChangesDuringPreview(true);
+        void refreshOpenChangePreview();
+      } else {
+        scheduleNotice();
+      }
     }
 
     knownRevisionRef.current = Math.max(knownRevisionRef.current ?? 0, revision.revision);
@@ -446,7 +444,6 @@ export const useTripDataRevision = ({
             toUpdatedAt: revisionAfterRead.updatedAt,
           };
         }
-        setHasNewChangesDuringPreview(true);
         setChangePreviewError(null);
         await refreshOpenChangePreview();
         return;

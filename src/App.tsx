@@ -384,7 +384,6 @@ function ConfiguredApp({
     isConfirmingPreview: isConfirmingTripDataPreview,
     changePreviewSummary,
     changePreviewError,
-    hasNewChangesDuringPreview: hasNewTripDataChangesDuringPreview,
     checkForRemoteTripChange,
     openChangePreview,
     closeChangePreview,
@@ -415,7 +414,7 @@ function ConfiguredApp({
   const [isPersonalExpenseAliasEditOpen, setIsPersonalExpenseAliasEditOpen] = useState(false);
   const [requestedOtherInfoFolderId, setRequestedOtherInfoFolderId] = useState<string | null>(null);
   const [otherInfoSyncStatus, setOtherInfoSyncStatus] = useState<
-    OtherInfoSyncStatus | "syncing" | null
+    OtherInfoSyncStatus | null
   >(null);
   const otherInfoSyncingTripsRef = useRef(new Set<string>());
   const [checklistCopySources, setChecklistCopySources] = useState<
@@ -962,7 +961,6 @@ function ConfiguredApp({
         );
         if (!record) break;
 
-        setOtherInfoSyncStatus("syncing");
         const items = record.detail.content.otherInfoItems ?? [];
         // RC2 以前的 pending state 沒有 itemIds。這種舊狀態不可再把
         // 整份本機快照上傳，否則會把另一台裝置已 soft-delete 的資料復活。
@@ -1012,7 +1010,6 @@ function ConfiguredApp({
   ]);
 
   const retryOtherInfoSync = useCallback(() => {
-    setOtherInfoSyncStatus("syncing");
     void syncPendingOtherInfo();
   }, [syncPendingOtherInfo]);
 
@@ -1462,7 +1459,6 @@ function ConfiguredApp({
         isLoading={isChangePreviewLoading}
         isConfirming={isConfirmingTripDataPreview}
         error={changePreviewError}
-        hasNewChanges={hasNewTripDataChangesDuringPreview}
         onClose={closeChangePreview}
         onConfirm={confirmTripDataNotice}
       />

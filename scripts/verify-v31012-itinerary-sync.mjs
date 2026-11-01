@@ -342,7 +342,9 @@ assert.match(itinerary, /onSaveTripDetail/);
 // 三方合併／pending 契約由上方純函式測試覆蓋；卡片 UI 不引用舊版 itinerarySyncState 名稱。
 assert.doesNotMatch(itinerary, /itinerarySyncState/);
 // 跨裝置 revision 通知必須保留；正常通知是資訊提示而非編輯鎖或自動 reload。
-assert.match(revisionHook, /current === "revoked" \|\| current === "conflict" \? current : "available"/);
+assert.match(revisionHook, /setNoticeKind\(\(current\) => current \?\? "available"\)/);
+assert.match(revisionHook, /if \(suppressNoticeRef\.current \|\| isChangePreviewOpen\) return/);
+assert.match(revisionHook, /if \(isChangePreviewOpen\) \{[\s\S]*?setHasNewChangesDuringPreview\(true\)[\s\S]*?refreshOpenChangePreview\(\)[\s\S]*?\} else \{[\s\S]*?scheduleNotice\(\)/);
 assert.match(revisionHook, /isTripMasterLocked: noticeKind === "revoked"/);
 // 卡片編輯權由獨立租約控制，不可用全旅程版本衝突狀態冒充編輯鎖。
 assert.match(itinerary, /claimItineraryCardEditLease\(supabase, trip\.id, cardId\)/);
@@ -450,26 +452,26 @@ assert.match(revisionNotice, /kind === "conflict"/);
 assert.match(revisionNotice, /onReload/); // 僅撤權／衝突阻擋對話框可重新載入。
 assert.match(previewModal, /onConfirm/);
 assert.match(previewModal, /自上次確認後共有/);
-assert.match(previewModal, /\n\s*\{isConfirming \? "正在確認\.\.\." : hasNewChanges \? "確認最新摘要" : "確認"\}\n/);
-assert.doesNotMatch(previewModal, /稍後再說|確認並重新載入|onReload|window\.location\.reload|此處顯示行程/);
+assert.match(previewModal, /!summary && isLoading/);
+assert.match(previewModal, /\{summary && \(/);
+assert.match(previewModal, /isConfirming \? "正在確認\.\.\." : "確認"/);
+assert.doesNotMatch(previewModal, /hasNewChanges|收到新的變更，摘要已更新|正在更新最新統計|確認最新摘要|稍後再說|確認並重新載入|onReload|window\.location\.reload|此處顯示行程/);
 assert.match(revisionHook, /confirmNotice/);
 assert.match(revisionHook, /const shouldNotify = await acceptRevision\(revision\)/);
 assert.match(revisionHook, /if \(revision\) void acceptRevision\(revision\)/);
-assert.match(revisionHook, /if \(summary\.totalChanges === 0\)[\s\S]*?changePreviewWindowRef\.current = null[\s\S]*?setIsChangePreviewOpen\(false\)[\s\S]*?current === "available" \? null : current/);
+assert.match(revisionHook, /if \(summary\.totalChanges === 0\)[\s\S]*?changePreviewWindowRef\.current = null[\s\S]*?if \(!isChangePreviewOpen\)[\s\S]*?current === "available" \? null : current/);
 assert.match(revisionHook, /writeConfirmedItinerarySnapshot/);
 assert.match(revisionHook, /getCloudTripRecord\(supabase, tripId\)/);
-assert.match(revisionHook, /suppressNoticeRef\.current = true[\s\S]*?setIsChangePreviewOpen\(false\)/);
-assert.match(revisionHook, /Calculate the net result immediately[\s\S]*?void refreshOpenChangePreview\(\)/);
-assert.match(revisionHook, /if \(suppressNoticeRef\.current\) return/);
+assert.match(revisionHook, /suppressNoticeRef\.current = true[\s\S]*?if \(!isChangePreviewOpen\)/);
+assert.match(revisionHook, /if \(suppressNoticeRef\.current \|\| isChangePreviewOpen\) return/);
+assert.doesNotMatch(revisionHook, /Calculate the net result immediately/);
 assert.match(revisionHook, /previewRequestRef\.current/);
 assert.match(revisionHook, /previewedRevisionRef\.current = latestRevision\.revision/);
 assert.match(revisionHook, /revisionBeforeRead\.revision !== revisionAfterRead\.revision/);
 assert.match(revisionHook, /setHasNewChangesDuringPreview\(true\)/);
 assert.match(revisionHook, /isConfirmingPreview/);
 assert.match(revisionHook, /setNoticeKind\(\(current\) => current === "available" \? null : current\)/);
-assert.match(previewModal, /收到新的變更，摘要已更新。/);
-assert.match(previewModal, /正在更新最新統計/);
-assert.match(previewModal, /確認最新摘要/);
+assert.doesNotMatch(previewModal, /收到新的變更，摘要已更新。|正在更新最新統計|確認最新摘要/);
 assert.match(previewModal, /disabled=\{isConfirming \|\| isLoading \|\| Boolean\(error\)\}/);
 assert.doesNotMatch(revisionHook, /const snooze =/);
 assert.match(app, /onPreviewChanges=\{openChangePreview\}/);

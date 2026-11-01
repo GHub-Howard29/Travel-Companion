@@ -18,7 +18,6 @@ interface TripChangePreviewModalProps {
   isLoading: boolean;
   isConfirming?: boolean;
   error: string | null;
-  hasNewChanges?: boolean;
   onClose: () => void;
   onConfirm: () => void;
 }
@@ -100,7 +99,6 @@ export const TripChangePreviewModal = ({
   isLoading,
   isConfirming = false,
   error,
-  hasNewChanges = false,
   onClose,
   onConfirm,
 }: TripChangePreviewModalProps) => {
@@ -137,32 +135,13 @@ export const TripChangePreviewModal = ({
         </header>
 
         <div className="space-y-4 p-4">
-          {hasNewChanges && (
-            <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-800" role="status">
-              收到新的變更，摘要已更新。
-            </div>
-          )}
-          {isLoading && summary && (
-            <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800" role="status">
-              正在更新最新統計，請稍候...
-            </div>
-          )}
-          {isLoading && !summary && (
+          {!summary && isLoading && (
             <div className="rounded-xl border border-slate-200 bg-white p-5 text-center text-sm text-slate-500">
               正在整理變更摘要...
             </div>
           )}
 
-          {!isLoading && error && (
-            <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
-              <p className="text-sm font-bold text-amber-950">暫時無法取得變更摘要</p>
-              <p className="mt-1 text-xs leading-5 text-amber-800">
-                {error} 資料同步會在背景重試；請稍後再開啟摘要確認。
-              </p>
-            </div>
-          )}
-
-          {!isLoading && !error && summary && (
+          {summary && (
             <>
               <div className="rounded-xl border border-blue-100 bg-blue-50 p-4">
                 <p className="text-sm font-bold text-blue-950">
@@ -200,7 +179,7 @@ export const TripChangePreviewModal = ({
             className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-orange-600 px-4 py-3 text-sm font-bold text-white hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
             <Check size={16} />
-            {isConfirming ? "正在確認..." : hasNewChanges ? "確認最新摘要" : "確認"}
+            {isConfirming ? "正在確認..." : "確認"}
           </button>
         </div>
       </section>
