@@ -91,7 +91,7 @@ function getHandoffGitStatus() {
     .filter(Boolean);
 }
 
-function assertHandoffGitState() {
+async function assertHandoffGitState() {
   const branch = runGit(["branch", "--show-current"]);
   if (branch !== "develop") throw new Error(`安全停止：測試資料交接只允許在 develop；目前分支「${branch}」。`);
   const upstream = runGit(["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"]);
@@ -100,6 +100,10 @@ function assertHandoffGitState() {
   const status = getHandoffGitStatus();
   if (status.some((line) => line[0] !== " " && line[0] !== "?")) {
     throw new Error("安全停止：發現既有 staged 變更；請先處理 index，避免被交接提交帶入。");
+  }
+  if (status.some((line) => line.includes("scripts/testdata-sync.mjs") || line.includes("scripts/lib/testdata-revision.mjs"))) {
+    const validated = await validateActiveFixtures({ verifyGitHistory: false });
+    console.log(JSON.stringify({ fixtureCompatibilityValidated: validated.length, fixtures: validated }, null, 2));
   }
   if (status.some((line) => line.includes("supabase/test-fixtures/"))) {
     throw new Error("安全停止：handoff 開始前已有 fixture 變更，避免覆寫或提交其他操作的資料。");
@@ -257,6 +261,40 @@ async function readFixture(directoryArg) {
   detectSensitive(data);
   if (checksumData(data) !== manifest.checksum) throw new Error("checksum 不一致；fixture 可能被修改，拒絕使用。");
   return { directory, manifest, data: normalizeData(data) };
+}
+
+async function validateActiveFixtures({ verifyGitHistory = true } = {}) {
+  let entries = [];
+  try {
+    entries = await readdir(fixturesRoot, { withFileTypes: true });
+  } catch (error) {
+    if (error?.code === "ENOENT") return [];
+    throw error;
+  }
+
+  const validated = [];
+  for (const entry of entries.filter((item) => item.isDirectory() && tripIdPattern.test(item.name)).sort((a, b) => a.name.localeCompare(b.name))) {
+    const fixturePath = path.relative(root, path.join(fixturesRoot, entry.name));
+    const { manifest } = await readFixture(fixturePath);
+    if (manifest.fixtureId !== entry.name) throw new Error(`fixture 目錄與 manifest ID 不一致：${entry.name}`);
+    if (["active", "regression_pending"].includes(manifest.status)) {
+      validated.push({ fixtureId: manifest.fixtureId, version: manifest.version, status: manifest.status });
+    }
+  }
+
+  if (verifyGitHistory) {
+    for (const fixture of validated) {
+      const workingFixture = await readFixture(fixtureGitPath(fixture.fixtureId));
+      const parent = assertParentRevision(workingFixture);
+      if (fixture.version > 1 && (!parent || parent.manifest.version !== fixture.version - 1)) {
+        throw new Error(`fixture ${fixture.fixtureId} 找不到連續父版本 v${fixture.version - 1}；提交前格式驗證失敗。`);
+      }
+      if (parent && (workingFixture.manifest.parentVersion !== parent.manifest.version || workingFixture.manifest.parentChecksum !== parent.manifest.checksum)) {
+        throw new Error(`fixture ${fixture.fixtureId} manifest 父版本欄位與 Git 歷史不一致；提交前格式驗證失敗。`);
+      }
+    }
+  }
+  return validated;
 }
 
 async function validateFixture(directoryArg) {
@@ -761,7 +799,7 @@ function localSourceHost() {
 }
 
 async function handoff({ autoCommitPush = false } = {}) {
-  const baselineGitStatus = autoCommitPush ? assertHandoffGitState() : null;
+  const baselineGitStatus = autoCommitPush ? await assertHandoffGitState() : null;
   if (!autoCommitPush) assertDevelopBranch();
   assertLocalOnly();
   const fixtureEntries = (await readdir(fixturesRoot, { withFileTypes: true }))
@@ -845,7 +883,15 @@ async function handoff({ autoCommitPush = false } = {}) {
 
 const [command, argument] = process.argv.slice(2);
 try {
-  if (command === "export" && argument) await exportFixture(argument);
+  if (command === "validate:active") {
+    const validated = await validateActiveFixtures();
+    console.log(JSON.stringify({ valid: true, checked: validated.length, fixtures: validated }, null, 2));
+  }
+  else if (command === "handoff:validate") {
+    const validated = await validateActiveFixtures();
+    console.log(JSON.stringify({ valid: true, checked: validated.length, fixtures: validated }, null, 2));
+  }
+  else if (command === "export" && argument) await exportFixture(argument);
   else if (command === "validate" && argument) await validateFixture(argument);
   else if (command === "import:all" && !argument) await importAllFixtures();
   else if (command === "handoff" && !argument) await handoff();

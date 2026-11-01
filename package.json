@@ -89,6 +89,7 @@
     "test:testdata-revision": "node scripts/test-testdata-revision.mjs",
     "testdata:export": "node scripts/testdata-sync.mjs export",
     "testdata:validate": "node scripts/testdata-sync.mjs validate",
+    "testdata:validate:active": "node scripts/testdata-sync.mjs validate:active",
     "testdata:import:all": "node scripts/testdata-sync.mjs import:all",
     "testdata:handoff": "node scripts/testdata-sync.mjs handoff",
     "testdata:handoff:publish": "node scripts/testdata-sync.mjs handoff:publish"

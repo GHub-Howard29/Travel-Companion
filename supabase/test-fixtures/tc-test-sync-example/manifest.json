@@ -2,6 +2,8 @@
   "schemaVersion": 1,
   "fixtureId": "tc-test-sync-example",
   "version": 4,
+  "parentVersion": 3,
+  "parentChecksum": "8fb27afabdd3602753eb392d47df16d23ce23d2856e15ae390e78a5caaf3e7af",
   "status": "active",
   "sourceHost": "HOWARD-NEWPC",
   "exportedAt": "2026-11-01T14:10:43.603Z",
