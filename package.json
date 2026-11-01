@@ -86,6 +86,7 @@
     "release:v364:verify-metadata": "node scripts/prepare-v364-release.mjs verify-metadata",
     "release:v364:cleanup": "node scripts/prepare-v364-release.mjs cleanup",
     "db:sync:local": "node scripts/sync-local-database.mjs",
+    "test:testdata-revision": "node scripts/test-testdata-revision.mjs",
     "testdata:export": "node scripts/testdata-sync.mjs export",
     "testdata:validate": "node scripts/testdata-sync.mjs validate",
     "testdata:import:all": "node scripts/testdata-sync.mjs import:all",

@@ -47,7 +47,7 @@ try {
   console.log("[sync-local] 步驟 3/6：偵測並驗證本機合成測試資料交接；只產生 fixture，不自動 stage／commit／push");
   run("npm", ["run", "testdata:handoff"]);
 
-  console.log("[sync-local] 步驟 4/6：匯入已驗證且允許載入的版本化合成測試資料；遇到內容衝突會回滾並停止");
+  console.log("[sync-local] 步驟 4/6：比對 fixture revision；僅在本機等於已宣告父版本時更新 fixture 範圍，版本倒退／同版異 checksum／父版不符皆停止");
   run("npm", ["run", "testdata:import:all"]);
 
   console.log("[sync-local] 步驟 5/6：依版本控制中的標準 fixture 準備本機回歸測試資料");
