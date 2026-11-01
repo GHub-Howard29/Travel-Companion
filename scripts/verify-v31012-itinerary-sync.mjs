@@ -349,7 +349,8 @@ assert.match(itinerary, /claimItineraryCardEditLease\(supabase, trip\.id, cardId
 assert.match(itinerary, /renewItineraryCardEditLease\(supabase, trip\.id, cardId\)/);
 assert.match(itinerary, /releaseItineraryCardEditLease\(supabase, trip\.id, cardId\)/);
 assert.match(itinerary, /ITINERARY_EDIT_LEASE_HEARTBEAT_MS/);
-assert.match(itinerary, /其他裝置編輯中/);
+assert.doesNotMatch(itinerary, /其他裝置編輯中/);
+assert.match(itinerary, /: "編輯"/);
 assert.match(itinerary, /鎖定狀態未知/);
 // 所有會改變卡片資料的入口都受同一張卡片 lease 保護；純檢視／導航不受影響。
 assert.match(itinerary, /const canModifyCard = \(cardId\?: string\)/);
@@ -363,18 +364,56 @@ const manageToggle = itinerary.match(/const toggleManageMode = \(\) => \{([\s\S]
 assert.match(manageToggle, /setIsManageMode\(true\)/);
 assert.doesNotMatch(manageToggle, /currentEditLeases|editLeaseStatus/);
 assert.doesNotMatch(itinerary, /disabled=\{!isOrderMode \|\| \(canUseEditLeases && \(editLeaseStatus !== "ready" \|\| Object\.keys\(currentEditLeases\)\.length > 0\)\)\}/);
-assert.match(itinerary, /Object\.keys\(currentEditLeases\)\.length > 0/);
-// 等待中的卡片 lease 釋放後只提示一次，不會自動開啟編輯表單或自動取得 lease。
-assert.match(itinerary, /waitingCardIdRef\.current = event\.id/);
-assert.match(itinerary, /previous\[waitingCardId\] && !next\[waitingCardId\]/);
+assert.match(itinerary, /const hasRemoteLeaseOnActiveDay = hasCurrentEditLeaseList/);
+assert.match(itinerary, /hasRemoteLeaseOnActiveDay\) \{/);
+assert.match(itinerary, /新增活動仍可使用/);
+assert.match(itinerary, /setIsOrderMode\(false\)/);
+// 等待中的多張卡片各自追蹤 lease DELETE，不依賴行程資料 revision／廣播。
+assert.match(itinerary, /waitingCardIdsRef\.current\.add\(event\.id\)/);
+assert.match(itinerary, /payload\.eventType === "DELETE"/);
+assert.match(itinerary, /waitingCardIdsRef\.current\.has\(changedCardId\)/);
+assert.match(itinerary, /releasedWaitingCardIds\.length > 0/);
+assert.match(itinerary, /refreshQueued = true/);
+// 無變更儲存走 release RPC，不送出整筆 Trip 更新；取消等待 release 結果。
+assert.match(itinerary, /JSON\.stringify\(currentEvents\[editingIndex\]\) === JSON\.stringify\(nextEvent\)/);
+assert.match(itinerary, /const released = await releaseEditingLease\(\)/);
+assert.match(itinerary, /const resetForm = async \(\) =>/);
+assert.match(itinerary, /await releaseEditingLease\(\)/);
+assert.match(itinerary, /釋放卡片編輯鎖失敗/);
+// 單卡 lease heartbeat 僅在編輯期間續租，回到前景立即續租；不使用全日 lease 清單輪詢。
+assert.match(itinerary, /const renewLease = async \(\) =>/);
+assert.match(itinerary, /const renewWhenVisible = \(\) =>/);
+assert.match(itinerary, /document\.addEventListener\("visibilitychange", renewWhenVisible\)/);
+assert.match(itinerary, /window\.addEventListener\("focus", renewWhenVisible\)/);
+assert.match(itinerary, /editLeaseVisibilityCleanupRef\.current/);
+assert.match(itinerary, /setInterval\(\s*\(\) => void renewLease\(\)/);
+// 遠端鎖定時編輯與刪除均 disabled，呈白底禁用游標，編輯文案不改變。
+assert.match(itinerary, /disabled=\{isClaimingEdit \|\| !hasCurrentEditLeaseList \|\| isCardLockedByOther\(event\.id\)\}/);
+assert.match(itinerary, /disabled=\{!canModifyCard\(event\.id\)\}/);
+assert.match(itinerary, /bg-white px-3 py-1\.5 text-xs font-bold text-rose-700 hover:bg-rose-50 disabled:cursor-not-allowed/);
+assert.match(itinerary, /: "編輯"/);
 assert.match(itinerary, /卡片已釋放編輯鎖定/);
 assert.match(itinerary, /退出管理並重新確認/);
+assert.match(itinerary, /void editLeaseRefreshRef\.current\?\.\(\)/);
+assert.match(itinerary, /isRemoteLeaseNoticeDismissed/);
+assert.match(itinerary, /setIsRemoteLeaseNoticeDismissed\(true\)/);
+assert.match(itinerary, /setIsRemoteLeaseNoticeDismissed\(false\)/);
+assert.match(itinerary, /hasRemoteLeaseOnActiveDay && !isRemoteLeaseNoticeDismissed/);
+assert.match(manageToggle, /setIsRemoteLeaseNoticeDismissed\(false\)/);
+assert.match(manageToggle, /void editLeaseRefreshRef\.current\?\.\(\)/);
+assert.match(itinerary, /releasedWaitingCardIds\.length > 0/);
+assert.match(itinerary, /previous\[waitingCardId\] && !next\[waitingCardId\]/);
+assert.match(itinerary, /setReleasedWaitingCardIds\(\(current\)/);
+assert.match(app, /key=\{`\$\{selectedTripId\}-\$\{userEmail \?\? "guest"\}`\}/);
+assert.doesNotMatch(app, /key=\{`\$\{selectedTripId\}-\$\{userEmail \?\? "guest"\}-\$\{isOnline/);
+assert.match(itinerary, /if \(canUseEditLeases \|\| !isHistoricalTripReadOnly\) return/);
 // Trip revision 摘要只從使用者進入該 Trip 的最新資料開始計算，不沿用舊確認快照。
 assert.match(revisionHook, /tripMonitoringBaselineRef/);
 assert.match(revisionHook, /isTripBaselineReadyRef/);
 assert.match(revisionHook, /daysData: cloudRecord\.detail\.content\.daysData/);
 assert.match(revisionHook, /fromRevision: baseline\.revision/);
-assert.match(revisionHook, /tripMonitoringBaselineRef\.current \?\? undefined/);
+assert.match(revisionHook, /const baseline = tripMonitoringBaselineRef\.current/);
+assert.match(revisionHook, /toUpdatedAt: latestRevision\.updatedAt/);
 assert.match(readFileSync(new URL("../src/services/tripChangePreviewService.ts", import.meta.url), "utf8"), /monitoringBaseline\?\: ItineraryChangeSnapshot/);
 // 未登入、無一般編輯權、歷史唯讀或離線時，租約查詢／Realtime／RPC 均不可啟用。
 assert.match(app, /isSignedIn=\{isSignedIn\}/);
@@ -397,7 +436,7 @@ assert.match(itinerary, /editLeaseRefreshRef\.current = refresh/);
 assert.match(itinerary, /claimingCardId === event\.id/);
 assert.match(itinerary, /取得編輯權…/);
 assert.match(itinerary, /重新確認/);
-assert.match(itinerary, /resetForm = \(\) => \{\s*void releaseEditingLease\(\)/);
+assert.match(itinerary, /resetForm = async \(\) => \{\s*await releaseEditingLease\(\)/);
 assert.match(itinerary, /useEffect\(\(\) => \(\) => \{\s*void releaseEditingLease\(\)/);
 assert.doesNotMatch(itinerary, /setInterval\([^\n]*listItineraryCardEditLeases/);
 const previewModal = readFileSync(new URL("../src/components/TripChangePreviewModal.tsx", import.meta.url), "utf8");

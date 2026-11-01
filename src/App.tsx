@@ -1502,7 +1502,7 @@ function ConfiguredApp({
             {/* 1. 行程規劃模組 */}
             {currentScreenType === "itinerary" && currentTrip && (
               <ItineraryPage
-                key={`${selectedTripId}-${userEmail ?? "guest"}-${isOnline ? "online" : "offline"}`}
+                key={`${selectedTripId}-${userEmail ?? "guest"}`}
                 supabase={supabase}
                 trip={currentTrip}
                 activeDay={activeDay}

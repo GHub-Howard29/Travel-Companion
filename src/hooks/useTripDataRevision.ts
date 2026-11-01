@@ -58,6 +58,7 @@ export const useTripDataRevision = ({
   const changePreviewWindowRef = useRef<TripChangePreviewWindow | null>(null);
   const tripMonitoringBaselineRef = useRef<{ revision: number; updatedAt: string; daysData: Record<string, import("../types").ItineraryItem[]> } | null>(null);
   const previewRequestRef = useRef(0);
+  const refreshPreviewRef = useRef<(() => Promise<void>) | null>(null);
   const previewedRevisionRef = useRef<number | null>(null);
   const confirmingRef = useRef(false);
   const suppressNoticeRef = useRef(false);
@@ -113,43 +114,70 @@ export const useTripDataRevision = ({
   const refreshOpenChangePreview = useCallback(async () => {
     const tripId = selectedTripIdRef.current;
     if (!tripId || monitoredTripIdRef.current !== tripId || !isTripBaselineReadyRef.current) return;
-    const previewWindow = changePreviewWindowRef.current;
-    if (!tripId || !previewWindow || !navigator.onLine) return;
+    if (!changePreviewWindowRef.current || !navigator.onLine) return;
 
+    // Invalidate any older in-flight preview as soon as a newer revision asks for a refresh.
     const requestId = ++previewRequestRef.current;
+    const baseline = tripMonitoringBaselineRef.current;
+    if (!baseline) return;
     setIsChangePreviewLoading(true);
     try {
       const cloudRecord = await getCloudTripRecord(supabase, tripId);
       if (!cloudRecord) throw new Error("無法取得最新雲端行程資料。");
       const latestRevision = await getAppDataRevision(supabase);
       if (!latestRevision) throw new Error("無法確認最新資料版本。");
+      if ((knownRevisionRef.current ?? 0) > latestRevision.revision) {
+        if (requestId === previewRequestRef.current) {
+          const baseline = tripMonitoringBaselineRef.current;
+          if (baseline) {
+            changePreviewWindowRef.current = {
+              fromRevision: baseline.revision,
+              toRevision: knownRevisionRef.current!,
+              fromUpdatedAt: baseline.updatedAt,
+              toUpdatedAt: knownRevisionUpdatedAtRef.current ?? latestRevision.updatedAt,
+            };
+          }
+          window.setTimeout(() => {
+            if (isChangePreviewOpen) void refreshPreviewRef.current?.();
+          }, 0);
+        }
+        return;
+      }
       const summary = await getTripChangePreview(
         supabase,
         tripId,
         {
-          ...previewWindow,
+          fromRevision: baseline.revision,
           toRevision: latestRevision.revision,
+          fromUpdatedAt: baseline.updatedAt,
           toUpdatedAt: latestRevision.updatedAt,
         },
         cloudRecord.detail.content.daysData,
         cloudRecord.updatedAt,
-        tripMonitoringBaselineRef.current ?? undefined,
+        baseline,
       );
       if (requestId !== previewRequestRef.current) return;
       setChangePreviewSummary(summary);
       setChangePreviewError(null);
       previewedRevisionRef.current = latestRevision.revision;
       if (summary.totalChanges === 0) {
-        // The net state matches the last confirmed baseline. Suppress the remote
-        // notice and preview until a later revision produces real net changes.
+        // Keep the preview open if the user explicitly opened it. A zero-net
+        // state clears the notice only when the preview was not already open.
         suppressNoticeRef.current = true;
         changePreviewWindowRef.current = null;
         setHasNewChangesDuringPreview(false);
         setChangePreviewSummary(null);
-        setIsChangePreviewOpen(false);
-        setNoticeKind((current) => current === "available" ? null : current);
+        if (!isChangePreviewOpen) {
+          setNoticeKind((current) => current === "available" ? null : current);
+        }
       } else {
         suppressNoticeRef.current = false;
+        changePreviewWindowRef.current = {
+          fromRevision: baseline.revision,
+          toRevision: latestRevision.revision,
+          fromUpdatedAt: baseline.updatedAt,
+          toUpdatedAt: latestRevision.updatedAt,
+        };
       }
       knownRevisionRef.current = Math.max(knownRevisionRef.current ?? 0, latestRevision.revision);
       knownRevisionUpdatedAtRef.current = latestRevision.updatedAt;
@@ -160,7 +188,11 @@ export const useTripDataRevision = ({
     } finally {
       if (requestId === previewRequestRef.current) setIsChangePreviewLoading(false);
     }
-  }, [supabase]);
+  }, [isChangePreviewOpen, supabase]);
+
+  useEffect(() => {
+    refreshPreviewRef.current = refreshOpenChangePreview;
+  }, [refreshOpenChangePreview]);
 
   const inspectAccessAndNotify = useCallback(async () => {
     const tripId = selectedTripIdRef.current;
