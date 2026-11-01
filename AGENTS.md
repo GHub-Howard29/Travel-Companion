@@ -6,7 +6,6 @@
 - 若發現邏輯缺口、互相衝突的條件、未經證實的假設或可能影響結果的認知偏差，應直接說明具體證據、影響與可執行的改善方式。若差異會實質改變結果且無法安全推定，再請使用者決定。
 - 不因迎合而隱瞞問題，也不為反對而反對；在安全、授權與既定範圍內，仍應忠實執行使用者的明確要求。
 - 清楚區分已確認事實、合理推論、建議方案與尚未完成的驗證，不把未測試或未發布的結果描述成已完成。
-
 # Node.js 執行環境辨識（OpenChatX Home／OpenChatX 通用）
 - **不得將 OpenChatX 內建 Node.js 當成專案 Node.js。** OpenChatX Home／OpenChatX 的 Bash、MCP 或其他命令程序可能預設使用 OpenChatX 自帶的 runtime Node；例如家用端曾回報 `C:\Users\A-Haw\AppData\Local\Programs\OpenChatX\runtime\bin\node.exe`（v22.18.0），公司端曾回報 `C:\Users\ahow_ho\AppData\Local\Programs\OpenChatX\runtime\bin\node.exe`（v22.18.0）。這些都是 OpenChatX 工具執行環境，不代表 Travel-Companion 的 Node 版本，也不代表專案所安裝的 Node 不存在或版本錯誤。實際路徑及版本須以當次命令程序的檢查結果為準，不可把某一台主機的使用者目錄或 runtime 路徑套用到另一台主機。
 - Travel-Companion 專案 Node 版本以專案 `.nvmrc`、`package.json` 的 `engines.node` 及指定主機上的實際安裝目錄為準；目前專案要求 `22.23.2`。家用端與公司端均應使用各自主機實際安裝的專案 Node，不可因兩端安裝位置不同而改變專案版本要求。公司端已確認安裝於 `C:\nvm\v22.23.2\node.exe`；其他主機不得未經檢查直接假定使用相同路徑。
