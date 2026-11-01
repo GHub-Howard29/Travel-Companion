@@ -120,6 +120,22 @@ if (!historyVersions.includes(previousReleaseVersion)) {
   );
 }
 
+const { execFileSync } = await import("node:child_process");
+const releaseTags = execFileSync("git", ["tag", "--list", "v*"], {
+  cwd: projectRoot,
+  encoding: "utf8",
+}).trim().split("\n").map((tag) => tag.trim()).filter(Boolean);
+const taggedReleaseVersions = releaseTags
+  .map((tag) => tag.replace(/^v/, ""))
+  .filter((version) => parseVersion(version) && compareVersions(version, appVersion) < 0)
+  .sort(compareVersions);
+const latestTaggedRelease = taggedReleaseVersions.at(-1);
+if (latestTaggedRelease && previousReleaseVersion !== latestTaggedRelease) {
+  throw new Error(
+    `PREVIOUS_RELEASE_VERSION 設為 ${previousReleaseVersion}，但 Git 最新已發布 tag 是 ${latestTaggedRelease}；請核對版本設定。`,
+  );
+}
+
 if (historyVersions.includes(appVersion)) {
   throw new Error(`版本歷史不應包含目前版本 ${appVersion}。`);
 }

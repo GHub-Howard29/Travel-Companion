@@ -6,9 +6,9 @@ const expenseHook = fs.readFileSync("src/hooks/useExpenseBook.ts", "utf8");
 const expenseScreen = fs.readFileSync("src/components/expense/ExpenseScreen.tsx", "utf8");
 
 assert.match(revisionHook, /if \(!tripId \|\| !email \|\| !navigator\.onLine\) \{\s*return;\s*\}/s);
-assert.doesNotMatch(
+assert.match(
   revisionHook,
-  /if \(!tripId \|\| !email \|\| !navigator\.onLine\) \{[\s\S]*?current \?\? "available"/,
+  /if \(!tripId \|\| !email \|\| !navigator\.onLine\) \{\s*return;\s*\}[\s\S]*?setNoticeKind\(\(current\) => current \?\? "available"\)/,
 );
 assert.match(revisionHook, /if \(!navigator\.onLine \|\| !hasAnyManagementRole\) return false;/);
 assert.match(revisionHook, /if \(!revision\) \{\s*return false;\s*\}/s);

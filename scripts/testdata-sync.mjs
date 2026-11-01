@@ -5,6 +5,10 @@ import os from "node:os";
 import process from "node:process";
 import { createHash } from "node:crypto";
 
+// Test-data workflows are local-only and do not require Supabase CLI telemetry.
+// Apply this before spawning any CLI child process, including standalone commands.
+process.env.SUPABASE_TELEMETRY_DISABLED = "1";
+
 const root = process.cwd();
 const fixturesRoot = path.resolve(root, "supabase", "test-fixtures");
 const handoffStatePath = path.resolve(root, "supabase", ".temp", "testdata-handoff-state.json");

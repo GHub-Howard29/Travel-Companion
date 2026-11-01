@@ -1,12 +1,11 @@
-import { AlertTriangle, Eye, RefreshCw } from "lucide-react";
+import { AlertTriangle, Check, Eye, RefreshCw } from "lucide-react";
 import type { TripDataNoticeKind } from "../hooks/useTripDataRevision";
 
 interface TripDataRevisionNoticeProps {
   kind: TripDataNoticeKind | null;
   isOnline: boolean;
-  willApplyPreparedUpdate?: boolean;
   onPreviewChanges: () => void;
-  onSnooze: () => void;
+  onConfirm: () => void;
   onReload: () => void;
 }
 
@@ -27,9 +26,8 @@ const criticalCopy: Record<"revoked" | "conflict", {
 export const TripDataRevisionNotice = ({
   kind,
   isOnline,
-  willApplyPreparedUpdate = false,
   onPreviewChanges,
-  onSnooze,
+  onConfirm,
   onReload,
 }: TripDataRevisionNoticeProps) => {
   if (!kind) return null;
@@ -61,43 +59,10 @@ export const TripDataRevisionNotice = ({
             className="mt-5 flex w-full items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-3 text-sm font-bold text-white hover:bg-slate-800"
           >
             <RefreshCw size={16} />
-            {willApplyPreparedUpdate ? "重新載入並套用新版" : "重新載入"}
+            {kind === "conflict" ? "確認衝突並重新載入" : "重新載入以套用最新權限"}
           </button>
         </section>
       </div>
-    );
-  }
-
-  if (kind === "snoozed") {
-    return (
-      <section className="mx-auto mt-3 max-w-md rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
-        <p className="font-bold">雲端行程資料已有更新，目前暫停行程編輯。</p>
-        <p className="mt-1 leading-6 text-amber-800">
-          {willApplyPreparedUpdate
-            ? "共用工具仍可正常使用；目前已有新版準備完成，重新載入會同時套用新版並取得最新行程資料。"
-            : "共用工具仍可正常使用，請重新載入後再繼續編輯行程。"}
-        </p>
-        <div className="mt-3 flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={onPreviewChanges}
-            disabled={!isOnline}
-            className="inline-flex items-center gap-2 rounded-lg border border-amber-300 bg-white px-3 py-2 text-xs font-bold text-amber-900 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <Eye size={14} />
-            預覽變更
-          </button>
-          <button
-            type="button"
-            onClick={onReload}
-            disabled={!isOnline}
-            className="inline-flex items-center gap-2 rounded-lg bg-amber-900 px-3 py-2 text-xs font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <RefreshCw size={14} />
-            {willApplyPreparedUpdate ? "重新載入並套用新版" : "重新載入"}
-          </button>
-        </div>
-      </section>
     );
   }
 
@@ -106,19 +71,10 @@ export const TripDataRevisionNotice = ({
       <p className="font-bold">行程資料已有更新</p>
       <p className="mt-1 leading-6 text-amber-800">
         {isOnline
-          ? willApplyPreparedUpdate
-            ? "其他裝置已更新雲端行程資料，而且新版已準備完成。重新載入會同時套用新版並取得最新行程資料；若選擇「稍後」，請先不要編輯行程。"
-            : "其他裝置已更新雲端行程資料。若選擇「稍後」，可繼續查看，但請先不要編輯行程，以免發生版本衝突。"
-          : "目前沒有網路連線，無法取得最新資料。恢復連線並重新載入前，請先不要編輯行程。"}
+          ? "其他裝置已更新雲端行程資料。"
+          : "目前沒有網路連線；恢復連線後會自動檢查並同步資料。"}
       </p>
       <div className="mt-3 flex flex-wrap gap-2">
-        <button
-          type="button"
-          onClick={onSnooze}
-          className="rounded-lg border border-amber-300 bg-white px-3 py-2 text-xs font-bold text-amber-900"
-        >
-          稍後
-        </button>
         <button
           type="button"
           onClick={onPreviewChanges}
@@ -130,12 +86,12 @@ export const TripDataRevisionNotice = ({
         </button>
         <button
           type="button"
-          onClick={onReload}
+          onClick={onConfirm}
           disabled={!isOnline}
           className="inline-flex items-center gap-2 rounded-lg bg-amber-900 px-3 py-2 text-xs font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
         >
-          <RefreshCw size={14} />
-          {willApplyPreparedUpdate ? "重新載入並套用新版" : "重新載入"}
+          <Check size={14} />
+          確認
         </button>
       </div>
     </section>

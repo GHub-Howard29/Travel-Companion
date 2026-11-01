@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   DndContext,
@@ -135,6 +135,8 @@ interface ItineraryPageProps {
   trip: TripDetail;
   activeDay: number;
   hasEditPermission: boolean;
+  isSignedIn: boolean;
+  isHistoricalTripReadOnly: boolean;
   isOnline: boolean;
   onActiveDayChange: (day: number) => void;
   onSaveTripDetail: (trip: TripDetail) => Promise<void>;
@@ -235,6 +237,8 @@ export const ItineraryPage = ({
   trip,
   activeDay,
   hasEditPermission,
+  isSignedIn,
+  isHistoricalTripReadOnly,
   isOnline,
   onActiveDayChange,
   onSaveTripDetail,
@@ -289,7 +293,170 @@ export const ItineraryPage = ({
   }, []);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [editLeases, setEditLeases] = useState<Record<string, { ownerUserId: string; ownerClientId: string; expiresAt: string }>>({});
+  const [editLeaseScope, setEditLeaseScope] = useState<string | null>(null);
+  const [editLeaseStatus, setEditLeaseStatus] = useState<"disabled" | "loading" | "ready" | "error">("loading");
+  const [editLeaseError, setEditLeaseError] = useState<string | null>(null);
+  const [editClaimError, setEditClaimError] = useState<string | null>(null);
+  const [isClaimingEdit, setIsClaimingEdit] = useState(false);
+  const [claimingCardId, setClaimingCardId] = useState<string | null>(null);
+  const [hasValidEditingLease, setHasValidEditingLease] = useState(false);
+  const [editLeaseClientId, setEditLeaseClientId] = useState<string | null>(null);
+  const editLeaseClientRef = useRef<string | null>(null);
+  const editLeaseApiRef = useRef<null | typeof import("../services/itineraryCardEditLeaseService")>(null);
+  const editLeaseRefreshRef = useRef<(() => Promise<void>) | null>(null);
+  const releaseEditingLeaseRef = useRef<(() => Promise<boolean>) | null>(null);
+  const editingLeaseCardIdRef = useRef<string | null>(null);
+  const editLeaseHeartbeatRef = useRef<number | null>(null);
+  const editLeaseVisibilityCleanupRef = useRef<(() => void) | null>(null);
   const [draft, setDraft] = useState<ItineraryItem>(createEmptyItineraryDraft);
+
+  const canUseEditLeases = isSignedIn && hasEditPermission && !isHistoricalTripReadOnly && isOnline;
+  const hasCurrentEditLeaseList = canUseEditLeases && editLeaseScope === trip.id && editLeaseStatus === "ready";
+  const currentEditLeases = editLeaseScope === trip.id ? editLeases : {};
+  const [releasedWaitingCardIds, setReleasedWaitingCardIds] = useState<string[]>([]);
+  const [isRemoteLeaseNoticeDismissed, setIsRemoteLeaseNoticeDismissed] = useState(false);
+  const previousLeaseListRef = useRef<typeof editLeases>({});
+  const waitingCardIdsRef = useRef<Set<string>>(new Set());
+  const isCardLockedByOther = (cardId?: string) => Boolean(
+    cardId && hasCurrentEditLeaseList && currentEditLeases[cardId] &&
+    currentEditLeases[cardId].ownerClientId !== editLeaseClientId,
+  );
+  const hasRemoteLeaseOnActiveDay = hasCurrentEditLeaseList &&
+    (trip.content.daysData[String(activeDay)] ?? []).some((card) => isCardLockedByOther(card.id));
+  const canModifyCard = (cardId?: string) => canManageItinerary && hasCurrentEditLeaseList &&
+    Boolean(cardId) && !isCardLockedByOther(cardId) && !isClaimingEdit;
+
+  useEffect(() => {
+    previousLeaseListRef.current = {};
+    waitingCardIdsRef.current = new Set();
+    if (!canUseEditLeases) {
+      editLeaseRefreshRef.current = null;
+      return;
+    }
+
+    let disposed = false;
+    let refreshInFlight: Promise<void> | null = null;
+    let refreshQueued = false;
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    let leaseApi: typeof import("../services/itineraryCardEditLeaseService") | null = null;
+
+    const refresh = async () => {
+      if (refreshInFlight) {
+        refreshQueued = true;
+        return refreshInFlight;
+      }
+      if (disposed || !leaseApi) return;
+      if (refreshInFlight) return refreshInFlight;
+      refreshInFlight = (async () => {
+        try {
+          const rows = await leaseApi!.listItineraryCardEditLeases(supabase, trip.id);
+          if (disposed) return;
+          const next = Object.fromEntries(rows.map((lease) => [lease.cardId, {
+            ownerUserId: lease.ownerUserId,
+            ownerClientId: lease.ownerClientId,
+            expiresAt: lease.expiresAt,
+          }]));
+          const previous = previousLeaseListRef.current;
+          for (const waitingCardId of waitingCardIdsRef.current) {
+            if (previous[waitingCardId] && !next[waitingCardId]) {
+              setReleasedWaitingCardIds((current) => current.includes(waitingCardId) ? current : [...current, waitingCardId]);
+              waitingCardIdsRef.current.delete(waitingCardId);
+            }
+          }
+          const activeDayCardIds = new Set(
+            (trip.content.daysData[String(activeDay)] ?? []).map((card) => card.id).filter(Boolean),
+          );
+          const hasRemoteLeaseForActiveDay = Object.entries(next).some(
+            ([cardId, lease]) => activeDayCardIds.has(cardId) && lease.ownerClientId !== editLeaseClientRef.current,
+          );
+          if (!hasRemoteLeaseForActiveDay) {
+            setIsRemoteLeaseNoticeDismissed(false);
+          }
+          if (hasRemoteLeaseForActiveDay) {
+            setIsOrderMode(false);
+            setOrderOriginal([]);
+            setOrderDraft([]);
+            setIsTimeAdjustmentMode(false);
+            setTimeAdjustmentResult(null);
+            setTimeAdjustmentSaveError("本日有卡片正在其他裝置編輯，排序與時間調整已停止；新增活動仍可使用。");
+          }
+          previousLeaseListRef.current = next;
+          setEditLeases(next);
+          setEditLeaseScope(trip.id);
+          setEditLeaseStatus("ready");
+          setEditLeaseError(null);
+        } catch {
+          if (disposed) return;
+          setEditLeaseStatus("error");
+          setEditLeaseError("目前無法確認其他裝置的編輯鎖定狀態，請稍後重試。");
+        }
+      })().finally(() => {
+        refreshInFlight = null;
+        if (refreshQueued && !disposed) {
+          refreshQueued = false;
+          void refresh();
+        }
+      });
+      return refreshInFlight;
+    };
+    editLeaseRefreshRef.current = refresh;
+
+    void import("../services/itineraryCardEditLeaseService").then((api) => {
+      if (disposed) return;
+      setEditLeaseStatus("loading");
+      setEditLeaseError(null);
+      leaseApi = api;
+      editLeaseApiRef.current = api;
+      editLeaseClientRef.current = api.ITINERARY_EDIT_CLIENT_ID;
+      setEditLeaseClientId(api.ITINERARY_EDIT_CLIENT_ID);
+      void refresh();
+      channel = supabase
+        .channel(`itinerary-card-edit-leases:${trip.id}`)
+        .on("postgres_changes", {
+          event: "*",
+          schema: "public",
+          table: "itinerary_card_edit_leases",
+          filter: `trip_id=eq.${trip.id}`,
+        }, (payload) => {
+          const changedCardId = String(
+            payload.eventType === "DELETE"
+              ? (payload.old as { card_id?: string }).card_id ?? ""
+              : (payload.new as { card_id?: string }).card_id ?? "",
+          );
+          if (
+            payload.eventType === "DELETE" &&
+            changedCardId &&
+            waitingCardIdsRef.current.has(changedCardId)
+          ) {
+            setReleasedWaitingCardIds((current) => current.includes(changedCardId) ? current : [...current, changedCardId]);
+            waitingCardIdsRef.current.delete(changedCardId);
+          }
+          void refresh();
+        })
+        .subscribe((status) => {
+          if (disposed) return;
+          if (status === "SUBSCRIBED") void refresh();
+        });
+    }).catch(() => {
+      if (disposed) return;
+      setEditLeaseStatus("error");
+      setEditLeaseError("無法啟用卡片編輯鎖定服務。");
+    });
+
+    const refreshOnForeground = () => {
+      if (document.visibilityState === "visible") void refresh();
+    };
+    document.addEventListener("visibilitychange", refreshOnForeground);
+    window.addEventListener("focus", refreshOnForeground);
+    return () => {
+      disposed = true;
+      editLeaseRefreshRef.current = null;
+      document.removeEventListener("visibilitychange", refreshOnForeground);
+      window.removeEventListener("focus", refreshOnForeground);
+      if (channel) void supabase.removeChannel(channel);
+    };
+  }, [activeDay, canUseEditLeases, supabase, trip.content.daysData, trip.id]);
   const [weatherByCardId, setWeatherByCardId] = useState<Record<string, WeatherForecastItem>>({});
   const [timeErrors, setTimeErrors] = useState<{
     arrival?: string;
@@ -604,7 +771,43 @@ export const ItineraryPage = ({
     );
   };
 
-  const resetForm = () => {
+  const releaseEditingLease = useCallback(async () => {
+    const cardId = editingLeaseCardIdRef.current;
+    const leaseApi = editLeaseApiRef.current;
+    if (editLeaseHeartbeatRef.current !== null) {
+      window.clearInterval(editLeaseHeartbeatRef.current);
+      editLeaseHeartbeatRef.current = null;
+    }
+    editLeaseVisibilityCleanupRef.current?.();
+    editLeaseVisibilityCleanupRef.current = null;
+    editingLeaseCardIdRef.current = null;
+    setHasValidEditingLease(false);
+    if (!cardId) return true;
+    if (!leaseApi || !isSignedIn || !isOnline) {
+      setEditClaimError("目前無法送出卡片編輯鎖釋放請求；請保持連線後重新確認。");
+      return false;
+    }
+    try {
+      await leaseApi.releaseItineraryCardEditLease(supabase, trip.id, cardId);
+      await editLeaseRefreshRef.current?.();
+      return true;
+    } catch (error) {
+      setEditClaimError(error instanceof Error
+        ? `釋放卡片編輯鎖失敗：${error.message}`
+        : "釋放卡片編輯鎖失敗；請重新確認。");
+      return false;
+    }
+  }, [isOnline, isSignedIn, supabase, trip.id]);
+  useEffect(() => {
+    releaseEditingLeaseRef.current = releaseEditingLease;
+  }, [releaseEditingLease]);
+
+  useEffect(() => () => {
+    void releaseEditingLease();
+  }, [releaseEditingLease]);
+
+  const resetForm = async () => {
+    await releaseEditingLease();
     releaseFocusedControl();
     setIsFormOpen(false);
     setEditingIndex(null);
@@ -649,10 +852,13 @@ export const ItineraryPage = ({
     setCopySaveError(null);
   };
 
-  const closeManageMode = () => {
+  const closeManageMode = async () => {
+    if (!(await releaseEditingLease())) return;
     releaseFocusedControl();
+    setIsRemoteLeaseNoticeDismissed(true);
+    setReleasedWaitingCardIds([]);
     setIsManageMode(false);
-    resetForm();
+    await resetForm();
     resetTimeAdjustment();
     resetOrder();
     closeCopyDialog();
@@ -714,6 +920,16 @@ export const ItineraryPage = ({
     });
   };
 
+  useEffect(() => {
+    if (canUseEditLeases || !isHistoricalTripReadOnly) return;
+    if (editingLeaseCardIdRef.current) {
+      void releaseEditingLeaseRef.current?.();
+      setIsFormOpen(false);
+      setEditingIndex(null);
+      setEditClaimError("行程已切換為唯讀，編輯表單已關閉。");
+    }
+  }, [canUseEditLeases, isHistoricalTripReadOnly]);
+
   const startCreateItem = () => {
     releaseFocusedControl();
     setEditingIndex(null);
@@ -725,28 +941,122 @@ export const ItineraryPage = ({
     setItemSaveError(null);
   };
 
-  const startEditItem = (event: ItineraryItem, index: number) => {
+  const startEditItem = async (event: ItineraryItem, index: number) => {
     releaseFocusedControl();
-    setEditingIndex(index);
-    setDraft(event);
-    setTimeErrors({});
-    setIsFormOpen(true);
-    setIsPlaceSearchOpen(false);
-    setIsPlaceDecisionPending(false);
-    setItemSaveError(null);
+    if (isCardLockedByOther(event.id)) {
+      if (event.id) waitingCardIdsRef.current.add(event.id);
+      setEditClaimError("此卡片目前由另一個裝置編輯中；釋放後會通知你，請勿持續嘗試編輯。");
+      return;
+    }
+    setEditClaimError(null);
+    setHasValidEditingLease(false);
+    if (isHistoricalTripReadOnly) {
+      setEditClaimError("歷史行程目前為唯讀，無法編輯卡片。");
+      return;
+    }
+    if (!isOnline) {
+      setEditClaimError("目前離線，無法確認卡片編輯權。");
+      return;
+    }
+    if (!isSignedIn || !hasEditPermission) {
+      setEditClaimError("目前帳號沒有編輯此行程的權限。");
+      return;
+    }
+    if (editLeaseStatus !== "ready" || !editLeaseApiRef.current) {
+      setEditClaimError(editLeaseError ?? "正在確認卡片編輯鎖定狀態，請稍後重試。");
+      void editLeaseRefreshRef.current?.();
+      return;
+    }
+    const cardId = event.id;
+    if (!cardId) {
+      setEditClaimError("此卡片缺少穩定識別碼，為避免覆蓋其他修改，暫時無法編輯。");
+      return;
+    }
+    setIsClaimingEdit(true);
+    setClaimingCardId(cardId);
+    try {
+      const claim = await editLeaseApiRef.current.claimItineraryCardEditLease(supabase, trip.id, cardId);
+      if (!claim.acquired) {
+        setEditClaimError("此卡片目前由另一個裝置編輯中，請稍後再試。");
+        void editLeaseRefreshRef.current?.();
+        return;
+      }
+      editingLeaseCardIdRef.current = cardId;
+      setHasValidEditingLease(true);
+      const leaseApi = editLeaseApiRef.current;
+      let renewalInFlight = false;
+      const renewLease = async () => {
+        if (renewalInFlight || !editingLeaseCardIdRef.current || editingLeaseCardIdRef.current !== cardId) return;
+        if (!navigator.onLine || document.visibilityState !== "visible") return;
+        renewalInFlight = true;
+        try {
+          const renewed = await leaseApi.renewItineraryCardEditLease(supabase, trip.id, cardId);
+          if (!renewed) {
+            if (editLeaseHeartbeatRef.current !== null) {
+              window.clearInterval(editLeaseHeartbeatRef.current);
+              editLeaseHeartbeatRef.current = null;
+            }
+            editingLeaseCardIdRef.current = null;
+            setHasValidEditingLease(false);
+            setIsFormOpen(false);
+            setEditingIndex(null);
+            setEditClaimError("卡片編輯鎖定已失效，表單已關閉；請重新取得編輯權後再修改。");
+          }
+        } catch {
+          if (editLeaseHeartbeatRef.current !== null) {
+            window.clearInterval(editLeaseHeartbeatRef.current);
+            editLeaseHeartbeatRef.current = null;
+          }
+          editingLeaseCardIdRef.current = null;
+          setHasValidEditingLease(false);
+          setEditClaimError("無法確認卡片編輯鎖是否仍有效，為避免覆蓋其他裝置修改，請關閉表單後重新取得編輯權。");
+        } finally {
+          renewalInFlight = false;
+        }
+      };
+      const renewWhenVisible = () => {
+        if (document.visibilityState === "visible") void renewLease();
+      };
+      document.addEventListener("visibilitychange", renewWhenVisible);
+      window.addEventListener("focus", renewWhenVisible);
+      editLeaseVisibilityCleanupRef.current = () => {
+        document.removeEventListener("visibilitychange", renewWhenVisible);
+        window.removeEventListener("focus", renewWhenVisible);
+      };
+      editLeaseHeartbeatRef.current = window.setInterval(
+        () => void renewLease(),
+        leaseApi.ITINERARY_EDIT_LEASE_HEARTBEAT_MS,
+      );
+      void editLeaseRefreshRef.current?.();
+      setEditingIndex(index);
+      setDraft(event);
+      setTimeErrors({});
+      setIsFormOpen(true);
+      setIsPlaceSearchOpen(false);
+      setIsPlaceDecisionPending(false);
+      setItemSaveError(null);
+    } catch (error) {
+      setEditClaimError(error instanceof Error ? error.message : "無法取得卡片編輯權，請稍後重試。");
+      void editLeaseRefreshRef.current?.();
+    } finally {
+      setIsClaimingEdit(false);
+      setClaimingCardId(null);
+    }
   };
 
   const toggleManageMode = () => {
     if (isManageMode) {
-      closeManageMode();
+      void closeManageMode();
       return;
     }
-
+    setIsRemoteLeaseNoticeDismissed(false);
+    setEditClaimError(null);
     setIsManageMode(true);
+    void editLeaseRefreshRef.current?.();
   };
 
-  const canManageItinerary = hasEditPermission && isOnline;
-  const canAdjustItineraryTime = hasEditPermission;
+  const canManageItinerary = hasEditPermission && isOnline && !isHistoricalTripReadOnly;
+  const canAdjustItineraryTime = hasEditPermission && !isHistoricalTripReadOnly;
   const getCoverPublicUrl = (path: string) => coverUrls[path] ?? "";
 
   const activeDayDate = getItineraryDayDate(trip.departureDate, activeDay);
@@ -756,6 +1066,12 @@ export const ItineraryPage = ({
     : null;
 
   const startTimeAdjustment = () => {
+    if (!canManageItinerary || editLeaseStatus !== "ready" || hasRemoteLeaseOnActiveDay) {
+      setTimeAdjustmentSaveError(hasRemoteLeaseOnActiveDay
+        ? "本日有卡片正在其他裝置編輯，請先等待釋放後再調整時間。"
+        : "目前無法確認卡片編輯鎖定狀態；請稍後重試。");
+      return;
+    }
     resetForm();
     resetOrder();
     setShowOrderSaved(false);
@@ -769,6 +1085,12 @@ export const ItineraryPage = ({
   };
 
   const startOrderTimePreview = () => {
+    if (editLeaseStatus !== "ready" || hasRemoteLeaseOnActiveDay) {
+      setOrderSaveError(hasRemoteLeaseOnActiveDay
+        ? "本日有卡片正在其他裝置編輯，無法調整時間。"
+        : "目前無法確認卡片編輯鎖定狀態；請稍後重試。");
+      return;
+    }
     resetForm();
     resetOrder();
     setShowOrderSaved(false);
@@ -792,6 +1114,12 @@ export const ItineraryPage = ({
   };
 
   const startOrderAdjustment = () => {
+    if (!canManageItinerary || editLeaseStatus !== "ready" || hasRemoteLeaseOnActiveDay) {
+      setOrderSaveError(hasRemoteLeaseOnActiveDay
+        ? "本日有卡片正在其他裝置編輯，請先等待釋放後再調整順序。"
+        : "目前無法確認卡片編輯鎖定狀態；請稍後重試。");
+      return;
+    }
     resetForm();
     resetTimeAdjustment();
     setShowOrderSaved(false);
@@ -810,6 +1138,12 @@ export const ItineraryPage = ({
 
   const saveOrder = async () => {
     if (isOrderSaving) return;
+    if (!canManageItinerary || editLeaseStatus !== "ready" || hasRemoteLeaseOnActiveDay) {
+      setOrderSaveError(hasRemoteLeaseOnActiveDay
+        ? "本日有卡片正在其他裝置編輯，請先等待釋放後再儲存順序。"
+        : "目前無法確認卡片編輯鎖定狀態；請稍後重試。");
+      return;
+    }
     setIsOrderSaving(true);
     setOrderSaveError(null);
     try {
@@ -839,6 +1173,10 @@ export const ItineraryPage = ({
   };
 
   const openCopyDialog = (event: ItineraryItem) => {
+    if (!canModifyCard(event.id)) {
+      setEditClaimError("此卡片目前由其他裝置編輯，暫時無法複製；請先重新確認卡片狀態。");
+      return;
+    }
     setCopySource(event);
     setCopyTargetDays([]);
     setCopyArrivalTime("");
@@ -928,6 +1266,10 @@ export const ItineraryPage = ({
 
   const saveCopies = async () => {
     if (!copySource || isCopySaving) return;
+    if (!canModifyCard(copySource.id)) {
+      setCopySaveError("來源卡片目前由其他裝置編輯，無法複製；請先退出並重新確認卡片內容。");
+      return;
+    }
     if (!copyTimeValidation.isValid) {
       setCopyTimeAlertErrors(
         [copyArrivalError, copyDepartureError].filter((message): message is string => Boolean(message)),
@@ -1108,6 +1450,10 @@ export const ItineraryPage = ({
 
   const applyTimeAdjustment = async () => {
     if (!timeAdjustmentResult || timeAdjustmentResult.blocker || isTimeAdjustmentSaving) return;
+    if (!canManageItinerary || Object.keys(currentEditLeases).length > 0 || editLeaseStatus !== "ready") {
+      setTimeAdjustmentSaveError("目前有卡片正在其他裝置編輯，或無法確認鎖定狀態；請重新確認後再套用時間調整。");
+      return;
+    }
     setIsTimeAdjustmentSaving(true);
     setTimeAdjustmentSaveError(null);
     try {
@@ -1252,6 +1598,10 @@ export const ItineraryPage = ({
   };
 
   const openCoverPhotoDialog = (index: number, event: ItineraryItem) => {
+    if (!canModifyCard(event.id)) {
+      setEditClaimError("此卡片目前由其他裝置編輯，暫時無法設定照片；請先重新確認卡片狀態。");
+      return;
+    }
     const query = event.location.trim();
     coverDialogOpenerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     setCoverTargetIndex(index);
@@ -1434,6 +1784,11 @@ export const ItineraryPage = ({
     const dayKey = String(activeDay);
     const target = stableDaysData[dayKey]?.[coverTargetIndex];
     if (!target?.id) return;
+    if (!canModifyCard(target.id)) {
+      setEditClaimError("此卡片已由其他裝置取得編輯權，照片未儲存；請重新確認最新卡片內容。");
+      closeCoverPhotoDialog();
+      return;
+    }
     setIsCoverSaving(true);
     setCoverPhotoError(null);
     let uploadedPath: string | null = null;
@@ -1474,6 +1829,10 @@ export const ItineraryPage = ({
     const dayKey = String(activeDay);
     const target = stableDaysData[dayKey]?.[index];
     if (!target?.coverPhoto) return;
+    if (!canModifyCard(target.id)) {
+      setEditClaimError("此卡片目前由其他裝置編輯，無法移除照片；請先重新確認卡片狀態。");
+      return;
+    }
     const nextItem = { ...target };
     delete nextItem.coverPhoto;
     const nextTrip: TripDetail = {
@@ -1605,6 +1964,17 @@ export const ItineraryPage = ({
   const saveItem = async () => {
     if (!draft.title.trim() || isPlaceDecisionPending || isItemSaving) return;
 
+    if (
+      editingIndex !== null &&
+      (!canUseEditLeases ||
+        !editingLeaseCardIdRef.current ||
+        !editLeaseClientRef.current ||
+        !hasValidEditingLease)
+    ) {
+      setItemSaveError("卡片編輯權已失效，為避免覆蓋其他裝置的修改，請取消後重新取得編輯權。");
+      return;
+    }
+
     setItemSaveError(null);
     const dayKey = String(activeDay);
     const stableDaysData = ensureItineraryDaysDataIds(trip.content.daysData);
@@ -1684,6 +2054,17 @@ export const ItineraryPage = ({
     let savedEvents = editingIndex === null
       ? sortItineraryItemsByTime(nextEvents)
       : nextEvents;
+    if (editingIndex !== null && JSON.stringify(currentEvents[editingIndex]) === JSON.stringify(nextEvent)) {
+      const released = await releaseEditingLease();
+      if (released) {
+        releaseFocusedControl();
+        setIsFormOpen(false);
+        setEditingIndex(null);
+        setDraft(createEmptyItineraryDraft());
+        setEditClaimError(null);
+      }
+      return;
+    }
     const changedIndex = savedEvents.indexOf(nextEvent);
     const routeSegments = getTravelSegmentsNeedingEstimate(
       savedEvents,
@@ -1745,6 +2126,10 @@ export const ItineraryPage = ({
     const currentEvents = stableDaysData[dayKey] ?? [];
     const targetEvent = currentEvents[index];
     if (!targetEvent) return;
+    if (!canModifyCard(targetEvent.id)) {
+      setEditClaimError("此卡片目前由其他裝置編輯，無法刪除；請先重新確認卡片內容。");
+      return;
+    }
     if (!confirm(`確定刪除「${targetEvent.title}」？`)) return;
 
     await onSaveTripDetail({
@@ -2077,7 +2462,7 @@ export const ItineraryPage = ({
           {isInlineEdit && (
             <button
               type="button"
-              onClick={resetForm}
+              onClick={() => void resetForm()}
               disabled={isItemSaving}
               className="min-h-11 rounded-lg border border-slate-200 bg-white px-4 text-sm font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-60"
             >
@@ -2142,8 +2527,7 @@ export const ItineraryPage = ({
               )}
             </h2>
           </div>
-          {(canManageItinerary || canAdjustItineraryTime) && (
-            <button
+          <button
               type="button"
               onClick={toggleManageMode}
               disabled={!canManageItinerary}
@@ -2156,7 +2540,6 @@ export const ItineraryPage = ({
               {isManageMode ? <X size={14} /> : <Settings2 size={14} />}
               {isManageMode ? "退出" : "管理"}
             </button>
-          )}
         </div>
       </div>
 
@@ -2166,7 +2549,25 @@ export const ItineraryPage = ({
         </p>
       )}
 
-      {(canManageItinerary || (canAdjustItineraryTime && isTimeAdjustmentMode)) && (isManageMode || isTimeAdjustmentMode) && (
+      {((hasRemoteLeaseOnActiveDay && !isRemoteLeaseNoticeDismissed) || releasedWaitingCardIds.length > 0) && (
+        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-3 text-xs leading-relaxed text-amber-900" role="status">
+          <p className="font-bold">{hasRemoteLeaseOnActiveDay ? "本日有卡片正在其他裝置編輯" : "卡片已釋放編輯鎖定"}</p>
+          <p className="mt-1">{hasRemoteLeaseOnActiveDay
+            ? "本日的調整順序與調整時間暫時鎖定；新增活動仍可使用。受鎖定卡片的照片、複製、編輯及刪除功能也會停用。"
+            : "其他裝置已結束對此卡片的編輯。請先退出目前操作，重新確認最新卡片內容；如需再次修改，請重新使用編輯功能。"}</p>
+          <button
+            type="button"
+            onClick={() => {
+              void closeManageMode();
+            }}
+            className="mt-2 rounded-md border border-amber-300 bg-white px-3 py-1.5 font-bold text-amber-900"
+          >
+            退出管理並重新確認
+          </button>
+        </div>
+      )}
+
+      {(isManageMode || isTimeAdjustmentMode) && (
         <div className="mb-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="flex items-center justify-between gap-2">
             <h3 className="text-sm font-bold text-slate-800">
@@ -2208,6 +2609,48 @@ export const ItineraryPage = ({
             </div>
           </div>
 
+          {!isSignedIn ? (
+            <p className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs leading-relaxed text-slate-600" role="status">
+              登入後才能編輯與同步卡片。
+            </p>
+          ) : isHistoricalTripReadOnly ? (
+            <p className="mt-3 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs leading-relaxed text-sky-800" role="status">
+              歷史行程目前僅供檢視，無法修改卡片。
+            </p>
+          ) : !isOnline ? (
+            <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-800" role="status">
+              目前離線，卡片編輯鎖無法驗證；重新連線後才能編輯。
+            </p>
+          ) : !hasEditPermission ? (
+            <p className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs leading-relaxed text-slate-600" role="status">
+              目前帳號沒有此行程的編輯權限。
+            </p>
+          ) : editLeaseStatus === "loading" ? (
+            <p className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs leading-relaxed text-slate-600" role="status">
+              正在確認其他裝置的卡片編輯狀態…
+            </p>
+          ) : editLeaseStatus === "error" ? (
+            <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-800" role="status">
+              無法確認卡片編輯鎖定狀態，暫時不能編輯。
+              <button type="button" onClick={() => void editLeaseRefreshRef.current?.()} className="ml-2 underline">
+                重新確認
+              </button>
+            </p>
+          ) : null}
+
+          {editClaimError && (
+            <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800" role="status">
+              {editClaimError}
+            </p>
+          )}
+          {editLeaseError && canManageItinerary && (
+            <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800" role="status">
+              {editLeaseError}
+              <button type="button" onClick={() => void editLeaseRefreshRef.current?.()} className="ml-2 underline">
+                重新確認
+              </button>
+            </p>
+          )}
           <p className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-xs leading-relaxed text-slate-500">
             新增依到達時間排序；編輯時間不改卡片順序。
           </p>
@@ -2471,7 +2914,7 @@ export const ItineraryPage = ({
             <Fragment key={sortableId}>
             <SortableCard
               id={sortableId}
-              disabled={!isOrderMode}
+              disabled={!isOrderMode || (canUseEditLeases && editLeaseStatus !== "ready")}
               onKeyboardMove={(direction) => setOrderDraft((items) => moveItineraryItem(items, sortableId, direction))}
             >
             {(dragHandle) => <article
@@ -2711,7 +3154,8 @@ export const ItineraryPage = ({
                   <button
                     type="button"
                     onClick={() => openCoverPhotoDialog(originalIndex, event)}
-                    className="inline-flex items-center gap-1 rounded-lg bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700 hover:bg-emerald-100"
+                    disabled={!canModifyCard(event.id)}
+                    className="inline-flex items-center gap-1 rounded-lg bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     <ImageIcon size={13} /> {event.coverPhoto ? "更換照片" : "設定照片"}
                   </button>
@@ -2719,7 +3163,8 @@ export const ItineraryPage = ({
                     <button
                       type="button"
                       onClick={() => void removeCoverPhoto(originalIndex)}
-                      className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-200"
+                      disabled={!canModifyCard(event.id)}
+                      className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       移除照片
                     </button>
@@ -2727,21 +3172,32 @@ export const ItineraryPage = ({
                   <button
                     type="button"
                     onClick={() => openCopyDialog(event)}
-                    className="inline-flex items-center gap-1 rounded-lg bg-sky-50 px-3 py-1.5 text-xs font-bold text-sky-700 hover:bg-sky-100"
+                    disabled={!canModifyCard(event.id)}
+                    className="inline-flex items-center gap-1 rounded-lg bg-sky-50 px-3 py-1.5 text-xs font-bold text-sky-700 hover:bg-sky-100 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     <Copy size={13} /> 複製
                   </button>
                   <button
                     type="button"
-                    onClick={() => startEditItem(event, originalIndex)}
-                    className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-200"
+                    onClick={() => void startEditItem(event, originalIndex)}
+                    disabled={isClaimingEdit || !hasCurrentEditLeaseList || isCardLockedByOther(event.id)}
+                    title={isCardLockedByOther(event.id) ? "此卡片目前由其他裝置編輯" : undefined}
+                    className="rounded-lg bg-white px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    編輯
+                    {isClaimingEdit && claimingCardId === event.id
+                      ? "取得編輯權…"
+                      : editLeaseStatus === "loading"
+                        ? "確認鎖定…"
+                        : editLeaseStatus === "error"
+                          ? "鎖定狀態未知"
+                          : "編輯"}
                   </button>
                   <button
                     type="button"
                     onClick={() => void deleteItem(originalIndex)}
-                    className="rounded-lg bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-700 hover:bg-rose-100"
+                    disabled={!canModifyCard(event.id)}
+                    title={isCardLockedByOther(event.id) ? "此卡片目前由其他裝置編輯" : undefined}
+                    className="rounded-lg bg-white px-3 py-1.5 text-xs font-bold text-rose-700 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     刪除
                   </button>

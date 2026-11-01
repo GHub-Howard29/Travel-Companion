@@ -48,8 +48,9 @@ assert.doesNotMatch(
 assert.match(app, /await reconcileTripWorkspace\(\)/);
 assert.match(app, /await reloadCurrentTrip\(\)/);
 assert.match(app, /kind=\{updateAvailable \? null : tripDataNoticeKind\}/);
-assert.match(app, /willApplyPreparedUpdate=\{hasPreparedUpdate && updateAvailable\}/);
-assert.match(revisionNotice, /重新載入並套用新版/);
-assert.match(revisionNotice, /重新載入會同時套用新版並取得最新行程資料/);
+assert.match(app, /<TripDataRevisionNotice[\s\S]*kind=\{updateAvailable \? null : tripDataNoticeKind\}/);
+assert.match(revisionNotice, /重新載入以套用最新權限/);
+assert.match(revisionNotice, /確認衝突並重新載入/);
+assert.match(revisionNotice, /行程資料已在其他裝置更新/);
 
 console.log("V3.9.13 PWA 更新與遠端行程修訂競態靜態契約驗證通過。");

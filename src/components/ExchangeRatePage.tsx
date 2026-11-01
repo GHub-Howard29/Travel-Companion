@@ -130,7 +130,6 @@ export const ExchangeRatePage = ({
   const refreshCloudPurchases = useCallback(async (): Promise<boolean> => {
     if (!canViewCloudHistory) return false;
 
-    setCloudStatus("syncing");
     const cloudPurchases = await getCloudExchangePurchases(supabase, tripId);
     if (cloudPurchases === null) {
       setCloudStatus("error");
@@ -149,7 +148,6 @@ export const ExchangeRatePage = ({
 
     let active = true;
     void (async () => {
-      setCloudStatus("syncing");
       const cloudPurchases = await getCloudExchangePurchases(supabase, tripId);
       if (!active) return;
       if (cloudPurchases === null) {

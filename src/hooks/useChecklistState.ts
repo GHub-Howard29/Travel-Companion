@@ -59,6 +59,7 @@ export const useChecklistState = (
     "local" | "syncing" | "synced" | "error"
   >("local");
   const [syncError, setSyncError] = useState<string | null>(null);
+  const [isUserSyncing, setIsUserSyncing] = useState(false);
   const localMutationRevisionRef = useRef(0);
   const initialSyncPromiseRef = useRef<Promise<void>>(Promise.resolve());
   const cloudWriteQueueRef = useRef<Promise<void>>(Promise.resolve());
@@ -415,6 +416,7 @@ export const useChecklistState = (
         : null;
 
       if (canSyncToCloud) {
+        setIsUserSyncing(true);
         setSyncStatus("syncing");
         setSyncError(null);
         isCloudWritePendingRef.current = true;
@@ -474,6 +476,7 @@ export const useChecklistState = (
           .finally(() => {
             if (localMutationRevisionRef.current === mutationRevision) {
               isCloudWritePendingRef.current = false;
+              setIsUserSyncing(false);
             }
           });
       }
@@ -523,6 +526,7 @@ export const useChecklistState = (
     items,
     checkedItemIds,
     syncStatus: canReadCloud ? syncStatus : "local",
+    isUserSyncing: canReadCloud && isUserSyncing,
     syncError: canReadCloud ? syncError : null,
     toggleChecklistItem,
     reorderChecklistItems,

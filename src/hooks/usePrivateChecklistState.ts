@@ -106,7 +106,6 @@ export const usePrivateChecklistState = (
       return;
     }
 
-    setSyncStatus("syncing");
     setSyncError(null);
 
     const latestChecklist = await syncPrivateChecklistWithCloud(
@@ -265,7 +264,6 @@ export const usePrivateChecklistState = (
     let isActive = true;
 
     const syncInitialChecklist = async () => {
-      setSyncStatus("syncing");
       setSyncError(null);
 
       try {

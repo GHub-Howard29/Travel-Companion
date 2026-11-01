@@ -290,7 +290,6 @@ function ConfiguredApp({
     updateError,
     isChecking,
     updatePhase,
-    hasPreparedUpdate,
     update,
     dismiss,
   } = useAppUpdate();
@@ -382,13 +381,14 @@ function ConfiguredApp({
     isTripMasterLocked,
     isChangePreviewOpen,
     isChangePreviewLoading,
+    isConfirmingPreview: isConfirmingTripDataPreview,
     changePreviewSummary,
     changePreviewError,
     checkForRemoteTripChange,
     openChangePreview,
     closeChangePreview,
     showConflict: showTripVersionConflict,
-    snooze: snoozeTripDataNotice,
+    confirmNotice: confirmTripDataNotice,
     reload: reloadForTripDataChange,
   } = useTripDataRevision({
     supabase,
@@ -414,7 +414,7 @@ function ConfiguredApp({
   const [isPersonalExpenseAliasEditOpen, setIsPersonalExpenseAliasEditOpen] = useState(false);
   const [requestedOtherInfoFolderId, setRequestedOtherInfoFolderId] = useState<string | null>(null);
   const [otherInfoSyncStatus, setOtherInfoSyncStatus] = useState<
-    OtherInfoSyncStatus | "syncing" | null
+    OtherInfoSyncStatus | null
   >(null);
   const otherInfoSyncingTripsRef = useRef(new Set<string>());
   const [checklistCopySources, setChecklistCopySources] = useState<
@@ -961,7 +961,6 @@ function ConfiguredApp({
         );
         if (!record) break;
 
-        setOtherInfoSyncStatus("syncing");
         const items = record.detail.content.otherInfoItems ?? [];
         // RC2 以前的 pending state 沒有 itemIds。這種舊狀態不可再把
         // 整份本機快照上傳，否則會把另一台裝置已 soft-delete 的資料復活。
@@ -1011,7 +1010,6 @@ function ConfiguredApp({
   ]);
 
   const retryOtherInfoSync = useCallback(() => {
-    setOtherInfoSyncStatus("syncing");
     void syncPendingOtherInfo();
   }, [syncPendingOtherInfo]);
 
@@ -1450,9 +1448,8 @@ function ConfiguredApp({
       <TripDataRevisionNotice
         kind={updateAvailable ? null : tripDataNoticeKind}
         isOnline={isOnline}
-        willApplyPreparedUpdate={hasPreparedUpdate && updateAvailable}
         onPreviewChanges={openChangePreview}
-        onSnooze={snoozeTripDataNotice}
+        onConfirm={confirmTripDataNotice}
         onReload={reloadForTripDataChange}
       />
 
@@ -1460,10 +1457,10 @@ function ConfiguredApp({
         isOpen={isChangePreviewOpen}
         summary={changePreviewSummary}
         isLoading={isChangePreviewLoading}
+        isConfirming={isConfirmingTripDataPreview}
         error={changePreviewError}
-        willApplyPreparedUpdate={hasPreparedUpdate && updateAvailable}
         onClose={closeChangePreview}
-        onReload={reloadForTripDataChange}
+        onConfirm={confirmTripDataNotice}
       />
 
       {/* 主內容呈現區 */}
@@ -1501,11 +1498,13 @@ function ConfiguredApp({
             {/* 1. 行程規劃模組 */}
             {currentScreenType === "itinerary" && currentTrip && (
               <ItineraryPage
-                key={`${selectedTripId}-${userEmail ?? "guest"}-${isOnline ? "online" : "offline"}`}
+                key={`${selectedTripId}-${userEmail ?? "guest"}`}
                 supabase={supabase}
                 trip={currentTrip}
                 activeDay={activeDay}
                 hasEditPermission={canEditTripMaster}
+                isSignedIn={isSignedIn}
+                isHistoricalTripReadOnly={isSharedTripReadOnly}
                 isOnline={isOnline}
                 onActiveDayChange={setActiveDay}
                 otherInfoFolders={(currentTrip.content.otherInfoFolders ?? getFolders(selectedTripId)).filter((folder) => folder.isVisible !== false).filter((folder) => {

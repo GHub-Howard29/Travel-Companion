@@ -62,7 +62,7 @@ interface OtherInfoPageProps {
   isSpecialInfoPage?: boolean;
   specialFolderId?: string;
   requestedFolderId?: string | null;
-  syncStatus?: OtherInfoSyncStatus | "syncing" | null;
+  syncStatus?: OtherInfoSyncStatus | null;
   onRetrySync?: () => void;
   onManageModeChange?: (isManaging: boolean) => void;
 }
@@ -496,11 +496,9 @@ export const OtherInfoPage = ({
         >
           <div className="flex items-center justify-between gap-3">
             <span>
-              {syncStatus === "syncing"
-                ? "同步中…"
-                : syncStatus === "failed"
-                  ? "同步失敗，資料已保存在本機，連線恢復後會自動重試。"
-                  : "已儲存於本機，待連線同步。"}
+              {syncStatus === "failed"
+                ? "同步失敗，資料已保存在本機，連線恢復後會自動重試。"
+                : "已儲存於本機，待連線同步。"}
             </span>
             {syncStatus === "failed" && onRetrySync && (
               <button
