@@ -8,11 +8,16 @@
 - 清楚區分已確認事實、合理推論、建議方案與尚未完成的驗證，不把未測試或未發布的結果描述成已完成。
 # Node.js 執行環境辨識（OpenChatX Home／OpenChatX 通用）
 - **不得將 OpenChatX 內建 Node.js 當成專案 Node.js。** OpenChatX Home／OpenChatX 的 Bash、MCP 或其他命令程序可能預設使用 OpenChatX 自帶的 runtime Node；例如家用端曾回報 `C:\Users\A-Haw\AppData\Local\Programs\OpenChatX\runtime\bin\node.exe`（v22.18.0），公司端曾回報 `C:\Users\ahow_ho\AppData\Local\Programs\OpenChatX\runtime\bin\node.exe`（v22.18.0）。這些都是 OpenChatX 工具執行環境，不代表 Travel-Companion 的 Node 版本，也不代表專案所安裝的 Node 不存在或版本錯誤。實際路徑及版本須以當次命令程序的檢查結果為準，不可把某一台主機的使用者目錄或 runtime 路徑套用到另一台主機。
-- Travel-Companion 專案 Node 版本以專案 `.nvmrc`、`package.json` 的 `engines.node` 及指定主機上的實際安裝目錄為準；目前專案要求 `22.23.2`。家用端與公司端均應使用各自主機實際安裝的專案 Node，不可因兩端安裝位置不同而改變專案版本要求。公司端已確認安裝於 `C:\nvm\v22.23.2\node.exe`；其他主機不得未經檢查直接假定使用相同路徑。
-- **每次進行 Node／npm、依賴、測試、lint、build 或 Supabase CLI 的版本檢查時，必須先在當次命令程序內明確將該主機的專案 Node 目錄放到 PATH 最前端，再執行版本與工具命令。** PowerShell 範例（僅適用於已確認專案 Node 位於該路徑的主機）：
-  `$env:PATH = 'C:\nvm\v22.23.2;' + $env:PATH`
-  然後執行 `node --version`，確認輸出 `v22.23.2`；再確認 `npm --version` 為 `10.9.8`。若專案 Node 安裝於其他目錄，應代入該主機經查證的實際目錄，不得照抄範例路徑。
-- 為避免誤判，必要時先記錄 `(Get-Command node).Source` 與 `node --version`；若來源仍是 OpenChatX `runtime\\bin\\node.exe`，代表命令尚未切換到專案 Node，必須先修正 PATH，不能回報專案版本不符或要求使用者重裝 Node。
+- Travel-Companion 專案 Node 版本以專案 `.nvmrc`、`package.json` 的 `engines.node` 及指定主機上的實際安裝目錄為準；目前專案要求 `22.23.2`。家用端與公司端均應使用各自主機實際安裝的專案 Node，不可因兩端安裝位置不同而改變專案版本要求。其他主機不得未經檢查直接假定使用公司端或家用端的 Node 路徑。
+- **Node 工作流程（兼顧正確性與 Token／命令成本）：**
+  1. 每次開始一項 Travel-Companion 專案任務時，先確認目前實際執行主機身分（Windows `COMPUTERNAME`／`USERDOMAIN`）；若本次工作階段已取得且主機未切換，可沿用該身分，不需在每條命令重複查詢。
+  2. 對該主機，優先沿用本工作階段或可信診斷紀錄中已驗證的專案 Node 安裝目錄；只有首次接觸該主機、路徑未記錄、檔案不存在、版本不符或疑似安裝異動時，才重新搜尋與驗證實際路徑。不得直接套用另一台主機的路徑。
+  3. 每次執行依賴 Node／npm 的命令（包含 Node／npm 版本檢查、依賴安裝、測試、lint、build、Supabase CLI）時，必須在該次命令程序內將已確認的專案 Node 目錄放到 PATH 最前端，再執行命令。PowerShell 範例：`$env:PATH = '<該主機已確認的專案 Node 目錄>;' + $env:PATH`。這是單次程序設定，不寫入使用者或系統永久環境變數。
+  4. 不需每次執行所有 Node 工具版本檢查；只檢查本次任務實際使用的工具，且必要時記錄 `(Get-Command node).Source`，確認解析到專案 Node 而非 OpenChatX `runtime\\bin\\node.exe`。
+  5. 若主機身分、Node 路徑或版本有疑義，先停止依賴該環境的命令並查證；不得把 OpenChatX 內建 Node 的版本誤報為專案版本錯誤，也不得因此要求使用者重裝 Node。
+- 公司端目前已驗證專案 Node 位於 `C:\nvm\v22.23.2\node.exe`，npm 為 `10.9.8`；此路徑只適用於已確認的公司主機 `TPEPC-TM7503-01`／`NICE-GREEN`，其他主機必須獨立確認。
+- **公司端瀏覽器操作工具政策（預設且強制）：** 在公司主機 `TPEPC-TM7503-01`／`NICE-GREEN` 執行 Travel-Companion 相關瀏覽器操作、分頁讀取、頁面導覽或 UI 驗證時，唯一允許使用 `open-browser-use` 原生 CLI（直接執行已安裝的 native CLI／其命令）；不得使用 `open-browser-use-office` MCP 工具執行瀏覽器操作，也不得每次工作開始時重新測試或排查該 MCP。此限制只適用公司端，不延伸至家用端。只有使用者明確解除本規則，或明確核准改用新工具／新流程後，才可變更。若原生 CLI 本身故障，回報具體錯誤並停止該項瀏覽器操作，不可自行切回 MCP。
+- 公司端原生 CLI 可執行檔目前已驗證位於 `C:\nvm\v22.23.2\node_modules\open-browser-use\native\windows-amd64\open-browser-use.exe`，版本 `0.1.42`；CLI npm wrapper 入口為 `C:\nvm\v22.23.2\node_modules\open-browser-use\cli\open-browser-use.js`。以上路徑僅適用已確認的公司主機；若日後升級、搬移或更換工具，需經使用者核准後更新。
 - 專案工具檢查及測試命令可採單次程序 PATH 覆寫；不得擅自修改 OpenChatX 全域 runtime、安裝目錄或使用者全域 Node 設定。除非使用者另行授權，不做永久性環境變數修改。
 - **既有診斷更正原則：** 過去若只在 OpenChatX 預設 shell 讀到 v22.18.0，應更正為「OpenChatX 內建 Node v22.18.0；專案 Node 版本須依專案設定及該主機安裝位置，在專案 PATH 下另行驗證」，不得將其列為專案工具阻塞。
 
