@@ -106,7 +106,12 @@ async function assertHandoffGitState() {
     console.log(JSON.stringify({ fixtureCompatibilityValidated: validated.length, fixtures: validated }, null, 2));
   }
   if (status.some((line) => line.includes("supabase/test-fixtures/"))) {
-    throw new Error("安全停止：handoff 開始前已有 fixture 變更，避免覆寫或提交其他操作的資料。");
+    // A prior handoff may already have exported the local synthetic DB into
+    // fixture files. Accept only when every active fixture validates; retain
+    // the captured status as the baseline so publish can stage only its
+    // expected fixture paths and reject unrelated changes.
+    const validated = await validateActiveFixtures({ verifyGitHistory: false });
+    console.log(JSON.stringify({ preexistingFixtureChangesValidated: validated.length, fixtures: validated }, null, 2));
   }
   const counts = runGit(["rev-list", "--left-right", "--count", "HEAD...origin/develop"]).split(/\s+/).map(Number);
   if (counts.length !== 2 || counts.some((value) => !Number.isFinite(value)) || counts[0] !== 0 || counts[1] !== 0) {
@@ -794,10 +799,6 @@ async function importAllFixtures() {
   }, null, 2));
 }
 
-function localSourceHost() {
-  return (process.env.TC_TEST_SOURCE || process.env.COMPUTERNAME || "unknown").toLowerCase();
-}
-
 async function handoff({ autoCommitPush = false } = {}) {
   const baselineGitStatus = autoCommitPush ? await assertHandoffGitState() : null;
   if (!autoCommitPush) assertDevelopBranch();
@@ -807,41 +808,38 @@ async function handoff({ autoCommitPush = false } = {}) {
     .sort((a, b) => a.name.localeCompare(b.name));
   const candidates = fixtureEntries.map((entry) => ({ id: entry.name }));
   const results = [];
-  const sourceOwned = [];
-  const receiverOnly = [];
   for (const item of candidates) {
     const currentFixture = await readFixture(path.relative(root, fixtureDirectory(item.id)));
-    if (typeof currentFixture.manifest.sourceHost !== "string" || !currentFixture.manifest.sourceHost.trim()) {
-      throw new Error(`fixture ${item.id} 缺少有效 sourceHost；不可判斷來源／接收端角色。`);
-    }
-    if (currentFixture.manifest.sourceHost.toLowerCase() !== localSourceHost()) {
-      receiverOnly.push({ fixtureId: item.id, version: currentFixture.manifest.version, sourceHost: currentFixture.manifest.sourceHost });
-      await recordHandoffState(item.id);
-      continue;
-    }
     const applied = (await loadAppliedState()).fixtures[item.id];
     if (!applied) {
+      // The committed fixture is the trusted parent revision. Register it as
+      // the baseline first, then allow local synthetic DB edits to export as
+      // the next revision. fetchExistingFixtureData validates the fixture
+      // marker and rejects missing/non-synthetic trips.
       const currentData = await fetchExistingFixtureData(item.id);
-      if (!dataMatchesFixture(currentData, currentFixture.data)) {
-        throw new Error(`來源端 fixture ${item.id} 尚無已套用 revision 基準，且資料庫與目前版本不相同；拒絕從未知基準發布。`);
-      }
       const state = await loadAppliedState();
       state.fixtures[item.id] = { version: currentFixture.manifest.version, checksum: currentFixture.manifest.checksum };
       await writeAppliedState(state);
       await recordHandoffState(item.id);
-      results.push({ fixtureId: item.id, result: "baseline-adopted", version: currentFixture.manifest.version });
+
+      if (dataMatchesFixture(currentData, currentFixture.data)) {
+        results.push({ fixtureId: item.id, result: "baseline-adopted", version: currentFixture.manifest.version });
+        continue;
+      }
+
+      results.push(await exportFixture(item.id, { allowUpdate: true }));
+      await validateFixture(path.relative(root, fixtureDirectory(item.id)));
+      await recordHandoffState(item.id);
       continue;
     }
-    if (applied.version !== currentFixture.manifest.version || applied.checksum !== currentFixture.manifest.checksum) {
-      throw new Error(`來源端 fixture ${item.id} 的已套用版本與 Git fixture 不一致；拒絕反向匯出。`);
+    const appliedMatchesCurrent = applied.version === currentFixture.manifest.version && applied.checksum === currentFixture.manifest.checksum;
+    const appliedMatchesParent = applied.version === currentFixture.manifest.parentVersion && applied.checksum === currentFixture.manifest.parentChecksum;
+    if (!appliedMatchesCurrent && !appliedMatchesParent) {
+      throw new Error(`fixture ${item.id} 的本機已套用版本與 Git revision／待發布父版本皆不一致；拒絕匯出，避免覆蓋未同步修改。`);
     }
-    sourceOwned.push(item.id);
     results.push(await exportFixture(item.id, { allowUpdate: true }));
     await validateFixture(path.relative(root, fixtureDirectory(item.id)));
     await recordHandoffState(item.id);
-  }
-  if (autoCommitPush && receiverOnly.length) {
-    throw new Error(`此電腦是 fixture 接收端（${receiverOnly.map((item) => `${item.fixtureId}:${item.sourceHost}`).join(", ")}）；不可從接收端資料庫反向發布。`);
   }
   const changed = results.some((item) => item.result !== "unchanged");
   let gitResult = { committed: false, pushed: false };

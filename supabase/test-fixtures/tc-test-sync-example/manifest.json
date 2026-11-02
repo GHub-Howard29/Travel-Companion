@@ -1,12 +1,12 @@
 {
   "schemaVersion": 1,
   "fixtureId": "tc-test-sync-example",
-  "version": 4,
-  "parentVersion": 3,
-  "parentChecksum": "8fb27afabdd3602753eb392d47df16d23ce23d2856e15ae390e78a5caaf3e7af",
+  "version": 5,
+  "parentVersion": 4,
+  "parentChecksum": "a8d13e1b65ed879704687f285c9bf6167ac4427a2ad43829b99bc60a34011faa",
   "status": "active",
-  "sourceHost": "HOWARD-NEWPC",
-  "exportedAt": "2026-11-01T14:10:43.603Z",
+  "sourceHost": "TPEPC-TM7503-01",
+  "exportedAt": "2026-11-02T16:08:18.925Z",
   "tables": [
     "trips",
     "checklists",
@@ -23,6 +23,6 @@
     "exchange_purchases": 0,
     "other_info_items": 0
   },
-  "checksum": "a8d13e1b65ed879704687f285c9bf6167ac4427a2ad43829b99bc60a34011faa",
+  "checksum": "301153c0fa20354522a9d83c1c76f8bb0a7d745e59dbcb48a799a6660b1d15ca",
   "note": "Synthetic test data only. Import is restricted to local loopback Supabase."
 }

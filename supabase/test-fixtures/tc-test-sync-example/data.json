@@ -214,7 +214,7 @@
         }
       ],
       "title": "Travel-Companion 合成測試接力行程",
-      "updated_at": "2026-11-01T10:57:32.760629+00:00"
+      "updated_at": "2026-11-01T14:32:32.490189+00:00"
     }
   ],
   "checklists": [
@@ -224,7 +224,7 @@
       "scope": "shared",
       "title": "跨電腦同步驗收清單",
       "trip_id": "tc-test-sync-example",
-      "updated_at": "2026-10-29T05:00:00+00:00"
+      "updated_at": "2026-11-01T14:32:32.687331+00:00"
     }
   ],
   "checklist_items": [
@@ -274,7 +274,7 @@
       "is_checked": true,
       "label": "確認合成測試行程可在另一台電腦載入",
       "sort_order": 0,
-      "updated_at": "2026-11-01T10:57:33.475979+00:00"
+      "updated_at": "2026-11-01T14:32:32.689076+00:00"
     },
     {
       "category": "必備證件",
@@ -312,7 +312,7 @@
       "payer": "合成測試者",
       "title": "合成測試費用",
       "trip_id": "tc-test-sync-example",
-      "updated_at": "2026-10-29T05:00:00+00:00"
+      "updated_at": "2026-11-01T14:32:32.711054+00:00"
     }
   ],
   "exchange_purchases": [],
