@@ -741,7 +741,7 @@ async function importAllFixtures() {
     }
     if (revisionDecision.action === "skip") {
       const current = await fetchExistingFixtureData(manifest.fixtureId);
-      if (!dataMatchesFixture(current, fixture.data)) {
+      if (!dataMatchesFixture(current, fixture.data, { ignoreTimestamps: true })) {
         throw new Error(`fixture ${manifest.fixtureId} 資料庫內容與已記錄 v${manifest.version} 不一致；可能有本機編輯，拒絕覆蓋。`);
       }
       skipped.push({ fixtureId: manifest.fixtureId, version: manifest.version, reason: "already-applied" });
@@ -809,36 +809,70 @@ async function handoff({ autoCommitPush = false } = {}) {
   const candidates = fixtureEntries.map((entry) => ({ id: entry.name }));
   const results = [];
   for (const item of candidates) {
-    const currentFixture = await readFixture(path.relative(root, fixtureDirectory(item.id)));
-    const applied = (await loadAppliedState()).fixtures[item.id];
+    const fixturePath = path.relative(root, fixtureDirectory(item.id));
+    const currentFixture = await readFixture(fixturePath);
+    const gitStatus = runGit(["status", "--porcelain=v1", "--", fixtureGitPath(item.id)]);
+    if (gitStatus) {
+      throw new Error(`fixture ${item.id} 工作檔有未提交變更；handoff 不會覆蓋或發布既有修改。`);
+    }
+    const committedFixture = readFixtureAtRevision(item.id, "HEAD");
+    if (committedFixture.manifest.version !== currentFixture.manifest.version ||
+        committedFixture.manifest.checksum !== currentFixture.manifest.checksum ||
+        !sameFixtureData(committedFixture.data, currentFixture.data)) {
+      throw new Error(`fixture ${item.id} 工作檔與 Git HEAD 不一致；拒絕執行 handoff。`);
+    }
+
+    const appliedState = await loadAppliedState();
+    const applied = appliedState.fixtures[item.id];
+    const handoffState = await loadHandoffState();
+    const previousFiles = handoffState.fixtures[item.id];
+    const currentHashes = await fixtureFileHashes(fixtureDirectory(item.id));
+    const filesMatchPrevious = previousFiles &&
+      currentHashes.dataSha256 === previousFiles.dataSha256 &&
+      currentHashes.manifestSha256 === previousFiles.manifestSha256;
+
     if (!applied) {
-      // The committed fixture is the trusted parent revision. Register it as
-      // the baseline first, then allow local synthetic DB edits to export as
-      // the next revision. fetchExistingFixtureData validates the fixture
-      // marker and rejects missing/non-synthetic trips.
+      // Bootstrap is safe only when local DB is already byte-for-byte equivalent
+      // to the committed fixture (apart from database-generated timestamps).
+      // Never infer a baseline and export an unknown local database state.
       const currentData = await fetchExistingFixtureData(item.id);
-      const state = await loadAppliedState();
-      state.fixtures[item.id] = { version: currentFixture.manifest.version, checksum: currentFixture.manifest.checksum };
-      await writeAppliedState(state);
-      await recordHandoffState(item.id);
-
-      if (dataMatchesFixture(currentData, currentFixture.data)) {
-        results.push({ fixtureId: item.id, result: "baseline-adopted", version: currentFixture.manifest.version });
-        continue;
+      if (!dataMatchesFixture(currentData, currentFixture.data, { ignoreTimestamps: true })) {
+        throw new Error(`fixture ${item.id} 缺少本機已套用版本紀錄，且資料庫不等於 Git fixture；拒絕猜測基準或產生新版本。`);
       }
-
-      results.push(await exportFixture(item.id, { allowUpdate: true }));
-      await validateFixture(path.relative(root, fixtureDirectory(item.id)));
+      appliedState.fixtures[item.id] = { version: currentFixture.manifest.version, checksum: currentFixture.manifest.checksum };
+      await writeAppliedState(appliedState);
       await recordHandoffState(item.id);
+      results.push({ fixtureId: item.id, result: "baseline-adopted", version: currentFixture.manifest.version });
       continue;
     }
+
     const appliedMatchesCurrent = applied.version === currentFixture.manifest.version && applied.checksum === currentFixture.manifest.checksum;
     const appliedMatchesParent = applied.version === currentFixture.manifest.parentVersion && applied.checksum === currentFixture.manifest.parentChecksum;
     if (!appliedMatchesCurrent && !appliedMatchesParent) {
-      throw new Error(`fixture ${item.id} 的本機已套用版本與 Git revision／待發布父版本皆不一致；拒絕匯出，避免覆蓋未同步修改。`);
+      throw new Error(`fixture ${item.id} 本機基準與 Git revision 不一致；拒絕匯出或覆蓋。`);
     }
+
+    if (!filesMatchPrevious) {
+      // A committed revision arrived from the peer. Adopt its file baseline;
+      // importing it is handled separately by importAllFixtures().
+      await recordHandoffState(item.id);
+      results.push({ fixtureId: item.id, result: "peer-revision-received", version: currentFixture.manifest.version });
+      continue;
+    }
+
+    const currentData = await fetchExistingFixtureData(item.id);
+    if (dataMatchesFixture(currentData, currentFixture.data, { ignoreTimestamps: true })) {
+      results.push({ fixtureId: item.id, result: "unchanged", version: currentFixture.manifest.version });
+      continue;
+    }
+    if (appliedMatchesParent) {
+      throw new Error(`fixture ${item.id} 本機資料已偏離已知父版本；Git 尚有待接收 revision，拒絕覆蓋或另開分支。`);
+    }
+
+    // This node may create the next revision only from the exact revision it
+    // has recorded as applied. A concurrent peer change is detected by Git.
     results.push(await exportFixture(item.id, { allowUpdate: true }));
-    await validateFixture(path.relative(root, fixtureDirectory(item.id)));
+    await validateFixture(fixturePath);
     await recordHandoffState(item.id);
   }
   const changed = results.some((item) => item.result !== "unchanged");

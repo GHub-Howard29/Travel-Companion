@@ -87,6 +87,7 @@
     "release:v364:cleanup": "node scripts/prepare-v364-release.mjs cleanup",
     "db:sync:local": "node scripts/sync-local-database.mjs",
     "test:testdata-revision": "node scripts/test-testdata-revision.mjs",
+    "test:testdata-peer-sync": "node scripts/test-testdata-peer-sync.mjs",
     "testdata:export": "node scripts/testdata-sync.mjs export",
     "testdata:validate": "node scripts/testdata-sync.mjs validate",
     "testdata:validate:active": "node scripts/testdata-sync.mjs validate:active",
