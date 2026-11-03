@@ -1,6 +1,11 @@
-import { useState } from "react";
-import type { FormEvent } from "react";
-import { AlertTriangle, Save, X } from "lucide-react";
+import { useRef, useState } from "react";
+import type { ChangeEvent, FormEvent } from "react";
+import { AlertTriangle, FileSpreadsheet, Save, X } from "lucide-react";
+import {
+  parseTripExcelWorkbook,
+  type ParsedTripExcel,
+  type TripExcelValidationIssue,
+} from "../services/tripExcelImport";
 import type {
   AdminProfile,
   TripDetail,
@@ -165,8 +170,60 @@ export const TripEditorModal = ({
     impacts: RemovedDayImpact[];
   } | null>(null);
   const [shrinkConfirmationStep, setShrinkConfirmationStep] = useState<1 | 2>(1);
+  const [creationMethod, setCreationMethod] = useState<"manual" | "excel">("manual");
+  const [excelPreview, setExcelPreview] = useState<ParsedTripExcel | null>(null);
+  const [excelIssues, setExcelIssues] = useState<TripExcelValidationIssue[]>([]);
+  const [excelFileName, setExcelFileName] = useState("");
+  const [isParsingExcel, setIsParsingExcel] = useState(false);
+  const excelInputRef = useRef<HTMLInputElement | null>(null);
 
   if (!isOpen) return null;
+
+  const handleExcelFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    setExcelPreview(null);
+    setExcelIssues([]);
+    setExcelFileName(file?.name ?? "");
+    if (!file) return;
+    if (!canManageEditors) {
+      setExcelIssues([{
+        worksheet: "新增 TRIP",
+        row: 1,
+        field: "權限",
+        message: "只有 Super Admin 可以使用 Excel 建立 TRIP。",
+      }]);
+      return;
+    }
+    if (!file.name.toLowerCase().endsWith(".xlsx")) {
+      setExcelIssues([{
+        worksheet: "新增 TRIP",
+        row: 1,
+        field: "檔案",
+        message: "請選擇 .xlsx 格式的 Excel 檔案。",
+      }]);
+      return;
+    }
+
+    setIsParsingExcel(true);
+    try {
+      const result = await parseTripExcelWorkbook(await file.arrayBuffer());
+      if (result.success) {
+        setExcelPreview(result.data);
+      } else {
+        setExcelIssues(result.issues);
+      }
+    } catch {
+      setExcelIssues([{
+        worksheet: "新增 TRIP",
+        row: 1,
+        field: "工作簿",
+        message: "讀取檔案時發生錯誤，請確認檔案完整後再試。",
+      }]);
+    } finally {
+      setIsParsingExcel(false);
+      event.target.value = "";
+    }
+  };
 
   const handleCurrencyChange = (code: string) => {
     const selectedCurrency = CURRENCY_OPTIONS.find((item) => item.code === code);
@@ -430,7 +487,137 @@ export const TripEditorModal = ({
           </button>
         </div>
 
-        {historicalTripEndDate && (
+        {mode === "create" && (
+          <section className="rounded-xl border border-slate-200 p-3">
+            <p className="text-sm font-bold text-slate-700">建立方式</p>
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setCreationMethod("manual");
+                  setExcelPreview(null);
+                  setExcelIssues([]);
+                }}
+                className={`rounded-lg border px-3 py-2.5 text-sm font-semibold ${creationMethod === "manual" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 text-slate-600"}`}
+              >
+                手動新增
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setCreationMethod("excel");
+                  setExcelPreview(null);
+                  setExcelIssues([]);
+                }}
+                disabled={!canManageEditors}
+                className={`rounded-lg border px-3 py-2.5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50 ${creationMethod === "excel" ? "border-emerald-700 bg-emerald-700 text-white" : "border-slate-200 text-slate-600"}`}
+              >
+                <span className="inline-flex items-center justify-center gap-1.5">
+                  <FileSpreadsheet size={16} /> Excel 建立
+                </span>
+              </button>
+            </div>
+            {!canManageEditors && (
+              <p className="mt-2 text-xs text-slate-500">Excel 建立僅限 Super Admin 使用。</p>
+            )}
+          </section>
+        )}
+
+        {mode === "create" && creationMethod === "excel" ? (
+          <section className="space-y-3">
+            <div>
+              <p className="text-sm font-bold text-slate-800">匯入標準 Excel 範本</p>
+              <p className="mt-1 text-xs leading-5 text-slate-500">
+                請使用 V1 標準範本。系統會先完整驗證，再顯示預覽；目前僅開放預覽，建立功能尚未啟用。
+              </p>
+            </div>
+            <input
+              ref={excelInputRef}
+              type="file"
+              accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+              onChange={handleExcelFileChange}
+              className="block w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-slate-700"
+              aria-label="選擇新增 TRIP Excel 檔案"
+            />
+            {excelFileName && (
+              <p className="text-xs text-slate-500">檔案：{excelFileName}</p>
+            )}
+            {isParsingExcel && (
+              <p className="text-sm text-slate-600">正在驗證工作簿…</p>
+            )}
+            {excelIssues.length > 0 && (
+              <div role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-3">
+                <p className="text-sm font-bold text-rose-800">Excel 驗證失敗，尚未建立任何 TRIP。</p>
+                <ul className="mt-2 space-y-1 text-xs text-rose-700">
+                  {excelIssues.map((issue, index) => (
+                    <li key={`${issue.worksheet}-${issue.row}-${issue.field}-${index}`}>
+                      {issue.worksheet} 第 {issue.row} 列／{issue.field}：{issue.message}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {excelPreview && (
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50/40 p-3">
+                <p className="text-sm font-bold text-slate-900">預覽資料</p>
+                <dl className="mt-2 grid grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <dt className="text-xs text-slate-500">TRIP 名稱</dt>
+                    <dd className="font-semibold text-slate-800">{excelPreview.title}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-slate-500">出發日期</dt>
+                    <dd className="font-semibold text-slate-800">{excelPreview.departureDate}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-slate-500">旅程天數</dt>
+                    <dd className="font-semibold text-slate-800">{excelPreview.dayCount} 天</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-slate-500">行程卡片</dt>
+                    <dd className="font-semibold text-slate-800">{excelPreview.cardCount} 張</dd>
+                  </div>
+                </dl>
+                <div className="mt-3 space-y-2">
+                  {excelPreview.days.map((day) => {
+                    const items = excelPreview.daysData[String(day)] ?? [];
+                    return (
+                      <div key={day} className="rounded-lg border border-slate-200 bg-white p-2.5">
+                        <div className="flex items-center justify-between">
+                          <p className="text-sm font-bold text-slate-800">第 {day} 天</p>
+                          <span className="text-xs text-slate-500">{items.length} 張卡片</span>
+                        </div>
+                        {items.length > 0 ? (
+                          <ul className="mt-1 space-y-1">
+                            {items.map((item) => (
+                              <li key={item.id} className="text-xs leading-5 text-slate-700">
+                                <span className="font-semibold">{item.time}–{item.departureTime}</span>
+                                {" · "}{item.title}
+                                <span className="ml-1 text-slate-500">（{item.type}）</span>
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="mt-1 text-xs text-slate-400">此日沒有卡片，將保留為空白日。</p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs leading-5 text-amber-900">
+                  預覽階段尚未讀取或確認本次 TRIP 的幣別設定；正式建立前須由系統重新取得目前預設幣別並要求確認。
+                </div>
+                <button
+                  type="button"
+                  disabled
+                  className="mt-3 w-full rounded-lg bg-slate-300 px-4 py-3 text-sm font-bold text-slate-600"
+                >
+                  Excel 建立尚未開放
+                </button>
+              </div>
+            )}
+          </section>
+        ) : historicalTripEndDate && (
           <section className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">
             <p className="font-bold">正在編輯歷史行程</p>
             <p className="mt-1 leading-6 text-amber-800">
@@ -439,6 +626,16 @@ export const TripEditorModal = ({
           </section>
         )}
 
+        {mode === "create" && creationMethod === "excel" ? (
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50"
+          >
+            關閉
+          </button>
+        ) : (
+          <>
         {formError && (
           <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700">
             {formError}
@@ -610,6 +807,8 @@ export const TripEditorModal = ({
               </p>
             )}
           </div>
+        )}
+          </>
         )}
       </form>
     </div>

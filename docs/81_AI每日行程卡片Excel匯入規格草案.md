@@ -124,7 +124,28 @@ TRIP 基本資料區只有上述兩項。V1 不提供旅程天數、結束日期
 
 **建立流程共同原則**：新增 TRIP 時由使用者選擇「Excel 建立」或「手動新增」，兩者二選一。Excel 匯入不要求先建立空白 TRIP，也不支援既有 TRIP 卡片匯入／覆蓋。匯入前完成整份驗證，預覽幣別及卡片分布，明確確認後才提交。僅雲端整批建立成功後更新本機權威快取／UI；離線或結果不明時不得本機單獨建立或誤報成功。
 
-**目前狀態（2026-11-03 更新）**：產品欄位契約、正式範本、欄位契約文件及 Office round-trip 已完成；已核對資料模型、類別／顏色、日期與 ID、參與者來源、TRIP 建立路徑、通用 RLS、Other Info 儲存及特殊資訊初始資料。TRIP 名稱與出發日期不作唯一限制；不同建立請求即使名稱及日期相同，也允許建立不同 TRIP。安全產品決策已定案為三層保護：UI 入口限制、確認匯入時自動檢查當下 Supabase Session／登入帳號／線上狀態（不再次啟動 Google OAuth）、RPC 依目前 JWT 與資料庫權威角色最終核對 Super Admin。仍待實作 Excel 專用 SECURITY DEFINER RPC／request registry，並驗證 SQL 權限、併發冪等、整批交易與 rollback。IM01–IM10 尚未執行；尚未核准實作與 migration，亦未發布。
+**目前狀態（2026-11-03 公司端續作後更新）**：產品欄位契約、正式範本、欄位契約文件及 Office round-trip 已完成。公司端已完成 ExcelJS 解析／嚴格驗證核心、建立方式二選一 UI 與預覽、parser 回歸測試；Excel 專用 RPC migration 已建立，包含 request registry、Super Admin／Auth 身分核對、私有 participant Email map 同交易寫入、Trip／特殊 Other Info 寫入及明確函式權限。現行權限硬化與 V3.9.26 私有 Email map 設計已完成原始碼核對。仍未完成最終幣別確認／提交 UI、提交時 Session refresh、RPC client 呼叫及結果不明 recovery。公司端既有 local Supabase V5 是本功能預定的整合測試資料庫，允許在保留 V5 既有資料的前提下套用本機 migration；IM01–IM10 是 migration 套用後的測試，不是升級前置門檻。任何本機開發／測試指令均不得改用 `--linked`，也不得對遠端共享或正式資料庫套用此 migration。IM01–IM10 尚未執行；尚未發布。
+
+### 公司端 Excel V1 實作進度（2026-11-03）
+
+| 項目 | 狀態 | 證據／限制 |
+|---|---|---|
+| ExcelJS V1 解析與嚴格驗證 | 已實作、測試通過 | `src/services/tripExcelImport.ts`；`npm run verify:trip-excel-import` |
+| 新增 TRIP Excel／手動二選一 UI | 已實作預覽階段 | `src/components/TripEditorModal.tsx`；Excel 模式只可選檔、看預覽或關閉，不提供寫入提交 |
+| Parser 回歸測試 | 已通過 | 正向解析、空白日保留、結束時間預設、標題／時間／metadata／損壞檔拒絕；ExcelJS 輸入已正規化成獨立 ArrayBuffer，通過 TypeScript |
+| Excel RPC／request registry | 已套用公司端 local Supabase V5 | `supabase/migrations/20261103150000_v3110_trip_excel_create_rpc.sql`；PostgreSQL migration 成功，RPC／request registry 可查得；RPC owner=`postgres`、SECURITY DEFINER、僅 authenticated EXECUTE；一般 API 角色無 request registry SELECT；實際建立成功、rollback、冪等及併發測試仍待執行 |
+| RPC 靜態規格檢查 | 已通過 | `npm run verify:trip-excel-rpc`；不能取代 DB integration tests |
+| 最終幣別確認、Session refresh、RPC client、結果不明 recovery | 尚未實作 | Excel 建立仍停留在 preview-only |
+| IM01–IM10 與交易 rollback／併發測試 | 尚未執行 | 不得宣稱 Excel 建立端到端通過 |
+
+**RPC 草稿未套用前的審查事項（2026-11-03 續作更新）**：
+- 已完成原始碼核對：V3.5.2 對 public `tc_*` 函式先撤銷預設 EXECUTE，再逐一授權；新 RPC 已採相同 revoke-all／authenticated-only grant 寫法。V3.9.26 的 participant Email map 存於 `private.trip_participant_email_maps`，新 RPC 草稿已改為同一交易寫入私有表，且不寫入 `trips.content`。
+- 已完成原始碼核對：pgcrypto 的 SHA-256 呼叫使用 `extensions.digest`；預設參與者以 `admin_profiles.include_in_new_trip`、`admin_users.role=super_admin` 及 `auth.users.id`／Email 對應交集篩選。特殊資訊資料夾、卡片 ID 與預設資料夾清單已對照現行 `tripRepository`／`folderDefaults`。
+- 尚須在明確隔離的 disposable Supabase database 做 SQL parse／migration dry-run，再執行 rollback、同 request 重送、不同 request 同名同日期、併發同 request、非 Super Admin、缺少預設參與者及 Other Info 寫入失敗等交易測試。
+- 尚須確認實際 migration 執行 owner 與 `SECURITY DEFINER` 函式 owner，確保其可存取 `private.tc_is_super_admin()`、`private.tc_trip_excel_create_requests`、`private.trip_participant_email_maps`、`public.trips` 及 `public.other_info_items`；靜態原始碼比對不能取代實際 ACL／RLS 測試。
+- 需確認 request registry reservation 在錯誤時與 Trip／Other Info 同交易 rollback；不可留下 `pending` row。不同 request ID 即使 title/date 一樣必須建立不同 Trip。
+- 草稿固定 guided 初始資料，符合 V1 預設；正式套用前仍須對照現行 Trip JSON、Other Info RLS 與特殊項目呈現方式做 DB/UI round-trip。
+- 本功能以公司端既有 local Supabase V5 作為整合測試目標；允許直接在該本機資料庫套用 migration，再進行 SQL／RPC／rollback／併發測試，不要求另建隔離資料庫，也不要求 IM01–IM10 先通過才可升級。套用前應確認 local endpoint 為 `127.0.0.1`，並保留既有 V5 測試資料；不得執行 `supabase db reset` 或使用 `--linked`。此項授權僅涵蓋本機測試資料庫，不涵蓋遠端共享或正式資料庫。
 
 ### 現行 TRIP ID 與名稱／日期唯一性基線（2026-11-03，公司端實測）
 
@@ -225,7 +246,7 @@ TRIP 基本資料區只有上述兩項。V1 不提供旅程天數、結束日期
 6. **新增 TRIP 匯入建立與雲端保護（2026-11-03 更新）**：Excel 採本文最新精簡欄位契約；系統預設資料須補齊 App 完整 TRIP 模型。不得以既有 TRIP 的單日／零卡片資格限制新增匯入。只有雲端整批建立成功後才更新本機權威快取／UI；離線或無法確認雲端建立結果時停止並核對，不得本機單獨建立或誤報成功。
 7. **復原策略（使用者選擇 D／自訂）**：遵守不過度開發原則，V1 不新增每次匯入的持久化快照子系統，也不承諾匯入成功後可一鍵還原上一版。V1 重點是匯入失敗時不破壞舊資料；若日後明確需要成功後復原，再另行評估最小單筆 Trip 備份。
 8. **離開時間（使用者選擇 B）**：`arrival_time` 必填；`departure_time` 可空白，空白時系統以抵達時間作為離開時間，不阻止匯入。
-9. **實作邊界**：現有一般儲存入口可能在雲端同步失敗時仍更新本機 UI 或排程照片清理，因此不能未經調整就直接作為嚴格匯入入口；須設計具雲端成功閘門的專用整批流程。以上為規格決策，尚未授權開始程式實作或資料庫變更。
+9. **實作邊界**：現有一般儲存入口可能在雲端同步失敗時仍更新本機 UI 或排程照片清理，因此不能未經調整就直接作為嚴格匯入入口；須設計具雲端成功閘門的專用整批流程。此為既定實作要求；本機 V5 migration／整合測試已獲授權，遠端資料庫變更仍須另行核准。
 10. **舊地點確認摘要流程（2026-10-19，已於 2026-11-02 完全廢止）**：本項只保留歷史決策背景，不屬於 V1 現行規格，不得實作或納入驗收。其逐張地點選擇、地圖候選、不帶入地點選項、地點確認摘要及三個操作按鈕，均因最新定案「Excel 不提供任何地點欄位」而全部取消。
 11. **舊地點欄位允許空白規則（2026-10-19，已於 2026-11-02 完全廢止）**：本項只保留歷史決策背景，不屬於 V1 現行規格。Excel 已不提供 `location`／`location_address`，因此不再有地點欄位空白、地點搜尋初始文字或跳過地點確認等匯入情境。
 12. **舊匯入地圖搜尋次數規則（2026-10-19，已於 2026-11-02 完全廢止）**：本項只保留歷史決策背景，不屬於 V1 現行規格。新增 TRIP Excel 建立流程不呼叫地圖搜尋，因此不適用匯入搜尋次數、關鍵字重搜或候選查詢限制；App 卡片後續手動設定地點時，仍沿用 App 原有地圖搜尋規則。
@@ -487,7 +508,7 @@ RPC 成功回應（建議使用單一 JSON object）至少包含：
 >
 > **執行原則：先確認前置定義，再確認後續設計；前一階段未定案或未通過，不得把依賴它的後續項目標記為可執行／通過。** 可以預先整理測試案例，但不得以尚未定案的規格作為測試通過依據。
 >
-> 本流程區分實作前置審查、實作中的設計／驗證，以及實作後驗收。階段 0–1 的產品契約、正式範本及主要資料映射已完成，可作為開始實作的前置基礎；Excel 專用 RPC／request registry、解析器、預覽與雲端成功閘門須在明確授權後實作，並在公司端 local Supabase 驗證。階段 2–5 的 IM01–IM10 是實作過程及完成後的測試，不應被當成開始實作前必須全部完成的條件。實作授權不包含遠端資料庫寫入、commit/push 或發布，除非另行明確核准。
+> 本流程區分實作前置審查、實作中的設計／驗證，以及實作後驗收。階段 0–1 的產品契約、正式範本及主要資料映射已完成；程式與 RPC 實作可直接在公司端既有 local Supabase V5 開發及驗證。階段 2–5 的 IM01–IM10 是實作過程及 migration 套用後的測試，不是本機測試資料庫升級前置條件。公司端 V5 local 是可更新的測試資料庫：允許套用本機 migration，但須保留既有 V5 測試資料、不得 reset；先確認 endpoint 是 `127.0.0.1`，本機命令不得使用 `--linked`。本機開發授權不包含遠端資料庫寫入、commit/push 或發布，除非另行明確核准。
 
 ### 12.1 階段與依賴關係
 
@@ -497,7 +518,7 @@ RPC 成功回應（建議使用單一 JSON object）至少包含：
 | 1. 程式資料契約核對 | Excel 欄位到 `ItineraryItem` 的映射、中文 category 到內部 `type`、`typeColor` 權威來源、`daysData` 日期鍵、排序、時間正規化、UUID ID 產生規則 | 階段 0 完成 | 產生可供解析器、預覽、資料庫寫入及測試共用的明確資料映射表 | 不得宣稱解析結果正確，不得進行正式整批寫入 |
 | 2. Excel 解析與資料驗證（IM01–IM03） | 有效範本解析、範本／工作表／標題錯誤、資料列／時間／天數／類別驗證 | 階段 0、1 完成 | 有效檔案輸出符合資料契約；錯誤檔案拒絕且無任何 Trip／本機權威資料變更；錯誤定位可辨識 | 不得進行 Supabase 整批寫入測試 |
 | 3. 新 TRIP 建立與提交安全設計（IM04–IM06） | 新 TRIP 建立權限、雲端可用性、Trip ID 主鍵防碰撞、request registry 冪等性及整批寫入原子性 | 階段 0、1 完成；階段 2 的有效解析輸出及建立預覽契約確認 | 新 TRIP 建立流程的狀態轉移、權限、ID 唯一性、request 重送與失敗結果明確；允許不同 request 建立同名同日期 TRIP；確認整批建立完整性可被測試 | 不得執行正式資料庫整批建立驗收 |
-| 4. 本機 Supabase 整批建立與失敗處理（IM07–IM08） | 使用隔離的本機測試資料驗證建立新 TRIP 與每日卡片成功提交、明確失敗、逾時結果不明、雲端權威資料與本機快取更新順序 | 階段 2、3 均完成；已確認僅連線本機 Supabase，且具備本次專用測試資料及清理方案 | 整批建立成功才更新本機 UI／快取；失敗不留下部分 TRIP／卡片；結果不明能重新核對；新建 TRIP 資料完整性符合規格 | 不得宣稱整批建立完整性通過或進入整體驗收 |
+| 4. 本機 Supabase 整批建立與失敗處理（IM07–IM08） | 使用公司端既有 local Supabase V5 測試資料庫驗證建立新 TRIP 與每日卡片成功提交、明確失敗、逾時結果不明、雲端權威資料與本機快取更新順序 | 階段 2、3 均完成；已確認僅連線 `127.0.0.1` 本機 Supabase，並使用本次專用測試 TRIP／request ID | 整批建立成功才更新本機 UI／快取；失敗不留下部分 TRIP／卡片；結果不明能重新核對；新建 TRIP 資料完整性符合規格 | 不得宣稱整批建立完整性通過或進入整體驗收 |
 | 5. 地點欄位排除與既有功能相容性（IM09–IM10） | 確認 Excel 不含地點／地址欄位、不觸發地圖、天氣、路線、照片副作用；其他裝置沿用既有 workspace reconciliation | 階段 0、1、2 完成；IM08 成功建立路徑可供驗證 | 確認匯入只建立 TRIP 與每日卡片，App 原有地點功能及其他模組／同步規則不被改動；不新增 Realtime／同步子系統 | 不得宣稱整體功能驗收完成 |
 | 6. 最終驗收與發布審查 | 彙整所有定案、測試證據、未解問題與不在 V1 範圍的項目 | 階段 0–5 完成，IM01–IM10 及必要回歸測試均有結果 | 提交完整驗收摘要，由 Product Owner 決定是否核准後續發布 | 未完成驗收或未取得發布核准，不得宣告功能完成、建立發布候選或部署 |
 
@@ -532,7 +553,7 @@ RPC 成功回應（建議使用單一 JSON object）至少包含：
 1. 每次只處理目前階段尚未定案的項目；完成後記錄決策與證據，再進入下一個依賴階段。
 2. 前置定義不完整時，可以整理問題與測試案例，但不得自行補猜規格，也不得將依賴後續階段的測試標記為通過。
 3. 若實作過程發現規格矛盾，先回到本文件相應階段修訂並取得 Product Owner 確認；不得私下改變已定案產品規則。
-4. 本機 Supabase 測試只能使用明確標記、可識別及可清理的專用測試 Trip；不得 reset 資料庫、修改正式環境或碰觸既有資料。
+4. 本機 Supabase migration 與整合測試使用公司端既有 V5 測試資料庫；migration 可直接套用，但不得 reset 資料庫或清除既有 V5 資料。測試建立的 TRIP／request 必須明確標記、可識別及可清理；不得修改遠端共享／正式環境或碰觸既有資料。
 5. 每項測試記錄：狀態（未開始／待定案／可測試／通過／失敗／阻塞）、前置條件、環境、操作、預期結果、實際結果及證據。未執行不得標記通過。
 6. 本計畫不納入 V3.10.12 的 TC01–TC14 舊版同步驗收重測；除非 V3.11.0 實作實際修改相關程式路徑，且能指出具體受影響行為，才新增最小範圍的回歸項目。
 7. 本文件的產品決策及範圍限制優先於測試便利性；不得為了通過測試而擴大 V1 範圍。
@@ -542,7 +563,7 @@ RPC 成功回應（建議使用單一 JSON object）至少包含：
 | 項目 | 狀態 | 備註 |
 |---|---|---|
 | 階段 0：產品契約與範本技術定案 | 產品欄位契約、兩工作表 metadata、ExcelJS／LibreOffice／Microsoft Excel 2010 隔離 round-trip、正式範本及欄位契約文件均已完成 | 已定義可見「新增 TRIP」及隱藏「系統設定」兩張工作表；系統設定表 A1 為固定識別標題、A2:B2 保存精確字串 `template_version=1`。使用 ExcelJS 4.4.0 原生 worksheet API，不採 `docProps/custom.xml` 或 `contentStatus`；使用者頁 TRIP 區 A1:B3、卡片標題 A6:F6、資料自 A7:F 起；隱藏輔助欄 I:N 供六種固定類別清單，資料驗證引用 `$I$1:$N$1`。正式範本 `docs/templates/AI新增TRIP標準範本_V1.xlsx` 及欄位契約文件已建立。隔離測試使用 `%TEMP%` 專用檔：ExcelJS 讀寫、LibreOffice 25.2.7.2 headless 獨立 UserInstallation profile 另存、Microsoft Excel 2010（14.0.7015.1000）獨立 COM instance 另存，最後均由 ExcelJS 讀回，確認兩表名稱／順序、第二表 hidden、metadata 字串、隱藏輔助欄及類別下拉來源保留；未操作使用者既有活頁簿。此證據只涵蓋上述版本組合。不得重新開放已定案欄位。
-| 階段 1：程式資料契約與 SQL 邊界核對 | 既有映射、RLS、trigger 與權威角色來源已完成唯讀檢查；Excel 專用 RPC／原子交易尚不存在，需另行實作與驗證 | 已核對 `createTripRecord` 系統預設與 ID、參與者權威來源、六類及 typeColor、日期資料與空白日、時間格式、TRIP／卡片 ID、一般建立服務與通用 RLS。Excel 類別中文值直接映射到 `ItineraryItem.type` 的同名中文值；`typeColor` 取 `ItineraryPage.tsx` 既有 `ITINERARY_TYPE_OPTIONS`。`daysData` key 為 `String(day)`；卡片 ID 使用現有 `createItineraryItemId()`；匯入列維持工作簿順序，不自行按時間排序；嚴格 `HHMM` 驗證後正規化為 App 的 `HH:mm`。本機 Supabase 17.6 唯讀 catalog 確認：`admin_users`、`trips`、`other_info_items` 均啟用 RLS；`trips` INSERT policy 要求 `auth.uid()` 非空且 `tc_is_super_admin()` 或 `tc_is_trip_editor(id)`；`other_info_items` 寫入 policy 要求登入及 `tc_can_edit_other_info(trip_id)`。Super Admin 權威來源為 `private.tc_is_super_admin()`：SECURITY DEFINER、空 `search_path`，以 JWT email 對 `public.admin_users` 的 `role='super_admin'`；`admin_users` 有 `(email, role, trip_id)` unique index。`trips` INSERT 觸發 visibility／participant map guard 及 revision broadcast；guard 會從 content 移除 `participantEmailMap`、`otherInfoItems`，participant map 僅 admin-owned map 寫入 private table；因此不可把其他系統欄位直接塞入 `trips.content`。Other Info 要獨立 INSERT `public.other_info_items`，受 RLS、`allowed_roles` CHECK 與 identity-update trigger；欄位必填包括 `trip_id/folder_id/title/content`，`id` 預設 UUID、`sort_order` 預設 0、`created_by` 預設 `auth.uid()`。`trips.currency_config` DB default 為 JPY，但產品要求沿用當下新增 TRIP UI 的 currency config，故 Excel 專用建立不可盲用 DB default。authenticated 有 `trips`／Other Info INSERT 權限但受 RLS；anon 只有 SELECT。查詢只讀，沒有執行資料寫入。尚未找到 Excel 專用 SECURITY DEFINER RPC；因此建立 TRIP、日期卡片與必要 Other Info 的同交易完整性、rollback、execute grants、非 Super Admin 拒絕與 request registry 防重等行為目前無法實測。**阻塞：尚無可供呼叫的 Excel 建立 RPC；建立 RPC／migration 或執行資料庫寫入驗證需 Product Owner 明確授權，現階段不修改 schema／migration，也不呼叫任何寫入 RPC。** |
+| 階段 1：程式資料契約與 SQL 邊界核對 | 既有映射、RLS、trigger 與權威角色來源已完成唯讀檢查；Excel 專用 RPC migration 已建立，待本機 V5 套用及整合驗證 | 已核對 `createTripRecord` 系統預設與 ID、參與者權威來源、六類及 typeColor、日期資料與空白日、時間格式、TRIP／卡片 ID、一般建立服務與通用 RLS。Excel 類別中文值直接映射到 `ItineraryItem.type` 的同名中文值；`typeColor` 取 `ItineraryPage.tsx` 既有 `ITINERARY_TYPE_OPTIONS`。`daysData` key 為 `String(day)`；卡片 ID 使用現有 `createItineraryItemId()`；匯入列維持工作簿順序，不自行按時間排序；嚴格 `HHMM` 驗證後正規化為 App 的 `HH:mm`。本機 Supabase 17.6 唯讀 catalog 確認：`admin_users`、`trips`、`other_info_items` 均啟用 RLS；`trips` INSERT policy 要求 `auth.uid()` 非空且 `tc_is_super_admin()` 或 `tc_is_trip_editor(id)`；`other_info_items` 寫入 policy 要求登入及 `tc_can_edit_other_info(trip_id)`。Super Admin 權威來源為 `private.tc_is_super_admin()`：SECURITY DEFINER、空 `search_path`，以 JWT email 對 `public.admin_users` 的 `role='super_admin'`；`admin_users` 有 `(email, role, trip_id)` unique index。`trips` INSERT 觸發 visibility／participant map guard 及 revision broadcast；guard 會從 content 移除 `participantEmailMap`、`otherInfoItems`，participant map 僅 admin-owned map 寫入 private table；因此不可把其他系統欄位直接塞入 `trips.content`。Other Info 要獨立 INSERT `public.other_info_items`，受 RLS、`allowed_roles` CHECK 與 identity-update trigger；欄位必填包括 `trip_id/folder_id/title/content`，`id` 預設 UUID、`sort_order` 預設 0、`created_by` 預設 `auth.uid()`。`trips.currency_config` DB default 為 JPY，但產品要求沿用當下新增 TRIP UI 的 currency config，故 Excel 專用建立不可盲用 DB default。Excel RPC migration 已建立並完成靜態契約檢查；實際 SQL parse、owner／ACL、RLS、rollback、冪等及並行測試將在公司端 local V5 套用後執行。 |
 | 階段 2：IM01–IM03 | 尚未開始 | 等階段 0、1；沒有執行 Excel 解析測試。 |
 | 階段 3：IM04–IM06 | 尚未開始 | 等階段 0–2；沒有執行建立權限／重複提交／原子性測試。 |
 | 階段 4：IM07–IM08 | 尚未開始 | 等階段 0–3；沒有執行 V3.11.0 整批建立資料庫測試。 |
@@ -552,11 +573,11 @@ RPC 成功回應（建議使用單一 JSON object）至少包含：
 ### 12.6 版本與授權狀態
 
 - **版本建議：V3.11.0（MINOR 主要功能）**，建議範圍為新增 TRIP 的 Excel 建立流程（含 TRIP 基本資料及每日行程卡片匯入）；不包含已捨棄的既有 TRIP 卡片匯入／覆蓋。
-- **公司端實作可行性（2026-11-03）**：雙電腦測試資料交接的端到端實證仍待後續真實事件／家用端作業，但不是本功能的程式相依。公司端 `develop` 可獨立使用公司端 Node 與 local Supabase 進行 Excel V1 實作及隔離驗證；本功能不得依賴、修改或清理家用端本機資料庫，也不得寫入遠端正式資料庫。實作與本機 migration 仍須 Product Owner 明確授權。
+- **公司端實作可行性（2026-11-03 更新）**：雙電腦測試資料交接的端到端實證仍待後續真實事件／家用端作業，但不是本功能程式與資料庫測試的前置條件。公司端 `develop` 可直接使用公司端 Node 與既有 local Supabase V5 進行 Excel V1 實作、套用本機 migration 及整合驗證；不建立額外隔離資料庫，不依賴、修改或清理家用端本機資料庫，也不寫入遠端共享／正式資料庫。
 - 2026-11-03 技術審查補充：遠端正式 DB 唯讀盤點顯示 6 筆 TRIP、0 筆 trim 後 title/date 重複、無 title/date 唯一索引；participant mapping trigger 與 6 筆 private mapping 已存在。公司端本機 Supabase 因 Docker Engine 未啟動，`npx supabase status`／`migration list --local` 無法連線，故本次沒有本機 DB 驗證或任何 DB 寫入。遠端查詢僅為 SELECT／catalog 讀取，未執行 migration、DDL 或資料修改。
 - 2026-11-03 延續 SQL 契約審查（歷史方案，已被本日後續產品決策取代）：原先曾建議以 request registry 處理同 request 重送，並以 expression unique index 限制 title/date；本日後續決策已取消名稱＋日期防重複，request registry 僅保留同一提交的冪等性，詳見 P05-01-04 與 8.3。正式 DB postgres owner／RLS bypass、participant mapping trigger、特殊 Other Info 與整批 rollback 的安全要求仍有效，需於本機 SQL 驗證。
 - 2026-11-03 產品決策更新：取消 TRIP 名稱＋出發日期防衝撞。唯一性只由 `trip-<UUID>`／`trips_pkey(id)` 保證；不同建立 request 可以建立相同名稱及日期的多筆 TRIP。同一 request 的重送仍須冪等，不得重複建立。此決策已同步 P05-01-04、8.1、8.3、8.5、8.8、8.9、IM05、階段依賴與狀態紀錄。
-- 2026-11-03 前一輪規格更新曾僅修改本權威規格文件，未修改程式碼、資料庫或 migration；該輪當時尚未 commit／push。其後文件更新已另行提交並推送，當前狀態以 Git 為準。名稱＋日期唯一索引及 `TRIP_DUPLICATE_TITLE_DATE` 錯誤碼已明確取消；request registry 仍屬技術審查建議，尚未授權實作。
-- 本文件目前已完成實作前產品與技術核對；**是否開始程式實作／本機 migration，仍須 Product Owner 明確授權**。取得授權後，依階段 0–1 的契約與第 8 節安全設計開始實作，並逐步完成 IM01–IM10。只允許公司端隔離環境及本機 Supabase 進行本功能開發／寫入驗證；不因雙電腦測試資料交接未完成而阻止本功能實作，但不得操作家用端資料庫或遠端正式資料庫。
+- 2026-11-03 前一輪規格更新曾僅修改本權威規格文件，未修改程式碼、資料庫或 migration；該輪當時尚未 commit／push。其後文件更新已另行提交並推送，當前狀態以 Git 為準。名稱＋日期唯一索引及 `TRIP_DUPLICATE_TITLE_DATE` 錯誤碼已明確取消；request registry 已納入本次 Excel RPC migration，實際冪等與交易行為仍待本機整合測試。
+- 本功能已進入公司端實作；允許在既有 local Supabase V5 套用 migration 並逐步執行 IM01–IM10。此授權不包含操作家用端資料庫或遠端共享／正式資料庫。
 - 實作授權不包含 commit/push、正式資料庫寫入、合併 main、版本標籤、部署或發布；這些操作均須另行明確授權。未完成階段 2–5 的測試及階段 6 最終審查前，不得宣稱 V1 功能驗收完成或進入發布。
 - 後續工作一律依本節編號及狀態逐項推進；不得每次對話重新建立不同的測試清單或執行順序。

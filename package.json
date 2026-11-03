@@ -37,6 +37,8 @@
     "verify:itinerary-day-style": "node --experimental-strip-types --no-warnings scripts/verify-itinerary-day-style.mjs",
     "verify:itinerary-order": "node --experimental-strip-types --no-warnings scripts/verify-itinerary-order.mjs",
     "verify:trip-lifecycle": "node --experimental-strip-types --no-warnings scripts/verify-trip-lifecycle.mjs",
+    "verify:trip-excel-import": "node scripts/verify-trip-excel-import.mjs",
+    "verify:trip-excel-rpc": "node scripts/verify-trip-excel-rpc.mjs",
     "verify:v370-time-adjustment": "node --experimental-strip-types --no-warnings scripts/verify-v370-time-adjustment.mjs",
     "verify:travel-route": "node --experimental-strip-types --no-warnings scripts/verify-travel-route.mjs",
     "verify:v390-place-photos": "node --experimental-strip-types --no-warnings scripts/verify-v390-place-photos.mjs",
