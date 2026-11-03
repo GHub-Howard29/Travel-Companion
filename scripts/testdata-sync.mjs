@@ -850,7 +850,7 @@ async function handoff({ autoCommitPush = false } = {}) {
 
     const currentData = await fetchExistingFixtureData(item.id);
     const parentFixture = currentFixture.manifest.parentVersion
-      ? findParentFixture(currentFixture.manifest)
+      ? assertParentRevision(currentFixture)
       : null;
     const baselineFixture = parentFixture ?? currentFixture;
     const databaseMatchesCurrent = dataMatchesFixture(currentData, baselineFixture.data, { ignoreTimestamps: true });
