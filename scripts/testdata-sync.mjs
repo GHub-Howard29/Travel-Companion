@@ -4,7 +4,7 @@ import path from "node:path";
 import os from "node:os";
 import process from "node:process";
 import { createHash } from "node:crypto";
-import { classifyFixtureRevision } from "./lib/testdata-revision.mjs";
+import { classifyFixtureRevision, classifyPeerHandoff } from "./lib/testdata-revision.mjs";
 
 // Test-data workflows are local-only and do not require Supabase CLI telemetry.
 // Apply this before spawning any CLI child process, including standalone commands.
@@ -755,6 +755,15 @@ async function importAllFixtures() {
       continue;
     }
 
+    const isEmptyTarget = allowedTables.every((table) => current[table].length === 0);
+    if (!previous && isEmptyTarget) {
+      // One-time local bootstrap: an empty fixture target has no prior data to
+      // protect. The committed Git fixture is the authoritative initial state.
+      // This path is local-only and never permits overwriting existing rows.
+      pending.push({ ...fixture, previousData: null });
+      continue;
+    }
+
     const parent = assertParentRevision(fixture);
     if (!parent) {
       if (current.trips.length) throw new Error(`fixture ${manifest.fixtureId} 首次匯入時目標行程已存在，但無法證明為空白基準；拒絕覆蓋。`);
@@ -824,13 +833,6 @@ async function handoff({ autoCommitPush = false } = {}) {
 
     const appliedState = await loadAppliedState();
     const applied = appliedState.fixtures[item.id];
-    const handoffState = await loadHandoffState();
-    const previousFiles = handoffState.fixtures[item.id];
-    const currentHashes = await fixtureFileHashes(fixtureDirectory(item.id));
-    const filesMatchPrevious = previousFiles &&
-      currentHashes.dataSha256 === previousFiles.dataSha256 &&
-      currentHashes.manifestSha256 === previousFiles.manifestSha256;
-
     if (!applied) {
       // Bootstrap is safe only when local DB is already byte-for-byte equivalent
       // to the committed fixture (apart from database-generated timestamps).
@@ -846,31 +848,35 @@ async function handoff({ autoCommitPush = false } = {}) {
       continue;
     }
 
-    const appliedMatchesCurrent = applied.version === currentFixture.manifest.version && applied.checksum === currentFixture.manifest.checksum;
-    const appliedMatchesParent = applied.version === currentFixture.manifest.parentVersion && applied.checksum === currentFixture.manifest.parentChecksum;
-    if (!appliedMatchesCurrent && !appliedMatchesParent) {
-      throw new Error(`fixture ${item.id} 本機基準與 Git revision 不一致；拒絕匯出或覆蓋。`);
+    const currentData = await fetchExistingFixtureData(item.id);
+    const parentFixture = currentFixture.manifest.parentVersion
+      ? findParentFixture(currentFixture.manifest)
+      : null;
+    const baselineFixture = parentFixture ?? currentFixture;
+    const databaseMatchesCurrent = dataMatchesFixture(currentData, baselineFixture.data, { ignoreTimestamps: true });
+    const decision = classifyPeerHandoff(
+      applied,
+      baselineFixture.manifest,
+      parentFixture ? currentFixture.manifest : null,
+      databaseMatchesCurrent,
+    );
+    if (decision.action === "reject") {
+      throw new Error(`fixture ${item.id} handoff rejected: ${decision.reason} (applied=v${applied.version}, git=v${currentFixture.manifest.version}).`);
     }
-
-    if (!filesMatchPrevious) {
-      // A committed revision arrived from the peer. Adopt its file baseline;
-      // importing it is handled separately by importAllFixtures().
+    if (decision.action === "receive") {
+      // importAllFixtures() performs the parent-row comparison and transactional
+      // apply. Handoff only classifies the revision direction here.
       await recordHandoffState(item.id);
       results.push({ fixtureId: item.id, result: "peer-revision-received", version: currentFixture.manifest.version });
       continue;
     }
-
-    const currentData = await fetchExistingFixtureData(item.id);
-    if (dataMatchesFixture(currentData, currentFixture.data, { ignoreTimestamps: true })) {
+    if (decision.action === "unchanged") {
       results.push({ fixtureId: item.id, result: "unchanged", version: currentFixture.manifest.version });
       continue;
     }
-    if (appliedMatchesParent) {
-      throw new Error(`fixture ${item.id} 本機資料已偏離已知父版本；Git 尚有待接收 revision，拒絕覆蓋或另開分支。`);
-    }
 
-    // This node may create the next revision only from the exact revision it
-    // has recorded as applied. A concurrent peer change is detected by Git.
+    // Export is allowed only when applied=current and the local DB differs
+    // from that exact current fixture. The exporter creates current+1.
     results.push(await exportFixture(item.id, { allowUpdate: true }));
     await validateFixture(fixturePath);
     await recordHandoffState(item.id);

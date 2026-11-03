@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { classifyFixtureRevision, formatFixtureRevision } from "./lib/testdata-revision.mjs";
 
-const v9 = { version: 9, checksum: "sha256-v9" };
-const v10 = { version: 10, checksum: "sha256-v10", parentVersion: 9, parentChecksum: "sha256-v9" };
+const v9 = { version: 9, checksum: "a".repeat(64) };
+const v10 = { version: 10, checksum: "b".repeat(64), parentVersion: 9, parentChecksum: v9.checksum };
 
 assert.deepEqual(classifyFixtureRevision(null, v9), { action: "bootstrap" });
 assert.deepEqual(classifyFixtureRevision(v9, v10), { action: "apply" });
