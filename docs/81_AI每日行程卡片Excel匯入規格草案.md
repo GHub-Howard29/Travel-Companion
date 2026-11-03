@@ -4,11 +4,11 @@
 >
 > 開發狀態：尚未實作程式。版本建議不代表已核准開始開發或資料庫變更。
 >
-**重要範圍定案（2026-11-03）：V1 採用新增 TRIP 時匯入 Excel 的 A 流程；使用者在新增 TRIP 時選擇「Excel 建立」或「手動新增」，兩者二選一，Excel 直接建立新 TRIP，不要求先建立空白 TRIP。舊方案 B「既有 TRIP 每日卡片 Excel 匯入／匯出」已捨棄，不屬本功能、不保留為 V1 或後續待辦規格；其單日／零卡片資格、既有卡片覆蓋、地點搜尋與候選確認等規則不得套用至 A。V1 採單一可見工作表「新增 TRIP」，TRIP 基本資料只有 TRIP 名稱及出發日期兩欄；卡片日序最大值推導天數，其他設定由系統預設。
+**重要範圍定案（2026-11-03）：V1 採用新增 TRIP 時匯入 Excel 的 A 流程；使用者在新增 TRIP 時選擇「Excel 建立」或「手動新增」，兩者二選一，Excel 直接建立新 TRIP，不要求先建立空白 TRIP。舊方案 B「既有 TRIP 每日卡片 Excel 匯入／匯出」已捨棄，不屬本功能、不保留為 V1 或後續待辦規格；其單日／零卡片資格、既有卡片覆蓋、地點搜尋與候選確認等規則不得套用至 A。V1 採兩張工作表：第一張為唯一使用者操作的「新增 TRIP」，第二張為系統管理用的隱藏「系統設定」，不增加使用者需填寫的業務欄位；TRIP 基本資料只有 TRIP 名稱及出發日期兩欄；卡片日序最大值推導天數，其他設定由系統預設。
 >
 > **安全與資料邊界原則（2026-11-03 定案）：只有 Super Admin 可執行 Excel 建立。採三層保護：第一層由前端限制匯入入口只對 Super Admin 顯示；第二層於確認匯入時自動檢查當下 Supabase Session／登入憑證有效性、線上狀態與目前帳號，不要求再次啟動 Google OAuth；第三層由 Excel 專用 RPC 依目前請求 JWT 與資料庫權威角色重新核對 Super Admin，作為最終授權。前端 Session 或角色快取不得取代 RPC 授權，任何檢查失敗或無法確認均停止匯入。系統背景產生或由資料庫安全設定保護的欄位不得由 Excel 指定；V1 的使用者輸入欄位以本文最新精簡欄位契約為唯一依據，不再採用「手動新增 UI 可修改欄位原則上全部納入 Excel」的舊原則。Excel 欄位標題使用固定繁體中文；格式及允許值依欄位契約嚴格驗證。
 >
-> **標準範本工作方式（2026-11-03 更新）：先依本節最新單一工作表欄位契約完成定義，再建立一份正式 Excel 範本並固定保存於專案資料夾，供日後提取及修改。V1 的版本識別 `template_version=1` 由系統 metadata 維護，不建立使用說明工作表，也不要求使用者輸入或修改；metadata 的實際承載格式仍須通過 ExcelJS、Microsoft Excel 與 LibreOffice 相容性測試後才能定案。**
+> **標準範本工作方式（2026-11-03 更新）：正式 Excel 範本已建立並固定保存於專案資料夾。V1 的版本識別 `template_version=1` 放在系統管理用隱藏工作表「系統設定」，由系統維護，不要求使用者輸入或修改；匯入端仍須嚴格驗證工作表名稱、隱藏狀態、固定儲存格位置與版本值。正式範本已通過 ExcelJS 4.4.0、LibreOffice 25.2.7.2 與 Microsoft Excel 2010（14.0.7015.1000）隔離 round-trip；相容性證據僅涵蓋上述版本組合。**
 >
 > 範圍限制：本文件只規範新增 TRIP 的 Excel 建立流程，包含 TRIP 基本資料及每日行程卡片；不包含已捨棄的既有 TRIP 卡片匯入／匯出功能。
 >
@@ -20,13 +20,17 @@
 
 ### 1. 工作簿與工作表
 
-- V1 只有一張可見工作表，名稱固定為「新增 TRIP」。
-- TRIP 基本資料置於工作表上方，行程卡片資料表置於下方；不另建 TRIP 基本資料工作表或使用說明工作表。
-- 工作表版面以固定儲存格座標、固定標題及固定區塊界線識別，解析器不得依空白列、顏色、合併儲存格或使用者填入內容推測區塊。固定列／欄座標須寫入配套欄位契約，範本與解析器共用同一份座標常數。
-- TRIP 基本資料區固定為 A1:B3：A1:B1 為區塊標題，A2「TRIP 名稱」、B2 使用者輸入；A3「出發日期」、B3 使用者輸入。卡片區固定從第 6 列開始：A6:F6 為固定欄位標題，A7:F 往下為資料列，順序為「第幾天、開始時間、結束時間、行程名稱、類別、描述」。不允許插入／刪除上述標題列或移動區塊；匯入端以固定座標定位並重新驗證標題文字。
-- `template_version=1` 由系統維護於工作簿 metadata，不增加第二張可見或隱藏工作表，不要求使用者輸入或修改。已檢查專案 ExcelJS 4.4.0 的 `Workbook` 實際 API 與 `index.d.ts`：沒有 `customProperties` 屬性，也沒有 custom document property 讀寫介面，因此 `docProps/custom.xml` 不符合 ExcelJS 原生讀寫要求，判定此路線未通過。另驗證 ExcelJS 已公開的核心文件屬性 `contentStatus` 可由 ExcelJS 寫入並重新讀回字串 `template_version=1`，單一工作表數量維持不變；但它的語意是文件內容狀態，尚未確認可否作為範本版本識別，且 Microsoft Excel／LibreOffice 編輯另存的保留性測試尚未完成。公司端目前安裝 Microsoft Office 2010（Excel 14.0.7015.1000）及 LibreOffice 25.2.7.2；LibreOffice headless 另存測試出現 XML parser「Document is empty」錯誤。Excel COM 隔離測試未能穩定取得獨立 Workbook 物件，故未完成另存驗證；測試確認使用者原本的 Excel 視窗及活頁簿仍保持開啟，未被操作。這些測試只涉及 `%TEMP%` 暫存檔，不代表 Office 相容性通過。因此 `contentStatus` 僅為待評估候選，不得視為已定案。階段 0 尚須確認此欄位的語意適用性及 Office round-trip；若不適合，另評估其他不增加工作表且能由 ExcelJS 原生穩定讀寫的方式。不得退回以欄位猜測版本。匯入端必須驗證 metadata、工作表名稱、固定座標標題及資料驗證規則。
-- 範本檔案預定保存於 `docs/templates/AI新增TRIP標準範本_V1.xlsx`，欄位契約配套文件預定為 `docs/templates/AI新增TRIP標準範本_V1_欄位契約.md`；實際範本檔案待 metadata 相容性測試完成後建立。
-- **metadata 承載方式驗證（階段 0 必做，2026-11-03 實測更新）**：已檢查專案既有 ExcelJS 4.4.0 的 `Workbook` 執行時 API 與 `index.d.ts`，未提供 custom document property 的原生讀寫介面；因此 `docProps/custom.xml` 候選已判定未通過。另以暫存 `.xlsx` 驗證 ExcelJS 公開的核心文件屬性 `contentStatus` 可原生寫入並重新讀回字串 `template_version=1`，且工作表數量維持一張；但 `contentStatus` 語意為文件內容狀態，是否適合作為範本版本仍需確認，不能逕自採用。Office round-trip 尚未通過：公司端 Microsoft Excel 為 Office 2010（14.0.7015.1000），LibreOffice 為 25.2.7.2；LibreOffice headless 另存測試發生 XML parser「Document is empty」錯誤，Excel COM 隔離測試也未能穩定取得獨立 Workbook 物件。測試確認原本使用者 Excel 視窗及活頁簿仍保持開啟、未被操作；測試檔均位於 `%TEMP%`，不在專案內。這些結果不代表 Office 相容性通過。下一步須先確認 `contentStatus` 語意適用性，再決定是否使用此候選；若採用，仍須以隔離 Office instance 完成 Microsoft Excel／LibreOffice 開啟、編輯／另存，再由 ExcelJS 讀回。若語意不適合或任一工具無法穩定保留，另評估其他不增加工作表且可由 ExcelJS 原生讀寫的方案。不得自行拼接 ZIP／XML 後宣稱是 ExcelJS 原生支援，也不得退回以欄位猜測版本。版本值必須始終精確為字串 `1`，且不得增加第二張工作表；缺少或不支援版本時匯入端必須明確拒絕。
+- V1 固定兩張工作表：第一張可見工作表名稱為「新增 TRIP」，是唯一使用者填寫與操作頁面；第二張工作表名稱為「系統設定」，由範本設為隱藏，僅供系統保存及讀取 metadata，不提供使用者日常編輯，不增加任何業務輸入欄位或使用說明內容。
+- 「新增 TRIP」工作表中，TRIP 基本資料置於上方，行程卡片資料表置於下方；不另建 TRIP 基本資料工作表或使用說明工作表。類別資料驗證選項使用此表 I1:N1 隱藏輔助欄作為清單來源；I:N 欄須保持隱藏，不增加第三張工作表或任何使用者業務輸入欄位。
+- 使用者操作頁版面以固定儲存格座標、固定標題及固定區塊界線識別，解析器不得依空白列、顏色、合併儲存格或使用者填入內容推測區塊。固定列／欄座標須寫入配套欄位契約，範本與解析器共用同一份座標常數。類別下拉清單位於「新增 TRIP」工作表 I1:N1，I:N 為隱藏輔助欄；E7:E1006 資料驗證引用 `$I$1:$N$1`，匯入端仍以程式固定允許值重新驗證。
+- 「新增 TRIP」的 TRIP 基本資料區固定為 A1:B3：A1:B1 為區塊標題，A2「TRIP 名稱」、B2 使用者輸入；A3「出發日期」、B3 使用者輸入。卡片區固定從第 6 列開始：A6:F6 為固定欄位標題，A7:F 往下為資料列，順序為「第幾天、開始時間、結束時間、行程名稱、類別、描述」。不允許插入／刪除上述標題列或移動區塊；匯入端以固定座標定位並重新驗證標題文字。
+- 「系統設定」工作表採固定儲存格契約，A1 為固定識別標題 `Travel-Companion Template Metadata`，A2 為鍵名 `template_version`、B2 為字串值 `1`；此表必須為隱藏狀態。固定標題、鍵名及值均須由匯入端驗證；缺表、表名錯誤、非隱藏、識別標題錯誤、鍵名錯誤、版本缺漏或不支援版本均拒絕匯入。不得只依工作表順序或版本值單獨判定來源。
+- 兩張工作表由 ExcelJS 4.4.0 原生工作表 API 讀寫，不使用 `docProps/custom.xml`、`contentStatus` 或自行拼接 ZIP／XML。隔離測試已確認 ExcelJS 原生寫入／讀取，以及 LibreOffice 25.2.7.2、Microsoft Excel 2010（14.0.7015.1000）開啟另存後，第二張工作表的 hidden 狀態與 metadata 均可保留；測試證據及版本範圍見下方 metadata round-trip 實測紀錄。不得把目前版本組合的驗證延伸解讀為所有 Office／試算表版本均相容。測試均使用 `%TEMP%` 隔離檔及獨立 Office profile／instance，不操作使用者正在使用的活頁簿。
+- 正式範本檔案保存於 `docs/templates/AI新增TRIP標準範本_V1.xlsx`，欄位契約配套文件保存於 `docs/templates/AI新增TRIP標準範本_V1_欄位契約.md`；正式範本已完成 ExcelJS／LibreOffice／Microsoft Excel 2010 隔離 round-trip。
+- **metadata 承載方式與 Office round-trip 驗證（2026-11-03 實測通過）**：採用第二張隱藏「系統設定」工作表，將 `template_version=1` 保存於固定儲存格 A2:B2 契約；A1 固定識別標題為 `Travel-Companion Template Metadata`。以 ExcelJS 4.4.0 建立隔離測試檔，確認兩張工作表、hidden 狀態、A1/A2/B2 及版本值字串型別均正確。再分別以 LibreOffice 25.2.7.2 headless（獨立 UserInstallation profile）及 Microsoft Excel 2010（14.0.7015.1000；獨立 Excel COM instance）開啟並另存至不同暫存檔，最後由 ExcelJS 重新讀回；兩條 Office 路徑均保留兩張工作表、第二張 hidden、識別標題、鍵名及精確字串 `1`。所有檔案均位於 `%TEMP%` 隔離目錄；Excel 2010 使用獨立 instance，未操作使用者原本開啟的活頁簿。此驗證證明目前測試環境及版本組合的基本 round-trip；不應延伸宣稱涵蓋其他 Office 版本、Excel 網頁版或所有第三方試算表軟體。正式範本仍須按欄位契約產生及驗證。
+- **資料版面驗證（階段 0 必做）**：「新增 TRIP」檢查工作表名稱、A1:B3 與 A6:F6 固定文字、A7:F 資料起始位置、類別下拉資料驗證範圍及時間／日期格式；「系統設定」檢查工作表名稱、hidden 狀態、A1 固定識別標題與 A2:B2 版本契約。移動或更改固定標題、插入／刪除必要標題列、變更工作表名稱或顯示系統設定表均應被解析器拒絕；新增一般卡片資料列不得破壞版面辨識。
+- 範本檔案保存於 `docs/templates/AI新增TRIP標準範本_V1.xlsx`，欄位契約配套文件保存於 `docs/templates/AI新增TRIP標準範本_V1_欄位契約.md`；兩者須依本節唯一有效契約維護，版本 metadata 不得自行更改。
+- **歷史技術調查（2026-11-03，已被兩工作表決策取代）**：曾檢查專案既有 ExcelJS 4.4.0 的 `Workbook` 執行時 API 與 `index.d.ts`，確認未提供 custom document property 原生讀寫介面；`docProps/custom.xml` 候選因此未通過。另以暫存 `.xlsx` 驗證 `contentStatus` 可原生寫入並讀回 `template_version=1`，但其文件內容狀態語意不適合作為專用版本欄位，故不採用。早期 LibreOffice headless 另存測試曾發生 XML parser「Document is empty」錯誤，Excel COM 隔離測試亦曾未能穩定取得獨立 Workbook 物件；後續已改用專用 LibreOffice UserInstallation profile 及獨立 Excel COM instance，並完成兩者 round-trip。早期失敗紀錄保留為調查沿革，不代表現行方案仍受阻。測試未操作使用者既有活頁簿，測試檔位於 `%TEMP%`。
 - **資料版面驗證（階段 0 必做）**：範本產生後檢查工作表名稱、A1:B3 與 A6:F6 固定文字、A7:F 資料起始位置、類別下拉資料驗證範圍及時間／日期格式。移動或更改固定標題、插入／刪除必要標題列、變更工作表名稱均應被解析器拒絕；新增一般卡片資料列不得破壞版面辨識。
 
 ### 2. TRIP 基本資料區
@@ -87,7 +91,7 @@ TRIP 基本資料區只有上述兩項。V1 不提供旅程天數、結束日期
 - TRIP 名稱、出發日期、卡片第幾天、開始時間、行程名稱及類別為必填；結束時間與描述可空白。
 - 任一非空白值格式錯誤、類別不在允許值內、標題缺漏／重複、工作表或 metadata 不符，整份匯入拒絕，不靜默略過錯誤列、不猜測或自動轉換。
 - 錯誤須指出工作表、列號及欄位；拒絕時不得建立 TRIP 或部分卡片。
-- 範本固定版型與系統 metadata 均須驗證。版本 metadata 的承載格式須先通過 ExcelJS、Microsoft Excel 與 LibreOffice 相容性測試；缺少、空白或不支援版本均拒絕匯入。
+- 範本固定版型與系統 metadata 均須驗證。版本 metadata 的承載格式已通過 ExcelJS 4.4.0、Microsoft Excel 2010（14.0.7015.1000）及 LibreOffice 25.2.7.2 的隔離 round-trip；正式範本仍須依同一契約產生並驗證。缺少、空白或不支援版本均拒絕匯入。
 
 ### 8. 版本與範本決策沿革
 
@@ -97,7 +101,7 @@ TRIP 基本資料區只有上述兩項。V1 不提供旅程天數、結束日期
 - 舊版參與者名稱／Email 橫向五組輸入，已改為一律使用資料庫權威預設參與者。
 - 舊版 TRIP 編輯者 Email 五組輸入，已改為不額外指派編輯者。
 - 舊版公開行程、顯示農曆日期、旅程型態欄位，已改為全部沿用系統預設。
-- 舊版兩張或三張工作表／使用說明工作表構想，已改為單一「新增 TRIP」工作表；版本識別由系統 metadata 維護，但不增加第二張工作表，實際承載格式仍待相容性測試。
+- 舊版兩張或三張工作表／使用說明工作表構想，曾簡化為單一操作工作表；2026-11-03 最新決策再次放寬為兩張工作表：可見「新增 TRIP」及隱藏系統管理用「系統設定」，不增加使用者輸入欄位，版本識別固定存放於第二張表。
 - 幣別規則以 P04-04／P05-01-05 最新決策為準：沿用新增表單當下預設幣別及確認流程，不固定 TWD。
 
 ## 新增 TRIP Excel 建立：目前已定案項目總覽（2026-11-03）
@@ -105,7 +109,7 @@ TRIP 基本資料區只有上述兩項。V1 不提供旅程天數、結束日期
 | 主題 | 最新定案 |
 |---|---|
 | 建立流程 | 新增 TRIP 時選擇 Excel 建立或手動新增；Excel 直接建立全新 TRIP |
-| 工作表 | 單一可見「新增 TRIP」工作表；TRIP 區在上、卡片區在下；`template_version=1` 由系統 metadata 保存，承載格式待 ExcelJS／Excel／LibreOffice 相容性測試 |
+| 工作表 | 兩張工作表：可見「新增 TRIP」供使用者填寫；隱藏「系統設定」保存 `template_version=1`，不增加使用者輸入欄位；ExcelJS、LibreOffice 25.2.7.2、Microsoft Excel 2010 隔離 round-trip 已通過 |
 | TRIP 必填欄位 | TRIP 名稱、出發日期，僅兩項 |
 | 卡片欄位 | 第幾天、開始時間、行程名稱、類別必填；結束時間、描述選填 |
 | 類別 | 必填，Excel 下拉選單六選項：交通、住宿、景點、餐飲、自駕、其他；匯入端重新驗證 |
@@ -120,7 +124,7 @@ TRIP 基本資料區只有上述兩項。V1 不提供旅程天數、結束日期
 
 **建立流程共同原則**：新增 TRIP 時由使用者選擇「Excel 建立」或「手動新增」，兩者二選一。Excel 匯入不要求先建立空白 TRIP，也不支援既有 TRIP 卡片匯入／覆蓋。匯入前完成整份驗證，預覽幣別及卡片分布，明確確認後才提交。僅雲端整批建立成功後更新本機權威快取／UI；離線或結果不明時不得本機單獨建立或誤報成功。
 
-**目前狀態（2026-11-03 更新）**：產品欄位契約及主要技術架構已整理；已核對資料模型、類別／顏色、日期與 ID、參與者來源、TRIP 建立路徑、通用 RLS、Other Info 儲存及特殊資訊初始資料。TRIP 名稱與出發日期不作唯一限制；不同建立請求即使名稱及日期相同，也允許建立不同 TRIP。安全產品決策已定案為三層保護：UI 入口限制、確認匯入時自動檢查當下 Supabase Session／登入帳號／線上狀態（不再次啟動 Google OAuth）、RPC 依目前 JWT 與資料庫權威角色最終核對 Super Admin。RPC request registry 的併發協定、SQL 權限／交易 rollback 仍待完整 SQL review 與本機驗證。IM01–IM10 尚未執行。正式範本尚未產製；尚未授權程式實作、資料庫 migration 或發布。
+**目前狀態（2026-11-03 更新）**：產品欄位契約、正式範本、欄位契約文件及 Office round-trip 已完成；已核對資料模型、類別／顏色、日期與 ID、參與者來源、TRIP 建立路徑、通用 RLS、Other Info 儲存及特殊資訊初始資料。TRIP 名稱與出發日期不作唯一限制；不同建立請求即使名稱及日期相同，也允許建立不同 TRIP。安全產品決策已定案為三層保護：UI 入口限制、確認匯入時自動檢查當下 Supabase Session／登入帳號／線上狀態（不再次啟動 Google OAuth）、RPC 依目前 JWT 與資料庫權威角色最終核對 Super Admin。仍待實作 Excel 專用 SECURITY DEFINER RPC／request registry，並驗證 SQL 權限、併發冪等、整批交易與 rollback。IM01–IM10 尚未執行；尚未核准實作與 migration，亦未發布。
 
 ### 現行 TRIP ID 與名稱／日期唯一性基線（2026-11-03，公司端實測）
 
@@ -147,7 +151,7 @@ TRIP 基本資料區只有上述兩項。V1 不提供旅程天數、結束日期
 1. **P01｜Excel 建立權限（三層保護，已定案 2026-11-03）**：只有 Super Admin 可使用新增 TRIP Excel 建立。第一層：前端只向 Super Admin 顯示 Excel 建立入口。第二層：使用者按下確認建立時，系統自動檢查當下 Supabase Session／登入憑證有效性、線上狀態及目前帳號；若 Session 可由 Supabase 正常更新，須先完成更新再確認，若無 Session、更新失敗、帳號不符或狀態無法確認則停止；不再次啟動 Google OAuth、不要求輸入 Google 帳密。第三層：Excel 專用 RPC 依請求 JWT 與 `auth.uid()`，再以 `private.tc_is_super_admin()` 查詢資料庫權威角色，通過才建立。前端 Session、快取角色名單或任何用戶端旗標都不能取代 RPC 授權。既有手動新增權限及 `trips` 通用 INSERT RLS 不因本功能而收緊；Excel 使用獨立安全寫入入口。
 2. **P02｜Excel 可控制資料範圍（已定案）**：Excel V1 僅能指定最新欄位契約列出的 TRIP 名稱、出發日期及六項卡片欄位。TRIP／卡片 ID、建立／更新時間、參與者 Email mapping、編輯者、公開狀態、農曆、旅程型態、幣別及其他系統欄位均不得由 Excel 指定；依系統權威預設或明確確認流程產生。
 3. **P03｜欄位標題與格式（已定案）**：使用固定繁體中文欄位標題；格式、必要／選填、允許值及範例均以 V1 精簡欄位契約為準，不得自行增欄或改採英文程式欄位名稱。
-4. **P04-01｜固定範本與嚴格驗證（產品原則已定案；metadata 承載格式待技術驗證）**：系統提供固定 V1 `.xlsx` 範本，版本識別 `template_version=1` 由系統 metadata 保存，不要求使用者輸入或修改；metadata 不得以欄位猜測替代。已確認 ExcelJS 4.4.0 沒有 custom document property 原生讀寫介面，因此 `docProps/custom.xml` 候選不通過；須另評估不增加第二張工作表且可由現有 ExcelJS 原生讀寫的 metadata 方案，再完成 Excel／LibreOffice 開啟、編輯及另存保留性測試後才可定案。匯入端重新驗證工作表、metadata、固定座標區塊、標題及欄位值；任何不合約定的非空白值拒絕整份匯入，不猜測、不自動轉換、不靜默忽略。
+4. **P04-01｜固定範本與嚴格驗證（產品原則與範本技術已定案）**：系統提供固定 V1 `.xlsx` 範本，固定兩張工作表：可見「新增 TRIP」及隱藏「系統設定」。`template_version=1` 置於系統設定表固定 A2:B2，不要求使用者輸入或修改；ExcelJS 4.4.0 以原生 worksheet API 讀寫，不使用 custom properties、`contentStatus` 或手動 ZIP/XML。正式範本已完成，並通過 ExcelJS、LibreOffice 25.2.7.2、Microsoft Excel 2010（14.0.7015.1000）隔離開啟／另存回讀；匯入端仍須重新驗證兩張工作表名稱、順序、可見／隱藏狀態、系統識別及版本值、固定座標區塊、標題及欄位值。任何不合約定的非空白值拒絕整份匯入，不猜測、不自動轉換、不靜默忽略。
 5. **P04-02｜記帳參與者（已定案）**：Excel 不提供參與者欄位；建立時使用即時資料庫權威預設名單，即 `admin_profiles.include_in_new_trip=true` 且 Email 同時存在於 `admin_users.role=super_admin` 的交集。手動新增原有參與者管理行為不變。
 6. **P04-03｜可編輯者（已定案）**：Excel 不提供編輯者 Email 欄位；V1 不額外指派 `trip_editor`。需要授權時，建立後使用 App 既有管理功能。
 7. **P04-04｜幣別與符號（已定案）**：Excel 不提供幣別欄位；沿用新增 TRIP 表單當下的預設幣別代碼與符號，不固定 TWD、不接受 Excel 覆寫。預覽及最終確認均顯示幣別並要求明確確認；確認前若預設值改變，必須更新預覽並重新確認。手動新增原有幣別選擇不變。
@@ -175,11 +179,11 @@ TRIP 基本資料區只有上述兩項。V1 不提供旅程天數、結束日期
 | P01 | Excel 建立權限 | 僅 Super Admin；第一層 UI 入口限制，第二層確認建立時自動檢查當下 Supabase Session／登入帳號／線上狀態（不再次啟動 Google OAuth），第三層 Excel 專用 RPC 以 JWT、`auth.uid()` 與資料庫權威角色最終授權。既有手動新增及通用 INSERT RLS 不改動。 |
 | P02 | Excel 可控制資料範圍 | 僅限 V1 精簡契約的兩個 TRIP 欄位與六個卡片欄位；所有系統識別、預設、權限及設定欄位均由系統產生或確認。 |
 | P03 | 欄位名稱與說明 | 固定繁體中文標題；欄位型別、格式、必填／選填及允許值依 V1 精簡欄位契約。 |
-| P04-01 | 固定範本與驗證 | 固定 `.xlsx` 範本；版本 metadata 原則已定案，不增加第二張工作表。ExcelJS 4.4.0 無 custom document property 原生讀寫介面，`docProps/custom.xml` 候選不通過；`contentStatus` 可由 ExcelJS 寫入讀回，但語意適用性及 Microsoft Excel／LibreOffice 編輯另存保留性未驗證，僅列待評估候選。須先定案可用 metadata 方案，再完成 Office round-trip。固定座標、標題與欄位值均重新驗證，任一違規拒絕整份匯入。 |
+| P04-01 | 固定範本與驗證 | 固定兩張工作表：可見「新增 TRIP」及隱藏「系統設定」；`template_version=1` 置於系統設定表固定 A2:B2，採 ExcelJS 4.4.0 原生 worksheet API。`docProps/custom.xml` 無原生 API、`contentStatus` 語意不適合作專用版本欄位，均不採用。ExcelJS round-trip 可直接驗證；Microsoft Excel／LibreOffice 編輯另存保留性仍待隔離驗證。固定座標、標題、系統表識別與 hidden 狀態均重新驗證，任一違規拒絕整份匯入。 |
 | P04-02 | 記帳參與者 | 不提供 Excel 欄位；使用 `admin_profiles.include_in_new_trip=true` 且 Email 同時具有 `admin_users.role=super_admin` 的即時交集名單。 |
 | P04-03 | TRIP 編輯者 | 不提供 Excel 欄位；不額外指派 `trip_editor`。 |
 | P04-04 | 預設幣別 | Excel 不提供幣別代碼、幣別名稱或符號欄；沿用新增 TRIP 表單當下預設幣別代碼及符號，不固定使用 TWD、不接受 Excel 覆寫。預覽及最終確認顯示幣別並要求使用者明確確認；若預覽期間設定改變，更新並要求重新確認。手動新增原有幣別選擇行為不變。 |
-| P05-01 | 正式範本 | 欄位契約完成後，正式範本固定為 `docs/templates/AI新增TRIP標準範本_V1.xlsx`，配套契約文件為 `docs/templates/AI新增TRIP標準範本_V1_欄位契約.md`；目前尚未建立。 |
+| P05-01 | 正式範本 | 正式範本已建立於 `docs/templates/AI新增TRIP標準範本_V1.xlsx`，配套契約文件為 `docs/templates/AI新增TRIP標準範本_V1_欄位契約.md`；不得另建互不相容的 V1 範本。 |
 | P05-01-01 | TRIP 名稱 | 必填；去除前後空白後不可為空；V1 不另增長度上限或字元白名單。 |
 | P05-01-02 | TRIP 基本資料與天數 | TRIP 區僅有「TRIP 名稱」「出發日期」兩欄；天數由卡片最大「第幾天」推導，範圍 1–30。 |
 | P05-01-03 | 結束日期計算 | 天數由最大卡片日序推導；結束日期＝出發日期＋（推導天數－1），包含出發日。 |
@@ -194,7 +198,7 @@ TRIP 基本資料區只有上述兩項。V1 不提供旅程天數、結束日期
 
 **建立流程共同原則**：新增 TRIP 時由使用者選擇「Excel 建立」或「手動新增」，兩者是二選一的建立方式，但 Excel 使用最新精簡欄位契約，不要求欄位與手動表單完全相同。Excel 直接建立新 TRIP，不先建立空白 TRIP，也不套用既有 TRIP 匯入的單日／零卡片資格。建立前確認雲端可用；只有雲端整批交易成功後才更新本機權威快取／UI。離線或建立結果不明時停止，結果不明須依提交識別查詢雲端，不得誤報成功或只在本機建立。
 
-**目前狀態**：P01–P05-07 產品決策已定案；Excel 精簡欄位契約為唯一有效欄位依據。Excel 專用 RPC 的安全邊界、輸入／輸出、錯誤碼、交易順序、重複判定及逾時處理已記錄於第 8 節；request UUID 保存位置、跨手動建立併發防護及目標 DB trigger／RLS 實際狀態仍待驗證。正式 Excel 範本待階段 0 收斂後建立。尚未授權程式實作、資料庫 migration 或發布。
+**目前狀態**：P01–P05-07 產品決策已定案；Excel 精簡欄位契約為唯一有效欄位依據。正式 V1 範本及欄位契約文件已建立並完成 Office 隔離 round-trip。Excel 專用 RPC 的安全邊界、輸入／輸出、錯誤碼及交易順序已形成實作設計；request registry 的 SQL 實作、併發冪等、資料庫 EXECUTE grants、整批 rollback 與特殊 Other Info 寫入仍須在公司端 local Supabase 實作及測試。尚未進行程式實作或資料庫 migration；是否進入實作以 Product Owner 明確授權為準，未授權不得部署或修改遠端資料庫。
 
 ### 手動新增 TRIP 程式核對補充（2026-11-03，只讀檢查）
 
@@ -217,7 +221,7 @@ TRIP 基本資料區只有上述兩項。V1 不提供旅程天數、結束日期
 2. **Excel 建立資料範圍（2026-11-02 定案）**：本功能只採新增 TRIP 的 A 流程；工作簿同時提供 TRIP 基本資料與每日行程卡片，使用者由新增 TRIP 入口直接建立新旅程。先前既有 TRIP 卡片匯入／匯出方案 B 已捨棄，不屬本功能。
 3. **旅程天數與卡片建立（2026-11-03 更新）**：Excel 不提供「旅程天數」欄位；系統取所有有效卡片「第幾天」的最大值推導旅程天數（1–30），並依出發日期建立完整日期資料。中間沒有卡片的日序仍保留空白日；工作簿每筆卡片資料均建立為新卡片，卡片 ID 由系統產生。
 4. **系統管理欄位排除**：不從 Excel 匯入 Place ID、座標、天氣、照片／Storage 路徑、路線估算、移動方式或其他系統管理欄位。天氣預設不勾選，完全不列入 V1 匯入欄位或匯入觸發流程。
-5. **地點欄位排除（2026-11-03 更新）**：單一「新增 TRIP」工作表中的卡片資料區完全不提供地點名稱、完整地址、`location` 或 `location_address` 欄位；不匯入地點文字，也不在匯入流程進行地圖搜尋、候選確認、Place ID／座標設定或地點確認摘要。卡片建立後如需設定地圖地點，由使用者在 App 內自行編輯卡片並使用既有地點搜尋／確認功能。此決策只限制 Excel 欄位與匯入流程，不刪除 App 既有地圖功能。
+5. **地點欄位排除（2026-11-03 更新）**：「新增 TRIP」工作表中的卡片資料區完全不提供地點名稱、完整地址、`location` 或 `location_address` 欄位；不匯入地點文字，也不在匯入流程進行地圖搜尋、候選確認、Place ID／座標設定或地點確認摘要。卡片建立後如需設定地圖地點，由使用者在 App 內自行編輯卡片並使用既有地點搜尋／確認功能。此決策只限制 Excel 欄位與匯入流程，不刪除 App 既有地圖功能。
 6. **新增 TRIP 匯入建立與雲端保護（2026-11-03 更新）**：Excel 採本文最新精簡欄位契約；系統預設資料須補齊 App 完整 TRIP 模型。不得以既有 TRIP 的單日／零卡片資格限制新增匯入。只有雲端整批建立成功後才更新本機權威快取／UI；離線或無法確認雲端建立結果時停止並核對，不得本機單獨建立或誤報成功。
 7. **復原策略（使用者選擇 D／自訂）**：遵守不過度開發原則，V1 不新增每次匯入的持久化快照子系統，也不承諾匯入成功後可一鍵還原上一版。V1 重點是匯入失敗時不破壞舊資料；若日後明確需要成功後復原，再另行評估最小單筆 Trip 備份。
 8. **離開時間（使用者選擇 B）**：`arrival_time` 必填；`departure_time` 可空白，空白時系統以抵達時間作為離開時間，不阻止匯入。
@@ -229,7 +233,7 @@ TRIP 基本資料區只有上述兩項。V1 不提供旅程天數、結束日期
 14. **P01：新增 TRIP Excel 建立的權限邊界（2026-11-03 技術核對與安全流程定案）**：只有 Super Admin 可以使用新增 TRIP Excel 建立功能；目前通用 `trips` INSERT RLS 允許 Super Admin 或該 TRIP 的 `trip_editor`，因此不能滿足 Excel 專用限制。Excel 必須走專用安全 RPC。產品採三層保護：UI 限制入口、確認提交時自動檢查當下 Supabase Session／登入帳號／線上狀態（不再次啟動 Google OAuth）、RPC 依目前 JWT／`auth.uid()` 及 `private.tc_is_super_admin()` 重新核對資料庫權威角色。前端 Session 或角色快取不得取代 RPC 最終授權；既有通用 INSERT RLS 及手動新增權限保持不變。
 15. **P02：Excel 可控制欄位與系統欄位界線（2026-11-03 更新，取代舊版「可修改欄位原則上全部納入」）**：凡由系統背景產生、系統自動計算，或受資料庫／安全政策保護的資料，不得由 Excel 指定或覆寫，例如 TRIP ID、卡片 ID、建立／更新時間及系統識別資料。Excel V1 可輸入欄位僅限本文件最新契約列出的 TRIP 名稱、出發日期及卡片資料；參與者、編輯者、公開、農曆、旅程型態、幣別及其他設定均不由 Excel 控制，依系統預設或確認流程產生。
 16. **P03：Excel 欄位標題及備註原則（2026-11-03 更新）**：工作表可見欄位標題使用固定繁體中文，僅採最新 V1 欄位契約列出的兩個 TRIP 欄位及六個卡片欄位；範本的時間格式、必要／選填、類別下拉選項與範例依該契約呈現，不增加未定案欄位或開放式輸入方式。
-17. **P04-01：標準範本與嚴格驗證（2026-11-03 更新）**：系統提供固定格式 Excel 範本，由系統 metadata 管理範本版本，使用者不得任意修改版本識別；metadata 不增加第二張工作表，實際承載格式須經 ExcelJS、Microsoft Excel 與 LibreOffice 相容性測試後定案。匯入時驗證版本、工作表結構、固定座標欄位標題、資料型別及允許值；選填欄位僅依契約允許空白，任何非空白但不符合格式／允許值的資料一律拒絕整份匯入，不猜測、不自動轉換、不靜默忽略。
+17. **P04-01：標準範本與嚴格驗證（2026-11-03 更新）**：系統提供固定格式 Excel 範本，由系統 metadata 管理範本版本，使用者不得任意修改版本識別。最新決策允許兩張工作表：可見「新增 TRIP」供使用者填寫，隱藏「系統設定」以固定儲存格保存 `template_version=1`；不增加使用者輸入欄位。匯入時驗證兩張工作表名稱、順序、hidden 狀態、固定識別及版本值、固定座標欄位標題、資料型別及允許值；選填欄位僅依契約允許空白，任何非空白但不符合格式／允許值的資料一律拒絕整份匯入，不猜測、不自動轉換、不靜默忽略。Office round-trip 需於隔離環境另行驗證。
 18. **P04-02：記帳參與者沿用系統預設（2026-11-03 更新）**：Excel 不提供參與者欄位；建立時直接載入資料庫 `admin_profiles` 與 `admin_users` 的即時權威預設參與者名單，不在範本硬編碼姓名或 Email。手動新增表單原有參與者管理功能不變。
 19. **P04-03：可編輯者（2026-11-03 更新）**：Excel 不提供可編輯者 Email 欄位；V1 不額外指派任何 `trip_editor`。需要授權時，使用者於 TRIP 建立後透過 App 既有管理功能處理。
 20. **P04-04：幣別與符號（2026-11-03 更新）**：Excel 不提供幣別代碼或符號欄位。建立時沿用目前新增 TRIP 表單當下的預設代碼與符號，不固定指定 TWD，也不由 DB 預設值取代此產品決策。預覽及最終確認均顯示實際將採用的幣別代碼與符號，要求依本次旅程目的地明確確認；預覽後設定若改變，更新預覽並要求再次確認。手動新增表單原有幣別選擇功能不變。
@@ -255,7 +259,7 @@ TRIP 基本資料區只有上述兩項。V1 不提供旅程天數、結束日期
 - 下方為每日行程卡片資料表，每列代表一張新卡片，欄位為「第幾天」「開始時間」「結束時間」「行程名稱」「類別」「描述」。其中第幾天、開始時間、行程名稱及類別必填；結束時間、描述選填。
 - 「類別」使用 Excel 資料驗證下拉選單，固定選項為「交通、住宿、景點、餐飲、自駕、其他」；匯入端仍須重新驗證。
 - 不提供任何地點名稱或地址欄位。每日卡片總數與每日分布由系統依資料列計算，不接受 AI 提供的摘要數字。
-- `template_version=1` 由系統工作簿 metadata 保存，不增加第二張工作表，也不要求使用者輸入或修改；metadata 實際承載格式須經 ExcelJS 與 Microsoft Excel／LibreOffice 相容性測試後定案。
+- 工作簿固定兩張工作表：可見「新增 TRIP」供使用者輸入，隱藏「系統設定」保存 metadata；`template_version=1` 位於系統設定表固定 A2:B2，不要求使用者輸入或修改。
 
 使用者在新增 TRIP 時選擇 Excel 建立，系統依同一份工作簿中的 TRIP 基本資料及行程卡片一次建立新旅程。Excel 不攜帶可覆寫系統識別資料；TRIP ID、卡片 ID、日期資料及其他初始結構由系統建立。此流程不以既有 TRIP 作為匯入目標，也不執行既有卡片覆蓋／合併。
 
@@ -306,7 +310,7 @@ TRIP 基本資料區只有上述兩項。V1 不提供旅程天數、結束日期
 
 1. 使用者在「新增 TRIP」流程中選擇「Excel 建立」或「手動新增」。選擇 Excel 時直接建立新 TRIP，不先建立空白 TRIP，也不從既有 TRIP 功能選單啟動。Excel 欄位採本文精簡契約，系統以權威預設補齊其他必要資料，建立結果須符合 App 完整資料模型。**此流程僅在網路連線可用且雲端服務可正常連線時開放；離線狀態直接禁止開始。**
 2. 開始匯入前先檢查網路狀態，再以實際雲端請求確認服務可達，並確認使用者具備新增 TRIP 的權限。`navigator.onLine` 只能作為初步訊號，不可單獨視為雲端可用證明。若離線、雲端請求失敗、逾時或無法確認，停止匯入，不進入會修改資料的流程，也不得改成本機暫存建立。
-3. 使用者上傳 `.xlsx`。系統檢查單一工作表名稱及系統範本版本 metadata、固定座標 TRIP／卡片區欄位、推導天數、欄位值與時間格式；metadata 承載格式須先通過 ExcelJS、Microsoft Excel 與 LibreOffice 相容性測試。任何驗證失敗均不得建立 TRIP 或寫入部分卡片，並指出工作表、列號及欄位。
+3. 使用者上傳 `.xlsx`。系統檢查兩張工作表名稱、順序與可見／隱藏狀態，驗證「系統設定」固定識別及 `template_version=1`，再解析「新增 TRIP」固定座標欄位、推導天數、欄位值與時間格式。任何驗證失敗均不得建立 TRIP 或寫入部分卡片，並指出工作表、列號及欄位。
 4. 驗證成功後顯示建立預覽，至少包含 TRIP 名稱、出發日期、依最大卡片日序推導的結束日期與旅程天數、系統目前預設幣別代碼與符號、明確的幣別確認提醒、系統預設參與者摘要（不提供自訂參與者欄位）、編輯者未額外指派提示，以及每日卡片總數與每日分布；列出所有錯誤與警告。幣別確認應由匯入者明確勾選或以等效明確動作完成，未確認不得進入提交。此預覽不包含地點確認摘要、Google 地圖候選或地點確認操作。
 5. 使用者按下「確認建立」後，先重新讀取／取得目前新增 TRIP 流程的系統預設幣別代碼與符號；若與預覽顯示值不同，更新預覽、清除舊的確認狀態並要求匯入者再次確認，不可直接提交。幣別確認有效後，第二層自動檢查當下 Supabase Session／登入帳號／線上狀態；必要時依 Supabase Auth 正常更新 Session，若無有效 Session、更新失敗或帳號不符則停止，不啟動第二次 Google OAuth。接著呼叫 Excel 專用 RPC，由 RPC 依目前請求 JWT、`auth.uid()` 及 `private.tc_is_super_admin()` 再核對權限。只有通過後才提交 TRIP 主資料及每日卡片。TRIP ID、卡片 ID、日期資料及其他系統初始結構由系統產生。若建立提交失敗或結果不明，依雲端建立結果核對流程處理；不得本機單獨建立或誤報成功。
 6. 只有整批雲端建立成功後才回報成功，並以雲端回傳的權威資料更新本機快取／UI。失敗時不得留下部分建立的 TRIP 或卡片；若底層儲存無法保證整批完整性，實作前必須補足原子性或安全補償設計。
@@ -449,7 +453,7 @@ RPC 成功回應（建議使用單一 JSON object）至少包含：
 
 ## 10. 範本版本相容性與提交結果
 
-- V1 僅有一張可見「新增 TRIP」工作表；`template_version=1` 由系統 metadata 保存，不建立「使用說明」工作表或第二張隱藏工作表。metadata 承載格式尚未定案，須先完成 ExcelJS 讀寫及 Microsoft Excel／LibreOffice 開啟儲存相容性測試；匯入端只接受明確支援的版本，metadata 缺少、空白、格式錯誤或不支援時拒絕匯入，不以欄位猜測版本，也不自動改寫使用者檔案。
+- V1 固定兩張工作表：可見「新增 TRIP」為唯一使用者填寫頁，隱藏「系統設定」保存識別及 `template_version=1`（A1、A2:B2 固定契約）；不建立使用說明工作表，也不增加使用者業務輸入欄位。採 ExcelJS 4.4.0 原生 worksheet API 讀寫，不使用 `docProps/custom.xml`、`contentStatus` 或手動 ZIP/XML。匯入端驗證兩張工作表的名稱、順序、可見／隱藏狀態、固定識別及精確版本字串；metadata 缺少、空白、格式錯誤或不支援時拒絕匯入，不以欄位猜測版本，也不自動改寫使用者檔案。Microsoft Excel／LibreOffice 編輯另存後的保留性仍待安全隔離 round-trip 驗證。
 - 匯入端仍須驗證工作表名稱、固定欄位標題、必要欄位與資料格式；即使 `template_version=1`，若必要欄位缺少、標題重複／改名或工作表結構不符，也要拒絕匯入並指出位置。
 - 雲端提交若明確失敗且確認沒有提交，保持原有雲端資料且不清理照片。若請求逾時或連線中斷，無法判斷雲端是否已提交，須重新讀取雲端核對；若仍無法確認，顯示「建立結果待確認」，不可宣稱成功或失敗，也不得清理其他既有照片資產。此處不新增持久化快照或匯入交易子系統。
 - 雲端建立成功後，立即以雲端回傳的權威資料更新本機快取與 UI；其他設備沿用既有 Trip workspace reconciliation 取得最新資料。目前查證到的 Trip 主資料刷新觸發點是啟動／重新協調、網路恢復、視窗 focus 與頁面回到 visible；目前未找到 `trips` 主資料表的 Realtime 訂閱，因此不能承諾其他設備在仍停留於前景時立即收到事件。**已選方案 A（2026-10-19）：V1 沿用既有刷新機制，不增加 `trips` Realtime 訂閱，也不另建同步子系統。** 其他設備若一直停留在前景，可能不會立即刷新；此為 V1 接受的同步時效限制，不列為本次阻擋項。成功訊息只在確認雲端資料已建立後顯示。
@@ -483,26 +487,26 @@ RPC 成功回應（建議使用單一 JSON object）至少包含：
 >
 > **執行原則：先確認前置定義，再確認後續設計；前一階段未定案或未通過，不得把依賴它的後續項目標記為可執行／通過。** 可以預先整理測試案例，但不得以尚未定案的規格作為測試通過依據。
 >
-> 本流程目前是規劃與審查階段，不代表已授權開始程式實作、正式資料庫變更或發布。逐項定案完成後，再由 Product Owner 明確決定進入實作。
+> 本流程區分實作前置審查、實作中的設計／驗證，以及實作後驗收。階段 0–1 的產品契約、正式範本及主要資料映射已完成，可作為開始實作的前置基礎；Excel 專用 RPC／request registry、解析器、預覽與雲端成功閘門須在明確授權後實作，並在公司端 local Supabase 驗證。階段 2–5 的 IM01–IM10 是實作過程及完成後的測試，不應被當成開始實作前必須全部完成的條件。實作授權不包含遠端資料庫寫入、commit/push 或發布，除非另行明確核准。
 
 ### 12.1 階段與依賴關係
 
 | 階段 | 工作內容 | 進入條件 | 完成條件／交付物 | 未完成時禁止進行 |
 |---|---|---|---|---|
-| 0. 產品契約與範本技術定案 | Excel 範本版本、metadata 承載方式、單一工作表及固定座標、欄位名稱／型別／必填規則／下拉允許值與匯入範圍 | 產品欄位契約依 2026-11-03 已定案內容整理，不重新開放產品決策；metadata 承載格式須經相容性測試 | 完成欄位契約及正式範本；確認版本 metadata 能在 ExcelJS、Microsoft Excel、LibreOffice 的讀寫及編輯另存流程中穩定保留 | metadata 承載格式及正式範本未通過驗證前，不得開始正式解析驗收或宣告階段 0 完成 |
+| 0. 產品契約與範本技術定案 | 兩張工作表結構、系統 metadata 儲存座標、固定座標、欄位名稱／型別／必填規則／下拉允許值與匯入範圍 | 產品欄位契約依 2026-11-03 已定案內容整理，不重新開放產品決策；兩工作表契約已選定；ExcelJS／LibreOffice／Microsoft Excel 2010 隔離 round-trip 已通過 | 完成正式範本及欄位契約文件；確認正式範本套用固定版型、資料驗證及格式後，能由 ExcelJS 正確讀回 | 正式範本與欄位契約未完成前，階段 0 不得標記完成，也不得進入 IM01–IM03 正式測試 |
 | 1. 程式資料契約核對 | Excel 欄位到 `ItineraryItem` 的映射、中文 category 到內部 `type`、`typeColor` 權威來源、`daysData` 日期鍵、排序、時間正規化、UUID ID 產生規則 | 階段 0 完成 | 產生可供解析器、預覽、資料庫寫入及測試共用的明確資料映射表 | 不得宣稱解析結果正確，不得進行正式整批寫入 |
 | 2. Excel 解析與資料驗證（IM01–IM03） | 有效範本解析、範本／工作表／標題錯誤、資料列／時間／天數／類別驗證 | 階段 0、1 完成 | 有效檔案輸出符合資料契約；錯誤檔案拒絕且無任何 Trip／本機權威資料變更；錯誤定位可辨識 | 不得進行 Supabase 整批寫入測試 |
 | 3. 新 TRIP 建立與提交安全設計（IM04–IM06） | 新 TRIP 建立權限、雲端可用性、Trip ID 主鍵防碰撞、request registry 冪等性及整批寫入原子性 | 階段 0、1 完成；階段 2 的有效解析輸出及建立預覽契約確認 | 新 TRIP 建立流程的狀態轉移、權限、ID 唯一性、request 重送與失敗結果明確；允許不同 request 建立同名同日期 TRIP；確認整批建立完整性可被測試 | 不得執行正式資料庫整批建立驗收 |
 | 4. 本機 Supabase 整批建立與失敗處理（IM07–IM08） | 使用隔離的本機測試資料驗證建立新 TRIP 與每日卡片成功提交、明確失敗、逾時結果不明、雲端權威資料與本機快取更新順序 | 階段 2、3 均完成；已確認僅連線本機 Supabase，且具備本次專用測試資料及清理方案 | 整批建立成功才更新本機 UI／快取；失敗不留下部分 TRIP／卡片；結果不明能重新核對；新建 TRIP 資料完整性符合規格 | 不得宣稱整批建立完整性通過或進入整體驗收 |
 | 5. 地點欄位排除與既有功能相容性（IM09–IM10） | 確認 Excel 不含地點／地址欄位、不觸發地圖、天氣、路線、照片副作用；其他裝置沿用既有 workspace reconciliation | 階段 0、1、2 完成；IM08 成功建立路徑可供驗證 | 確認匯入只建立 TRIP 與每日卡片，App 原有地點功能及其他模組／同步規則不被改動；不新增 Realtime／同步子系統 | 不得宣稱整體功能驗收完成 |
-| 6. 最終審查與實作授權 | 彙整所有定案、測試證據、未解問題與不在 V1 範圍的項目 | 階段 0–5 完成，所有必測項目有結果 | 提交完整審查摘要，由 Product Owner 決定是否進入實作 | 未取得明確實作授權，不得開始程式實作或資料庫變更 |
+| 6. 最終驗收與發布審查 | 彙整所有定案、測試證據、未解問題與不在 V1 範圍的項目 | 階段 0–5 完成，IM01–IM10 及必要回歸測試均有結果 | 提交完整驗收摘要，由 Product Owner 決定是否核准後續發布 | 未完成驗收或未取得發布核准，不得宣告功能完成、建立發布候選或部署 |
 
 ### 12.2 固定測試清單（IM01–IM10）
 
 | ID | 測試項目 | 測試目的與通過條件 | 前置依賴 |
 |---|---|---|---|
-| IM01 | 有效 V1 單一工作表解析與欄位映射 | 有效範本可解析；TRIP 區兩個欄位與卡片區六個欄位正確映射；預覽的最大日序推導天數、卡片數及每日分布正確 | 階段 0、1 |
-| IM02 | 範本版本、單一工作表及欄位結構錯誤 | 系統 metadata 缺少／空白／未知 `template_version`、可見工作表數量或名稱錯誤、TRIP／卡片區標題缺少／改名／重複時拒絕；指出具體位置；資料完全不變。metadata 測試涵蓋 ExcelJS 讀寫及 Excel／LibreOffice 編輯另存 | 階段 0 |
+| IM01 | 有效 V1 兩工作表解析與欄位映射 | 有效範本的可見「新增 TRIP」及隱藏「系統設定」可正確驗證；TRIP 區兩個欄位與卡片區六個欄位正確映射；預覽的最大日序推導天數、卡片數及每日分布正確 | 階段 0、1 |
+| IM02 | 範本版本、兩工作表結構及欄位錯誤 | 系統 metadata 缺少／空白／未知 `template_version`、工作表數量／名稱／順序錯誤、「系統設定」未隱藏、固定識別或版本座標錯誤、TRIP／卡片區標題缺少／改名／重複時均拒絕；指出具體位置；資料完全不變。metadata 測試涵蓋 ExcelJS 讀寫及 Office 編輯另存保留性 | 階段 0 |
 | IM03 | 資料列、型別、時間、日序與類別驗證 | 必填／選填、HHMM 時間格式、第幾天 1–30、最大日序推導、空白中間日保留、類別下拉固定允許值等均依定案契約驗證；錯誤檔案不得進入可提交狀態 | 階段 0、1 |
 | IM04 | 精簡 Excel 輸入與完整 TRIP 資料模型一致性 | Excel 只要求最新契約欄位，但建立後的 TRIP 必須具備 App 所需完整資料結構；參與者與其他設定由系統預設產生，不要求先建立空白 TRIP | 階段 0、1：完成欄位映射及系統預設資料核對 |
 | IM05 | TRIP ID 唯一性、相同名稱日期可重複建立與三層權限保護 | 兩個不同建立 request 即使 `title + departure_date` 完全相同，也都可成功建立；兩筆資料的 TRIP ID 必須不同且各自可正確讀取。相同 request ID 不得當成另一個新建立請求（由 IM06 驗證）。只有實際 ID 主鍵衝突或 tombstone ID 重用才拒絕；非 Super Admin 不得看見／進入匯入入口；確認提交時 Session 缺失／更新失敗／帳號不符須停止；即使繞過前端直接呼叫 RPC，非 Super Admin 仍不得建立 | IM04；P01；UUID 產生規則及 `trips_pkey` |
@@ -516,7 +520,7 @@ RPC 成功回應（建議使用單一 JSON object）至少包含：
 
 | 階段 | 對應測試 | 說明 |
 |---|---|---|
-| 0–1 | 測試案例準備，不宣告通過 | 先定義檔案與資料契約 |
+| 0–1 | 實作前置條件已完成 | 產品及檔案契約、資料映射與 SQL 權限邊界已核對；進入實作後仍須對照驗證 |
 | 2 | IM01、IM02、IM03 | Excel 解析及驗證 |
 | 3 | IM04、IM05、IM06 | 新 TRIP 權限、UUID 唯一性、同名同日期多筆建立、同 request 重送冪等及整批原子性 |
 | 4 | IM07、IM08 | 整批寫入、錯誤處理及完整性 |
@@ -537,8 +541,8 @@ RPC 成功回應（建議使用單一 JSON object）至少包含：
 
 | 項目 | 狀態 | 備註 |
 |---|---|---|
-| 階段 0：產品契約與範本技術定案 | 欄位契約及初步座標已定義；metadata 技術方案未定，階段未完成 | 已定義單一可見工作表、兩項 TRIP 欄位、六項卡片欄位及必填／選填、類別下拉選單、最大日序推導天數、系統預設與幣別確認流程。固定 TRIP 區 A1:B3、卡片標題 A6:F6、資料自 A7:F 起；不依空白列／顏色／合併儲存格猜測。已檢查 ExcelJS 4.4.0 `Workbook` 執行時 API 與 `index.d.ts`，沒有 custom document property 原生讀寫介面；`docProps/custom.xml` 候選判定未通過。另驗證 `contentStatus` 可由 ExcelJS 寫入／讀回字串 `template_version=1` 且只保留一張工作表，但它是文件內容狀態欄位，語意是否適用仍未確認；Microsoft Excel／LibreOffice 編輯另存保留性也未通過（LibreOffice headless 測試遇 XML parser 錯誤而中止）。須先確認 `contentStatus` 語意是否可接受，並完成 Office round-trip；若不適合則另尋不增加工作表且可由 ExcelJS 原生讀寫的方案。完成前不得產生正式範本或宣稱階段 0 完成。不得重新開放已定案欄位。
-| 階段 1：程式資料契約核對 | 主要映射已核對；RPC 權限／交易仍待 SQL 驗證 | 已核對 `createTripRecord` 系統預設與 ID、參與者權威來源、六類及 typeColor、日期資料與空白日、時間格式、TRIP／卡片 ID、一般建立服務與通用 RLS。Excel 類別中文值直接映射到 `ItineraryItem.type` 的同名中文值；`typeColor` 取 `ItineraryPage.tsx` 既有 `ITINERARY_TYPE_OPTIONS`。`daysData` key 為 `String(day)`；卡片 ID 使用現有 `createItineraryItemId()`；每日匯入列維持工作簿列順序，不自行按時間排序（既有手動編輯保存時才會依時間穩定排序）。Excel 嚴格 `HHMM` 驗證後，保存值正規化為 App 現有 `HH:mm`。已透過正式 Supabase 唯讀查詢確認 participant mapping trigger／private table 已啟用，6 筆既有 TRIP 均有 mapping；`other_info_items` 欄位、RLS、唯一索引及 postgres owner／RLS bypass 特性已核對。request registry 僅為技術建議，尚未實作／測試；名稱／日期不設唯一索引，依本輪決策允許重複。RPC SECURITY DEFINER 權限、完整交易 rollback 與特殊 Other Info 寫入仍待本機 DB 驗證。P01 使用 Excel 專用安全 RPC，不修改通用 INSERT RLS。 |
+| 階段 0：產品契約與範本技術定案 | 產品欄位契約、兩工作表 metadata、ExcelJS／LibreOffice／Microsoft Excel 2010 隔離 round-trip、正式範本及欄位契約文件均已完成 | 已定義可見「新增 TRIP」及隱藏「系統設定」兩張工作表；系統設定表 A1 為固定識別標題、A2:B2 保存精確字串 `template_version=1`。使用 ExcelJS 4.4.0 原生 worksheet API，不採 `docProps/custom.xml` 或 `contentStatus`；使用者頁 TRIP 區 A1:B3、卡片標題 A6:F6、資料自 A7:F 起；隱藏輔助欄 I:N 供六種固定類別清單，資料驗證引用 `$I$1:$N$1`。正式範本 `docs/templates/AI新增TRIP標準範本_V1.xlsx` 及欄位契約文件已建立。隔離測試使用 `%TEMP%` 專用檔：ExcelJS 讀寫、LibreOffice 25.2.7.2 headless 獨立 UserInstallation profile 另存、Microsoft Excel 2010（14.0.7015.1000）獨立 COM instance 另存，最後均由 ExcelJS 讀回，確認兩表名稱／順序、第二表 hidden、metadata 字串、隱藏輔助欄及類別下拉來源保留；未操作使用者既有活頁簿。此證據只涵蓋上述版本組合。不得重新開放已定案欄位。
+| 階段 1：程式資料契約與 SQL 邊界核對 | 既有映射、RLS、trigger 與權威角色來源已完成唯讀檢查；Excel 專用 RPC／原子交易尚不存在，需另行實作與驗證 | 已核對 `createTripRecord` 系統預設與 ID、參與者權威來源、六類及 typeColor、日期資料與空白日、時間格式、TRIP／卡片 ID、一般建立服務與通用 RLS。Excel 類別中文值直接映射到 `ItineraryItem.type` 的同名中文值；`typeColor` 取 `ItineraryPage.tsx` 既有 `ITINERARY_TYPE_OPTIONS`。`daysData` key 為 `String(day)`；卡片 ID 使用現有 `createItineraryItemId()`；匯入列維持工作簿順序，不自行按時間排序；嚴格 `HHMM` 驗證後正規化為 App 的 `HH:mm`。本機 Supabase 17.6 唯讀 catalog 確認：`admin_users`、`trips`、`other_info_items` 均啟用 RLS；`trips` INSERT policy 要求 `auth.uid()` 非空且 `tc_is_super_admin()` 或 `tc_is_trip_editor(id)`；`other_info_items` 寫入 policy 要求登入及 `tc_can_edit_other_info(trip_id)`。Super Admin 權威來源為 `private.tc_is_super_admin()`：SECURITY DEFINER、空 `search_path`，以 JWT email 對 `public.admin_users` 的 `role='super_admin'`；`admin_users` 有 `(email, role, trip_id)` unique index。`trips` INSERT 觸發 visibility／participant map guard 及 revision broadcast；guard 會從 content 移除 `participantEmailMap`、`otherInfoItems`，participant map 僅 admin-owned map 寫入 private table；因此不可把其他系統欄位直接塞入 `trips.content`。Other Info 要獨立 INSERT `public.other_info_items`，受 RLS、`allowed_roles` CHECK 與 identity-update trigger；欄位必填包括 `trip_id/folder_id/title/content`，`id` 預設 UUID、`sort_order` 預設 0、`created_by` 預設 `auth.uid()`。`trips.currency_config` DB default 為 JPY，但產品要求沿用當下新增 TRIP UI 的 currency config，故 Excel 專用建立不可盲用 DB default。authenticated 有 `trips`／Other Info INSERT 權限但受 RLS；anon 只有 SELECT。查詢只讀，沒有執行資料寫入。尚未找到 Excel 專用 SECURITY DEFINER RPC；因此建立 TRIP、日期卡片與必要 Other Info 的同交易完整性、rollback、execute grants、非 Super Admin 拒絕與 request registry 防重等行為目前無法實測。**阻塞：尚無可供呼叫的 Excel 建立 RPC；建立 RPC／migration 或執行資料庫寫入驗證需 Product Owner 明確授權，現階段不修改 schema／migration，也不呼叫任何寫入 RPC。** |
 | 階段 2：IM01–IM03 | 尚未開始 | 等階段 0、1；沒有執行 Excel 解析測試。 |
 | 階段 3：IM04–IM06 | 尚未開始 | 等階段 0–2；沒有執行建立權限／重複提交／原子性測試。 |
 | 階段 4：IM07–IM08 | 尚未開始 | 等階段 0–3；沒有執行 V3.11.0 整批建立資料庫測試。 |
@@ -548,10 +552,11 @@ RPC 成功回應（建議使用單一 JSON object）至少包含：
 ### 12.6 版本與授權狀態
 
 - **版本建議：V3.11.0（MINOR 主要功能）**，建議範圍為新增 TRIP 的 Excel 建立流程（含 TRIP 基本資料及每日行程卡片匯入）；不包含已捨棄的既有 TRIP 卡片匯入／覆蓋。
+- **公司端實作可行性（2026-11-03）**：雙電腦測試資料交接的端到端實證仍待後續真實事件／家用端作業，但不是本功能的程式相依。公司端 `develop` 可獨立使用公司端 Node 與 local Supabase 進行 Excel V1 實作及隔離驗證；本功能不得依賴、修改或清理家用端本機資料庫，也不得寫入遠端正式資料庫。實作與本機 migration 仍須 Product Owner 明確授權。
 - 2026-11-03 技術審查補充：遠端正式 DB 唯讀盤點顯示 6 筆 TRIP、0 筆 trim 後 title/date 重複、無 title/date 唯一索引；participant mapping trigger 與 6 筆 private mapping 已存在。公司端本機 Supabase 因 Docker Engine 未啟動，`npx supabase status`／`migration list --local` 無法連線，故本次沒有本機 DB 驗證或任何 DB 寫入。遠端查詢僅為 SELECT／catalog 讀取，未執行 migration、DDL 或資料修改。
 - 2026-11-03 延續 SQL 契約審查（歷史方案，已被本日後續產品決策取代）：原先曾建議以 request registry 處理同 request 重送，並以 expression unique index 限制 title/date；本日後續決策已取消名稱＋日期防重複，request registry 僅保留同一提交的冪等性，詳見 P05-01-04 與 8.3。正式 DB postgres owner／RLS bypass、participant mapping trigger、特殊 Other Info 與整批 rollback 的安全要求仍有效，需於本機 SQL 驗證。
 - 2026-11-03 產品決策更新：取消 TRIP 名稱＋出發日期防衝撞。唯一性只由 `trip-<UUID>`／`trips_pkey(id)` 保證；不同建立 request 可以建立相同名稱及日期的多筆 TRIP。同一 request 的重送仍須冪等，不得重複建立。此決策已同步 P05-01-04、8.1、8.3、8.5、8.8、8.9、IM05、階段依賴與狀態紀錄。
 - 2026-11-03 前一輪規格更新曾僅修改本權威規格文件，未修改程式碼、資料庫或 migration；該輪當時尚未 commit／push。其後文件更新已另行提交並推送，當前狀態以 Git 為準。名稱＋日期唯一索引及 `TRIP_DUPLICATE_TITLE_DATE` 錯誤碼已明確取消；request registry 仍屬技術審查建議，尚未授權實作。
-- 本文件目前只作規格審查與定案管理；**尚未授權程式實作、執行資料庫 schema／migration 變更或發布**。後續正式實作如獲授權，僅可依第 8 節定義的 Excel 專用 RPC 與最小必要 migration 進行，不得擅自修改通用 `trips` INSERT RLS。
-- 只有階段 0–6 所需審查完成，且 Product Owner 明確授權後，才進入實作。
+- 本文件目前已完成實作前產品與技術核對；**是否開始程式實作／本機 migration，仍須 Product Owner 明確授權**。取得授權後，依階段 0–1 的契約與第 8 節安全設計開始實作，並逐步完成 IM01–IM10。只允許公司端隔離環境及本機 Supabase 進行本功能開發／寫入驗證；不因雙電腦測試資料交接未完成而阻止本功能實作，但不得操作家用端資料庫或遠端正式資料庫。
+- 實作授權不包含 commit/push、正式資料庫寫入、合併 main、版本標籤、部署或發布；這些操作均須另行明確授權。未完成階段 2–5 的測試及階段 6 最終審查前，不得宣稱 V1 功能驗收完成或進入發布。
 - 後續工作一律依本節編號及狀態逐項推進；不得每次對話重新建立不同的測試清單或執行順序。
