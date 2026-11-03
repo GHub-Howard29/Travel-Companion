@@ -852,12 +852,15 @@ async function handoff({ autoCommitPush = false } = {}) {
     const parentFixture = currentFixture.manifest.parentVersion
       ? assertParentRevision(currentFixture)
       : null;
-    const baselineFixture = parentFixture ?? currentFixture;
+    const appliedMatchesHead = applied.version === currentFixture.manifest.version &&
+      applied.checksum === currentFixture.manifest.checksum;
+    const baselineFixture = appliedMatchesHead ? currentFixture : (parentFixture ?? currentFixture);
+    const incomingFixture = appliedMatchesHead ? null : (parentFixture ? currentFixture.manifest : null);
     const databaseMatchesCurrent = dataMatchesFixture(currentData, baselineFixture.data, { ignoreTimestamps: true });
     const decision = classifyPeerHandoff(
       applied,
       baselineFixture.manifest,
-      parentFixture ? currentFixture.manifest : null,
+      incomingFixture,
       databaseMatchesCurrent,
     );
     if (decision.action === "reject") {

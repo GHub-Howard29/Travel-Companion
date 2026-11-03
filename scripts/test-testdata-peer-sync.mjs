@@ -37,6 +37,16 @@ assert.deepEqual(classifyPeerHandoff(
   { version: 6, checksum: v6.checksum }, v6, null, true,
 ), { action: "unchanged", version: 6 });
 
+// Applied revision equal to Git HEAD must compare against HEAD, not its parent.
+assert.deepEqual(classifyPeerHandoff(
+  { version: 5, checksum: v5.checksum }, v5, null, true,
+), { action: "unchanged", version: 5 });
+
+// Only the immediately preceding applied revision may receive the Git HEAD revision.
+assert.deepEqual(classifyPeerHandoff(
+  { version: 4, checksum: v4.checksum }, v4, v5, true,
+), { action: "receive", version: 5 });
+
 // Applied V6 plus local edits creates V7 from V6.
 assert.deepEqual(classifyPeerHandoff(
   { version: 6, checksum: v6.checksum }, v6, null, false,
