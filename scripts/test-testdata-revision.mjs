@@ -6,6 +6,10 @@ const v10 = { version: 10, checksum: "b".repeat(64), parentVersion: 9, parentChe
 
 assert.deepEqual(classifyFixtureRevision(null, v9), { action: "bootstrap" });
 assert.deepEqual(classifyFixtureRevision(v9, v10), { action: "apply" });
+// A new revision may intentionally contain identical data: version advancement
+// still applies, and the importer must advance applied-state without rewriting rows.
+const v10SameData = { ...v10, checksum: v9.checksum, parentChecksum: v9.checksum };
+assert.deepEqual(classifyFixtureRevision(v9, v10SameData), { action: "apply" });
 assert.deepEqual(classifyFixtureRevision(v10, v10), { action: "skip" });
 assert.deepEqual(classifyFixtureRevision(v10, { ...v10, checksum: "other" }), { action: "reject", reason: "same-version-checksum-mismatch" });
 assert.deepEqual(classifyFixtureRevision(v10, v9), { action: "reject", reason: "rollback" });

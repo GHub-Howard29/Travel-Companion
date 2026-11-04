@@ -4,6 +4,7 @@ import { classifyPeerHandoff } from "./lib/testdata-revision.mjs";
 const checksum = (char) => char.repeat(64);
 const v4 = { version: 4, checksum: checksum("4") };
 const v5 = { version: 5, checksum: checksum("5"), parentVersion: 4, parentChecksum: v4.checksum };
+const v5SameData = { ...v5, checksum: v4.checksum };
 const v6 = { version: 6, checksum: checksum("6"), parentVersion: 5, parentChecksum: v5.checksum };
 const v6FromOtherPeer = { ...v6, checksum: checksum("a") };
 
@@ -41,6 +42,12 @@ assert.deepEqual(classifyPeerHandoff(
 // Company DB exactly matches the applied V4 parent: receiving V5 is valid.
 assert.deepEqual(classifyPeerHandoff(
   { version: 4, checksum: v4.checksum }, v4, v5, true,
+), { action: "receive", version: 5 });
+
+// V5 can be a version-only revision with the same payload/checksum as V4.
+// It is still received so the importer can advance applied-state to V5.
+assert.deepEqual(classifyPeerHandoff(
+  { version: 4, checksum: v4.checksum }, v4, v5SameData, true,
 ), { action: "receive", version: 5 });
 
 // Already applied V6 with no edits remains unchanged at V6.
