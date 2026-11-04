@@ -186,6 +186,14 @@ function sameFixtureData(left, right) {
   return JSON.stringify(canonicalValue(normalizeData(left))) === JSON.stringify(canonicalValue(normalizeData(right)));
 }
 
+function sameFixtureBusinessData(left, right) {
+  const withoutTimestamps = (data) => normalizeData(data);
+  const strip = (rows) => rows.map(withoutDatabaseTimestamps).sort((a, b) =>
+    JSON.stringify(a).localeCompare(JSON.stringify(b)));
+  return allowedTables.every((table) =>
+    JSON.stringify(strip(withoutTimestamps(left)[table])) === JSON.stringify(strip(withoutTimestamps(right)[table])));
+}
+
 function checksumData(data) {
   return createHash("sha256").update(JSON.stringify(normalizeData(data))).digest("hex");
 }
@@ -534,7 +542,7 @@ async function exportFixture(tripId, { allowUpdate = false } = {}) {
     if (!["active", "regression_pending"].includes(oldFixture.manifest.status)) {
       throw new Error(`fixture 狀態為 ${oldFixture.manifest.status}，一般交接不會重新啟用或覆寫。`);
     }
-    if (sameFixtureData(oldFixture.data, data)) {
+    if (sameFixtureBusinessData(oldFixture.data, data)) {
       return { fixtureId: tripId, result: "unchanged", version: oldFixture.manifest.version };
     }
     await assertSafeFixtureUpdate(tripId, directory, oldFixture.manifest);
@@ -854,8 +862,11 @@ async function handoff({ autoCommitPush = false } = {}) {
       : null;
     const appliedMatchesHead = applied.version === currentFixture.manifest.version &&
       applied.checksum === currentFixture.manifest.checksum;
-    const baselineFixture = appliedMatchesHead ? currentFixture : (parentFixture ?? currentFixture);
-    const incomingFixture = appliedMatchesHead ? null : (parentFixture ? currentFixture.manifest : null);
+    const appliedMatchesParent = parentFixture &&
+      applied.version === parentFixture.manifest.version &&
+      applied.checksum === parentFixture.manifest.checksum;
+    const baselineFixture = appliedMatchesHead ? currentFixture : (appliedMatchesParent ? parentFixture : currentFixture);
+    const incomingFixture = appliedMatchesParent ? currentFixture.manifest : null;
     const databaseMatchesCurrent = dataMatchesFixture(currentData, baselineFixture.data, { ignoreTimestamps: true });
     const decision = classifyPeerHandoff(
       applied,
@@ -880,15 +891,27 @@ async function handoff({ autoCommitPush = false } = {}) {
 
     // Export is allowed only when applied=current and the local DB differs
     // from that exact current fixture. The exporter creates current+1.
-    results.push(await exportFixture(item.id, { allowUpdate: true }));
+    const exportResult = await exportFixture(item.id, { allowUpdate: true });
+    results.push(exportResult);
     await validateFixture(fixturePath);
+    if (["updated", "created"].includes(exportResult.result)) {
+      const publishedFixture = await readFixture(fixturePath);
+      appliedState.fixtures[item.id] = {
+        version: publishedFixture.manifest.version,
+        checksum: publishedFixture.manifest.checksum,
+      };
+      await writeAppliedState(appliedState);
+    }
     await recordHandoffState(item.id);
   }
-  const changed = results.some((item) => item.result !== "unchanged");
+  // Only a newly exported fixture revision creates files that may be
+  // committed and pushed. Receiving a peer revision or adopting a baseline
+  // changes only local state and must never enter fixture publication.
+  const exported = results.filter((item) => ["updated", "created"].includes(item.result));
+  const changed = exported.length > 0;
   let gitResult = { committed: false, pushed: false };
   if (autoCommitPush && changed) {
-    const fixturePaths = [...new Set(results.filter((item) => item.result !== "unchanged")
-      .map((item) => `supabase/test-fixtures/${item.fixtureId}`))];
+    const fixturePaths = [...new Set(exported.map((item) => `supabase/test-fixtures/${item.fixtureId}`))];
     const changedPaths = getHandoffGitStatus();
     const allowed = new Set(fixturePaths.flatMap((directory) => [`${directory}/manifest.json`, `${directory}/data.json`]));
     const expected = new Set([...allowed].flatMap((file) => [`?? ${file}`, ` M ${file}`]));

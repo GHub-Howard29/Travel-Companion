@@ -32,6 +32,17 @@ assert.deepEqual(classifyPeerHandoff(
   { version: 5, checksum: v5.checksum }, v5, v6, false,
 ), { action: "reject", reason: "local-database-diverged-from-parent" });
 
+// Company has unversioned business edits while Git has a peer revision.
+// It must not be classified as a clean receiver or silently discard local edits.
+assert.deepEqual(classifyPeerHandoff(
+  { version: 4, checksum: v4.checksum }, v4, v5, false,
+), { action: "reject", reason: "local-database-diverged-from-parent" });
+
+// Company DB exactly matches the applied V4 parent: receiving V5 is valid.
+assert.deepEqual(classifyPeerHandoff(
+  { version: 4, checksum: v4.checksum }, v4, v5, true,
+), { action: "receive", version: 5 });
+
 // Already applied V6 with no edits remains unchanged at V6.
 assert.deepEqual(classifyPeerHandoff(
   { version: 6, checksum: v6.checksum }, v6, null, true,
