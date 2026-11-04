@@ -1,7 +1,11 @@
 # Codex 協作指示
 
 - 使用中文撰寫 commit 訊息。
-- 未經明確指示，不自動 commit 或 push。**一般 `commit`、`push` 或 `commit/push` 指令只授權該次明確要求的 Git 操作；完整指令 `commit/push/資料庫` 只代表資料庫交接的「上傳階段」，不啟動接收端下載／同步。**收到完整指令後，檢查 Git 狀態、分支/upstream 與遠端差異，整理文件及執行適用驗證，只提交／推送本次任務範圍內且安全可交付的一般程式碼／文件變更；若工作樹含無關或歸屬不明的變更、驗證失敗、分支／遠端狀態不安全，須保留現況並停止受影響的寫入操作，不可使用 `git add .`、強制覆寫或 reset。不得自動執行 `npm run db:sync:local`、`npm run testdata:import:all` 或其他接收端下載／匯入流程。**`npm run db:sync:local` 是獨立的手動下載／同步指令，由使用者在接收端確認已取得 Git 版本後自行執行**，避免近端 push 與 pull 同時操作測試資料庫而造成衝突。完整交接指令不等於正式發布授權：不合併 `main`、不部署、不清除資料、不自行切換分支。若不在 `develop`，不得自行切分支或推測同步方向；須回報狀態與阻礙。
+- 未經明確指示，不自動 commit 或 push。**Git 與測試資料庫操作完全分離：** 一般 `commit`、`push`、`commit/push` 只依明確要求執行一般 Git commit／push。完整口令 `commit/push/資料庫` 已整個廢除，不再是有效指令；收到該完整口令時不執行任何動作，應告知使用者改用明確的 Git 指令或獨立資料庫口令。任何 Git 口令均不得呼叫 fixture export、upload、download、import、`testdata:handoff:publish` 或任何資料庫同步程式。
+- **資料庫上傳觸發詞：** 使用者明確輸入 `/上傳資料庫` 時，只執行 `npm run testdata:upload`（`scripts/testdata-upload.mjs`）。此命令自行檢查並只上傳合格的本機合成 fixture 到 `origin/develop`；不得執行一般程式碼／文件 commit，不得 download/import，不得 pull，不得順便執行其他資料庫同步入口。必須保留既有分支、upstream、工作樹、敏感資料與 fixture 驗證安全停止條件；有無關／歸屬不明變更或安全檢查失敗時停止並回報。
+- **資料庫下載觸發詞：** 使用者明確輸入 `/下載資料庫` 時，只執行 `npm run testdata:download`（`scripts/testdata-download.mjs`）。此命令只讀取本機 Git 已提交的 fixture 並更新目前主機自己的 loopback Supabase；不得執行 Git pull、commit、push、upload 或舊的 `db:sync:local`。若本機 Git 尚未取得目標 fixture，停止並明確提示需由使用者另外執行 Git pull／更新，不可自動替使用者執行。
+- 上述 `/上傳資料庫`、`/下載資料庫` 是獨立資料庫操作口令；不得因一般任務完成、Git 操作、對話提及或另一口令而自動觸發。兩者皆不得連線或寫入正式 Supabase。
+- 一般 Git 操作仍須檢查 Git 狀態、分支/upstream 與遠端差異，整理文件及執行適用驗證，只提交／推送本次任務範圍內且安全可交付的檔案；若工作樹含無關或歸屬不明變更、驗證失敗、分支／遠端狀態不安全，須保留現況並停止受影響的寫入操作，不可使用 `git add .`、強制覆寫或 reset。一般 Git 操作不合併 `main`、不部署、不清除資料、不自行切換分支；若不在 `develop`，不得自行切分支或推測同步方向，須回報狀態與阻礙。
 - 在重要結論、規劃或實作前，先檢查需求、前提、限制與可驗證證據；簡單且低風險的請求採相稱深度，不必為形式而展開冗長分析。
 - 若發現邏輯缺口、互相衝突的條件、未經證實的假設或可能影響結果的認知偏差，應直接說明具體證據、影響與可執行的改善方式。若差異會實質改變結果且無法安全推定，再請使用者決定。
 - 不因迎合而隱瞞問題，也不為反對而反對；在安全、授權與既定範圍內，仍應忠實執行使用者的明確要求。
@@ -21,16 +25,22 @@
 - 專案工具檢查及測試命令可採單次程序 PATH 覆寫；不得擅自修改 OpenChatX 全域 runtime、安裝目錄或使用者全域 Node 設定。除非使用者另行授權，不做永久性環境變數修改。
 - **既有診斷更正原則：** 過去若只在 OpenChatX 預設 shell 讀到 v22.18.0，應更正為「OpenChatX 內建 Node v22.18.0；專案 Node 版本須依專案設定及該主機安裝位置，在專案 PATH 下另行驗證」，不得將其列為專案工具阻塞。
 
-# Supabase 雙電腦同步流程設定狀態
-- 雙電腦同步流程的設定建立工作已完成；原先為該流程建立的公司電腦專屬限制已解除。後續依目前指定的 OpenChatX 主機與實際 Git／Supabase 狀態操作，不因連線主機是公司或家用電腦而一律停止。
+# Supabase 三方以上測試資料同步流程設定狀態
+- 同步節點為三台以上對等電腦；不得固定公司端／家用端／第三台為 sender 或 receiver。`sourceHost` 僅供稽核，不決定權限或方向。
+- 各節點只操作自己的本機 loopback Supabase；Git `origin/develop` 傳遞已提交的合成 fixture 基準，不複製 Docker volume，也不使用正式資料庫 dump。
+- 唯一方向欄位為 manifest `baselineAt`（UTC ISO 8601），不是資料列 `created_at`／`updated_at`。本機基準較舊→下載；本機較新→上傳；時間相同且 checksum 相同→unchanged；時間相同 checksum 不同→停止衝突。舊 manifest 可用 `exportedAt` 相容讀取；舊 applied state 需依 version/checksum 回查 Git 歷史，查不到即停止。
+- 時間戳只決定方向；實際上傳仍須本機 applied version/checksum 與 Git current 相符。實際下載仍須 parent version/checksum 與本機 applied 相符，DB 逐列資料及筆數匹配 parent，並在交易內二次檢查。資料分歧時不可 last-write-wins、自動合併、reset 或 force-push。
+- 新的獨立上傳入口為 `npm run testdata:upload`（`scripts/testdata-upload.mjs`）；新的獨立下載入口為 `npm run testdata:download`（`scripts/testdata-download.mjs`）。上傳入口不下載／匯入；下載入口不 pull／commit／push。兩者皆不得觸碰正式 Supabase。
+- 口令分工已定案：完整口令 `commit/push/資料庫` 已整個廢除，不再是有效指令，收到時不執行任何動作；一般 Git 操作使用 `commit`、`push` 或 `commit/push`；`/上傳資料庫` 僅執行 `npm run testdata:upload`；`/下載資料庫` 僅執行 `npm run testdata:download`。不得把 upload/download 串接到任何 Git 指令、`db:sync:local` 或其他自動化流程。
 - 若執行特定主機的本機資料庫操作，或要宣稱該主機產生新的驗證結果，仍須確認實際主機識別；不得把家用電腦測試結果誤報為公司電腦證據，也不得在未確認前操作另一台電腦。公司電腦識別基準仍為 Windows `COMPUTERNAME=TPEPC-TM7503-01`、`USERDOMAIN=NICE-GREEN`，專案路徑 `D:\\Project\\Travel-Companion`。
-- **尚待實證：** 實際操作產生新的資料庫資料後，兩端同步版本確認及自動化交接尚未實證；真正 A→B→A 雙向交接、兩端各自新增資料合併與生命週期端到端驗收亦待真實事件發生時補驗，不刻意製造新測試資料。詳細設計與歷史證據存放於 `docs/archive/supabase-sync/`。
+- **尚待實證：** 三台真實本機 DB 的 A→B→C→A、逆向輪替、首次空白 bootstrap、同時間不同 checksum 衝突、parent 不符停止及第三台加入流程仍待驗收。詳細設計與歷史證據存放於 `docs/archive/supabase-sync/`。
 
 # 每次開始工作前：Git 與 Supabase 核對
 - 每次開始任何專案任務，先在專案根目錄檢查 `git status --short --branch`、目前分支與 upstream；再執行 `git fetch origin`，確認本機與遠端差異。不得因任務看似只改文件就跳過。
 - 若工作目錄乾淨、目前分支是 `develop`，且遠端只有可安全 fast-forward 的新提交，允許直接執行 `git pull --ff-only origin develop`，然後確認最新 commit 與工作目錄狀態。
 - 若工作目錄有未提交修改或 untracked 檔案，先判斷是否屬於本次任務；一般任務不得自動切分支、stash、覆寫或 reset，應保留現況並回報。唯一例外是使用者已明確下達「進行發布流程」，且逐一檢視後確認所有待提交變更均屬於本次發布候選時，可依標準發布流程只 stage 明確檔案並提交；任何無關或歸屬不明的變更都必須停止。一般任務若目前分支不是 `develop`，不得自行切換。標準發布流程則可在工作樹乾淨、分支／upstream 已核對、遠端差異可安全處理且目前階段要求時，依序切換 `develop`／`main`；不得因發布需要而忽略遠端分歧、強制覆寫或 reset。沒有 upstream 或本機與遠端分歧時，仍須停止並回報差異，先處理安全同步方案。
-- **換電腦／資料庫交接流程（僅由完整指令觸發）：** 只有使用者明確輸入 `commit/push/資料庫` 才執行完整交接；一般 `commit`、`push`、`commit/push`、單次工作完成、暫停對話或提及換電腦都不觸發。收到完整指令後，先檢查分支/upstream、遠端差異與工作樹，確認哪些變更屬於本次交接；整理相關文件並執行適用驗證，僅對本次任務範圍內、驗證合格且無無關／歸屬不明變更的一般程式碼與文件進行精確 stage、commit、push。不可用 `git add .`，不可覆蓋、reset、強制推送或自動切換分支。**提交前 Fixture 格式相容性檢查：** 若本次一般程式碼／文件變更修改 `scripts/testdata-sync.mjs` 的 `readFixture`／manifest schema 驗證、`scripts/lib/testdata-revision.mjs` 的 revision 驗證，或其他會提高 Fixture manifest 格式要求的路徑，必須在一般 commit 前執行 `npm run testdata:validate:active`；`assertHandoffGitState()` 亦會在偵測到這些同步驗證程式變更時自動呼叫同一驗證函式，確保完整 `commit/push/資料庫` 流程不會漏掉檢查。此命令逐一讀取所有現存 `tc-test-*` fixture，僅對 `active`／`regression_pending` 狀態套用新版完整 manifest、父版本 Git 歷史、資料結構、筆數、敏感欄位與 checksum 驗證，任一此類 fixture 不合格即停止一般 commit/push。驗證成功後，才可提交同步程式／文件；若本次同時修正 fixture manifest，應將精確修正一併納入同一組已驗證變更，確保遠端程式與 fixture 格式相容。此檢查只讀檔案，不連線或修改資料庫；不得因格式驗證而執行 fixture publish。之後在 `develop` 直接執行 `npm run testdata:handoff:publish`；不可先執行 `npm run testdata:handoff`，避免先產生 fixture 差異而觸發安全停止。此 publish 入口自行判斷有無合格 fixture 變更，無變更就略過 commit/push；有變更時只有安全檢查全數通過才會精確提交／推送 fixture。若不在 `develop`、本機 Supabase 不可用、存在無關／歸屬不明變更、驗證失敗或 Git／fixture 安全檢查失敗，停止受影響的寫入操作並回報未完成項目，不可繞過檢查或宣稱已同步。最後提供一般 commit/push、fixture 交接、剩餘未提交內容與接收端接手指引。此流程不是正式發布：不合併 `main`、不部署、不清除資料；一般 commit/push 指令本身仍不授權執行本流程。
+- **舊換電腦／資料庫交接流程（已停用，2026-11-04）：** 本段後續內容是歷史存檔，不得照此執行。歷史完整口令 `commit/push/資料庫` 已不再觸發資料庫交接。現行三個互斥入口為：一般 `commit`／`push`／`commit/push`（包括歷史完整口令 `commit/push/資料庫`）只做 Git；`/上傳資料庫` 只執行 `npm run testdata:upload`；`/下載資料庫` 只執行 `npm run testdata:download`。不得互相串接。
+- **舊規則正文（已廢止、不可執行，僅留歷史）：** 原規則曾規定只有使用者明確輸入 `commit/push/資料庫` 才執行完整交接；一般 `commit`、`push`、`commit/push`、單次工作完成、暫停對話或提及換電腦都不觸發。收到完整指令後，先檢查分支/upstream、遠端差異與工作樹，確認哪些變更屬於本次交接；整理相關文件並執行適用驗證，僅對本次任務範圍內、驗證合格且無無關／歸屬不明變更的一般程式碼與文件進行精確 stage、commit、push。不可用 `git add .`，不可覆蓋、reset、強制推送或自動切換分支。**提交前 Fixture 格式相容性檢查：** 若本次一般程式碼／文件變更修改 `scripts/testdata-sync.mjs` 的 `readFixture`／manifest schema 驗證、`scripts/lib/testdata-revision.mjs` 的 revision 驗證，或其他會提高 Fixture manifest 格式要求的路徑，必須在一般 commit 前執行 `npm run testdata:validate:active`；`assertHandoffGitState()` 亦會在偵測到這些同步驗證程式變更時自動呼叫同一驗證函式，確保完整 `commit/push/資料庫` 流程不會漏掉檢查。此命令逐一讀取所有現存 `tc-test-*` fixture，僅對 `active`／`regression_pending` 狀態套用新版完整 manifest、父版本 Git 歷史、資料結構、筆數、敏感欄位與 checksum 驗證，任一此類 fixture 不合格即停止一般 commit/push。驗證成功後，才可提交同步程式／文件；若本次同時修正 fixture manifest，應將精確修正一併納入同一組已驗證變更，確保遠端程式與 fixture 格式相容。此檢查只讀檔案，不連線或修改資料庫；不得因格式驗證而執行 fixture publish。之後在 `develop` 直接執行 `npm run testdata:handoff:publish`；不可先執行 `npm run testdata:handoff`，避免先產生 fixture 差異而觸發安全停止。此 publish 入口自行判斷有無合格 fixture 變更，無變更就略過 commit/push；有變更時只有安全檢查全數通過才會精確提交／推送 fixture。若不在 `develop`、本機 Supabase 不可用、存在無關／歸屬不明變更、驗證失敗或 Git／fixture 安全檢查失敗，停止受影響的寫入操作並回報未完成項目，不可繞過檢查或宣稱已同步。最後提供一般 commit/push、fixture 交接、剩餘未提交內容與接收端接手指引。此流程不是正式發布：不合併 `main`、不部署、不清除資料；一般 commit/push 指令本身仍不授權執行本流程。
 - Git pull 只同步檔案，不代表 Supabase 本機資料庫已同步。若任務涉及資料庫或 migration，另行檢查 `npx supabase status` 與 `npx supabase migration list --local`；確認 Docker／本機 Supabase 正常後，檢視所有待套用 migration SQL，再決定是否執行 `npx supabase migration up --local`。
 - 套用可能刪除／重建資料、改變欄位型別或主鍵、刪欄位／索引、改寫資料、影響附件關聯的 migration 前，必須先建立可辨識且可還原的本機資料備份，並確認備份檔存在且非空。若無法可靠備份、無法確認還原方式，或 migration 會影響 Supabase Storage 物件，先停止並回報，不得冒險執行。一般純新增且不破壞既有資料的 migration 仍須先檢視 SQL 與驗證條件。
 - 不得自動執行 `db reset`、刪除 Docker volume、`migration repair`、`db push --linked` 或其他正式環境寫入操作；正式 Supabase 的部署、資料修復或其他不可逆操作必須先取得使用者明確核准。

@@ -1,0 +1,54 @@
+---
+description: Travel-Companion 專案所有 Node.js/npm 命令必須使用目前主機已驗證的專案 Node runtime，避免誤用 OpenChatX 內建 Node。
+globs:
+  - "<PROJECT_ROOT>/**"
+alwaysApply: true
+---
+
+# Travel-Companion Node.js 執行環境強制規則（跨主機模板）
+
+## 主機專屬設定（每台電腦必須自行填寫）
+- 主機識別：<COMPUTERNAME_OR_HOST_ID>
+- 專案根目錄：<PROJECT_ROOT>
+- 專案 Node.js 完整路徑：<NODE_EXE_PATH>
+- Node 版本：22.23.2
+- npm 版本：10.9.8
+- Node 目錄（node.exe 所在資料夾）：<NODE_DIRECTORY>
+
+以上設定只適用於已驗證的這台主機。複製到其他電腦時，必須先確認該電腦的主機識別、專案路徑、Node 安裝路徑與版本，再替換所有佔位值；不得直接沿用其他電腦的路徑。
+
+## 強制執行要求
+1. 任何依賴 Node.js/npm 的命令，不得直接沿用 OpenChatX runtime/bin 的預設 Node。
+2. 執行命令前先確認目前主機識別；同一工作階段主機未切換且已確認時可沿用。
+3. 只有在主機識別符合本 Rule 的主機專屬設定時，才可使用設定中的 Node 路徑。
+4. 若主機識別不符、路徑不存在或版本不符，停止 Node/npm 命令；先確認該主機的正確安裝位置與版本，再更新本機 Rule，不可猜測路徑。
+5. 必須在「同一個命令程序」內將已驗證的 Node 目錄放到 PATH 最前端，再執行 npm/node/npx。不得只在前一個獨立命令設定 PATH，因 OpenChatX Bash 每次可能建立新的程序。
+6. 執行前確認 Node 可執行檔存在，並驗證 node -v 與 npm -v 符合本 Rule 的設定。
+7. 在 Windows PowerShell 範例：
+   ```powershell
+   $expectedHost = '<COMPUTERNAME_OR_HOST_ID>'
+   $nodeDir = '<NODE_DIRECTORY>'
+   if ($env:COMPUTERNAME -ne $expectedHost) { throw 'Unverified host; stop Node command' }
+   if (!(Test-Path (Join-Path $nodeDir 'node.exe'))) { throw "Project Node not found: $nodeDir" }
+   $env:PATH = "$nodeDir;$env:PATH"
+   if ((node -v) -ne 'v22.23.2') { throw 'Wrong Node.js runtime' }
+   if ((npm -v) -ne '10.9.8') { throw 'Wrong npm version' }
+   npm run build
+   ```
+8. 若執行器不是 PowerShell，使用等效方式在同一程序內設定 PATH 並驗證版本。
+9. 若無法保證 PATH 生效，或 node/npm 解析到 OpenChatX runtime，必須停止該 Node 命令並回報。
+10. 此規則不要求永久修改 Windows 使用者／系統 PATH；不得修改 OpenChatX runtime 或安裝目錄，也不得影響其他專案。
+11. 每次只需驗證本次會用到的工具；必要時記錄 node 的實際執行檔路徑，避免每一條命令都重做完整盤點。
+
+## 工具及子代理
+- 將 Node/npm 命令委派給子代理時，必須明確傳遞本 Rule，以及當前已驗證的主機識別與 Node 路徑。
+- 不可因子代理自行執行命令而跳過 PATH 初始化。
+- 每個新命令程序都必須重新在該程序內設定 PATH；不得假設前一程序的環境變數會保留。
+
+## 安裝到新電腦時的必要步驟
+1. 確認專案在該電腦的實際根目錄。
+2. 確認主機識別（Windows 可用 COMPUTERNAME）。
+3. 找到該電腦專案指定的 Node.js，確認 node.exe、Node 版本及 npm 版本。
+4. 將上述資訊填入「主機專屬設定」，同步更新 globs 的專案路徑。
+5. 以唯讀命令測試主機識別、Node 路徑、Node/npm 版本及 PATH 優先序。
+6. 通過驗證後才允許執行 npm scripts。
