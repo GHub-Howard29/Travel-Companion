@@ -167,8 +167,9 @@ begin
     return v_existing.response_payload || jsonb_build_object('idempotent_replay', true);
   end if;
 
-  -- Read live participant defaults from the same authoritative intersection
-  -- used by getAdminProfiles(); do not hardcode account names or email values.
+  -- Read the same configured participant profiles as ordinary Trip creation.
+  -- admin_users remains the authority for Super Admin membership; profile rows
+  -- provide display names, inclusion and ordering.
   select
     coalesce(jsonb_agg(p.display_name order by p.sort_order, lower(p.email)), '[]'::jsonb),
     coalesce(jsonb_object_agg(p.display_name, lower(p.email)), '{}'::jsonb)
@@ -182,24 +183,11 @@ begin
    and lower(btrim(u.email)) = lower(btrim(p.email))
   where p.include_in_new_trip = true;
 
+  -- Enforce the ordinary Trip creation invariant at the trust boundary.
+  -- The UI also requires at least one participant, but a direct RPC caller
+  -- must not be able to create an ownerless Trip.
   if jsonb_array_length(v_participants) = 0 then
     raise exception using errcode = '23514', message = 'TC_EXCEL_DEFAULT_PARTICIPANTS_MISSING';
-  end if;
-
-  -- A participant name must map to exactly one email because the Trip content
-  -- stores participantEmailMap as a JSON object keyed by display name.
-  if (
-    select count(*) <> count(distinct p.display_name)
-    from public.admin_profiles p
-    join public.admin_users au
-      on lower(btrim(au.email)) = lower(btrim(p.email))
-     and au.role = 'super_admin'
-    join auth.users u
-      on u.id = p.user_id
-     and lower(btrim(u.email)) = lower(btrim(p.email))
-    where p.include_in_new_trip = true
-  ) then
-    raise exception using errcode = '23514', message = 'TC_EXCEL_DEFAULT_PARTICIPANT_NAME_COLLISION';
   end if;
 
   -- Validate every card again at the trust boundary. Only the fixed V1 keys

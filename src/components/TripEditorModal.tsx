@@ -22,6 +22,8 @@ import { isProtectedSeedTripId } from "../constants/appConstants";
 
 interface TripEditorModalProps {
   mode: "create" | "edit";
+  defaultCurrencyCode: string;
+  defaultCurrencySymbol: string;
   trip: TripMeta | null;
   tripDetail: TripDetail | null;
   editorEmails: string[];
@@ -31,6 +33,12 @@ interface TripEditorModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSubmit: (input: TripEditorInput) => Promise<void>;
+  onCreateFromExcel: (
+    workbook: ParsedTripExcel,
+    requestId: string,
+    currencyCode: string,
+    currencySymbol: string,
+  ) => Promise<void>;
   onDelete?: () => Promise<void>;
   historicalTripEndDate?: string;
 }
@@ -51,6 +59,78 @@ const splitLines = (value: string): string[] => {
 };
 
 const toTextareaValue = (items: string[]): string => items.join("\n");
+
+const EXCEL_PENDING_REQUEST_KEY = "tc_v311_excel_pending_request";
+
+const getExcelRequestFingerprint = async (
+  workbook: ParsedTripExcel,
+  currencyCode: string,
+  currencySymbol: string,
+): Promise<string> => {
+  const payload = JSON.stringify({
+    title: workbook.title.trim(),
+    departureDate: workbook.departureDate,
+    cards: workbook.cards.map(({ day, item }) => ({
+      day,
+      time: item.time,
+      departureTime: item.departureTime,
+      title: item.title,
+      type: item.type,
+      desc: item.desc ?? "",
+    })),
+    currencyCode,
+    currencySymbol,
+  });
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(payload),
+  );
+  return Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+};
+
+const readPendingExcelRequest = (): { fingerprint: string; requestId: string } | null => {
+  try {
+    const raw = sessionStorage.getItem(EXCEL_PENDING_REQUEST_KEY);
+    if (!raw) return null;
+    const parsed: unknown = JSON.parse(raw);
+    if (
+      parsed &&
+      typeof parsed === "object" &&
+      "fingerprint" in parsed &&
+      "requestId" in parsed &&
+      typeof parsed.fingerprint === "string" &&
+      typeof parsed.requestId === "string"
+    ) {
+      return { fingerprint: parsed.fingerprint, requestId: parsed.requestId };
+    }
+  } catch {
+    // Storage may be unavailable in privacy-restricted browser contexts.
+  }
+  return null;
+};
+
+const writePendingExcelRequest = (fingerprint: string, requestId: string): void => {
+  try {
+    sessionStorage.setItem(
+      EXCEL_PENDING_REQUEST_KEY,
+      JSON.stringify({ fingerprint, requestId }),
+    );
+  } catch {
+    // Keep the in-memory request ID even when session storage is unavailable.
+  }
+};
+
+const clearPendingExcelRequest = (requestId: string): void => {
+  const pending = readPendingExcelRequest();
+  if (pending?.requestId !== requestId) return;
+  try {
+    sessionStorage.removeItem(EXCEL_PENDING_REQUEST_KEY);
+  } catch {
+    // The request remains protected by the in-memory state for this modal.
+  }
+};
 
 const toParticipantAssignmentText = (
   participants: string[],
@@ -121,6 +201,8 @@ const getInitialTripMode = (
 
 export const TripEditorModal = ({
   mode,
+  defaultCurrencyCode,
+  defaultCurrencySymbol,
   trip,
   tripDetail,
   editorEmails,
@@ -130,6 +212,7 @@ export const TripEditorModal = ({
   isOpen,
   onClose,
   onSubmit,
+  onCreateFromExcel,
   onDelete,
   historicalTripEndDate,
 }: TripEditorModalProps) => {
@@ -157,10 +240,10 @@ export const TripEditorModal = ({
     toTextareaValue(editorEmails),
   );
   const [currencyCode, setCurrencyCode] = useState(
-    trip?.currencyConfig.code ?? "TWD",
+    trip?.currencyConfig.code ?? defaultCurrencyCode,
   );
   const [currencySymbol, setCurrencySymbol] = useState(
-    trip?.currencyConfig.symbol ?? "NT$",
+    trip?.currencyConfig.symbol ?? defaultCurrencySymbol,
   );
   const [formError, setFormError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
@@ -175,6 +258,10 @@ export const TripEditorModal = ({
   const [excelIssues, setExcelIssues] = useState<TripExcelValidationIssue[]>([]);
   const [excelFileName, setExcelFileName] = useState("");
   const [isParsingExcel, setIsParsingExcel] = useState(false);
+  const [isExcelCurrencyConfirmed, setIsExcelCurrencyConfirmed] = useState(false);
+  const [excelRequestId, setExcelRequestId] = useState<string | null>(null);
+  const [isExcelResultUnconfirmed, setIsExcelResultUnconfirmed] = useState(false);
+  const excelRequestFingerprintRef = useRef<string | null>(null);
   const excelInputRef = useRef<HTMLInputElement | null>(null);
 
   if (!isOpen) return null;
@@ -184,6 +271,10 @@ export const TripEditorModal = ({
     setExcelPreview(null);
     setExcelIssues([]);
     setExcelFileName(file?.name ?? "");
+    setExcelRequestId(null);
+    setIsExcelCurrencyConfirmed(false);
+    setIsExcelResultUnconfirmed(false);
+    excelRequestFingerprintRef.current = null;
     if (!file) return;
     if (!canManageEditors) {
       setExcelIssues([{
@@ -209,6 +300,19 @@ export const TripEditorModal = ({
       const result = await parseTripExcelWorkbook(await file.arrayBuffer());
       if (result.success) {
         setExcelPreview(result.data);
+        const fingerprint = await getExcelRequestFingerprint(
+          result.data,
+          currencyCode,
+          currencySymbol,
+        );
+        const pendingRequest = readPendingExcelRequest();
+        const requestId = pendingRequest?.fingerprint === fingerprint
+          ? pendingRequest.requestId
+          : crypto.randomUUID();
+        excelRequestFingerprintRef.current = fingerprint;
+        setExcelRequestId(requestId);
+        setIsExcelResultUnconfirmed(pendingRequest?.fingerprint === fingerprint);
+        setIsExcelCurrencyConfirmed(false);
       } else {
         setExcelIssues(result.issues);
       }
@@ -229,6 +333,70 @@ export const TripEditorModal = ({
     const selectedCurrency = CURRENCY_OPTIONS.find((item) => item.code === code);
     setCurrencyCode(code);
     setCurrencySymbol(selectedCurrency?.symbol ?? "");
+    setIsExcelCurrencyConfirmed(false);
+    if (excelPreview) {
+      void getExcelRequestFingerprint(excelPreview, code, selectedCurrency?.symbol ?? "")
+        .then((fingerprint) => {
+          const pendingRequest = readPendingExcelRequest();
+          const requestId = pendingRequest?.fingerprint === fingerprint
+            ? pendingRequest.requestId
+            : crypto.randomUUID();
+          excelRequestFingerprintRef.current = fingerprint;
+          setExcelRequestId(requestId);
+          setIsExcelResultUnconfirmed(pendingRequest?.fingerprint === fingerprint);
+        })
+        .catch(() => {
+          setExcelRequestId(null);
+          setFormError("無法建立安全的重試識別碼，請重新載入 Excel 檔案。");
+        });
+    }
+  };
+
+  const handleExcelCreate = async () => {
+    if (!excelPreview || !excelRequestId || !isExcelCurrencyConfirmed || !canManageEditors) {
+      return;
+    }
+    if (!currencyCode.trim() || !currencySymbol.trim()) {
+      setFormError("目前新增 TRIP 的幣別設定不完整，請重新選擇幣別。");
+      return;
+    }
+
+    setFormError("");
+    setIsSaving(true);
+    releaseFocusedControl();
+    try {
+      const fingerprint = excelRequestFingerprintRef.current ??
+        await getExcelRequestFingerprint(excelPreview, currencyCode, currencySymbol);
+      excelRequestFingerprintRef.current = fingerprint;
+      writePendingExcelRequest(fingerprint, excelRequestId);
+      await onCreateFromExcel(
+        excelPreview,
+        excelRequestId,
+        currencyCode,
+        currencySymbol,
+      );
+      clearPendingExcelRequest(excelRequestId);
+      setExcelRequestId(null);
+      setExcelPreview(null);
+      setIsExcelResultUnconfirmed(false);
+      excelRequestFingerprintRef.current = null;
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        "code" in error &&
+        ["RPC_FAILED", "RESULT_UNCONFIRMED", "REFRESH_UNCONFIRMED"].includes(
+          String(error.code),
+        )
+      ) {
+        setIsExcelResultUnconfirmed(true);
+      }
+      const message = error instanceof Error
+        ? error.message
+        : "無法確認 Excel 建立結果。請保留目前檔案並以相同內容重試。";
+      setFormError(message);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleSubmit = async (event: FormEvent) => {
@@ -479,7 +647,8 @@ export const TripEditorModal = ({
               releaseFocusedControl();
               onClose();
             }}
-            className="p-2 rounded-full text-slate-500 hover:bg-slate-100"
+            disabled={isSaving}
+            className="p-2 rounded-full text-slate-500 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
             aria-label="關閉"
             title="關閉"
           >
@@ -497,8 +666,13 @@ export const TripEditorModal = ({
                   setCreationMethod("manual");
                   setExcelPreview(null);
                   setExcelIssues([]);
+                  setExcelRequestId(null);
+                  setIsExcelCurrencyConfirmed(false);
+                  setIsExcelResultUnconfirmed(false);
+                  excelRequestFingerprintRef.current = null;
                 }}
-                className={`rounded-lg border px-3 py-2.5 text-sm font-semibold ${creationMethod === "manual" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 text-slate-600"}`}
+                disabled={isExcelResultUnconfirmed}
+                className={`rounded-lg border px-3 py-2.5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50 ${creationMethod === "manual" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 text-slate-600"}`}
               >
                 手動新增
               </button>
@@ -508,8 +682,12 @@ export const TripEditorModal = ({
                   setCreationMethod("excel");
                   setExcelPreview(null);
                   setExcelIssues([]);
+                  setExcelRequestId(null);
+                  setIsExcelCurrencyConfirmed(false);
+                  setIsExcelResultUnconfirmed(false);
+                  excelRequestFingerprintRef.current = null;
                 }}
-                disabled={!canManageEditors}
+                disabled={!canManageEditors || isExcelResultUnconfirmed}
                 className={`rounded-lg border px-3 py-2.5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50 ${creationMethod === "excel" ? "border-emerald-700 bg-emerald-700 text-white" : "border-slate-200 text-slate-600"}`}
               >
                 <span className="inline-flex items-center justify-center gap-1.5">
@@ -528,7 +706,7 @@ export const TripEditorModal = ({
             <div>
               <p className="text-sm font-bold text-slate-800">匯入標準 Excel 範本</p>
               <p className="mt-1 text-xs leading-5 text-slate-500">
-                請使用 V1 標準範本。系統會先完整驗證，再顯示預覽；目前僅開放預覽，建立功能尚未啟用。
+                請使用 V1 標準範本。系統先完整驗證，再顯示預覽；確認幣別後會以單一雲端交易建立全新 TRIP。
               </p>
             </div>
             <input
@@ -536,7 +714,8 @@ export const TripEditorModal = ({
               type="file"
               accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
               onChange={handleExcelFileChange}
-              className="block w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-slate-700"
+              disabled={isExcelResultUnconfirmed || isSaving}
+              className="block w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-slate-700 disabled:opacity-50"
               aria-label="選擇新增 TRIP Excel 檔案"
             />
             {excelFileName && (
@@ -605,14 +784,32 @@ export const TripEditorModal = ({
                   })}
                 </div>
                 <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs leading-5 text-amber-900">
-                  預覽階段尚未讀取或確認本次 TRIP 的幣別設定；正式建立前須由系統重新取得目前預設幣別並要求確認。
+                  本次新 TRIP 將使用新增表單目前的預設幣別：<strong>{currencyCode}（{currencySymbol}）</strong>。
+                  請依旅程目的地確認；此設定不會從 Excel 讀取。
+                  {isExcelResultUnconfirmed && " 上次建立結果尚未確認，請確認幣別及資料後使用同一份 Excel 重試；系統會沿用原建立請求。"}
                 </div>
+                <label className="mt-3 flex items-start gap-2 rounded-lg border border-slate-200 bg-white p-3 text-sm leading-5 text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={isExcelCurrencyConfirmed}
+                    onChange={(event) => setIsExcelCurrencyConfirmed(event.target.checked)}
+                    disabled={isSaving}
+                    className="mt-0.5 h-4 w-4 shrink-0 accent-emerald-700"
+                  />
+                  <span>我已確認本次旅程使用 {currencyCode}（{currencySymbol}）作為預設幣別。</span>
+                </label>
+                {formError && (
+                  <div role="alert" className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700">
+                    {formError}
+                  </div>
+                )}
                 <button
                   type="button"
-                  disabled
-                  className="mt-3 w-full rounded-lg bg-slate-300 px-4 py-3 text-sm font-bold text-slate-600"
+                  onClick={() => void handleExcelCreate()}
+                  disabled={!excelRequestId || !isExcelCurrencyConfirmed || isSaving || !canManageEditors}
+                  className="mt-3 w-full rounded-lg bg-emerald-700 px-4 py-3 text-sm font-bold text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-600"
                 >
-                  Excel 建立尚未開放
+                  {isSaving ? "正在建立並確認雲端資料…" : "確認幣別並建立 TRIP"}
                 </button>
               </div>
             )}
@@ -630,9 +827,10 @@ export const TripEditorModal = ({
           <button
             type="button"
             onClick={onClose}
-            className="w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50"
+            disabled={isSaving || isExcelResultUnconfirmed}
+            className="w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            關閉
+            {isExcelResultUnconfirmed ? "請先使用同一份 Excel 確認建立結果" : "關閉"}
           </button>
         ) : (
           <>
