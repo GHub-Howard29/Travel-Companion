@@ -4,13 +4,13 @@ import path from "node:path";
 import os from "node:os";
 import process from "node:process";
 import { EXCEL_RPC_DATASET_ID, normalizeExcelRpcDatasetCases, validateExcelRpcDataset } from "./lib/excel-rpc-test-dataset.mjs";
-import { applyFixtureImport } from "./lib/testdata-download-apply.mjs";
+import { applyFixtureImport, normalizeFixtureRows } from "./lib/testdata-download-apply.mjs";
 
 process.env.SUPABASE_TELEMETRY_DISABLED = "1";
 const root = process.cwd();
 const fixturesRoot = path.resolve(root, "supabase", "test-fixtures");
 const tables = ["trips", "checklists", "checklist_items", "expenses", "exchange_purchases", "other_info_items"];
-const tripPattern = /^tc-test-[a-z0-9][a-z0-9-]{2,60}$/;
+const tripPattern = /^trip-[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
 
 function runGit(args) {
   return execFileSync("git.exe", args, { cwd: root, encoding: "utf8", shell: true }).trim();
@@ -69,8 +69,10 @@ async function readRemoteBaseline(directory) {
     throw new Error(`遠端 fixture manifest 結構無效：${path.basename(directory)}`);
   }
   if (!data.trips || data.trips.length !== 1 || data.trips[0].id !== manifest.fixtureId ||
-      data.trips[0].content?.__testFixture !== true || !Array.isArray(data.trips[0].participants) || data.trips[0].participants.length !== 0) {
-    throw new Error(`遠端 fixture 不是合格的單筆合成行程：${manifest.fixtureId}`);
+      data.trips[0].content?.testPurpose !== "three-way-sync" ||
+      Object.hasOwn(data.trips[0], "participants") ||
+      JSON.stringify(normalizeFixtureRows(data)) !== JSON.stringify(data)) {
+    throw new Error(`遠端 fixture 的測試標記或帳號／參與者排除格式無效：${manifest.fixtureId}`);
   }
   for (const table of tables) {
     if (!Array.isArray(data[table]) || manifest.counts?.[table] !== data[table].length) throw new Error(`遠端 fixture ${manifest.fixtureId} 的 ${table} 筆數不符。`);
@@ -86,10 +88,10 @@ async function readRemoteBaseline(directory) {
 async function fetchCurrentData(fixtureId) {
   const id = quote(fixtureId);
   const sql = `select json_build_object(
-    'trips', coalesce((select json_agg(to_jsonb(t)) from (select id,title,departure_date,participants,currency_config,sidebar_config,content,created_at,updated_at,is_public from public.trips where id=${id}) t),'[]'::json),
+    'trips', coalesce((select json_agg(to_jsonb(t)) from (select id,title,departure_date,currency_config,sidebar_config,content,created_at,updated_at,is_public from public.trips where id=${id}) t),'[]'::json),
     'checklists', coalesce((select json_agg(to_jsonb(c)) from (select id,trip_id,scope,title,created_at,updated_at from public.checklists where trip_id=${id} and scope='shared') c),'[]'::json),
     'checklist_items', coalesce((select json_agg(to_jsonb(i)) from (select i.id,i.checklist_id,i.client_item_id,i.label,i.is_checked,i.sort_order,i.created_at,i.updated_at,i.deleted_at,i.category from public.checklist_items i join public.checklists c on c.id=i.checklist_id where c.trip_id=${id} and c.scope='shared') i),'[]'::json),
-    'expenses', coalesce((select json_agg(to_jsonb(e)) from (select trip_id,title,amount,payer,currency,created_at,expense_date,client_item_id,updated_at,deleted_at from public.expenses where trip_id=${id}) e),'[]'::json),
+    'expenses', coalesce((select json_agg(to_jsonb(e)) from (select trip_id,title,amount,currency,created_at,expense_date,client_item_id,updated_at,deleted_at from public.expenses where trip_id=${id}) e),'[]'::json),
     'exchange_purchases', coalesce((select json_agg(to_jsonb(e)) from (select id,trip_id,client_item_id,foreign_currency,purchase_date,twd_amount,foreign_amount,created_at,updated_at from public.exchange_purchases where trip_id=${id}) e),'[]'::json),
     'other_info_items', coalesce((select json_agg(to_jsonb(o)) from (select id,trip_id,client_item_id,folder_id,title,content,allowed_roles,sort_order,created_at,updated_at,deleted_at from public.other_info_items where trip_id=${id}) o),'[]'::json)
   ) as payload`;
@@ -106,6 +108,10 @@ async function downloadOne(entry) {
   const directory = path.join(fixturesRoot, entry.name);
   const { manifest, data } = await readRemoteBaseline(directory);
   const actual = await fetchCurrentData(entry.name);
+  const currentTrip = actual.trips?.[0];
+  if (currentTrip && currentTrip.content?.testPurpose !== "three-way-sync") {
+    throw new Error(`本機同 ID 行程不是指定測試資料，拒絕覆寫：${entry.name}`);
+  }
   if (sameFixtureRows(actual, data, { ignoreTimestamps: true })) {
     return { fixtureId: entry.name, result: "unchanged", data: null, manifest: null };
   }

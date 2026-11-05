@@ -661,6 +661,21 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
   const createTrip = useCallback(
     async (input: TripEditorInput, syncEditors = true) => {
       let record = createTripRecord(input);
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const localTestPurpose =
+        import.meta.env.DEV &&
+        typeof supabaseUrl === "string" &&
+        ["localhost", "127.0.0.1", "::1"].includes(new URL(supabaseUrl).hostname) &&
+        (await supabase.auth.getUser()).data.user?.user_metadata?.local_test === true;
+      if (localTestPurpose) {
+        record = {
+          ...record,
+          detail: {
+            ...record.detail,
+            content: { ...record.detail.content, testPurpose: "three-way-sync" },
+          },
+        };
+      }
       try {
         record = await createTripRecordWithCloudSync(
           supabase,

@@ -1,5 +1,12 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { canonical, withoutDatabaseTimestamps, sameFixtureRows } from "./testdata-download.mjs";
+
+const syncLocalSource = await readFile(new URL("./sync-local-database.mjs", import.meta.url), "utf8");
+assert.match(syncLocalSource, /npm\", \[\"run\", \"testdata:download\"\]/,
+  "db:sync:local must use content-based download");
+assert.doesNotMatch(syncLocalSource, /testdata:handoff|testdata:import:all/,
+  "db:sync:local must not call version-chain handoff/import commands");
 
 const fixture = {
   trips: [{ id: "tc-test-download", title: "Synthetic", created_at: "2026-11-05T00:00:00Z", updated_at: "2026-11-05T00:00:00Z", content: { __testFixture: true, nested: { b: 2, a: 1 } } }],

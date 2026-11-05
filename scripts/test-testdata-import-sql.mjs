@@ -1,15 +1,15 @@
 import assert from "node:assert/strict";
 import { buildFixtureImportSql, checksumFixture, normalizeFixtureRows } from "./lib/testdata-download-apply.mjs";
 
-const tripId = "tc-test-import-sql";
-const previousData = {
-  trips: [{ id: tripId, title: "Old", departure_date: "2026-11-01", participants: [], currency_config: {}, sidebar_config: {}, content: { __testFixture: true }, created_at: "2026-11-01T00:00:00Z", updated_at: "2026-11-01T00:00:00Z", is_public: false }],
+const tripId = "trip-a2131af0-2e96-43ee-8ea4-e71a27df63ab";
+const previousData = normalizeFixtureRows({
+  trips: [{ id: tripId, title: "Old", departure_date: "2026-11-01", currency_config: {}, sidebar_config: {}, content: { testPurpose: "three-way-sync", participants: ["local-only"], participantEmailMap: { ignored: "local-only" } }, participants: ["local-only"], created_at: "2026-11-01T00:00:00Z", updated_at: "2026-11-01T00:00:00Z", is_public: false }],
   checklists: [{ id: "checklist-1", trip_id: tripId, scope: "shared", title: "Old list", created_at: "2026-11-01T00:00:00Z", updated_at: "2026-11-01T00:00:00Z" }],
   checklist_items: [{ id: "item-1", checklist_id: "checklist-1", client_item_id: "item-client-1", label: "Old item", is_checked: false, sort_order: 0, created_at: "2026-11-01T00:00:00Z", updated_at: "2026-11-01T00:00:00Z", deleted_at: null, category: "general" }],
-  expenses: [{ trip_id: tripId, title: "Old expense", amount: 10, payer: "A", currency: "TWD", created_at: "2026-11-01T00:00:00Z", expense_date: "2026-11-01", client_item_id: "expense-1", updated_at: "2026-11-01T00:00:00Z", deleted_at: null }],
+  expenses: [{ trip_id: tripId, title: "Old expense", amount: 10, payer: "local-only", currency: "TWD", created_at: "2026-11-01T00:00:00Z", expense_date: "2026-11-01", client_item_id: "expense-1", updated_at: "2026-11-01T00:00:00Z", deleted_at: null }],
   exchange_purchases: [],
   other_info_items: [],
-};
+});
 const data = structuredClone(previousData);
 data.trips[0].title = "New";
 data.checklist_items[0].label = "New item";
@@ -30,11 +30,16 @@ const deleteSql = buildFixtureImportSql([{
 }]);
 
 assert.match(sql, /^DO \$tc_fixture\$/);
-assert.match(sql, /SELECT \* INTO existing_trip FROM public\.trips WHERE id = 'tc-test-import-sql' FOR UPDATE/);
+assert.match(sql, /SELECT \* INTO existing_trip FROM public\.trips WHERE id = 'trip-a2131af0-2e96-43ee-8ea4-e71a27df63ab' FOR UPDATE/);
 assert.match(sql, /PERFORM 1 FROM public\.trips t WHERE .* FOR UPDATE/);
 assert.doesNotMatch(sql, /parent revision|parentChecksum|parentVersion|checksum mismatch|row count mismatch/);
 assert.match(sql, /checklist_id = 'checklist-1' AND client_item_id = 'item-client-2'/);
 assert.match(sql, /INSERT INTO public\.trips/);
+assert.doesNotMatch(sql, /INSERT INTO public\.trips \([^)]*participants/);
+assert.doesNotMatch(sql, /UPDATE SET[^;]*participants/);
+assert.doesNotMatch(sql, /payer/);
+assert.doesNotMatch(JSON.stringify(normalizeFixtureRows(data)), /participants|participantEmailMap|checklistData|payer/);
+assert.equal(Object.hasOwn(normalizeFixtureRows(data).expenses[0], "payer"), false);
 assert.match(sql, /INSERT INTO public\.checklist_items/);
 assert.match(sql, /END \$tc_fixture\$;/);
 assert.doesNotMatch(sql, /owner_user_id|created_by|attachment_path|attachment_bucket|attachment_name/);
@@ -42,9 +47,9 @@ assert.match(sql, /DELETE FROM public\.checklist_items i WHERE .* NOT IN/);
 assert.match(deleteSql, /DELETE FROM public\.checklist_items i WHERE .*checklist_id IN/);
 assert.doesNotMatch(deleteSql, /NOT IN \(NULL\)/);
 assert.match(deleteSql, /DELETE FROM public\.checklists c WHERE .*scope = 'shared' AND c\.id NOT IN/);
-assert.match(deleteSql, /DELETE FROM public\.expenses e WHERE .*trip_id = 'tc-test-import-sql' AND e\.client_item_id NOT IN/);
-assert.match(deleteSql, /DELETE FROM public\.exchange_purchases e WHERE e\.trip_id = 'tc-test-import-sql';/);
-assert.match(deleteSql, /DELETE FROM public\.other_info_items o WHERE o\.trip_id = 'tc-test-import-sql';/);
+assert.match(deleteSql, /DELETE FROM public\.expenses e WHERE .*trip_id = 'trip-a2131af0-2e96-43ee-8ea4-e71a27df63ab' AND e\.client_item_id NOT IN/);
+assert.match(deleteSql, /DELETE FROM public\.exchange_purchases e WHERE e\.trip_id = 'trip-a2131af0-2e96-43ee-8ea4-e71a27df63ab';/);
+assert.match(deleteSql, /DELETE FROM public\.other_info_items o WHERE o\.trip_id = 'trip-a2131af0-2e96-43ee-8ea4-e71a27df63ab';/);
 assert.throws(() => buildFixtureImportSql([{
   manifest: { fixtureId: tripId },
   data: { ...deleteData, expenses: [{ ...data.expenses[0], trip_id: "tc-test-outside" }] },
@@ -68,7 +73,7 @@ const bootstrapSql = buildFixtureImportSql([{
   data,
   previousData: null,
 }]);
-assert.match(bootstrapSql, /Fixture target exists but is not marked synthetic/);
+assert.match(bootstrapSql, /Fixture target exists but is not marked test data/);
 assert.match(bootstrapSql, /INSERT INTO public\.trips/);
 assert.doesNotMatch(bootstrapSql, /parentVersion|parentChecksum|initial import target already exists/);
 

@@ -22,9 +22,9 @@
 
 ### 2.2 嚴禁直接跨機複製、必須在目的端重建的資料
 
-- `auth.users`、登入 session、access／refresh token、密碼及本機 Auth UUID。
-- `admin_profiles`、`admin_users` 等管理員身分與權限設定；它們各電腦依本機既有設定提供，不由 fixture 建立或覆寫。
-- `private.trip_participant_email_maps` 的 Email map。這是本機帳號／參與者的私有關聯，禁止放入 Git fixture；目的端由本機 RPC／既有帳號設定重建。
+- 所有使用者帳號與所有參與者資料，一律不跨機複製、不寫入 fixture／案例檔；不區分測試帳號或真實帳號。
+- `auth.users`、`admin_profiles`、`admin_users`、登入 session、access／refresh token、密碼、本機 Auth UUID、管理員身分與權限設定；各電腦僅使用本機既有帳號與權限。
+- `private.trip_participant_email_maps` 的所有 Email map，以及任何參與者姓名、Email、電話、使用者 ID 或其他參與者欄位；目的端不從 fixture 重建參與者，測試需要登入時只使用目的端既有帳號。
 - `private.tc_trip_excel_create_requests` request registry 的已完成 row、`user_id`、request UUID、response payload 與 pending 狀態。它們是本機 RPC 冪等及授權狀態，不是跨機業務 fixture。目的端執行測試時產生自己的 request UUID 與 registry row。
 - `created_by`、owner、私有附件識別、Storage 檔案本體、環境設定、secret、token 及任何非合成或可識別個資。
 

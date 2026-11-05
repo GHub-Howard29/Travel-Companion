@@ -16,7 +16,7 @@ const fixturesRoot = path.resolve(root, "supabase", "test-fixtures");
 const handoffStatePath = path.resolve(root, "supabase", ".temp", "testdata-handoff-state.json");
 const schemaVersion = 1;
 const allowedTables = ["trips", "checklists", "checklist_items", "expenses", "exchange_purchases", "other_info_items"];
-const tripIdPattern = /^tc-test-[a-z0-9][a-z0-9-]{2,60}$/;
+const tripIdPattern = /^trip-[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
 
 function runCli(args) {
   return execFileSync(
@@ -128,6 +128,20 @@ function normalizeData(data) {
   return normalizeFixtureRows(data);
 }
 
+function redactFixtureData(data) {
+  const normalized = normalizeData(data);
+  const excluded = {
+    tripParticipants: data.trips?.reduce((sum, row) => sum + (Array.isArray(row.participants) ? row.participants.length : 0), 0) ?? 0,
+    embeddedParticipantFields: data.trips?.reduce((sum, row) => sum + ["participants", "participantEmailMap", "checklistData", "participantMap", "participantEmailMaps"].filter((key) => Object.hasOwn(row.content ?? {}, key)).length, 0) ?? 0,
+    expensePayers: data.expenses?.filter((row) => typeof row.payer === "string" && row.payer.trim()).length ?? 0,
+  };
+  for (const row of normalized.trips) {
+    row.content = { ...(row.content ?? {}), testPurpose: "three-way-sync" };
+    delete row.participants;
+  }
+  return { data: normalized, excluded };
+}
+
 function canonicalValue(value) {
   if (Array.isArray(value)) return value.map(canonicalValue);
   if (value && typeof value === "object") {
@@ -199,10 +213,9 @@ async function readFixture(directoryArg) {
   if (!data.trips?.length || data.trips.length !== 1 || data.trips[0].id !== manifest.fixtureId) {
     throw new Error("行程 ID 與 manifest 不一致。");
   }
-  if (data.trips[0].content?.__testFixture !== true) throw new Error("缺少 content.__testFixture=true 合成資料標記。");
-  if (!Array.isArray(data.trips[0].participants) || data.trips[0].participants.length !== 0) {
-    throw new Error("fixture 不允許匯入參與者資料；請只使用 participants=[] 的合成行程。");
-  }
+  if (data.trips[0].content?.testPurpose !== "three-way-sync") throw new Error("缺少三方同步測試標記。");
+  if (Object.hasOwn(data.trips[0], "participants")) throw new Error("fixture 不得包含參與者欄位。");
+  if (JSON.stringify(normalizeData(data)) !== JSON.stringify(data)) throw new Error("fixture 含有應排除的帳號／參與者欄位或未正規化內容。");
   for (const table of allowedTables) {
     if (!Array.isArray(data[table])) throw new Error(`缺少或格式錯誤的資料表：${table}`);
     const expected = manifest.counts?.[table];
@@ -278,13 +291,13 @@ async function validateFixture(directoryArg) {
 }
 
 async function fetchTripData(tripId) {
-  if (!tripIdPattern.test(tripId)) throw new Error("只允許 tc-test- 開頭的合成測試行程 ID。");
+  if (!tripIdPattern.test(tripId)) throw new Error("只允許 App 自動產生格式的測試行程 ID。");
   const id = sqlLiteral(tripId);
   const sql = `select json_build_object(
-    'trips', coalesce((select json_agg(to_jsonb(t) - 'created_by') from (select id,title,departure_date,participants,currency_config,sidebar_config,content,created_at,updated_at,is_public from public.trips where id=${id}) t),'[]'::json),
+    'trips', coalesce((select json_agg(to_jsonb(t)) from (select id,title,departure_date,currency_config,sidebar_config,(content - 'participants' - 'participantEmailMap' - 'checklistData' - 'participantMap' - 'participantEmailMaps') as content,created_at,updated_at,is_public from public.trips where id=${id}) t),'[]'::json),
     'checklists', coalesce((select json_agg(to_jsonb(c) - 'created_by' - 'owner_user_id') from (select id,trip_id,scope,title,created_at,updated_at from public.checklists where trip_id=${id} and scope='shared') c),'[]'::json),
     'checklist_items', coalesce((select json_agg(to_jsonb(i) - 'created_by') from (select i.id,i.checklist_id,i.client_item_id,i.label,i.is_checked,i.sort_order,i.created_at,i.updated_at,i.deleted_at,i.category from public.checklist_items i join public.checklists c on c.id=i.checklist_id where c.trip_id=${id} and c.scope='shared') i),'[]'::json),
-    'expenses', coalesce((select json_agg(to_jsonb(e) - 'id' - 'owner_user_id' - 'recorded_by_email' - 'attachment_path' - 'attachment_bucket' - 'attachment_name' - 'attachment_mime' - 'attachment_size' - 'attachment_status' - 'attachment_uploaded_at' - 'attachment_uploaded_by' - 'attachment_last_error') from (select trip_id,title,amount,payer,currency,created_at,expense_date,client_item_id,updated_at,deleted_at from public.expenses where trip_id=${id}) e),'[]'::json),
+    'expenses', coalesce((select json_agg(to_jsonb(e) - 'id' - 'owner_user_id' - 'recorded_by_email' - 'payer' - 'attachment_path' - 'attachment_bucket' - 'attachment_name' - 'attachment_mime' - 'attachment_size' - 'attachment_status' - 'attachment_uploaded_at' - 'attachment_uploaded_by' - 'attachment_last_error') from (select trip_id,title,amount,currency,created_at,expense_date,client_item_id,updated_at,deleted_at from public.expenses where trip_id=${id}) e),'[]'::json),
     'exchange_purchases', coalesce((select json_agg(to_jsonb(e) - 'created_by') from (select id,trip_id,client_item_id,foreign_currency,purchase_date,twd_amount,foreign_amount,created_at,updated_at from public.exchange_purchases where trip_id=${id}) e),'[]'::json),
     'other_info_items', coalesce((select json_agg(to_jsonb(o) - 'created_by') from (select id,trip_id,client_item_id,folder_id,title,content,allowed_roles,sort_order,created_at,updated_at,deleted_at from public.other_info_items where trip_id=${id}) o),'[]'::json)
   ) as payload`;
@@ -794,10 +807,10 @@ try {
   }
   else if (command === "export" && argument) await exportFixture(argument);
   else if (command === "validate" && argument) await validateFixture(argument);
-  else if (command === "import:all" && !argument) await importAllFixtures();
-  else if (command === "handoff" && !argument) await handoff();
-  else if (command === "handoff:publish" && !argument) await handoff({ autoCommitPush: true });
-  else throw new Error("用法：npm run testdata:export -- tc-test-example；npm run testdata:validate -- supabase/test-fixtures/tc-test-example；npm run testdata:import:all；npm run testdata:handoff；npm run testdata:handoff:publish");
+  else if (["import:all", "handoff", "handoff:publish"].includes(command)) {
+    throw new Error("此舊版同步入口已停用：請使用 npm run testdata:download（下載）或 npm run testdata:upload（上傳）；同步只依實際內容比較，不使用版本鏈／父版本／applied-state 門檻。");
+  }
+  else throw new Error("用法：npm run testdata:export -- tc-test-example；npm run testdata:validate -- supabase/test-fixtures/tc-test-example；npm run testdata:validate:active");
 } catch (error) {
   console.error(`[testdata-sync] 停止：${error?.stderr?.toString().trim() || error.message || error}`);
   process.exitCode = 1;

@@ -165,6 +165,8 @@ export interface TripDetail {
   sidebarConfig: SidebarItemConfig[];
   content: {
     mode?: TripMode;
+    /** 僅供本機測試資料同步識別；不得用來判斷使用者或權限。 */
+    testPurpose?: "three-way-sync";
     /** 未設定時沿用舊旅程行為：顯示農曆日期。 */
     showLunarDate?: boolean;
     days: number[];

@@ -6,7 +6,7 @@ import os from "node:os";
 const tableSpecs = [
   {
     name: "trips",
-    columns: ["id", "title", "departure_date", "participants", "currency_config", "sidebar_config", "content", "created_at", "updated_at", "is_public"],
+    columns: ["id", "title", "departure_date", "currency_config", "sidebar_config", "content", "created_at", "updated_at", "is_public"],
     where: (candidate) => `t.id = ${candidate}.id`,
     key: (row) => row.id,
   },
@@ -24,7 +24,7 @@ const tableSpecs = [
   },
   {
     name: "expenses",
-    columns: ["trip_id", "title", "amount", "payer", "currency", "created_at", "expense_date", "client_item_id", "updated_at", "deleted_at"],
+    columns: ["trip_id", "title", "amount", "currency", "created_at", "expense_date", "client_item_id", "updated_at", "deleted_at"],
     where: (candidate) => `t.trip_id = ${candidate}.trip_id AND t.client_item_id = ${candidate}.client_item_id`,
     key: (row) => `${row.trip_id}/${row.client_item_id}`,
   },
@@ -49,9 +49,19 @@ export function normalizeFixtureRows(data) {
   const normalized = {};
   for (const table of allowedTables) {
     const spec = tableSpecs.find((item) => item.name === table);
-    normalized[table] = [...(data[table] ?? [])].sort((left, right) =>
+    normalized[table] = [...(data[table] ?? [])].map((row) => ({ ...row })).sort((left, right) =>
       String(spec.key(left)).localeCompare(String(spec.key(right))));
   }
+  for (const trip of normalized.trips) {
+    delete trip.participants;
+    if (trip.content && typeof trip.content === "object") {
+      trip.content = { ...trip.content };
+      for (const key of ["participants", "participantEmailMap", "checklistData", "participantMap", "participantEmailMaps"]) {
+        delete trip.content[key];
+      }
+    }
+  }
+  for (const expense of normalized.expenses) delete expense.payer;
   return normalized;
 }
 
@@ -67,11 +77,13 @@ export function buildFixtureImportSql(fixtures) {
   const body = ["DO $tc_fixture$", "DECLARE", "  existing_trip public.trips;", "  match_count integer;", "BEGIN"];
   for (const fixture of fixtures) {
     const { manifest, data } = fixture;
-    if (!manifest || !/^tc-test-[a-z0-9][a-z0-9-]{2,60}$/.test(manifest.fixtureId) ||
+    if (!manifest || typeof manifest.fixtureId !== "string" || !manifest.fixtureId.trim() ||
         !data || !Array.isArray(data.trips) || data.trips.length !== 1 ||
-        data.trips[0].id !== manifest.fixtureId || data.trips[0].content?.__testFixture !== true ||
-        !Array.isArray(data.trips[0].participants) || data.trips[0].participants.length !== 0) {
-      throw new Error("Incoming fixture structure or synthetic marker is invalid.");
+        data.trips[0].id !== manifest.fixtureId ||
+        data.trips[0].content?.testPurpose !== "three-way-sync" ||
+        Object.hasOwn(data.trips[0], "participants") ||
+        JSON.stringify(normalizeFixtureRows(data)) !== JSON.stringify(data)) {
+      throw new Error("Incoming fixture structure, test marker, or account/participant exclusion is invalid.");
     }
     for (const table of allowedTables) if (!Array.isArray(data[table])) throw new Error(`Incoming fixture missing table: ${table}`);
     const fixtureId = manifest.fixtureId;
@@ -102,7 +114,7 @@ export function buildFixtureImportSql(fixtures) {
     }
     const tripId = sqlLiteral(fixtureId);
     body.push(`  SELECT * INTO existing_trip FROM public.trips WHERE id = ${tripId} FOR UPDATE;`);
-    body.push(`  IF FOUND AND existing_trip.content ->> '__testFixture' IS DISTINCT FROM 'true' THEN RAISE EXCEPTION 'Fixture target exists but is not marked synthetic: %', ${tripId}; END IF;`);
+    body.push(`  IF FOUND AND existing_trip.content ->> 'testPurpose' IS DISTINCT FROM 'three-way-sync' THEN RAISE EXCEPTION 'Fixture target exists but is not marked test data: %', ${tripId}; END IF;`);
 
     for (const spec of tableSpecs) {
       const scope = spec.name === "trips" ? `t.id = ${tripId}` :
@@ -113,7 +125,7 @@ export function buildFixtureImportSql(fixtures) {
 
     for (const row of data.trips) {
       const json = sqlLiteral(JSON.stringify(row)) + "::jsonb";
-      body.push(`  INSERT INTO public.trips (id, title, departure_date, participants, currency_config, sidebar_config, content, is_public) SELECT r.id, r.title, r.departure_date, r.participants, r.currency_config, r.sidebar_config, r.content, r.is_public FROM jsonb_populate_record(NULL::public.trips, ${json}) AS r ON CONFLICT (id) DO UPDATE SET title = EXCLUDED.title, departure_date = EXCLUDED.departure_date, participants = EXCLUDED.participants, currency_config = EXCLUDED.currency_config, sidebar_config = EXCLUDED.sidebar_config, content = EXCLUDED.content, is_public = EXCLUDED.is_public;`);
+      body.push(`  INSERT INTO public.trips (id, title, departure_date, currency_config, sidebar_config, content, is_public) SELECT r.id, r.title, r.departure_date, r.currency_config, r.sidebar_config, r.content, r.is_public FROM jsonb_populate_record(NULL::public.trips, ${json}) AS r ON CONFLICT (id) DO UPDATE SET title = EXCLUDED.title, departure_date = EXCLUDED.departure_date, currency_config = EXCLUDED.currency_config, sidebar_config = EXCLUDED.sidebar_config, content = (public.trips.content - 'testPurpose' - 'fixtureDescription' - 'checklistData') || EXCLUDED.content, is_public = EXCLUDED.is_public;`);
     }
     for (const row of data.checklists) {
       const json = sqlLiteral(JSON.stringify(row)) + "::jsonb";
@@ -133,7 +145,7 @@ export function buildFixtureImportSql(fixtures) {
     }
     for (const row of data.expenses) {
       const json = sqlLiteral(JSON.stringify(row)) + "::jsonb";
-      body.push(`  INSERT INTO public.expenses (trip_id, client_item_id, title, amount, payer, currency, expense_date, deleted_at) SELECT r.trip_id, r.client_item_id, r.title, r.amount, r.payer, r.currency, r.expense_date, r.deleted_at FROM jsonb_populate_record(NULL::public.expenses, ${json}) AS r ON CONFLICT (trip_id, client_item_id) DO UPDATE SET title = EXCLUDED.title, amount = EXCLUDED.amount, payer = EXCLUDED.payer, currency = EXCLUDED.currency, expense_date = EXCLUDED.expense_date, deleted_at = EXCLUDED.deleted_at;`);
+      body.push(`  INSERT INTO public.expenses (trip_id, client_item_id, title, amount, currency, expense_date, deleted_at) SELECT r.trip_id, r.client_item_id, r.title, r.amount, r.currency, r.expense_date, r.deleted_at FROM jsonb_populate_record(NULL::public.expenses, ${json}) AS r ON CONFLICT (trip_id, client_item_id) DO UPDATE SET title = EXCLUDED.title, amount = EXCLUDED.amount, currency = EXCLUDED.currency, expense_date = EXCLUDED.expense_date, deleted_at = EXCLUDED.deleted_at;`);
     }
     for (const row of data.exchange_purchases) {
       const json = sqlLiteral(JSON.stringify(row)) + "::jsonb";
