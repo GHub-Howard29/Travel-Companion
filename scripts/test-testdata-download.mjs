@@ -39,4 +39,14 @@ assert.equal(sameFixtureRows(missingRow, fixture, { ignoreTimestamps: true }), f
   "extra local rows must be replaced by the B-side snapshot");
 
 assert.equal(sameFixtureRows(fixture, fixture), true);
-console.log("testdata download content comparison checks passed (timestamps ignored, canonical content controls overwrite, row/object order ignored)");
+
+const downloadSource = await readFile(new URL("./testdata-download.mjs", import.meta.url), "utf8");
+assert.match(downloadSource, /\[testdata-download\] 下載檢查完成/,
+  "successful download must print a visible completion summary");
+assert.match(downloadSource, /success: true/,
+  "successful download must emit an explicit success result");
+assert.match(downloadSource, /下載失敗：\$\{error\.message\}/,
+  "failed download must print a clear error");
+assert.match(downloadSource, /error\?\.stack/,
+  "failed download must print stack details for diagnosis");
+console.log("testdata download checks passed (content comparison and visible success/failure reporting)");

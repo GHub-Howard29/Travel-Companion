@@ -175,13 +175,24 @@ export async function runDownload() {
   }
 
   const results = [excelPlan, ...fixturePlans].map(({ data, cases, manifest, localCasesPath, ...summary }) => summary);
+  const fixtureChangedCount = changedFixtures.length;
+  const excelChanged = excelPlan.result === "downloaded";
+  console.log("[testdata-download] 下載檢查完成");
+  console.log(`- 資料庫測試行程：${fixtureChangedCount === 0 ? "無需更新" : `已更新 ${fixtureChangedCount} 組`}`);
+  console.log(`- Excel RPC 測試案例：${excelChanged ? "已更新" : "內容相同，無需更新"}`);
+  console.log(`- 本機資料庫寫入：${fixtureChangedCount > 0 ? "已完成交易式匯入" : "未執行（內容相同）"}`);
   console.log(JSON.stringify({
-    downloaded: changedFixtures.length > 0 || excelPlan.result === "downloaded",
-    databaseFixturesApplied: changedFixtures.length,
-    excelCasesUpdated: excelPlan.result === "downloaded",
+    success: true,
+    downloaded: fixtureChangedCount > 0 || excelChanged,
+    databaseFixturesApplied: fixtureChangedCount,
+    excelCasesUpdated: excelChanged,
     results,
   }, null, 2));
 }
 if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(new URL(import.meta.url).pathname)) {
-  runDownload().catch((error)=>{ console.error(`[testdata-download] 停止：${error.message}`); process.exitCode=1; });
+  runDownload().catch((error) => {
+    console.error(`[testdata-download] 下載失敗：${error.message}`);
+    if (error?.stack) console.error(error.stack);
+    process.exitCode = 1;
+  });
 }
