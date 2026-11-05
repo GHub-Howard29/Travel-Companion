@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "fixtureId": "trip-a2131af0-2e96-43ee-8ea4-e71a27df63ab",
+  "status": "active",
+  "sourceHost": "TPEPC-TM7503-01",
+  "baselineAt": "2026-11-05T09:36:26.172Z",
+  "exportedAt": "2026-11-05T09:36:26.172Z",
+  "tables": [
+    "trips",
+    "checklists",
+    "checklist_items",
+    "expenses",
+    "exchange_purchases",
+    "other_info_items"
+  ],
+  "counts": {
+    "trips": 1,
+    "checklists": 1,
+    "checklist_items": 5,
+    "expenses": 0,
+    "exchange_purchases": 0,
+    "other_info_items": 0
+  },
+  "note": "Synthetic test data only. User accounts and all participant data are excluded. Synchronization is decided by canonical content comparison."
+}
