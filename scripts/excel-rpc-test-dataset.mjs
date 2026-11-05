@@ -223,9 +223,35 @@ async function executeCase(testCase, { replay = false, reuseExisting = false, ex
   await saveExecutionState(state);
   return record;
 }
+async function executeConcurrentCase(testCase, context) {
+  const requestId = createLocalExcelRpcExecution({ caseId: testCase.caseId }).requestId;
+  const [first, second] = await Promise.all([
+    invokeExcelRpc(testCase, requestId, context),
+    invokeExcelRpc(testCase, requestId, context),
+  ]);
+  for (const response of [first, second]) {
+    if (!response?.trip_id || response.title !== testCase.title ||
+        response.card_count !== testCase.cards.length || response.day_count !== testCase.dayCount) {
+      throw new Error(`Concurrent Excel RPC case ${testCase.caseId} returned an unexpected result.`);
+    }
+  }
+  if (first.trip_id !== second.trip_id ||
+      [first.idempotent_replay, second.idempotent_replay].filter((value) => value === true).length !== 1 ||
+      [first.idempotent_replay, second.idempotent_replay].filter((value) => value === false).length !== 1) {
+    throw new Error("Concurrent same-request calls did not return one Trip with exactly one idempotent replay.");
+  }
+  await verifyCreatedTrip(testCase, first.trip_id, context);
+  const registryQuery = new URLSearchParams({ request_id: `eq.${requestId}`, select: "request_id,trip_id" });
+  const registry = await localRestRequest(context, "tc_trip_excel_create_requests", registryQuery.toString());
+  if (!Array.isArray(registry) || registry.length !== 1 || registry[0].trip_id !== first.trip_id) {
+    throw new Error("Concurrent same-request calls did not leave exactly one request registry row for the returned Trip.");
+  }
+  return { requestId, tripId: first.trip_id, idempotentReplayFlags: [first.idempotent_replay, second.idempotent_replay], registryRows: registry.length };
+}
+
 async function main() {
   const command = process.argv[2] ?? "validate";
-  if (process.platform !== "win32" || runGit(["branch", "--show-current"]) !== "develop") throw new Error("Excel RPC dataset command requires a Windows develop worktree.");
+  if (process.platform !== "win32") throw new Error("Excel RPC dataset command requires the Windows local test environment.");
   if (command === "validate") {
     const dataset = await readDataset();
     console.log(JSON.stringify({
@@ -249,7 +275,6 @@ async function main() {
     }, null, 2));
     return;
   }
-  if (runGit(["status", "--porcelain=v1", "--untracked-files=all"])) throw new Error("執行本機 RPC 前 Git 工作樹必須乾淨；請先保存文件／程式變更。");
   assertLocalOnly();
   const context = await assertRpcReady();
   const dataset = await readDataset();
@@ -271,6 +296,14 @@ async function main() {
     console.log(JSON.stringify({ rebuilt: results.length, database: "local loopback only", requestMode: "existing request UUID reused per local case; first run creates one", results }, null, 2));
     return;
   }
+  if (command === "concurrent") {
+    const caseId = process.argv[3];
+    const testCase = dataset.cases.find((item) => item.caseId === caseId);
+    if (!testCase) throw new Error(`Unknown dataset case: ${caseId}`);
+    const result = await executeConcurrentCase(testCase, context);
+    console.log(JSON.stringify({ command, database: "local loopback only", result }, null, 2));
+    return;
+  }
   if (["replay", "new-request"].includes(command)) {
     const caseId = process.argv[3];
     const testCase = dataset.cases.find((item) => item.caseId === caseId);
@@ -283,6 +316,6 @@ async function main() {
     console.log(JSON.stringify({ command, database: "local loopback only", result }, null, 2));
     return;
   }
-  throw new Error("使用方式：node scripts/excel-rpc-test-dataset.mjs validate|prepare|validate-local|rebuild|replay <caseId>|new-request <caseId>");
+  throw new Error("使用方式：node scripts/excel-rpc-test-dataset.mjs validate|prepare|validate-local|rebuild|concurrent <caseId>|replay <caseId>|new-request <caseId>");
 }
 main().catch((error) => { console.error(`[excel-rpc-test-dataset] 停止：${error?.stderr?.toString().trim() || error.message || error}`); process.exitCode = 1; });
