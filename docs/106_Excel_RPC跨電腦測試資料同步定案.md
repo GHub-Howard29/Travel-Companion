@@ -34,9 +34,10 @@
 
 - 測試來源電腦以受控測試案例定義保存輸入資料，不匯出已完成的本機 registry row 或 participant Email map。
 - 公司端 2026-11-05 唯讀盤點的 4 筆既有 Excel RPC 測試 TRIP 已轉成案例輸入：`Excel RPC test rollback`（2030-01-02，09:00–10:00）、`Excel RPC same title different request`（2030-01-05，11:00–12:00），以及兩筆 `Allowed duplicate title date`（2030-01-06，13:00–14:00）。這些舊 row 的 `daysData` 卡片 type 實際存為 `??`（非 RPC 接受類別），共享案例為使 RPC 可重建，將 type 正規化為允許的 `其他`；日期、時間、標題及描述仍保留其已核對內容。rollback 命名案例只代表原有測試命名／輸入；真正交易 rollback 仍須另外執行故障注入測試，不可把成功建立該案例當成 rollback 驗收。
-- 目的端必須使用該台電腦既有、有效的本機 Super Admin Session 與本機已套用的 Excel RPC migration，重新呼叫同一個 `tc_create_trip_from_excel` RPC；不得繞過 RPC 直接寫入正式業務路徑來假裝完成 RPC 驗收。
+- 目的端必須使用該台電腦有效的本機已登入使用者 Session 與本機已套用的 Excel RPC migration，重新呼叫同一個 `tc_create_trip_from_excel` RPC；不得以 service_role JWT 取代使用者登入身分，也不得繞過 RPC 直接寫入正式業務路徑來假裝完成 RPC 驗收。
+- 此 RPC 有兩個不同層次的限制：PostgREST 函式 EXECUTE 僅授予 `authenticated`；函式內再以 `auth.uid()` 確認呼叫者已登入，並以 `private.tc_is_super_admin()` 確認登入者 email 對應 `public.admin_users.role='super_admin'`。因此一般登入者不夠；管理者以一般登入流程取得的使用者 JWT 才符合條件。service_role JWT 雖具資料庫管理能力，但不代表一個已登入的管理者使用者，且目前函式明確不授予 service_role EXECUTE。
 - 每次重建使用目的端新產生的 request UUID；同一案例的重送測試在該目的端重用同一 request UUID，驗證冪等；不同 request UUID 同名同日期應建立不同 TRIP。
-- 本機 RPC 自行依目的端 Auth／admin 設定產生 participants、private Email map 及 request registry。若目的端缺少可用 Super Admin、migration 或必要 schema，須明確報錯停止，不得複製來源端 Auth 身分或降低授權。
+- 本機 RPC 自行依目的端 Auth／admin 設定產生 participants、private Email map 及 request registry。若目的端缺少可用 Super Admin 使用者、有效使用者 Session、migration 或必要 schema，須明確報錯停止，不得複製來源端 Auth 身分或降低授權。
 - TRIP 的隨機 ID 由 RPC 產生，不要求跨機相等。比較應使用穩定案例 ID、測試輸入與業務欄位；必要時將本機產生的 TRIP ID 存在本機測試執行紀錄，不得寫回共享 fixture。
 - 若要測試既有 RPC 產物（包含卡片時間欄位），同步案例輸入必須完整保存原始時間文字及日期序號，不可只保存 TRIP title 或只保存卡片數量。
 
@@ -79,7 +80,10 @@
 
 - `npm run excel-rpc:dataset:validate`：先確認 Git 版案例集有效。
 - 執行 `npm run excel-rpc:dataset:rebuild`：以目前節點的本機 Super Admin JWT 呼叫 loopback REST RPC，第一次建立時產生本機 request UUID 與 TRIP ID，並回讀 TRIP、每日卡片日期／時間及特殊 Other Info。
-- 必須在該次命令程序以環境變數 `TC_LOCAL_SUPABASE_ACCESS_TOKEN` 提供目前節點有效的本機 Super Admin access token；token 不得寫入 `.temp` 執行紀錄、fixture、Git 或 log。專案 `.env.local` 的 URL 必須是 loopback，並提供本機 anon key。缺少有效 token、權限不足、migration 不存在或 API 非 loopback 時，停止且不寫入。
+- 目前 runner 的 `TC_LOCAL_SUPABASE_ACCESS_TOKEN` 仍以「Super Admin JWT」為必要輸入，但程式實作其實只是把該值放進 `Authorization: Bearer`，沒有自動登入、也沒有取得或驗證使用者 Session。不得把 Supabase service_role JWT 填入此變數冒充管理者登入；本次實測正是因使用 service_role token 呼叫而收到 HTTP 403 `permission denied for function tc_create_trip_from_excel`。
+- 正確測試方式應先由受控本機測試流程建立一個短生命週期的臨時 Auth 使用者，使用本機管理 API 將該使用者 email 加入 `public.admin_users` 並授予 `super_admin`，再以 anon key + 該測試帳號 email/password 呼叫 Auth `signInWithPassword` 取得使用者 access token；RPC 及回讀驗證均使用這個使用者 token。測試結束須在 `finally` 清除本次建立的測試行程／相關 registry、Other Info、private map，以及本次建立的 `admin_users` 權限列和 Auth 使用者；清理僅限本次測試建立且以隨機識別值精確定位的資料，不得碰觸既有使用者或既有測試行程。若無法保證完整清理，先停止並回報，不可留下臨時管理者。
+- 目前 `.env.local` 僅確認有 loopback URL 與 anon key；本次沒有從設定檔找到可用的本機 service_role 測試變數，也沒有建立臨時帳號。後續先檢查 Supabase CLI 是否可在本機安全取得 service_role key，且確認只作用於 `127.0.0.1`；不可輸出、保存或記錄該 key。若可用，修改 runner 讓它在單次程序內用 service_role 僅負責建立／清理臨時測試帳號及管理列，另以 password sign-in 取得一般使用者 JWT 執行目標 RPC；不能把 service_role token 直接傳給目標 RPC。若 CLI 無法安全提供該憑證，改由使用者在本機已登入的管理者 UI 取得正常 Session，或明確回報需要的安全輸入。
+- token、password 及臨時 Auth 身分均不得寫入 `.temp` 執行紀錄、fixture、Git 或 log。專案 `.env.local` 的 URL 必須是 loopback，並提供本機 anon key。缺少必要條件、權限不足、migration 不存在或 API 非 loopback 時，停止且不寫入。
 - `npm run excel-rpc:dataset:rebuild` 會重用本機執行紀錄內的 request UUID，因此重跑為冪等重播，不會持續新增相同行程。
 - `node scripts/excel-rpc-test-dataset.mjs replay <caseId>`：使用本機已記錄 request UUID 重送，要求 RPC 回傳同一 trip_id 及 `idempotent_replay=true`。
 - `node scripts/excel-rpc-test-dataset.mjs new-request <caseId>`：為同一案例產生新 request UUID，並確認 RPC 回傳不同 trip_id。這是會新增本機測試行程的明確操作。
@@ -97,7 +101,39 @@
 6. 完成相關測試、TypeScript／build（受影響時）、文件連結與 diff 檢查。
 7. 未執行未授權的資料庫 upload、清理、commit、push 或正式 DB 操作。雙機真實端到端驗收未執行前，不得宣稱已完成實機跨機驗收。
 
-## 9. 2026-11-05 B → C 下載驗收紀錄
+## 9. 2026-11-06 本機 Excel RPC 併發測試進度與交接
+
+### 9.1 本次已完成檢查
+
+- 已確認作用中專案及根目錄為 `D:\\Project\\Travel-Companion`；所有查詢均在此專案內執行。
+- `scripts/excel-rpc-test-dataset.mjs` 的 `assertRpcReady()` 讀取 `.env.local` 的 `VITE_SUPABASE_URL`／`VITE_SUPABASE_ANON_KEY`，並要求環境變數 `TC_LOCAL_SUPABASE_ACCESS_TOKEN`；`localRestRequest()`、`invokeExcelRpc()` 會直接將此 token 放入 `Authorization: Bearer`。此 runner 沒有自行登入，也沒有驗證傳入 token 是使用者 Session。
+- 本機 `supabase/migrations/20261103150000_v3110_trip_excel_create_rpc.sql` 的 `tc_create_trip_from_excel` 以 `auth.uid()` 要求登入使用者，再呼叫 `private.tc_is_super_admin()`；管理者判斷依 JWT email 對 `public.admin_users.role='super_admin'`。同 migration 明確撤銷 `public`、`anon`、`authenticated`、`service_role` 的 EXECUTE，再只授予 `authenticated`。
+- 本次先前以本機 Supabase Service Role JWT 呼叫 RPC，實際收到 HTTP 403：`permission denied for function tc_create_trip_from_excel`。這是 token 身分／函式授權不符，不代表一般登入的非管理者可以呼叫；非管理者即使有登入 Session，仍會被函式內的 Super Admin 檢查拒絕。
+- 本機 Auth 服務 health endpoint 回應 HTTP 200（GoTrue v2.196.0），確認登入服務有啟動。
+- `.env.local` 已確認只有 `VITE_SUPABASE_URL`、`VITE_SUPABASE_ANON_KEY`；`supabase/.env.local` 僅見 `COMMONS_PRECISION_TOKEN_SECRET`。這兩個檔案沒有現成的測試登入帳號／密碼或 `V364_*`／`LEASE_TEST_*`／`SUPABASE_*` 測試憑證設定。不得把任何 secret 值寫入本文件或 log。
+- 以 anon key 查詢 `admin_users` 回應 HTTP 401／`permission denied for function tc_current_email`，符合管理者資料受保護的設計；本次沒有讀取或輸出管理者 email。
+- 專案既有 `scripts/verify-v364-supabase-realtime.mjs` 展示了本機測試模式：管理用 client 建立臨時 Auth 使用者與 `admin_users` 角色列，再以 anon client `signInWithPassword` 取得真正使用者 Session；其 `finally` 會刪除本次建立的 Auth 使用者。不過該腳本還涉及 Realtime／Trip 測試，不可直接整支執行來替代本次 RPC 測試。
+
+### 9.2 本次未完成／未執行事項
+
+- `concurrent multi-day-time-preservation` 測試未成功執行；RPC 沒有成功建立 TRIP，沒有產生新的執行紀錄。
+- 沒有修改程式、migration、資料庫權限或 Auth 使用者；沒有新增或刪除 TRIP、registry、Other Info 或 private Email map。
+- 未執行資料庫 reset、Docker volume 操作、遠端／正式 DB 操作、Git commit／push。
+- 既有 `.temp` 本機案例編輯副本 `supabase/.temp/excel-rpc-test-cases.json` 已存在，必須保留，不得覆蓋；本機執行紀錄 `supabase/.temp/excel-rpc-executions.json` 在此前檢查時尚不存在，後續執行前仍須再確認。
+
+### 9.3 明確下一步（下一位執行者照此順序進行）
+
+1. 先確認 `supabase status -o json` 的 API URL 僅為 `127.0.0.1`／localhost，且 migration `20261103150000` 仍已套用；不得使用 `--linked`。
+2. 確認可由本機 Supabase CLI／受控本機流程安全取得 service_role key 供「建立與清理測試帳號」使用；只在記憶體／程序環境內使用，不輸出、不寫檔、不記錄。若無法安全取得，停止並回報，不得改用遠端 key。
+3. 以隨機 email／密碼建立一個本次專用、短生命週期的 Auth 測試使用者，並只在本機 `admin_users` 為該 email 加入 `super_admin` 權限列。這是建立本次測試身分，不是調整既有使用者或放寬函式 EXECUTE 權限。
+4. 使用 `.env.local` anon key 對本機 Auth `signInWithPassword`，取得該臨時帳號的使用者 access token；先驗證 token 有 `auth.uid()` 且 email／`admin_users` 角色對應本次測試帳號，再將使用者 access token 傳給 Excel RPC runner。service_role key 僅限管理 API 建立／清理，不得傳給 `tc_create_trip_from_excel`。
+5. 修正或包裝 runner，讓上述建立帳號、登入、測試、清理流程由單一程序可靠管理；不得把 email、密碼、access token、service_role key 寫入 fixture、`.temp` 執行紀錄、Git 或輸出 log。清理應放在 `finally`，只刪除本次隨機識別的測試 TRIP、其 request registry、Other Info、private map、`admin_users` 權限列與 Auth 使用者；刪除前應以本次建立的 ID／email 精確比對，避免碰觸既有資料。若目標 TRIP／關聯資料清理無法安全完成，不要建立測試資料，先補齊清理策略。
+6. 先以 `node scripts/excel-rpc-test-dataset.mjs validate` 驗證案例，再執行 `node scripts/excel-rpc-test-dataset.mjs concurrent multi-day-time-preservation`（目前案例 ID 以 Git fixture 實際內容為準）；驗證兩個併發呼叫共用同一 request UUID、只建立一筆 TRIP，且回讀日期、每日卡片、開始／結束時間及特殊 Other Info 均正確，最後確認清理完成。
+7. 完成後回寫本節測試結果（pass／fail、實際案例 ID、建立／清理筆數及錯誤摘要，不包含任何憑證），再更新 `docs/81_AI每日行程卡片Excel匯入規格草案.md` 的進度表；本次文件修訂本身不包含 commit／push。
+
+**停止條件：** 若 local Supabase CLI 無法安全提供本機管理 key、Auth 無法建立／登入臨時使用者、使用者 JWT 仍無法通過管理者檢查，或無法保證測試資料完整清理，立即停止；不得改成授權 `service_role` 執行 RPC，不得使用真實管理者密碼或既有使用者 Session 來繞過測試設計。
+
+## 10. 2026-11-05 B → C 下載驗收紀錄
 
 - **結果：通過。** 使用者確認在 OpenChatX Home 的 `D:\Project\Travel-Companion` 成功執行 `/下載資料庫`。
 - 測試資料集：更新 1 組；Excel RPC 測試案例已更新，檔案大小 3,484 bytes。
