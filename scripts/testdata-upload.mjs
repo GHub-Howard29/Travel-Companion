@@ -1,16 +1,14 @@
 import { execFileSync } from "node:child_process";
-import { mkdir, readFile, writeFile, rename, rm, readdir } from "node:fs/promises";
+import { readFile, writeFile, rename, rm, readdir } from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
 import process from "node:process";
-import { classifyBaselineSync, createBaselineRecord } from "./lib/testdata-clock-sync.mjs";
-import { normalizeFixtureRows, checksumFixture } from "./lib/testdata-download-apply.mjs";
-import { EXCEL_RPC_DATASET_ID, checksumExcelRpcDataset, planExcelRpcDatasetUpload, validateExcelRpcDataset } from "./lib/excel-rpc-test-dataset.mjs";
+import { normalizeFixtureRows } from "./lib/testdata-download-apply.mjs";
+import { EXCEL_RPC_DATASET_ID, planExcelRpcDatasetUpload, validateExcelRpcDataset } from "./lib/excel-rpc-test-dataset.mjs";
 
 process.env.SUPABASE_TELEMETRY_DISABLED = "1";
 const root = process.cwd();
 const fixturesRoot = path.resolve(root, "supabase", "test-fixtures");
-const appliedPath = path.resolve(root, "supabase", ".temp", "testdata-applied-state.json");
 const localExcelCasesPath = path.resolve(root, "supabase", ".temp", "excel-rpc-test-cases.json");
 const tables = ["trips", "checklists", "checklist_items", "expenses", "exchange_purchases", "other_info_items"];
 const tripPattern = /^tc-test-[a-z0-9][a-z0-9-]{2,60}$/;
@@ -38,24 +36,7 @@ async function query(sql) {
     return rows[0].payload;
   } finally { await rm(file, { force: true }); }
 }
-function checksum(data) { return checksumFixture(data); }
 function queryNormalize(data) { return normalizeFixtureRows(data); }
-async function writeFixturePair(directory, data, manifest) {
-  const suffix = `.tmp-${process.pid}-${Date.now()}`;
-  const dataPath = path.join(directory, "data.json");
-  const manifestPath = path.join(directory, "manifest.json");
-  const tempData = dataPath + suffix;
-  const tempManifest = manifestPath + suffix;
-  try {
-    await writeFile(tempData, JSON.stringify(data, null, 2) + "\n", { flag: "wx" });
-    await writeFile(tempManifest, JSON.stringify(manifest, null, 2) + "\n", { flag: "wx" });
-    await rename(tempData, dataPath);
-    await rename(tempManifest, manifestPath);
-  } finally {
-    await rm(tempData, { force: true });
-    await rm(tempManifest, { force: true });
-  }
-}
 function detectSensitive(value, location = "$") {
   if (Array.isArray(value)) {
     value.forEach((item, index) => detectSensitive(item, `${location}[${index}]`));
@@ -96,65 +77,17 @@ function validateData(data, fixtureId) {
   }
   detectSensitive(data);
 }
-async function loadApplied() {
-  try {
-    const state = JSON.parse(await readFile(appliedPath, "utf8"));
-    if (state.schemaVersion !== 1 || !state.fixtures || typeof state.fixtures !== "object") {
-      throw new Error("本機 applied state 格式不符；拒絕上傳。");
-    }
-    return state;
-  } catch (error) {
-    if (error.code === "ENOENT") return { schemaVersion: 1, fixtures: {} };
-    throw error;
-  }
-}
-async function saveApplied(state) {
-  await mkdir(path.dirname(appliedPath), { recursive: true });
-  const temp = appliedPath + `.tmp-${process.pid}-${Date.now()}`;
-  try {
-    await writeFile(temp, JSON.stringify(state, null, 2) + "\n", { flag: "wx" });
-    await rename(temp, appliedPath);
-  } finally {
-    await rm(temp, { force: true });
-  }
-}
-async function findAppliedBaseline(fixtureId, appliedRecord, manifestPathOverride = null) {
-  if (appliedRecord.baselineAt && Number.isFinite(Date.parse(appliedRecord.baselineAt))) {
-    return new Date(appliedRecord.baselineAt).toISOString();
-  }
-  const manifestPath = manifestPathOverride ?? `supabase/test-fixtures/${fixtureId}/manifest.json`;
-  const commits = runGit(["log", "--format=%H", "--", manifestPath]).split(/\r?\n/).filter(Boolean);
-  for (const commit of commits) {
-    try {
-      const manifest = JSON.parse(runGit(["show", `${commit}:${manifestPath}`]));
-      if (manifest.version !== appliedRecord.version || manifest.checksum !== appliedRecord.checksum) continue;
-      const baselineAt = manifest.baselineAt ?? manifest.exportedAt;
-      if (!Number.isFinite(Date.parse(baselineAt))) break;
-      return new Date(baselineAt).toISOString();
-    } catch { /* continue searching exact applied revision */ }
-  }
-  throw new Error(`Fixture ${fixtureId} 找不到 applied version/checksum 對應時間；拒絕猜測上傳方向。`);
-}
 async function readBaseline(directory) {
   const raw = JSON.parse(await readFile(path.join(directory, "manifest.json"), "utf8"));
   const data = JSON.parse(await readFile(path.join(directory, "data.json"), "utf8"));
-  const baselineAt = raw.baselineAt ?? raw.exportedAt;
-  if (raw.schemaVersion !== 1 || raw.fixtureId !== path.basename(directory) ||
-      !Number.isInteger(raw.version) || raw.version < 1 ||
-      typeof raw.sourceHost !== "string" || !raw.sourceHost.trim() ||
+  if (!raw || raw.schemaVersion !== 1 || raw.fixtureId !== path.basename(directory) ||
       !["active", "regression_pending", "released", "archived", "deleted"].includes(raw.status) ||
-      !Array.isArray(raw.tables) || raw.tables.length !== tables.length || tables.some((table) => !raw.tables.includes(table)) ||
-      !Number.isFinite(Date.parse(baselineAt)) || !/^[a-f0-9]{64}$/.test(raw.checksum) || checksum(data) !== raw.checksum) {
-    throw new Error(`Fixture 基準 manifest/checksum 不一致：${path.basename(directory)}`);
+      !Array.isArray(raw.tables) || raw.tables.length !== tables.length || tables.some((table) => !raw.tables.includes(table))) {
+    throw new Error(`Fixture manifest 結構無效：${path.basename(directory)}`);
   }
-  if ((raw.version === 1 && (raw.parentVersion !== undefined || raw.parentChecksum !== undefined)) ||
-      (raw.version > 1 && (raw.parentVersion !== raw.version - 1 || !/^[a-f0-9]{64}$/.test(raw.parentChecksum ?? "")))) {
-    throw new Error(`Fixture ${raw.fixtureId} parent version 格式無效。`);
+  for (const table of tables) if (!Array.isArray(data[table]) || (raw.counts && raw.counts[table] !== undefined && raw.counts[table] !== data[table].length)) {
+    throw new Error(`Fixture ${raw.fixtureId} ${table} 結構或筆數不符。`);
   }
-  for (const table of tables) if (!Array.isArray(data[table]) || raw.counts?.[table] !== data[table].length) {
-    throw new Error(`Fixture ${raw.fixtureId} ${table} 筆數與 manifest 不一致。`);
-  }
-  raw.baselineAt = new Date(baselineAt).toISOString();
   validateData(data, raw.fixtureId);
   return { raw, data };
 }
@@ -172,54 +105,40 @@ async function main() {
   if (counts[0] !== 0 || counts[1] !== 0) throw new Error("本機與 origin/develop 不一致；拒絕自動合併或覆寫。");
 
   assertLocalOnly();
-  const appliedState = await loadApplied();
-  const applied = appliedState.fixtures;
   const dirs = (await readdir(fixturesRoot, { withFileTypes: true })).filter((entry) => entry.isDirectory() && tripPattern.test(entry.name));
   const published = [];
+  const pendingWrites = [];
   const datasetDirectory = path.join(fixturesRoot, EXCEL_RPC_DATASET_ID);
   const datasetManifestPath = path.join(datasetDirectory, "manifest.json");
   const datasetCasesPath = path.join(datasetDirectory, "cases.json");
+  const datasetManifest = JSON.parse(await readFile(datasetManifestPath, "utf8"));
+  const baselineCases = JSON.parse(await readFile(datasetCasesPath, "utf8")).cases;
   const datasetLocalCaseText = await readFile(localExcelCasesPath, "utf8").catch((error) => {
-    if (error.code === "ENOENT") return readFile(datasetCasesPath, "utf8");
+    if (error.code === "ENOENT") return JSON.stringify({ cases: baselineCases });
     throw error;
   });
-  const datasetManifest = JSON.parse(await readFile(datasetManifestPath, "utf8"));
   const datasetCases = JSON.parse(datasetLocalCaseText).cases;
-  const validatedDataset = validateExcelRpcDataset({
+  validateExcelRpcDataset({
     manifest: datasetManifest,
-    cases: datasetCases,
+    cases: baselineCases,
     directoryName: EXCEL_RPC_DATASET_ID,
     verifyManifestDigest: false,
   });
-  const datasetAppliedKey = `dataset:${EXCEL_RPC_DATASET_ID}`;
-  const datasetApplied = applied[datasetAppliedKey];
   const datasetPlan = planExcelRpcDatasetUpload({
     manifest: datasetManifest,
-    cases: validatedDataset.cases,
-    applied: datasetApplied,
+    cases: datasetCases,
+    baselineCases,
     sourceHost: hostname,
     baselineAt: new Date().toISOString(),
   });
-  applied[datasetAppliedKey] = datasetPlan.applied;
   if (datasetPlan.action === "publish") {
-    const tempCases = datasetCasesPath + `.tmp-${process.pid}-${Date.now()}`;
-    const tempManifest = datasetManifestPath + `.tmp-${process.pid}-${Date.now()}`;
-    try {
-      await writeFile(tempCases, JSON.stringify({ cases: datasetPlan.cases }, null, 2) + "\n", { flag: "wx" });
-      await writeFile(tempManifest, JSON.stringify(datasetPlan.manifest, null, 2) + "\n", { flag: "wx" });
-      await rename(tempCases, datasetCasesPath);
-      await rename(tempManifest, datasetManifestPath);
-    } finally {
-      await rm(tempCases, { force: true });
-      await rm(tempManifest, { force: true });
-    }
-    published.push({
-      fixtureId: EXCEL_RPC_DATASET_ID,
+    pendingWrites.push({
+      directory: datasetDirectory,
       kind: "excel-rpc-dataset",
-      version: datasetPlan.manifest.version,
-      baselineAt: datasetPlan.manifest.baselineAt,
-      checksum: datasetPlan.manifest.checksum,
+      cases: datasetPlan.cases,
+      manifest: datasetPlan.manifest,
     });
+    published.push({ fixtureId: EXCEL_RPC_DATASET_ID, kind: "excel-rpc-dataset", version: datasetPlan.manifest.version });
   }
   for (const entry of dirs) {
     const directory = path.join(fixturesRoot, entry.name);
@@ -236,50 +155,54 @@ async function main() {
     ) as payload`;
     const data = queryNormalize(await query(sql));
     validateData(data, entry.name);
-    const next = createBaselineRecord({ fixtureId: entry.name, data, sourceHost: hostname });
-    const appliedRecord = applied[entry.name];
-    if (!appliedRecord || appliedRecord.checksum !== previous.checksum || appliedRecord.version !== previous.version) {
-      throw new Error(`Fixture ${entry.name} 本機 applied baseline 與已提交基準不一致；拒絕上傳。`);
-    }
-    const appliedBaselineAt = await findAppliedBaseline(entry.name, appliedRecord);
-    if (next.checksum === previous.checksum) continue;
-    const decision = classifyBaselineSync(
-      { baselineAt: appliedBaselineAt, checksum: appliedRecord.checksum },
-      { baselineAt: next.baselineAt, checksum: next.checksum },
-    );
-    if (decision.action !== "upload") throw new Error(`Fixture ${entry.name} 上傳時間判斷非 upload：${decision.action}`);
+    const sameContent = JSON.stringify(queryNormalize(data)) === JSON.stringify(queryNormalize(previous));
+    if (sameContent) continue;
+    const baselineAt = new Date().toISOString();
     const manifest = {
-      schemaVersion: 1, fixtureId: entry.name, version: previous.version + 1,
-      parentVersion: previous.version, parentChecksum: previous.checksum,
-      status: previous.status, sourceHost: hostname, baselineAt: next.baselineAt,
-      exportedAt: next.baselineAt, tables,
+      schemaVersion: 1, fixtureId: entry.name,
+      status: previous.status, sourceHost: hostname, baselineAt,
+      exportedAt: baselineAt, tables,
       counts: Object.fromEntries(tables.map((table) => [table, data[table].length])),
-      checksum: next.checksum,
-      note: "Synthetic test data only. Timestamp selects peer direction; checksum and parent database checks protect imports.",
+      note: "Synthetic test data only. Synchronization is decided by canonical content comparison.",
     };
-    await writeFixturePair(directory, data, manifest);
-    applied[entry.name] = {
-      version: manifest.version,
-      checksum: manifest.checksum,
-      baselineAt: manifest.baselineAt,
-    };
-    published.push({ fixtureId: entry.name, version: manifest.version, baselineAt: manifest.baselineAt, checksum: manifest.checksum });
+    pendingWrites.push({ directory, kind: "fixture", data, manifest });
+    published.push({ fixtureId: entry.name, kind: "fixture", version: manifest.version });
   }
   if (!published.length) {
-    await saveApplied(appliedState);
-    console.log(JSON.stringify({ uploaded: false, reason: "unchanged", message: "沒有測試資料內容變更；未更新時間戳、未建立 commit。" }, null, 2));
+    console.log(JSON.stringify({ uploaded: false, reason: "unchanged", message: "兩個選集都沒有內容變更，未建立 commit。" }, null, 2));
     return;
   }
-  for (const item of published) {
-    const directory = path.join(fixturesRoot, item.fixtureId);
-    if (item.kind === "excel-rpc-dataset") {
-      const manifest = JSON.parse(await readFile(path.join(directory, "manifest.json"), "utf8"));
-      const cases = JSON.parse(await readFile(path.join(directory, "cases.json"), "utf8")).cases;
-      const verified = validateExcelRpcDataset({ manifest, cases, directoryName: EXCEL_RPC_DATASET_ID });
-      if (verified.manifest.checksum !== item.checksum) throw new Error("Excel RPC dataset 上傳前 checksum 重驗失敗。");
-    } else {
-      const { raw, data } = await readBaseline(directory);
-      if (raw.checksum !== item.checksum || checksum(data) !== item.checksum) throw new Error(`Fixture ${item.fixtureId} 上傳前 checksum 重驗失敗。`);
+  const tempFiles = [];
+  const replacements = [];
+  try {
+    for (const item of pendingWrites) {
+      const dataPath = item.kind === "excel-rpc-dataset" ? path.join(item.directory, "cases.json") : path.join(item.directory, "data.json");
+      const manifestPath = path.join(item.directory, "manifest.json");
+      const suffix = `.tmp-${process.pid}-${Date.now()}`;
+      const tempData = dataPath + suffix;
+      const tempManifest = manifestPath + suffix;
+      const dataContent = item.kind === "excel-rpc-dataset" ? { cases: item.cases } : item.data;
+      const manifestText = JSON.stringify(item.manifest, null, 2) + "\n";
+      const dataText = JSON.stringify(dataContent, null, 2) + "\n";
+      await writeFile(tempData, dataText, { flag: "wx" });
+      await writeFile(tempManifest, manifestText, { flag: "wx" });
+      tempFiles.push({ tempData, tempManifest });
+      replacements.push({ tempData, dataPath, tempManifest, manifestPath, oldData: await readFile(dataPath, "utf8"), oldManifest: await readFile(manifestPath, "utf8") });
+    }
+    for (const file of replacements) {
+      await rename(file.tempData, file.dataPath);
+      await rename(file.tempManifest, file.manifestPath);
+    }
+  } catch (error) {
+    for (const file of replacements) {
+      if (file.oldData !== undefined) await writeFile(file.dataPath, file.oldData);
+      if (file.oldManifest !== undefined) await writeFile(file.manifestPath, file.oldManifest);
+    }
+    throw error;
+  } finally {
+    for (const file of tempFiles) {
+      await rm(file.tempData, { force: true });
+      await rm(file.tempManifest, { force: true });
     }
   }
   const paths = published.flatMap((item) => {
@@ -288,6 +211,18 @@ async function main() {
       ? [`${base}/manifest.json`, `${base}/cases.json`]
       : [`${base}/manifest.json`, `${base}/data.json`];
   });
+  for (const item of published) {
+    const directory = path.join(fixturesRoot, item.fixtureId);
+    if (item.kind === "excel-rpc-dataset") {
+      const manifest = JSON.parse(await readFile(path.join(directory, "manifest.json"), "utf8"));
+      const cases = JSON.parse(await readFile(path.join(directory, "cases.json"), "utf8")).cases;
+      const verified = validateExcelRpcDataset({ manifest, cases, directoryName: EXCEL_RPC_DATASET_ID });
+      if (!Array.isArray(verified.cases) || verified.cases.length === 0) throw new Error("Excel RPC dataset 檔案結構重驗失敗。");
+    } else {
+      const { raw, data } = await readBaseline(directory);
+      validateData(data, raw.fixtureId);
+    }
+  }
   for (const file of paths) runGit(["add", "--", file]);
   const staged = runGit(["diff", "--cached", "--name-only"]).split(/\r?\n/).filter(Boolean);
   if (staged.length !== paths.length || staged.some((file) => !paths.includes(file))) throw new Error("上傳 stage 超出 fixture 白名單；停止 commit/push。");
@@ -298,7 +233,6 @@ async function main() {
   const remoteCounts = runGit(["rev-list", "--left-right", "--count", "HEAD...origin/develop"]).split(/\s+/).map(Number);
   if (remoteCounts[0] !== 1 || remoteCounts[1] !== 0) throw new Error("commit 後遠端已變更或分支差異異常；停止 push。");
   runGit(["push", "origin", "develop"]);
-  await saveApplied(appliedState);
   console.log(JSON.stringify({ uploaded: true, committed: true, pushed: true, fixtures: published, next: "其他節點先 git pull --ff-only origin develop，再獨立執行 testdata-download.mjs。" }, null, 2));
 }
 main().catch((error) => { console.error(`[testdata-upload] 停止：${error.message}`); process.exitCode = 1; });

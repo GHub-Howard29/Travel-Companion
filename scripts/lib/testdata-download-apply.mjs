@@ -66,42 +66,54 @@ function sqlLiteral(value) {
 export function buildFixtureImportSql(fixtures) {
   const body = ["DO $tc_fixture$", "DECLARE", "  existing_trip public.trips;", "  match_count integer;", "BEGIN"];
   for (const fixture of fixtures) {
-    const { manifest, data, previousData } = fixture;
-    const tripId = sqlLiteral(manifest.fixtureId);
-    body.push(`  SELECT * INTO existing_trip FROM public.trips WHERE id = ${tripId} FOR UPDATE;`);
-    if (previousData) {
-      body.push(`  IF NOT FOUND OR existing_trip.content ->> '__testFixture' <> 'true' THEN RAISE EXCEPTION 'Fixture target missing or unmarked: %', ${tripId}; END IF;`);
-    } else {
-      body.push(`  IF FOUND THEN RAISE EXCEPTION 'Fixture initial import target already exists: %', ${tripId}; END IF;`);
+    const { manifest, data } = fixture;
+    if (!manifest || !/^tc-test-[a-z0-9][a-z0-9-]{2,60}$/.test(manifest.fixtureId) ||
+        !data || !Array.isArray(data.trips) || data.trips.length !== 1 ||
+        data.trips[0].id !== manifest.fixtureId || data.trips[0].content?.__testFixture !== true ||
+        !Array.isArray(data.trips[0].participants) || data.trips[0].participants.length !== 0) {
+      throw new Error("Incoming fixture structure or synthetic marker is invalid.");
     }
+    for (const table of allowedTables) if (!Array.isArray(data[table])) throw new Error(`Incoming fixture missing table: ${table}`);
+    const fixtureId = manifest.fixtureId;
+    const requiredText = (value) => typeof value === "string" && value.trim().length > 0;
+    const unique = (values, label) => {
+      if (values.some((value) => !requiredText(value)) || new Set(values).size !== values.length) {
+        throw new Error(`Incoming fixture has missing or duplicate ${label}.`);
+      }
+    };
+    unique(data.checklists.map((row) => row.id), "checklist id");
+    unique(data.checklist_items.map((row) => row.id), "checklist item id");
+    unique(data.expenses.map((row) => row.client_item_id), "expense client_item_id");
+    unique(data.exchange_purchases.map((row) => row.id), "exchange purchase id");
+    unique(data.exchange_purchases.map((row) => row.client_item_id), "exchange purchase client_item_id");
+    unique(data.other_info_items.map((row) => row.id), "other-info item id");
+    unique(data.other_info_items.map((row) => row.client_item_id), "other-info client_item_id");
+    if (data.checklists.some((row) => row.trip_id !== fixtureId || row.scope !== "shared")) {
+      throw new Error("Incoming fixture contains a checklist outside the shared synthetic trip scope.");
+    }
+    const checklistIds = new Set(data.checklists.map((row) => row.id));
+    if (data.checklist_items.some((row) => !checklistIds.has(row.checklist_id))) {
+      throw new Error("Incoming fixture contains an item with an unknown checklist reference.");
+    }
+    for (const table of ["expenses", "exchange_purchases", "other_info_items"]) {
+      if (data[table].some((row) => row.trip_id !== fixtureId)) {
+        throw new Error(`Incoming fixture contains rows outside its synthetic trip scope: ${table}.`);
+      }
+    }
+    const tripId = sqlLiteral(fixtureId);
+    body.push(`  SELECT * INTO existing_trip FROM public.trips WHERE id = ${tripId} FOR UPDATE;`);
+    body.push(`  IF FOUND AND existing_trip.content ->> '__testFixture' IS DISTINCT FROM 'true' THEN RAISE EXCEPTION 'Fixture target exists but is not marked synthetic: %', ${tripId}; END IF;`);
 
     for (const spec of tableSpecs) {
-      const previousRows = previousData?.[spec.name] ?? [];
       const scope = spec.name === "trips" ? `t.id = ${tripId}` :
         spec.name === "checklist_items" ? `t.checklist_id IN (SELECT id FROM public.checklists WHERE trip_id = ${tripId} AND scope = 'shared')` :
         spec.name === "checklists" ? `t.trip_id = ${tripId} AND t.scope = 'shared'` : `t.trip_id = ${tripId}`;
-      const comparableColumns = spec.columns.filter((column) => !["created_at", "updated_at"].includes(column));
-      const currentJson = `jsonb_build_object(${comparableColumns.map((column) => `${sqlLiteral(column)}, t.${column}`).join(", ")})`;
       body.push(`  PERFORM 1 FROM public.${spec.name} t WHERE ${scope} FOR UPDATE;`);
-      body.push(`  SELECT count(*) INTO match_count FROM public.${spec.name} t WHERE ${scope};`);
-      body.push(`  IF match_count <> ${previousRows.length} THEN RAISE EXCEPTION 'Fixture target row count mismatch in ${spec.name}: %', ${tripId}; END IF;`);
-      for (const expected of previousRows) {
-        const json = sqlLiteral(JSON.stringify(expected)) + "::jsonb";
-        const candidate = `(jsonb_populate_record(NULL::public.${spec.name}, ${json}))`;
-        const expectedJson = `jsonb_build_object(${comparableColumns.map((column) => `${sqlLiteral(column)}, ${candidate}.${column}`).join(", ")})`;
-        body.push(`  SELECT count(*) INTO match_count FROM public.${spec.name} t WHERE ${spec.where(candidate)};`);
-        body.push(`  IF match_count <> 1 OR NOT EXISTS (SELECT 1 FROM public.${spec.name} t WHERE ${spec.where(candidate)} AND ${currentJson} IS NOT DISTINCT FROM ${expectedJson}) THEN RAISE EXCEPTION 'Fixture target differs from parent revision in ${spec.name}: %', ${tripId}; END IF;`);
-      }
     }
 
     for (const row of data.trips) {
       const json = sqlLiteral(JSON.stringify(row)) + "::jsonb";
-      if (previousData) {
-        const updates = ["title", "departure_date", "participants", "currency_config", "sidebar_config", "content", "is_public"];
-        body.push(`  UPDATE public.trips AS t SET ${updates.map((column) => `${column} = r.${column}`).join(", ")} FROM jsonb_populate_record(NULL::public.trips, ${json}) AS r WHERE t.id = r.id;`);
-      } else {
-        body.push(`  INSERT INTO public.trips (id, title, departure_date, participants, currency_config, sidebar_config, content, is_public) SELECT r.id, r.title, r.departure_date, r.participants, r.currency_config, r.sidebar_config, r.content, r.is_public FROM jsonb_populate_record(NULL::public.trips, ${json}) AS r;`);
-      }
+      body.push(`  INSERT INTO public.trips (id, title, departure_date, participants, currency_config, sidebar_config, content, is_public) SELECT r.id, r.title, r.departure_date, r.participants, r.currency_config, r.sidebar_config, r.content, r.is_public FROM jsonb_populate_record(NULL::public.trips, ${json}) AS r ON CONFLICT (id) DO UPDATE SET title = EXCLUDED.title, departure_date = EXCLUDED.departure_date, participants = EXCLUDED.participants, currency_config = EXCLUDED.currency_config, sidebar_config = EXCLUDED.sidebar_config, content = EXCLUDED.content, is_public = EXCLUDED.is_public;`);
     }
     for (const row of data.checklists) {
       const json = sqlLiteral(JSON.stringify(row)) + "::jsonb";
@@ -141,22 +153,22 @@ export function buildFixtureImportSql(fixtures) {
       }
       body.push(`  INSERT INTO public.other_info_items (id, trip_id, client_item_id, folder_id, title, content, allowed_roles, sort_order, deleted_at) SELECT r.id, r.trip_id, r.client_item_id, r.folder_id, r.title, r.content, r.allowed_roles, r.sort_order, r.deleted_at FROM jsonb_populate_record(NULL::public.other_info_items, ${json}) AS r ON CONFLICT (id) DO UPDATE SET folder_id = EXCLUDED.folder_id, title = EXCLUDED.title, content = EXCLUDED.content, allowed_roles = EXCLUDED.allowed_roles, sort_order = EXCLUDED.sort_order, deleted_at = EXCLUDED.deleted_at;`);
     }
-    if (previousData) {
-      for (const row of previousData.checklist_items.filter((item) => !data.checklist_items.some((next) => next.id === item.id || (next.checklist_id === item.checklist_id && next.client_item_id === item.client_item_id)))) {
-        body.push(`  DELETE FROM public.checklist_items WHERE id = ${sqlLiteral(row.id)} AND checklist_id IN (SELECT id FROM public.checklists WHERE trip_id = ${tripId} AND scope = 'shared');`);
-      }
-      for (const row of previousData.checklists.filter((item) => !data.checklists.some((next) => next.id === item.id))) {
-        body.push(`  DELETE FROM public.checklists WHERE id = ${sqlLiteral(row.id)} AND trip_id = ${tripId} AND scope = 'shared';`);
-      }
-      for (const row of previousData.expenses.filter((item) => !data.expenses.some((next) => next.trip_id === item.trip_id && next.client_item_id === item.client_item_id))) {
-        body.push(`  DELETE FROM public.expenses WHERE trip_id = ${tripId} AND client_item_id = ${sqlLiteral(row.client_item_id)};`);
-      }
-      for (const row of previousData.exchange_purchases.filter((item) => !data.exchange_purchases.some((next) => next.id === item.id || (next.trip_id === item.trip_id && next.client_item_id === item.client_item_id)))) {
-        body.push(`  DELETE FROM public.exchange_purchases WHERE trip_id = ${tripId} AND client_item_id = ${sqlLiteral(row.client_item_id)};`);
-      }
-      for (const row of previousData.other_info_items.filter((item) => !data.other_info_items.some((next) => next.id === item.id || (next.trip_id === item.trip_id && next.client_item_id === item.client_item_id)))) {
-        body.push(`  DELETE FROM public.other_info_items WHERE trip_id = ${tripId} AND id = ${sqlLiteral(row.id)};`);
-      }
+    const incomingChecklistItemIds = data.checklist_items.map((row) => sqlLiteral(row.id)).join(", ");
+    const incomingChecklistIds = data.checklists.map((row) => sqlLiteral(row.id)).join(", ");
+    const incomingExpenseKeys = data.expenses.map((row) => sqlLiteral(row.client_item_id)).join(", ");
+    const incomingExchangeIds = data.exchange_purchases.map((row) => sqlLiteral(row.id)).join(", ");
+    const incomingOtherInfoIds = data.other_info_items.map((row) => sqlLiteral(row.id)).join(", ");
+    const deleteSql = [
+      ["checklist_items", `DELETE FROM public.checklist_items i WHERE i.checklist_id IN (SELECT id FROM public.checklists WHERE trip_id = ${tripId} AND scope = 'shared')`, "i.id", incomingChecklistItemIds],
+      ["checklists", `DELETE FROM public.checklists c WHERE c.trip_id = ${tripId} AND c.scope = 'shared'`, "c.id", incomingChecklistIds],
+      ["expenses", `DELETE FROM public.expenses e WHERE e.trip_id = ${tripId}`, "e.client_item_id", incomingExpenseKeys],
+      ["exchange_purchases", `DELETE FROM public.exchange_purchases e WHERE e.trip_id = ${tripId}`, "e.id", incomingExchangeIds],
+      ["other_info_items", `DELETE FROM public.other_info_items o WHERE o.trip_id = ${tripId}`, "o.id", incomingOtherInfoIds],
+    ];
+    for (const [table, scopeSql, keySql, incomingKeys] of deleteSql) {
+      body.push(incomingKeys
+        ? `  ${scopeSql} AND ${keySql} NOT IN (${incomingKeys});`
+        : `  ${scopeSql};`);
     }
   }
   body.push("END $tc_fixture$;");

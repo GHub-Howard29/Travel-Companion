@@ -32,18 +32,31 @@ const deleteSql = buildFixtureImportSql([{
 assert.match(sql, /^DO \$tc_fixture\$/);
 assert.match(sql, /SELECT \* INTO existing_trip FROM public\.trips WHERE id = 'tc-test-import-sql' FOR UPDATE/);
 assert.match(sql, /PERFORM 1 FROM public\.trips t WHERE .* FOR UPDATE/);
-assert.match(sql, /Fixture target row count mismatch in trips/);
-assert.match(sql, /Fixture target differs from parent revision in trips/);
-assert.match(sql, /t\.checklist_id = .* AND t\.client_item_id = .*\.client_item_id/);
-assert.match(sql, /Fixture target differs from parent revision in checklist_items/);
-assert.match(sql, /UPDATE public\.trips AS t SET/);
+assert.doesNotMatch(sql, /parent revision|parentChecksum|parentVersion|checksum mismatch|row count mismatch/);
+assert.match(sql, /checklist_id = 'checklist-1' AND client_item_id = 'item-client-2'/);
+assert.match(sql, /INSERT INTO public\.trips/);
 assert.match(sql, /INSERT INTO public\.checklist_items/);
 assert.match(sql, /END \$tc_fixture\$;/);
 assert.doesNotMatch(sql, /owner_user_id|created_by|attachment_path|attachment_bucket|attachment_name/);
-assert.ok(sql.indexOf("parent revision in trips") < sql.indexOf("UPDATE public.trips"), "parent validation must precede updates");
-assert.doesNotMatch(sql, /DELETE FROM public\.checklist_items/);
-assert.match(deleteSql, /DELETE FROM public\.checklist_items WHERE id = 'item-1' AND checklist_id IN \(SELECT id FROM public\.checklists WHERE trip_id = 'tc-test-import-sql' AND scope = 'shared'\)/);
-assert.ok(deleteSql.indexOf("parent revision in checklist_items") < deleteSql.indexOf("DELETE FROM public.checklist_items"), "parent validation must precede deletes");
+assert.match(sql, /DELETE FROM public\.checklist_items i WHERE .* NOT IN/);
+assert.match(deleteSql, /DELETE FROM public\.checklist_items i WHERE .*checklist_id IN/);
+assert.doesNotMatch(deleteSql, /NOT IN \(NULL\)/);
+assert.match(deleteSql, /DELETE FROM public\.checklists c WHERE .*scope = 'shared' AND c\.id NOT IN/);
+assert.match(deleteSql, /DELETE FROM public\.expenses e WHERE .*trip_id = 'tc-test-import-sql' AND e\.client_item_id NOT IN/);
+assert.match(deleteSql, /DELETE FROM public\.exchange_purchases e WHERE e\.trip_id = 'tc-test-import-sql';/);
+assert.match(deleteSql, /DELETE FROM public\.other_info_items o WHERE o\.trip_id = 'tc-test-import-sql';/);
+assert.throws(() => buildFixtureImportSql([{
+  manifest: { fixtureId: tripId },
+  data: { ...deleteData, expenses: [{ ...data.expenses[0], trip_id: "tc-test-outside" }] },
+}]), /outside its synthetic trip scope/);
+assert.throws(() => buildFixtureImportSql([{
+  manifest: { fixtureId: tripId },
+  data: { ...deleteData, checklist_items: [{ ...data.checklist_items[0], checklist_id: "not-in-fixture" }] },
+}]), /unknown checklist reference/);
+assert.throws(() => buildFixtureImportSql([{
+  manifest: { fixtureId: tripId },
+  data: { ...deleteData, expenses: [{ ...data.expenses[0], client_item_id: null }] },
+}]), /missing or duplicate expense client_item_id/);
 
 const reordered = structuredClone(data);
 reordered.checklist_items.reverse();
@@ -55,7 +68,8 @@ const bootstrapSql = buildFixtureImportSql([{
   data,
   previousData: null,
 }]);
-assert.match(bootstrapSql, /Fixture initial import target already exists/);
+assert.match(bootstrapSql, /Fixture target exists but is not marked synthetic/);
 assert.match(bootstrapSql, /INSERT INTO public\.trips/);
+assert.doesNotMatch(bootstrapSql, /parentVersion|parentChecksum|initial import target already exists/);
 
-console.log("testdata import SQL generation checks passed (transaction, locks, parent checks, local-only fields, business keys, bootstrap)");
+console.log("testdata import SQL generation checks passed (transaction, content snapshot, synthetic marker, local-only fields, business keys)");

@@ -1,5 +1,4 @@
 import { createHash, randomUUID } from "node:crypto";
-import { classifyBaselineSync } from "./testdata-clock-sync.mjs";
 
 export const EXCEL_RPC_DATASET_SCHEMA_VERSION = 1;
 export const EXCEL_RPC_DATASET_ID = "excel-rpc-core";
@@ -98,87 +97,44 @@ export function checksumExcelRpcDataset(cases) {
   return createHash("sha256").update(JSON.stringify(canonical(normalized))).digest("hex");
 }
 
-export function planExcelRpcDatasetUpload({ manifest, cases, applied, sourceHost, baselineAt }) {
+export function planExcelRpcDatasetUpload({ manifest, cases, baselineCases, sourceHost, baselineAt }) {
   const validated = validateExcelRpcDataset({
-    manifest,
+    manifest: { ...manifest, counts: undefined },
     cases,
     directoryName: EXCEL_RPC_DATASET_ID,
     verifyManifestDigest: false,
   });
-  const checksum = checksumExcelRpcDataset(validated.cases);
-  const currentAt = validated.manifest.baselineAt;
-  if (!applied) {
-    if (checksum !== validated.manifest.checksum) {
-      throw new Error("Excel RPC dataset has no applied baseline; changed cases cannot be published.");
-    }
-    return {
-      action: "adopt-current",
-      applied: { version: validated.manifest.version, checksum: validated.manifest.checksum, baselineAt: currentAt },
-    };
-  }
-  if (applied.version !== validated.manifest.version || applied.checksum !== validated.manifest.checksum) {
-    throw new Error("Excel RPC dataset applied baseline does not match Git current.");
-  }
-  if (checksum === validated.manifest.checksum) {
-    return {
-      action: "unchanged",
-      applied: { version: applied.version, checksum: applied.checksum, baselineAt: currentAt },
-    };
-  }
-  if (!Number.isFinite(Date.parse(baselineAt)) || typeof sourceHost !== "string" || !sourceHost.trim()) {
-    throw new Error("Excel RPC dataset upload needs valid sourceHost and baselineAt.");
-  }
-  const direction = classifyBaselineSync(
-    { baselineAt, checksum },
-    { baselineAt: applied.baselineAt ?? currentAt, checksum: applied.checksum },
-  );
-  if (direction.action !== "upload") throw new Error(`Excel RPC dataset upload direction rejected: ${direction.action}`);
+  const baseline = validateExcelRpcDataset({
+    manifest,
+    cases: baselineCases,
+    directoryName: EXCEL_RPC_DATASET_ID,
+    verifyManifestDigest: false,
+  });
+  const currentCases = validated.cases;
+  const sameContent = JSON.stringify(canonical(currentCases)) === JSON.stringify(canonical(baseline.cases));
+  if (!sourceHost || typeof sourceHost !== "string" || !sourceHost.trim()) throw new Error("Excel RPC dataset needs sourceHost metadata.");
+  if (sameContent) return { action: "unchanged", manifest: validated.manifest, cases: currentCases };
+  const timestamp = new Date(baselineAt ?? new Date().toISOString());
+  if (!Number.isFinite(timestamp.getTime())) throw new Error("Excel RPC dataset baseline timestamp metadata is invalid.");
   const nextManifest = {
     ...validated.manifest,
-    version: validated.manifest.version + 1,
-    parentVersion: validated.manifest.version,
-    parentChecksum: validated.manifest.checksum,
+    version: Number.isSafeInteger(validated.manifest.version) && validated.manifest.version > 0 ? validated.manifest.version + 1 : 1,
     sourceHost,
-    baselineAt: new Date(baselineAt).toISOString(),
-    exportedAt: new Date(baselineAt).toISOString(),
-    counts: { cases: validated.cases.length },
-    checksum,
+    baselineAt: timestamp.toISOString(),
+    exportedAt: timestamp.toISOString(),
+    counts: { cases: currentCases.length },
   };
-  return {
-    action: "publish",
-    manifest: nextManifest,
-    cases: validated.cases,
-    applied: { version: nextManifest.version, checksum, baselineAt: nextManifest.baselineAt },
-  };
+  delete nextManifest.parentVersion;
+  delete nextManifest.parentChecksum;
+  delete nextManifest.checksum;
+  return { action: "publish", manifest: nextManifest, cases: currentCases };
 }
 
-export function classifyExcelRpcDatasetDownload({ incoming, applied, localCopyChecksum }) {
-  if (!incoming || !Number.isSafeInteger(incoming.version) || incoming.version < 1 ||
-      !/^[a-f0-9]{64}$/.test(incoming.checksum ?? "") ||
-      !Number.isFinite(Date.parse(incoming.baselineAt))) {
-    throw new Error("Incoming Excel RPC dataset revision is invalid.");
-  }
-  if (localCopyChecksum && applied && localCopyChecksum !== applied.checksum) {
-    throw new Error("Local Excel RPC case edits are not uploaded; refusing to receive another revision.");
-  }
-  if (!applied) return { action: "adopt-current" };
-  if (!Number.isSafeInteger(applied.version) || applied.version < 1 || !/^[a-f0-9]{64}$/.test(applied.checksum ?? "") ||
-      !Number.isFinite(Date.parse(applied.baselineAt))) {
-    throw new Error("Applied Excel RPC dataset baseline is invalid.");
-  }
-  const direction = classifyBaselineSync(
-    { baselineAt: applied.baselineAt, checksum: applied.checksum },
-    { baselineAt: incoming.baselineAt, checksum: incoming.checksum },
-  );
-  if (incoming.version < applied.version) throw new Error("Excel RPC dataset revision rollback.");
-  if (incoming.version === applied.version && incoming.checksum !== applied.checksum) throw new Error("Excel RPC dataset same-version checksum conflict.");
-  if (incoming.version > applied.version &&
-      (incoming.version !== applied.version + 1 || incoming.parentVersion !== applied.version || incoming.parentChecksum !== applied.checksum)) {
-    throw new Error("Excel RPC dataset revision gap or parent mismatch.");
-  }
-  if (direction.action === "conflict") throw new Error("Excel RPC dataset same-time checksum conflict.");
-  if (direction.action === "unchanged" && incoming.version !== applied.version) throw new Error("Excel RPC dataset same-time revision mismatch.");
-  return { action: direction.action };
+export function classifyExcelRpcDatasetDownload({ incoming, localCases, currentCases }) {
+  if (!incoming || incoming.datasetId !== EXCEL_RPC_DATASET_ID) throw new Error("Incoming Excel RPC dataset structure is invalid.");
+  const remote = normalizeExcelRpcDatasetCases(incoming.cases ?? currentCases ?? []);
+  const local = localCases === undefined ? null : normalizeExcelRpcDatasetCases(localCases);
+  return { action: local && JSON.stringify(canonical(local)) === JSON.stringify(canonical(remote)) ? "unchanged" : "download" };
 }
 
 export function validateExcelRpcDataset({ manifest, cases, directoryName = manifest?.datasetId, verifyManifestDigest = true }) {
@@ -186,21 +142,12 @@ export function validateExcelRpcDataset({ manifest, cases, directoryName = manif
       manifest.datasetId !== EXCEL_RPC_DATASET_ID || directoryName !== manifest.datasetId) {
     throw new Error("Unsupported or mismatched Excel RPC dataset manifest.");
   }
-  if (!Number.isSafeInteger(manifest.version) || manifest.version < 1) throw new Error("Invalid Excel RPC dataset revision.");
-  if (manifest.version === 1) {
-    if (manifest.parentVersion !== undefined || manifest.parentChecksum !== undefined) throw new Error("Initial Excel RPC dataset cannot declare a parent.");
-  } else if (manifest.parentVersion !== manifest.version - 1 || !/^[a-f0-9]{64}$/.test(manifest.parentChecksum ?? "")) {
-    throw new Error("Excel RPC dataset parent revision is invalid.");
-  }
-  if (!EXCEL_RPC_CASE_STATUSES.includes(manifest.status)) throw new Error("Invalid Excel RPC dataset lifecycle status.");
-  if (typeof manifest.sourceHost !== "string" || !manifest.sourceHost.trim()) throw new Error("Missing Excel RPC dataset sourceHost.");
-  const baselineAt = manifest.baselineAt ?? manifest.exportedAt;
-  if (!Number.isFinite(Date.parse(baselineAt))) throw new Error("Invalid Excel RPC dataset baselineAt.");
+  if (manifest.status !== undefined && !EXCEL_RPC_CASE_STATUSES.includes(manifest.status)) throw new Error("Invalid Excel RPC dataset lifecycle status.");
   const normalized = normalizeExcelRpcDatasetCases(cases);
-  if (verifyManifestDigest && (manifest.counts?.cases !== normalized.length || checksumExcelRpcDataset(normalized) !== manifest.checksum)) {
-    throw new Error("Excel RPC dataset count/checksum mismatch.");
+  if (manifest.counts?.cases !== undefined && manifest.counts.cases !== normalized.length) {
+    throw new Error("Excel RPC dataset case count does not match its file.");
   }
-  return { manifest: { ...manifest, baselineAt: new Date(baselineAt).toISOString() }, cases: normalized };
+  return { manifest, cases: normalized };
 }
 
 export function createLocalExcelRpcExecution({ caseId, requestId = randomUUID() }) {
