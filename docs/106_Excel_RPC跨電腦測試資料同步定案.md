@@ -96,3 +96,22 @@
 5. 原有 `tc-test-sync-example` V5 歷史 fixture 檔案內容不由 Excel RPC 案例同步程序改寫；其同步判斷仍依 docs/83 的內容比較規則。
 6. 完成相關測試、TypeScript／build（受影響時）、文件連結與 diff 檢查。
 7. 未執行未授權的資料庫 upload、清理、commit、push 或正式 DB 操作。雙機真實端到端驗收未執行前，不得宣稱已完成實機跨機驗收。
+
+## 9. 2026-11-05 B → C 下載驗收紀錄
+
+- **結果：通過。** 使用者確認在 OpenChatX Home 的 `D:\Project\Travel-Companion` 成功執行 `/下載資料庫`。
+- 測試資料集：更新 1 組；Excel RPC 測試案例已更新，檔案大小 3,484 bytes。
+- 本機資料庫：已完成交易式匯入；匯入後查詢筆數如下：
+
+  | 資料表 | 本機筆數 |
+  | --- | ---: |
+  | `trips` | 1 |
+  | `checklists` | 1 |
+  | `checklist_items` | 5 |
+  | `expenses` | 0 |
+  | `exchange_purchases` | 0 |
+  | `other_info_items` | 0 |
+
+- 更新的測試行程 ID：`trip-a2131af0-2e96-43ee-8ea4-e71a27df63ab`。
+- Git 工作樹：乾淨；本次未執行 Git commit／push，也未執行資料庫上傳。
+- **差異說明：** 本次下載顯示更新 1 組，代表執行前本機案例內容與 Git fixture 不完全一致；已完成匯入。此紀錄僅確認 B → C 下載及本機匯入成功，不代表其他跨機驗收項目已通過。
