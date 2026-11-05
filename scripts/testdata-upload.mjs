@@ -27,6 +27,31 @@ function assertLocalOnly() {
   if (!url || !["localhost", "127.0.0.1", "::1"].includes(new URL(url).hostname)) throw new Error("安全停止：只允許公司／家用等節點的本機 loopback Supabase。");
 }
 function quote(value) { return "'" + String(value).replaceAll("'", "''") + "'"; }
+
+async function assertSafeFixtureUpdate(tripId, directory, incomingManifest) {
+  const relativeDirectory = path.relative(root, directory);
+  const status = runGit(["status", "--porcelain=v1", "--", relativeDirectory]);
+  const records = status ? status.split(/\r?\n/).filter(Boolean) : [];
+  if (records.length) {
+    throw new Error(`fixture ${tripId} 在工作樹有未提交變更（${records.join(", ")}）；無法確認是他台交接或人工編輯，為避免覆蓋而停止。`);
+  }
+  const names = (await readdir(directory)).sort();
+  if (names.length !== 2 || names[0] !== "data.json" || names[1] !== "manifest.json") {
+    throw new Error(`fixture ${tripId} 目錄含額外檔案或暫存檔，為避免遺失而停止。`);
+  }
+
+  let committedManifest;
+  try {
+    committedManifest = JSON.parse(runGit(["show", `HEAD:${relativeDirectory.split(path.sep).join("/")}/manifest.json`]));
+  } catch {
+    throw new Error(`fixture ${tripId} 無法從目前 Git HEAD 讀取已提交 manifest；拒絕覆寫。`);
+  }
+  if (JSON.stringify(committedManifest) !== JSON.stringify(incomingManifest)) {
+    throw new Error(`fixture ${tripId} 的工作檔與 Git HEAD manifest 不一致；拒絕採用來源不明內容。`);
+  }
+  return true;
+}
+
 async function query(sql) {
   const file = path.join(os.tmpdir(), `tc-test-upload-${process.pid}-${Date.now()}.sql`);
   try {
