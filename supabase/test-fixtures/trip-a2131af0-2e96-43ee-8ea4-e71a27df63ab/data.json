@@ -7,8 +7,7 @@
           "subtitle": "旅程備忘錄"
         },
         "days": [
-          1,
-          2
+          1
         ],
         "daysData": {
           "1": [
@@ -29,28 +28,6 @@
               "location": "",
               "time": "09:00",
               "title": "test-2",
-              "type": "景點",
-              "typeColor": "bg-purple-50 text-purple-700 border-purple-200"
-            }
-          ],
-          "2": [
-            {
-              "departureTime": "08:00",
-              "desc": "",
-              "id": "8694c08d-2f7f-4a8a-b13d-cb94fec374b9",
-              "location": "",
-              "time": "08:00",
-              "title": "test3",
-              "type": "景點",
-              "typeColor": "bg-purple-50 text-purple-700 border-purple-200"
-            },
-            {
-              "departureTime": "09:00",
-              "desc": "",
-              "id": "559f7b8d-f2b9-4c1b-853a-12a794c1f2a9",
-              "location": "",
-              "time": "09:00",
-              "title": "test-4",
               "type": "景點",
               "typeColor": "bg-purple-50 text-purple-700 border-purple-200"
             }
@@ -172,7 +149,7 @@
         "showLunarDate": true,
         "testPurpose": "three-way-sync"
       },
-      "created_at": "2026-11-05T07:18:01.66491+00:00",
+      "created_at": "2026-11-05T15:17:27.467642+00:00",
       "currency_config": {
         "code": "JPY",
         "symbol": "¥"
@@ -213,17 +190,17 @@
         }
       ],
       "title": "三方同步測試",
-      "updated_at": "2026-11-05T08:49:49.919215+00:00"
+      "updated_at": "2026-11-05T15:36:57.078894+00:00"
     }
   ],
   "checklists": [
     {
-      "created_at": "2026-11-05T07:20:29.565948+00:00",
+      "created_at": "2026-11-05T15:17:27.467642+00:00",
       "id": "7f2818ab-c4ff-4f03-a7c3-fb94c7a78455",
       "scope": "shared",
       "title": "共同檢查清單",
       "trip_id": "trip-a2131af0-2e96-43ee-8ea4-e71a27df63ab",
-      "updated_at": "2026-11-05T07:20:29.565948+00:00"
+      "updated_at": "2026-11-05T15:17:27.467642+00:00"
     }
   ],
   "checklist_items": [
@@ -231,61 +208,61 @@
       "category": "必備證件",
       "checklist_id": "7f2818ab-c4ff-4f03-a7c3-fb94c7a78455",
       "client_item_id": "shared_copy_mw37upev_0",
-      "created_at": "2026-11-05T07:20:34.243572+00:00",
+      "created_at": "2026-11-05T15:17:27.467642+00:00",
       "deleted_at": null,
       "id": "3a274399-a213-412c-847d-7e90fdaef296",
       "is_checked": false,
       "label": "護照正本（確認效期大於 6 個月）",
       "sort_order": 0,
-      "updated_at": "2026-11-05T07:20:34.243572+00:00"
+      "updated_at": "2026-11-05T15:17:27.467642+00:00"
     },
     {
       "category": "隨身行李",
       "checklist_id": "7f2818ab-c4ff-4f03-a7c3-fb94c7a78455",
       "client_item_id": "shared_copy_mw37upev_4",
-      "created_at": "2026-11-05T07:20:34.243572+00:00",
+      "created_at": "2026-11-05T15:17:27.467642+00:00",
       "deleted_at": null,
       "id": "507040e1-2533-4c4a-9705-6169b1c29e36",
       "is_checked": false,
       "label": "薄外套或輕便雨具（秋季阿蘇山區早晚溫差較大）",
       "sort_order": 4,
-      "updated_at": "2026-11-05T07:20:34.243572+00:00"
+      "updated_at": "2026-11-05T15:17:27.467642+00:00"
     },
     {
       "category": "跟團專屬",
       "checklist_id": "7f2818ab-c4ff-4f03-a7c3-fb94c7a78455",
       "client_item_id": "shared_copy_mw37upev_2",
-      "created_at": "2026-11-05T07:20:34.243572+00:00",
+      "created_at": "2026-11-05T15:17:27.467642+00:00",
       "deleted_at": null,
       "id": "8e25adbf-0ac4-4532-a046-fd2d1273f83e",
       "is_checked": false,
       "label": "給導遊領隊的每日小費（依旅行社規定準備）",
       "sort_order": 2,
-      "updated_at": "2026-11-05T07:20:34.243572+00:00"
+      "updated_at": "2026-11-05T15:17:27.467642+00:00"
     },
     {
       "category": "隨身行李",
       "checklist_id": "7f2818ab-c4ff-4f03-a7c3-fb94c7a78455",
       "client_item_id": "shared_copy_mw37upev_3",
-      "created_at": "2026-11-05T07:20:34.243572+00:00",
+      "created_at": "2026-11-05T15:17:27.467642+00:00",
       "deleted_at": null,
       "id": "8f82fe84-a954-43ec-9319-3727de970c35",
       "is_checked": false,
       "label": "舒適好走的球鞋（多個神社與峽谷步道需步行）",
       "sort_order": 3,
-      "updated_at": "2026-11-05T07:20:34.243572+00:00"
+      "updated_at": "2026-11-05T15:17:27.467642+00:00"
     },
     {
       "category": "必備證件",
       "checklist_id": "7f2818ab-c4ff-4f03-a7c3-fb94c7a78455",
       "client_item_id": "shared_copy_mw37upev_1",
-      "created_at": "2026-11-05T07:20:34.243572+00:00",
+      "created_at": "2026-11-05T15:17:27.467642+00:00",
       "deleted_at": null,
       "id": "faeebcb0-d97d-4571-8f54-29b847d1be11",
       "is_checked": false,
       "label": "團體換匯日幣（準備個人自費/購物部分即可）",
       "sort_order": 1,
-      "updated_at": "2026-11-05T07:20:34.243572+00:00"
+      "updated_at": "2026-11-05T15:17:27.467642+00:00"
     }
   ],
   "expenses": [],
