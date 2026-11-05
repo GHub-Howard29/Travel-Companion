@@ -1,6 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { mkdir, readFile, writeFile, rename, rm, readdir } from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import os from "node:os";
 import process from "node:process";
 import { EXCEL_RPC_DATASET_ID, normalizeExcelRpcDatasetCases, validateExcelRpcDataset } from "./lib/excel-rpc-test-dataset.mjs";
@@ -189,7 +190,7 @@ export async function runDownload() {
     results,
   }, null, 2));
 }
-if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(new URL(import.meta.url).pathname)) {
+if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url))) {
   runDownload().catch((error) => {
     console.error(`[testdata-download] 下載失敗：${error.message}`);
     if (error?.stack) console.error(error.stack);

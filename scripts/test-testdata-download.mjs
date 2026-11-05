@@ -49,4 +49,8 @@ assert.match(downloadSource, /下載失敗：\$\{error\.message\}/,
   "failed download must print a clear error");
 assert.match(downloadSource, /error\?\.stack/,
   "failed download must print stack details for diagnosis");
-console.log("testdata download checks passed (content comparison and visible success/failure reporting)");
+assert.match(downloadSource, /fileURLToPath\(import\.meta\.url\)/,
+  "direct CLI detection must convert the module URL to a platform-native path");
+assert.doesNotMatch(downloadSource, /new URL\(import\.meta\.url\)\.pathname/,
+  "direct CLI detection must not compare against URL.pathname on Windows");
+console.log("testdata download checks passed (content comparison, visible reporting, and Windows CLI entrypoint)");
