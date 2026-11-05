@@ -274,7 +274,18 @@ async function main() {
       await writeFile(tempData, dataText, { flag: "wx" });
       await writeFile(tempManifest, manifestText, { flag: "wx" });
       tempFiles.push({ tempData, tempManifest });
-      replacements.push({ tempData, dataPath, tempManifest, manifestPath, oldData: await readFile(dataPath, "utf8"), oldManifest: await readFile(manifestPath, "utf8") });
+      const readPrevious = async (filePath) => readFile(filePath, "utf8").catch((error) => {
+        if (error.code === "ENOENT") return null;
+        throw error;
+      });
+      replacements.push({
+        tempData,
+        dataPath,
+        tempManifest,
+        manifestPath,
+        oldData: await readPrevious(dataPath),
+        oldManifest: await readPrevious(manifestPath),
+      });
     }
     for (const file of replacements) {
       await rename(file.tempData, file.dataPath);
