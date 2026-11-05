@@ -5,11 +5,13 @@ import os from "node:os";
 import process from "node:process";
 import { classifyBaselineSync, createBaselineRecord } from "./lib/testdata-clock-sync.mjs";
 import { normalizeFixtureRows, checksumFixture } from "./lib/testdata-download-apply.mjs";
+import { EXCEL_RPC_DATASET_ID, checksumExcelRpcDataset, planExcelRpcDatasetUpload, validateExcelRpcDataset } from "./lib/excel-rpc-test-dataset.mjs";
 
 process.env.SUPABASE_TELEMETRY_DISABLED = "1";
 const root = process.cwd();
 const fixturesRoot = path.resolve(root, "supabase", "test-fixtures");
 const appliedPath = path.resolve(root, "supabase", ".temp", "testdata-applied-state.json");
+const localExcelCasesPath = path.resolve(root, "supabase", ".temp", "excel-rpc-test-cases.json");
 const tables = ["trips", "checklists", "checklist_items", "expenses", "exchange_purchases", "other_info_items"];
 const tripPattern = /^tc-test-[a-z0-9][a-z0-9-]{2,60}$/;
 
@@ -100,17 +102,27 @@ async function loadApplied() {
     if (state.schemaVersion !== 1 || !state.fixtures || typeof state.fixtures !== "object") {
       throw new Error("本機 applied state 格式不符；拒絕上傳。");
     }
-    return state.fixtures;
+    return state;
   } catch (error) {
-    if (error.code === "ENOENT") return {};
+    if (error.code === "ENOENT") return { schemaVersion: 1, fixtures: {} };
     throw error;
   }
 }
-async function findAppliedBaseline(fixtureId, appliedRecord) {
+async function saveApplied(state) {
+  await mkdir(path.dirname(appliedPath), { recursive: true });
+  const temp = appliedPath + `.tmp-${process.pid}-${Date.now()}`;
+  try {
+    await writeFile(temp, JSON.stringify(state, null, 2) + "\n", { flag: "wx" });
+    await rename(temp, appliedPath);
+  } finally {
+    await rm(temp, { force: true });
+  }
+}
+async function findAppliedBaseline(fixtureId, appliedRecord, manifestPathOverride = null) {
   if (appliedRecord.baselineAt && Number.isFinite(Date.parse(appliedRecord.baselineAt))) {
     return new Date(appliedRecord.baselineAt).toISOString();
   }
-  const manifestPath = `supabase/test-fixtures/${fixtureId}/manifest.json`;
+  const manifestPath = manifestPathOverride ?? `supabase/test-fixtures/${fixtureId}/manifest.json`;
   const commits = runGit(["log", "--format=%H", "--", manifestPath]).split(/\r?\n/).filter(Boolean);
   for (const commit of commits) {
     try {
@@ -160,9 +172,55 @@ async function main() {
   if (counts[0] !== 0 || counts[1] !== 0) throw new Error("本機與 origin/develop 不一致；拒絕自動合併或覆寫。");
 
   assertLocalOnly();
-  const applied = await loadApplied();
+  const appliedState = await loadApplied();
+  const applied = appliedState.fixtures;
   const dirs = (await readdir(fixturesRoot, { withFileTypes: true })).filter((entry) => entry.isDirectory() && tripPattern.test(entry.name));
   const published = [];
+  const datasetDirectory = path.join(fixturesRoot, EXCEL_RPC_DATASET_ID);
+  const datasetManifestPath = path.join(datasetDirectory, "manifest.json");
+  const datasetCasesPath = path.join(datasetDirectory, "cases.json");
+  const datasetLocalCaseText = await readFile(localExcelCasesPath, "utf8").catch((error) => {
+    if (error.code === "ENOENT") return readFile(datasetCasesPath, "utf8");
+    throw error;
+  });
+  const datasetManifest = JSON.parse(await readFile(datasetManifestPath, "utf8"));
+  const datasetCases = JSON.parse(datasetLocalCaseText).cases;
+  const validatedDataset = validateExcelRpcDataset({
+    manifest: datasetManifest,
+    cases: datasetCases,
+    directoryName: EXCEL_RPC_DATASET_ID,
+    verifyManifestDigest: false,
+  });
+  const datasetAppliedKey = `dataset:${EXCEL_RPC_DATASET_ID}`;
+  const datasetApplied = applied[datasetAppliedKey];
+  const datasetPlan = planExcelRpcDatasetUpload({
+    manifest: datasetManifest,
+    cases: validatedDataset.cases,
+    applied: datasetApplied,
+    sourceHost: hostname,
+    baselineAt: new Date().toISOString(),
+  });
+  applied[datasetAppliedKey] = datasetPlan.applied;
+  if (datasetPlan.action === "publish") {
+    const tempCases = datasetCasesPath + `.tmp-${process.pid}-${Date.now()}`;
+    const tempManifest = datasetManifestPath + `.tmp-${process.pid}-${Date.now()}`;
+    try {
+      await writeFile(tempCases, JSON.stringify({ cases: datasetPlan.cases }, null, 2) + "\n", { flag: "wx" });
+      await writeFile(tempManifest, JSON.stringify(datasetPlan.manifest, null, 2) + "\n", { flag: "wx" });
+      await rename(tempCases, datasetCasesPath);
+      await rename(tempManifest, datasetManifestPath);
+    } finally {
+      await rm(tempCases, { force: true });
+      await rm(tempManifest, { force: true });
+    }
+    published.push({
+      fixtureId: EXCEL_RPC_DATASET_ID,
+      kind: "excel-rpc-dataset",
+      version: datasetPlan.manifest.version,
+      baselineAt: datasetPlan.manifest.baselineAt,
+      checksum: datasetPlan.manifest.checksum,
+    });
+  }
   for (const entry of dirs) {
     const directory = path.join(fixturesRoot, entry.name);
     const { raw: previous } = await readBaseline(directory);
@@ -200,20 +258,35 @@ async function main() {
       note: "Synthetic test data only. Timestamp selects peer direction; checksum and parent database checks protect imports.",
     };
     await writeFixturePair(directory, data, manifest);
+    applied[entry.name] = {
+      version: manifest.version,
+      checksum: manifest.checksum,
+      baselineAt: manifest.baselineAt,
+    };
     published.push({ fixtureId: entry.name, version: manifest.version, baselineAt: manifest.baselineAt, checksum: manifest.checksum });
   }
   if (!published.length) {
+    await saveApplied(appliedState);
     console.log(JSON.stringify({ uploaded: false, reason: "unchanged", message: "沒有測試資料內容變更；未更新時間戳、未建立 commit。" }, null, 2));
     return;
   }
   for (const item of published) {
     const directory = path.join(fixturesRoot, item.fixtureId);
-    const { raw, data } = await readBaseline(directory);
-    if (raw.checksum !== item.checksum || checksum(data) !== item.checksum) throw new Error(`Fixture ${item.fixtureId} 上傳前 checksum 重驗失敗。`);
+    if (item.kind === "excel-rpc-dataset") {
+      const manifest = JSON.parse(await readFile(path.join(directory, "manifest.json"), "utf8"));
+      const cases = JSON.parse(await readFile(path.join(directory, "cases.json"), "utf8")).cases;
+      const verified = validateExcelRpcDataset({ manifest, cases, directoryName: EXCEL_RPC_DATASET_ID });
+      if (verified.manifest.checksum !== item.checksum) throw new Error("Excel RPC dataset 上傳前 checksum 重驗失敗。");
+    } else {
+      const { raw, data } = await readBaseline(directory);
+      if (raw.checksum !== item.checksum || checksum(data) !== item.checksum) throw new Error(`Fixture ${item.fixtureId} 上傳前 checksum 重驗失敗。`);
+    }
   }
   const paths = published.flatMap((item) => {
     const base = `supabase/test-fixtures/${item.fixtureId}`;
-    return [`${base}/manifest.json`, `${base}/data.json`];
+    return item.kind === "excel-rpc-dataset"
+      ? [`${base}/manifest.json`, `${base}/cases.json`]
+      : [`${base}/manifest.json`, `${base}/data.json`];
   });
   for (const file of paths) runGit(["add", "--", file]);
   const staged = runGit(["diff", "--cached", "--name-only"]).split(/\r?\n/).filter(Boolean);
@@ -225,6 +298,7 @@ async function main() {
   const remoteCounts = runGit(["rev-list", "--left-right", "--count", "HEAD...origin/develop"]).split(/\s+/).map(Number);
   if (remoteCounts[0] !== 1 || remoteCounts[1] !== 0) throw new Error("commit 後遠端已變更或分支差異異常；停止 push。");
   runGit(["push", "origin", "develop"]);
+  await saveApplied(appliedState);
   console.log(JSON.stringify({ uploaded: true, committed: true, pushed: true, fixtures: published, next: "其他節點先 git pull --ff-only origin develop，再獨立執行 testdata-download.mjs。" }, null, 2));
 }
 main().catch((error) => { console.error(`[testdata-upload] 停止：${error.message}`); process.exitCode = 1; });

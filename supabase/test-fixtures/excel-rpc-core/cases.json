@@ -1,0 +1,125 @@
+{
+  "cases": [
+    {
+      "caseId": "rollback-named-existing-row",
+      "title": "Excel RPC test rollback",
+      "departureDate": "2030-01-02",
+      "currencyCode": "JPY",
+      "currencySymbol": "JPY",
+      "cards": [
+        {
+          "day": 1,
+          "time": "09:00",
+          "departureTime": "10:00",
+          "title": "Test card",
+          "type": "其他",
+          "desc": "rollback fixture"
+        }
+      ],
+      "expected": {
+        "dayCount": 1,
+        "cardCount": 1,
+        "sourceNote": "Recreates the persisted row named as rollback fixture. Transaction rollback itself remains a separate fault-injection test."
+      }
+    },
+    {
+      "caseId": "same-title-different-request",
+      "title": "Excel RPC same title different request",
+      "departureDate": "2030-01-05",
+      "currencyCode": "TWD",
+      "currencySymbol": "NT$",
+      "cards": [
+        {
+          "day": 1,
+          "time": "11:00",
+          "departureTime": "12:00",
+          "title": "Duplicate title card",
+          "type": "其他",
+          "desc": "second request"
+        }
+      ],
+      "expected": {
+        "dayCount": 1,
+        "cardCount": 1,
+        "newRequestCreatesDifferentTrip": true
+      }
+    },
+    {
+      "caseId": "duplicate-title-date-request-a",
+      "title": "Allowed duplicate title date",
+      "departureDate": "2030-01-06",
+      "currencyCode": "TWD",
+      "currencySymbol": "NT$",
+      "cards": [
+        {
+          "day": 1,
+          "time": "13:00",
+          "departureTime": "14:00",
+          "title": "Same title card",
+          "type": "其他",
+          "desc": "different requests same trip title date"
+        }
+      ],
+      "expected": {
+        "dayCount": 1,
+        "cardCount": 1,
+        "pairCaseId": "duplicate-title-date-request-b",
+        "differentRequestCreatesDifferentTrip": true
+      }
+    },
+    {
+      "caseId": "duplicate-title-date-request-b",
+      "title": "Allowed duplicate title date",
+      "departureDate": "2030-01-06",
+      "currencyCode": "TWD",
+      "currencySymbol": "NT$",
+      "cards": [
+        {
+          "day": 1,
+          "time": "13:00",
+          "departureTime": "14:00",
+          "title": "Same title card",
+          "type": "其他",
+          "desc": "different requests same trip title date"
+        }
+      ],
+      "expected": {
+        "dayCount": 1,
+        "cardCount": 1,
+        "pairCaseId": "duplicate-title-date-request-a",
+        "differentRequestCreatesDifferentTrip": true
+      }
+    },
+    {
+      "caseId": "multi-day-time-preservation",
+      "title": "Excel RPC 合成多日日期時間測試",
+      "departureDate": "2026-11-20",
+      "currencyCode": "TWD",
+      "currencySymbol": "NT$",
+      "cards": [
+        {
+          "day": 1,
+          "time": "08:30",
+          "departureTime": "09:00",
+          "title": "第一日交通",
+          "type": "交通",
+          "desc": "保留第一日時間"
+        },
+        {
+          "day": 3,
+          "time": "14:05",
+          "departureTime": "17:45",
+          "title": "第三日景點",
+          "type": "景點",
+          "desc": "第二日應保留空白日，時間不可位移"
+        }
+      ],
+      "expected": {
+        "dayCount": 3,
+        "cardCount": 2,
+        "emptyDays": [2],
+        "sameRequestReplay": true
+      }
+    }
+  ]
+}

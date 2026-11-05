@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "datasetId": "excel-rpc-core",
+  "version": 1,
+  "status": "active",
+  "sourceHost": "TPEPC-TM7503-01",
+  "baselineAt": "2026-11-05T00:00:00.000Z",
+  "tables": ["cases"],
+  "counts": {
+    "cases": 5
+  },
+  "checksum": "1f134233da5848e882a96228aef0a3d2108534b8f06e052d854abe4244aa688b",
+  "note": "Portable synthetic Excel RPC test inputs only. Local Auth, request registry, participant email map and generated Trip IDs are recreated per machine."
+}

@@ -3,7 +3,8 @@ import { mkdir, readFile, writeFile, rename, rm, readdir } from "node:fs/promise
 import path from "node:path";
 import os from "node:os";
 import process from "node:process";
-import { classifyBaselineSync, checksumFixture } from "./lib/testdata-clock-sync.mjs";
+import { checksumFixture } from "./lib/testdata-clock-sync.mjs";
+import { EXCEL_RPC_DATASET_ID, checksumExcelRpcDataset, classifyExcelRpcDatasetDownload, normalizeExcelRpcDatasetCases, validateExcelRpcDataset } from "./lib/excel-rpc-test-dataset.mjs";
 import { applyFixtureImport } from "./lib/testdata-download-apply.mjs";
 import { classifyInitialDownload } from "./lib/testdata-download-policy.mjs";
 
@@ -198,14 +199,15 @@ async function downloadOne(entry, state) {
   };
   return { fixtureId: entry.name, result: "downloaded", baselineAt: manifest.baselineAt };
 }
-async function findAppliedBaseline(fixtureId, applied) {
+async function findAppliedBaseline(fixtureId, applied, manifestPathOverride = null) {
   if (applied.baselineAt && Number.isFinite(Date.parse(applied.baselineAt)) && /^[a-f0-9]{64}$/.test(applied.checksum)) {
     return { ...applied, baselineAt: new Date(applied.baselineAt).toISOString() };
   }
-  const commits = runGit(["log", "--format=%H", "--", `supabase/test-fixtures/${fixtureId}/manifest.json`]).split(/\r?\n/).filter(Boolean);
+  const manifestPath = manifestPathOverride ?? `supabase/test-fixtures/${fixtureId}/manifest.json`;
+  const commits = runGit(["log", "--format=%H", "--", manifestPath]).split(/\r?\n/).filter(Boolean);
   for (const commit of commits) {
     try {
-      const manifest = JSON.parse(runGit(["show", `${commit}:supabase/test-fixtures/${fixtureId}/manifest.json`]));
+      const manifest = JSON.parse(runGit(["show", `${commit}:${manifestPath}`]));
       if (manifest.version !== applied.version || manifest.checksum !== applied.checksum) continue;
       const baselineAt = manifest.baselineAt ?? manifest.exportedAt;
       if (!Number.isFinite(Date.parse(baselineAt))) break;
@@ -226,6 +228,63 @@ async function findParentFixtureData(manifest) {
   }
   throw new Error(`Fixture ${manifest.fixtureId} 找不到 checksum 相符的 parent 歷史版本。`);
 }
+async function downloadExcelRpcDataset(state) {
+  const directory = path.join(fixturesRoot, EXCEL_RPC_DATASET_ID);
+  const manifestPath = path.join(directory, "manifest.json");
+  const casesPath = path.join(directory, "cases.json");
+  const localCasesPath = path.resolve(root, "supabase", ".temp", "excel-rpc-test-cases.json");
+  const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+  const cases = JSON.parse(await readFile(casesPath, "utf8")).cases;
+  const dataset = validateExcelRpcDataset({ manifest, cases, directoryName: EXCEL_RPC_DATASET_ID });
+  const key = `dataset:${EXCEL_RPC_DATASET_ID}`;
+  const applied = state.fixtures[key];
+  const localBaseline = applied ? await findAppliedBaseline(key, applied, `supabase/test-fixtures/${EXCEL_RPC_DATASET_ID}/manifest.json`) : null;
+  if (applied && (applied.version !== localBaseline.version || applied.checksum !== localBaseline.checksum)) {
+    throw new Error("Excel RPC dataset applied state 不一致；停止下載。");
+  }
+  let localCaseCopyExists = false;
+  try {
+    const localCases = JSON.parse(await readFile(localCasesPath, "utf8")).cases;
+    localCaseCopyExists = true;
+    const localChecksum = checksumExcelRpcDataset(normalizeExcelRpcDatasetCases(localCases));
+    const expectedLocalChecksum = localBaseline?.checksum ?? dataset.manifest.checksum;
+    if (localChecksum !== expectedLocalChecksum) {
+      throw new Error("本機仍有尚未上傳的 Excel RPC 案例修改；下載拒絕採認另一端版本，避免覆蓋／混合兩端變更。");
+    }
+  } catch (error) {
+    if (error.code !== "ENOENT") throw error;
+  }
+  const direction = classifyExcelRpcDatasetDownload({
+    incoming: dataset.manifest,
+    applied: localBaseline,
+    localCopyChecksum: localCaseCopyExists ? checksumExcelRpcDataset(normalizeExcelRpcDatasetCases(JSON.parse(await readFile(localCasesPath, "utf8")).cases)) : undefined,
+  });
+  if (!localBaseline) {
+    await mkdir(path.dirname(localCasesPath), { recursive: true });
+    const temp = localCasesPath + `.tmp-${process.pid}-${Date.now()}`;
+    try {
+      await writeFile(temp, JSON.stringify({ cases: dataset.cases }, null, 2) + "\n", { flag: "wx" });
+      await rename(temp, localCasesPath);
+    } finally {
+      await rm(temp, { force: true });
+    }
+    state.fixtures[key] = { version: dataset.manifest.version, checksum: dataset.manifest.checksum, baselineAt: dataset.manifest.baselineAt };
+    return { datasetId: EXCEL_RPC_DATASET_ID, result: "baseline-adopted", cases: dataset.cases.length, localCopyCreated: true };
+  }
+  if (direction.action === "upload") return { datasetId: EXCEL_RPC_DATASET_ID, result: "local-is-newer", skipped: true };
+  if (direction.action === "download") {
+    await mkdir(path.dirname(localCasesPath), { recursive: true });
+    const temp = localCasesPath + `.tmp-${process.pid}-${Date.now()}`;
+    try {
+      await writeFile(temp, JSON.stringify({ cases: dataset.cases }, null, 2) + "\n", { flag: "wx" });
+      await rename(temp, localCasesPath);
+    } finally {
+      await rm(temp, { force: true });
+    }
+  }
+  state.fixtures[key] = { version: dataset.manifest.version, checksum: dataset.manifest.checksum, baselineAt: dataset.manifest.baselineAt };
+  return { datasetId: EXCEL_RPC_DATASET_ID, result: direction.action, cases: dataset.cases.length, version: dataset.manifest.version };
+}
 async function main() {
   if (process.platform !== "win32") throw new Error("此下載入口目前只支援專案 Windows 節點。");
   if (runGit(["branch", "--show-current"]) !== "develop") throw new Error("下載只允許在 develop 分支。");
@@ -237,11 +296,11 @@ async function main() {
 
   const state = await loadState();
   const entries = await readdir(fixturesRoot, { withFileTypes: true });
-  const results = [];
+  const results = [await downloadExcelRpcDataset(state)];
   for (const entry of entries.filter((item)=>item.isDirectory() && tripPattern.test(item.name))) {
     results.push(await downloadOne(entry, state));
   }
-  if (results.some((item)=>item.result === "downloaded" || item.result === "unchanged")) await saveState(state);
-  console.log(JSON.stringify({ downloaded: results.some((item)=>item.result==="downloaded"), database: "local loopback only", results }, null, 2));
+  if (results.some((item)=>["downloaded", "unchanged", "baseline-adopted"].includes(item.result))) await saveState(state);
+  console.log(JSON.stringify({ downloaded: results.some((item)=>item.result==="downloaded" || item.result==="baseline-adopted"), database: "local loopback only", results }, null, 2));
 }
 main().catch((error)=>{ console.error(`[testdata-download] 停止：${error.message}`); process.exitCode=1; });
