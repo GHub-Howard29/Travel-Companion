@@ -93,6 +93,7 @@
     "test:testdata-clock-sync": "node scripts/test-testdata-clock-sync.mjs",
     "test:testdata-import-sql": "node scripts/test-testdata-import-sql.mjs",
     "test:testdata-download-policy": "node scripts/test-testdata-download-policy.mjs",
+    "test:testdata-download": "node scripts/test-testdata-download.mjs",
     "test:excel-rpc-dataset": "node scripts/test-excel-rpc-dataset.mjs",
     "excel-rpc:dataset:validate": "node scripts/excel-rpc-test-dataset.mjs validate",
     "excel-rpc:dataset:prepare": "node scripts/excel-rpc-test-dataset.mjs prepare",

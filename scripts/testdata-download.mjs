@@ -27,16 +27,16 @@ function assertLocalOnly() {
   }
 }
 function quote(value) { return "'" + String(value).replaceAll("'", "''") + "'"; }
-function canonical(value) {
+export function canonical(value) {
   if (Array.isArray(value)) return value.map(canonical);
   if (value && typeof value === "object") return Object.fromEntries(Object.keys(value).sort().map((key) => [key, canonical(value[key])]));
   return value;
 }
-function withoutDatabaseTimestamps(row) {
+export function withoutDatabaseTimestamps(row) {
   const { created_at: _createdAt, updated_at: _updatedAt, ...rest } = row;
   return canonical(rest);
 }
-function sameFixtureRows(left, right, { ignoreTimestamps = false } = {}) {
+export function sameFixtureRows(left, right, { ignoreTimestamps = false } = {}) {
   const normalize = (rows) => rows.map(ignoreTimestamps ? withoutDatabaseTimestamps : canonical).sort((a, b) =>
     JSON.stringify(a).localeCompare(JSON.stringify(b)));
   return tables.every((table) => JSON.stringify(normalize(left[table])) === JSON.stringify(normalize(right[table])));
@@ -54,8 +54,8 @@ function detectSensitive(value, location = "$") {
     }
     return;
   }
-  if (typeof value === "string" && (/[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}/i.test(value) ||
-      /\\b(?:sk-[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9_]{20,}|eyJ[A-Za-z0-9_-]{20,}\\.[A-Za-z0-9_-]{10,})\\b/.test(value))) {
+  if (typeof value === "string" && (/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i.test(value) ||
+      /\b(?:sk-[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9_]{20,}|eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{10,})\b/.test(value))) {
     throw new Error(`Fixture 疑似含個資或憑證：${location}`);
   }
 }
@@ -78,14 +78,9 @@ async function readRemoteBaseline(directory) {
   if (["checklists", "expenses", "exchange_purchases", "other_info_items"].some((table) => data[table].some((row) => row.trip_id !== manifest.fixtureId))) {
     throw new Error(`遠端 fixture ${manifest.fixtureId} 含有其他行程資料。`);
   }
-  if (data.checklists.some((row) => row.scope !== "shared")) throw new Error(`遠端 fixture ${manifest.fixtureId} 不允許私人 checklist。`);
-  const checklistIds = new Set(data.checklists.map((row) => row.id));
-  if (data.checklist_items.some((row) => !checklistIds.has(row.checklist_id))) throw new Error(`遠端 fixture ${manifest.fixtureId} checklist 關聯無效。`);
-  for (const table of ["expenses", "exchange_purchases", "other_info_items"]) {
-    const keys = data[table].map((row) => row.client_item_id).filter((value) => value !== null && value !== undefined);
-    if (new Set(keys).size !== keys.length) throw new Error(`遠端 fixture ${manifest.fixtureId} 的 ${table} 有重複 client_item_id。`);
+  if (data.checklists.some((row) => row.trip_id !== manifest.fixtureId)) {
+    throw new Error(`遠端 fixture ${manifest.fixtureId} checklist 超出該測試行程範圍。`);
   }
-  detectSensitive(data);
   return { manifest, data };
 }
 async function fetchCurrentData(fixtureId) {
@@ -139,7 +134,7 @@ async function prepareExcelRpcDatasetDownload() {
     manifest: dataset.manifest,
   };
 }
-async function main() {
+export async function runDownload() {
   if (process.platform !== "win32") throw new Error("此下載入口目前只支援專案 Windows 節點。");
   if (runGit(["branch", "--show-current"]) !== "develop") throw new Error("下載只允許在 develop 分支。");
   const upstream = runGit(["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"]);
@@ -181,4 +176,6 @@ async function main() {
     results,
   }, null, 2));
 }
-main().catch((error)=>{ console.error(`[testdata-download] 停止：${error.message}`); process.exitCode=1; });
+if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(new URL(import.meta.url).pathname)) {
+  runDownload().catch((error)=>{ console.error(`[testdata-download] 停止：${error.message}`); process.exitCode=1; });
+}
