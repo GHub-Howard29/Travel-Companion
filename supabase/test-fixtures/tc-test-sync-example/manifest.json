@@ -1,12 +1,10 @@
 {
   "schemaVersion": 1,
   "fixtureId": "tc-test-sync-example",
-  "version": 5,
-  "parentVersion": 4,
-  "parentChecksum": "a8d13e1b65ed879704687f285c9bf6167ac4427a2ad43829b99bc60a34011faa",
   "status": "active",
   "sourceHost": "TPEPC-TM7503-01",
-  "exportedAt": "2026-11-02T16:08:18.925Z",
+  "baselineAt": "2026-11-05T05:10:51.005Z",
+  "exportedAt": "2026-11-05T05:10:51.005Z",
   "tables": [
     "trips",
     "checklists",
@@ -23,6 +21,5 @@
     "exchange_purchases": 0,
     "other_info_items": 0
   },
-  "checksum": "301153c0fa20354522a9d83c1c76f8bb0a7d745e59dbcb48a799a6660b1d15ca",
-  "note": "Synthetic test data only. Import is restricted to local loopback Supabase."
+  "note": "Synthetic test data only. Synchronization is decided by canonical content comparison."
 }

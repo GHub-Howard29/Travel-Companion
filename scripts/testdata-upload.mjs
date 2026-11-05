@@ -50,8 +50,8 @@ function detectSensitive(value, location = "$") {
     }
     return;
   }
-  if (typeof value === "string" && (/[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}/i.test(value) ||
-      /\\b(?:sk-[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9_]{20,}|eyJ[A-Za-z0-9_-]{20,}\\.[A-Za-z0-9_-]{10,})\\b/.test(value))) {
+  if (typeof value === "string" && (/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i.test(value) ||
+      /\b(?:sk-[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9_]{20,}|eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{10,})\b/.test(value))) {
     throw new Error(`Fixture 疑似含個資或憑證：${location}`);
   }
 }
@@ -68,9 +68,18 @@ function validateData(data, fixtureId) {
   if (["checklists", "expenses", "exchange_purchases", "other_info_items"].some((table) => data[table].some((row) => row.trip_id !== fixtureId))) {
     throw new Error("Fixture 含有其他行程資料，禁止上傳。");
   }
-  if (data.checklists.some((row) => row.scope !== "shared")) throw new Error("Fixture 不允許私人 checklist。");
+  if (data.trips[0].is_public === true) throw new Error("Fixture 不允許公開行程。");
+  if (data.checklists.some((row) => row.scope !== "shared" || row.trip_id !== fixtureId)) throw new Error("Fixture 不允許私人或跨行程 checklist。");
   const checklistIds = new Set(data.checklists.map((row) => row.id));
   if (data.checklist_items.some((row) => !checklistIds.has(row.checklist_id))) throw new Error("Fixture checklist 關聯無效。");
+  for (const table of ["checklists", "checklist_items", "expenses", "exchange_purchases", "other_info_items"]) {
+    const ids = data[table].map((row) => row.id).filter((value) => value !== null && value !== undefined);
+    if (new Set(ids).size !== ids.length) throw new Error(`Fixture ${table} 存在重複 id。`);
+  }
+  if (data.checklist_items.some((row) => {
+    const parent = data.checklists.find((checklist) => checklist.id === row.checklist_id);
+    return !parent || parent.trip_id !== fixtureId || parent.scope !== "shared";
+  })) throw new Error("Fixture checklist item 超出共享測試行程範圍。");
   for (const table of ["expenses", "exchange_purchases", "other_info_items"]) {
     const keys = data[table].map((row) => row.client_item_id).filter((value) => value !== null && value !== undefined);
     if (new Set(keys).size !== keys.length) throw new Error(`Fixture ${table} 存在重複 client_item_id。`);
@@ -142,7 +151,7 @@ async function main() {
   }
   for (const entry of dirs) {
     const directory = path.join(fixturesRoot, entry.name);
-    const { raw: previous } = await readBaseline(directory);
+    const { raw: previous, data: previousData } = await readBaseline(directory);
     if (!["active", "regression_pending"].includes(previous.status)) continue;
     const id = quote(entry.name);
     const sql = `select json_build_object(
@@ -155,7 +164,7 @@ async function main() {
     ) as payload`;
     const data = queryNormalize(await query(sql));
     validateData(data, entry.name);
-    const sameContent = JSON.stringify(queryNormalize(data)) === JSON.stringify(queryNormalize(previous));
+    const sameContent = JSON.stringify(queryNormalize(data)) === JSON.stringify(queryNormalize(previousData));
     if (sameContent) continue;
     const baselineAt = new Date().toISOString();
     const manifest = {
