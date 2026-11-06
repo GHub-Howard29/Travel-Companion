@@ -1,14 +1,14 @@
 # Excel RPC 跨電腦測試資料同步定案
 
-> 本文件定義 Excel RPC 測試案例如何在公司端、家用端及其他開發電腦重現。本文件只補足案例輸入與本機私有狀態的邊界；同步方向一律遵循 docs/83 的現行內容直接比較規則，不使用 baselineAt、version、parent、checksum 或 applied state 作為傳輸門檻。
+> 本文件只定義 Excel RPC 測試案例集如何在 A（公司端）與 B（家用端）之間獨立傳遞，以及如何在目的端以本機登入狀態重建 RPC 測試。一般測試 TRIP fixtures 的同步範圍、標記方式及批次規則一律依 `docs/83_本機測試資料庫同步流程.md`；每個一般 fixture 目錄包含一筆 TRIP，但可有多個 fixture 一次上傳／下載。Excel RPC 案例集與一般 TRIP fixtures 是兩種獨立資料集，互不作為對方的前置條件。本文件不使用 baselineAt、version、parent、checksum 或 applied state 作為傳輸門檻。
 
 ## 1. 最終目標（已定案）
 
-任一台電腦建立或修改的合成測試資料，其他電腦取得 Git 最新版本後，必須能在各自的本機 Supabase 重現相同測試情境。資料範圍不限於單一行程，也包含多筆測試 TRIP、每日行程卡片的日期／時間／內容及其必要的 Other Info。
+A、B 任一端新增或修改 Excel RPC 合成案例輸入後，另一端取得 Git 最新版本並明確執行下載，即可取得相同案例定義；目的端再使用自己的本機登入狀態呼叫 RPC，重建相同測試情境。單一 RPC 案例集可包含多個案例及多筆預期建立的 TRIP 輸入；這不代表直接同步已建立的 TRIP、Auth 或 RPC registry。一般測試 TRIP 的跨機資料同步則依 `docs/83`，可由多個各自含一筆 TRIP 的 fixtures 批次處理。
 
 「重現」以相同測試輸入、相同業務內容、相同預期結果為準；不要求不同電腦的 Auth UUID、RPC request UUID、TRIP 隨機主鍵、DB trigger timestamps 或本機 session 相同。
 
-此要求適用所有本機自動化／人工測試資料，包括 Excel 匯入 RPC，不得再以現有 `tc-test-*` 單行程 fixture 的範圍，推定其他測試資料不需要跨機重現。
+Excel RPC 案例集與一般 TRIP fixtures 均可透過 Git 在 A、B 間取得，但採各自獨立的資料格式與流程。不得以一般 fixture「每個目錄一筆 TRIP」的結構，限制 RPC 案例集可保存的案例數或預期輸入；也不得把 RPC 案例集的多筆預期輸入解讀為一般 fixture 單一目錄可包含多筆 TRIP。
 
 ## 2. 同步資料與本機資料的分界
 
@@ -46,17 +46,17 @@
 - Excel RPC 測試案例以獨立資料集管理，不併入既有 `tc-test-sync-example` fixture；不改寫該 fixture 的檔案內容。
 - 每個資料集有穩定 `datasetId`，與實際 TRIP UUID 解耦；manifest 保留 `schemaVersion`、`datasetId`、`status`、資料表／案例清單及選擇性 counts。version、parent、baselineAt、sourceHost、checksum 皆為非必要 metadata。
 - manifest 的 version、baselineAt、parent、checksum 等若保留，只作資訊紀錄；內容是否上傳／下載以案例 JSON 正規化後的實際內容比較決定，案例 schema、日期時間、私有欄位與資料關聯檢查仍須通過。
-- fixture 需能包含多筆合成 Trip 的測試輸入及其跨表關聯；匯入器不可假設一個資料集只能有一筆 Trip。
+- Excel RPC 的 `cases.json` 可包含多個測試案例；單一案例可描述 RPC 輸入、預期結果及必要的多筆建立情境。目的端逐案例呼叫 RPC，由 RPC 在本機建立 TRIP。這是 RPC 案例集格式，不是一般 TRIP fixture 的資料結構；一般 fixture 每個目錄一筆 TRIP，多個目錄可批次同步，詳見 `docs/83`。
 - 舊 `tc-test-*` fixture schema 與資料內容維持相容；Excel RPC 案例同步程序不得修改一般 fixture 的資料檔。
-- 測試資料集的上傳／下載以案例內容直接比較；本機副本不存在時可首次建立，既有副本不同則依 Git 快照更新。下載不得影響任何本機 TRIP、Auth、request registry 或 Email map。
+- Excel RPC 案例集的上傳／下載以案例內容直接比較；本機副本不存在時可首次建立，既有副本不同則依 Git 快照更新。此流程只傳遞案例定義，不直接建立或覆蓋任何 TRIP，也不傳遞 Auth、request registry 或 Email map。一般 TRIP fixtures 的 DB 匯入／更新依 `docs/83`，與 RPC 案例集下載分開處理。
 
 ## 5. 回歸測試與資料生命週期
 
-- 所有 active／regression_pending 案例必須隨 Git fixture 一起供其他節點取得。
+- Excel RPC 所有 active／regression_pending 案例必須隨獨立案例集提交 Git，供 A、B 取得；一般 TRIP fixtures 則依 `docs/83` 的生命週期及批次規則管理。
 - 最少涵蓋：單筆建立、同 request 重送、建立交易失敗 rollback、特殊 Other Info 衝突 rollback、不同 request UUID 同名同日期建立多筆、日期／時間／多日序及必要卡片內容保留。
 - 每台電腦使用本機 Auth／Super Admin 獨立執行；非 Super Admin、缺少管理員、結果不明等案例依本機測試能力明確記錄 pass／fail／skipped，不得以來源端 registry row 假冒目的端驗收。
 - active／regression_pending 不可由一般同步程序清除。released 必須明確解除；archived 不得日常重新載入；deleted 必須依共同生命週期與兩端確認規則處理。
-- 任一節點新增／修改測試案例後，依 docs/83 內容比較流程上傳；其他節點安全取得 Git 快照後下載／重建。只在案例 schema、敏感資料或私有狀態檢查失敗時停止，不依 revision／parent／checksum 判斷衝突。
+- 任一端新增／修改 Excel RPC 案例後，透過 `/上傳資料庫` 發布案例集；另一端先安全 fast-forward Git，再透過 `/下載資料庫` 取得案例定義，之後才可依本文件第 7.2 節在目的端重建 RPC。一般 TRIP fixtures 同樣使用明確的 upload／download 命令，但其候選搜尋、內容比較及 DB 批次匯入依 `docs/83`。兩種資料集彼此獨立；不以 revision／parent／checksum 判斷衝突。
 
 ## 6. 命令與安全界線
 
@@ -73,8 +73,8 @@
 - `npm run excel-rpc:dataset:validate`：檢查 Git 版案例集的結構、案例欄位與必要 counts；checksum 若存在僅供參考，不作為驗證門檻。
 - `npm run excel-rpc:dataset:prepare`：在目前節點建立 `supabase/.temp/excel-rpc-test-cases.json` 編輯副本；若副本已存在，拒絕覆寫。
 - 編輯該 `.temp` JSON 後執行 `npm run excel-rpc:dataset:validate-local`：驗證案例欄位、日期、時間、卡片類別及敏感／私有欄位；不以案例 checksum 作為驗證依據。
-- 使用者明確輸入 `/上傳資料庫` 時，`testdata:upload` 直接比較本機案例副本與 Git `cases.json`；內容相同為 unchanged，內容不同且案例結構／敏感欄位驗證通過即可發布。程式執行時會將 manifest／cases 明確 stage；不以 applied baseline、version、parent 或 checksum 阻擋。
-- 其他電腦先自行安全 fast-forward Git，再明確輸入 `/下載資料庫`；`testdata:download` 直接比較本機 `.temp` 案例副本與 Git `cases.json`，不同才更新案例副本，不會自動建立任何 TRIP，也不會複製 request registry、Auth 或 Email map。
+- 使用者明確輸入 `/上傳資料庫` 時，`testdata:upload` 會獨立檢查 Excel RPC 案例集，並另行搜尋所有符合 `docs/83` 標記規則的一般 TRIP fixtures。RPC 案例內容相同（unchanged）或案例資料集格式驗證失敗，不會取消一般 TRIP fixtures 的候選搜尋與處理；一般 TRIP fixtures 仍依自身驗證結果處理。RPC 案例內容不同且結構／敏感欄位驗證通過時才發布案例集。共享檔案發布階段若發生檔案系統 I/O 或原子替換失敗，仍依安全原則停止整體上傳，不做不完整發布。程式執行時會將適用的 manifest／cases 明確 stage；不以 applied baseline、version、parent 或 checksum 阻擋。
+- B／A 另一端先自行安全 fast-forward Git，再明確輸入 `/下載資料庫`；`testdata:download` 分別處理 Excel RPC 案例集與一般 TRIP fixtures。RPC 案例副本不同才更新 `.temp` 案例 JSON，不會因下載案例而自動呼叫 RPC 或建立 TRIP；也不會複製 request registry、Auth 或 Email map。RPC 案例準備或本機案例檔更新失敗會獨立記錄，不會取消已驗證的一般 TRIP fixture DB 匯入；命令整體結果仍會如實回報 RPC 錯誤。一般 TRIP fixtures 的差異會依 `docs/83` 驗證後在單一 SQL transaction 批次匯入。
 
 ### 7.2 在目的端本機重建 RPC 測試
 
@@ -94,10 +94,10 @@
 ## 8. 完成條件
 
 1. 文件已明確定義上述資料同步與本機重建邊界。
-2. 程式可版本化、驗證及傳輸多案例／多筆 Trip 的 Excel RPC 合成測試輸入，不再受單一 `tc-test-*` Trip 限制。
+2. Excel RPC 獨立案例集可版本化、驗證及傳輸多個案例與多筆預期 TRIP 輸入；目的端逐案例以本機登入狀態呼叫 RPC 重建。一般 TRIP fixtures 每個目錄仍是一筆 TRIP，但可有多個 fixtures 批次上傳／下載，規則依 `docs/83`。
 3. 目的端能以本機 Super Admin RPC 重建案例及每日時間資料；request registry 與 Email map 均為本機新產生。
 4. 有純函式／SQL 生成／安全邊界測試，證明不會匯出 Auth、Email map、request registry、owner 或 secret。
-5. 原有 `tc-test-sync-example` V5 歷史 fixture 檔案內容不由 Excel RPC 案例同步程序改寫；其同步判斷仍依 docs/83 的內容比較規則。
+5. 原有 `tc-test-sync-example` V5 是一般 TRIP fixture 的歷史案例；保留其相容性，不代表現行 TRIP ID、命名或每批筆數限制。Excel RPC 案例集不得改寫該 fixture；一般 fixtures 的同步仍依 `docs/83`。
 6. 完成相關測試、TypeScript／build（受影響時）、文件連結與 diff 檢查。
 7. 未執行未授權的資料庫 upload、清理、commit、push 或正式 DB 操作。雙機真實端到端驗收未執行前，不得宣稱已完成實機跨機驗收。
 
