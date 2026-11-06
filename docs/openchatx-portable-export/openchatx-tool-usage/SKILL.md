@@ -22,6 +22,17 @@ description: 跨電腦通用的 OpenChatX 工具使用指引，涵蓋能力盤�
 - 瀏覽器頁面的 DOM 與登入後網頁：優先 Browser Use CDP；原生桌面 UI：Computer Use；靜態 HTTP 抓取：`fetch_url`。HTTP 抓取通常不會繼承 Chrome 登入 Cookie。
 - Node/npm/npx：必須遵循目前專案適用的 Node runtime Rule。不可假設任何主機的 Node 路徑或版本；每一個新命令程序都要依 Rule 在同一程序設定 PATH、驗證版本，再執行命令。
 
+## Shell 使用規範
+
+- 預設 Shell 為目前主機與工具實際設定的 PowerShell；執行前應確認工具所使用的 Shell，不可只憑作業系統猜測。
+- **禁止使用 `&&` 串接命令。** 不得以 `&&` 將多個命令合併成同一行或同一個 Shell 呼叫。
+- 原則上一次只執行一個命令；讀取前一個命令的輸出或退出狀態，確認成功後再執行下一個命令。
+- 多步驟工作有相依性時，必須逐步執行並驗證前一步成功；前一步失敗就停止後續步驟並先處理錯誤。
+- 需要條件式或批次流程時，使用目前 Shell 已確認支援的原生語法（PowerShell 可使用 `if`、`$LASTEXITCODE` 等），不可將 CMD、Bash 與 PowerShell 語法混用。
+- 若工具本身提供結構化的多步驟操作或專用工具，優先使用該能力，不要為了串接命令而改用 Shell。
+- 不得為了方便而將多個命令包在 `cmd /c`、`bash -c` 或其他子 Shell 中規避本規範。
+- 只有在使用者明確要求且確認執行環境支援時，才可例外採用其他 Shell；即使如此，仍不得使用 `&&` 串接命令。
+
 ## Browser Use
 先以 `tool_search` 查出目前 Browser Use MCP 的工具與 schema。常見工作順序：
 1. 檢查可用瀏覽器與分頁，核對 tab id、URL、title、登入身分。
