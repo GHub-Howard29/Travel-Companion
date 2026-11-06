@@ -11,7 +11,6 @@ const root = process.cwd();
 const fixturesRoot = path.resolve(root, "supabase", "test-fixtures");
 const localExcelCasesPath = path.resolve(root, "supabase", ".temp", "excel-rpc-test-cases.json");
 const tables = ["trips", "checklists", "checklist_items", "expenses", "exchange_purchases", "other_info_items"];
-const tripPattern = /^trip-[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
 const fixtureMarker = "three-way-sync";
 
 function runGit(args) {
@@ -91,9 +90,9 @@ function detectSensitive(value, location = "$") {
   }
 }
 function validateData(data, fixtureId) {
-  if (!tripPattern.test(fixtureId) || data.trips?.length !== 1 || data.trips[0].id !== fixtureId ||
-      data.trips[0].content?.testPurpose !== fixtureMarker) {
-    throw new Error("只允許明確標記為三方同步測試的單筆行程。");
+  if (!fixtureId || !Array.isArray(data.trips) || data.trips.length !== 1 ||
+      data.trips[0].id !== fixtureId || data.trips[0].content?.testPurpose !== fixtureMarker) {
+    throw new Error("每個 fixture 必須只包含一筆明確標記的非公開測試 TRIP。");
   }
   if (data.trips[0].is_public === true) throw new Error("測試行程不允許公開。");
   if (Object.hasOwn(data.trips[0], "participants")) {
@@ -146,7 +145,7 @@ async function readBaseline(directory) {
   return { raw, data };
 }
 async function markTripForSync(tripId) {
-  if (!tripPattern.test(tripId)) throw new Error("行程識別碼格式不正確。");
+  if (typeof tripId !== "string" || !tripId.trim()) throw new Error("行程識別碼不可空白。");
   assertLocalOnly();
   const trip = await query(`select id,is_public from public.trips where id=${quote(tripId)} limit 1`);
   if (!trip.length) throw new Error("找不到指定的本機行程。");
@@ -184,40 +183,48 @@ async function main() {
   const datasetDirectory = path.join(fixturesRoot, EXCEL_RPC_DATASET_ID);
   const datasetManifestPath = path.join(datasetDirectory, "manifest.json");
   const datasetCasesPath = path.join(datasetDirectory, "cases.json");
-  const datasetManifest = JSON.parse(await readFile(datasetManifestPath, "utf8"));
-  const baselineCases = JSON.parse(await readFile(datasetCasesPath, "utf8")).cases;
-  const datasetLocalCaseText = await readFile(localExcelCasesPath, "utf8").catch((error) => {
-    if (error.code === "ENOENT") return JSON.stringify({ cases: baselineCases });
-    throw error;
-  });
-  const datasetCases = JSON.parse(datasetLocalCaseText).cases;
-  validateExcelRpcDataset({
-    manifest: datasetManifest,
-    cases: baselineCases,
-    directoryName: EXCEL_RPC_DATASET_ID,
-    verifyManifestDigest: false,
-  });
-  const datasetPlan = planExcelRpcDatasetUpload({
-    manifest: datasetManifest,
-    cases: datasetCases,
-    baselineCases,
-    sourceHost: hostname,
-    baselineAt: new Date().toISOString(),
-  });
-  if (datasetPlan.action === "publish") {
-    pendingWrites.push({
-      directory: datasetDirectory,
-      kind: "excel-rpc-dataset",
-      cases: datasetPlan.cases,
-      manifest: datasetPlan.manifest,
+  let excelRpcReport = { fixtureId: EXCEL_RPC_DATASET_ID, result: "unchanged" };
+  try {
+    const datasetManifest = JSON.parse(await readFile(datasetManifestPath, "utf8"));
+    const baselineCases = JSON.parse(await readFile(datasetCasesPath, "utf8")).cases;
+    const datasetLocalCaseText = await readFile(localExcelCasesPath, "utf8").catch((error) => {
+      if (error.code === "ENOENT") return JSON.stringify({ cases: baselineCases });
+      throw error;
     });
-    published.push({ fixtureId: EXCEL_RPC_DATASET_ID, kind: "excel-rpc-dataset", version: datasetPlan.manifest.version });
+    const datasetCases = JSON.parse(datasetLocalCaseText).cases;
+    validateExcelRpcDataset({
+      manifest: datasetManifest,
+      cases: baselineCases,
+      directoryName: EXCEL_RPC_DATASET_ID,
+      verifyManifestDigest: false,
+    });
+    const datasetPlan = planExcelRpcDatasetUpload({
+      manifest: datasetManifest,
+      cases: datasetCases,
+      baselineCases,
+      sourceHost: hostname,
+      baselineAt: new Date().toISOString(),
+    });
+    if (datasetPlan.action === "publish") {
+      pendingWrites.push({
+        directory: datasetDirectory,
+        kind: "excel-rpc-dataset",
+        cases: datasetPlan.cases,
+        manifest: datasetPlan.manifest,
+      });
+      published.push({ fixtureId: EXCEL_RPC_DATASET_ID, kind: "excel-rpc-dataset", version: datasetPlan.manifest.version });
+      excelRpcReport = { fixtureId: EXCEL_RPC_DATASET_ID, result: "updated" };
+    }
+  } catch (error) {
+    excelRpcReport = { fixtureId: EXCEL_RPC_DATASET_ID, result: "error", error: error.message };
   }
   const candidateIds = await query("select id from public.trips where is_public = false and coalesce(content->>'testPurpose', '') = 'three-way-sync' order by id");
   const fixtureReports = [];
   for (const candidate of candidateIds) {
     const fixtureId = candidate.id;
-    if (!tripPattern.test(fixtureId)) continue;
+    if (typeof fixtureId !== "string" || !fixtureId.trim() || fixtureId === EXCEL_RPC_DATASET_ID) {
+      throw new Error("測試行程缺少有效 ID，停止匯出。");
+    }
     const directory = path.join(fixturesRoot, fixtureId);
     let previous = null;
     let previousData = null;
@@ -271,6 +278,7 @@ async function main() {
       preview: true,
       wouldPublish: published,
       fixtures: fixtureReports,
+      excelRpc: excelRpcReport,
       note: "僅產生白名單快照預覽；未寫入 fixture 檔、未 commit/push、未修改本機資料庫。",
     }, null, 2));
     return;
@@ -279,8 +287,9 @@ async function main() {
     console.log(JSON.stringify({
       uploaded: false,
       reason: "unchanged",
-      message: "兩個選集都沒有內容變更，未建立 commit。",
+      message: "TRIP fixtures 與 Excel RPC 案例集均無內容變更，未建立 commit。",
       fixtures: fixtureReports,
+      excelRpc: excelRpcReport,
     }, null, 2));
     return;
   }
@@ -304,6 +313,7 @@ async function main() {
         throw error;
       });
       replacements.push({
+        item,
         tempData,
         dataPath,
         tempManifest,
@@ -356,6 +366,14 @@ async function main() {
   const remoteCounts = runGit(["rev-list", "--left-right", "--count", "HEAD...origin/develop"]).split(/\s+/).map(Number);
   if (remoteCounts[0] !== 1 || remoteCounts[1] !== 0) throw new Error("commit 後遠端已變更或分支差異異常；停止 push。");
   runGit(["push", "origin", "develop"]);
-  console.log(JSON.stringify({ uploaded: true, committed: true, pushed: true, fixtures: published, next: "其他節點先 git pull --ff-only origin develop，再獨立執行 testdata-download.mjs。" }, null, 2));
+  console.log(JSON.stringify({
+    uploaded: true,
+    committed: true,
+    pushed: true,
+    fixtures: published,
+    fixtureReports,
+    excelRpc: excelRpcReport,
+    next: "其他節點先 git pull --ff-only origin develop，再獨立執行 testdata-download.mjs。",
+  }, null, 2));
 }
 main().catch((error) => { console.error(`[testdata-upload] 停止：${error.message}`); process.exitCode = 1; });

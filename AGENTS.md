@@ -25,15 +25,15 @@
 - 專案工具檢查及測試命令可採單次程序 PATH 覆寫；不得擅自修改 OpenChatX 全域 runtime、安裝目錄或使用者全域 Node 設定。除非使用者另行授權，不做永久性環境變數修改。
 - **既有診斷更正原則：** 過去若只在 OpenChatX 預設 shell 讀到 v22.18.0，應更正為「OpenChatX 內建 Node v22.18.0；專案 Node 版本須依專案設定及該主機安裝位置，在專案 PATH 下另行驗證」，不得將其列為專案工具阻塞。
 
-# Supabase 三方以上測試資料同步流程設定狀態
-- 同步節點為三台以上對等電腦；不得固定公司端／家用端／第三台為 sender 或 receiver。`sourceHost` 僅供稽核，不決定權限或方向。
-- 各節點只操作自己的本機 loopback Supabase；Git `origin/develop` 傳遞已提交的合成 fixture 基準，不複製 Docker volume，也不使用正式資料庫 dump。
+# Supabase A/B 雙機測試資料同步規則
+- 目前維護目標為公司端（A）與家用端（B）雙機；兩端只操作各自的本機 loopback Supabase。Git `origin/develop` 傳遞合成測試業務資料 fixture，不代表整個資料庫快照。
+- 上傳一次搜尋所有 `is_public=false` 且 `content.testPurpose='three-way-sync'` 的 TRIP；每筆 TRIP 保留自己的 ID 與 fixture 目錄，允許多筆批次處理，不要求 TRIP 名稱或 ID 固定格式。不複製 Docker volume，也不使用正式資料庫 dump。
 - 唯一同步依據為本機 DB／案例內容與 Git 目前快照的直接比較：內容相同為 unchanged，內容不同且必要安全驗證通過即可同步。`baselineAt`、version、parentVersion、parentChecksum、checksum、applied state 及時間戳不得作為上傳／下載許可門檻；若保留，只供閱讀或稽核。DB 比較可忽略 trigger 自動更新的 `created_at`／`updated_at`，不得忽略其他業務欄位。
-- 必要安全驗證只檢查快照結構、欄位白名單、合成資料標記、資料關聯／業務鍵、敏感與私人資料，以及本機 loopback 目標；DB 匯入只在單一交易中更新已確認的 fixture 範圍。不得用 parent／版本鏈／checksum 或 applied state 阻擋實際內容變更，也不得覆蓋 fixture 範圍以外的資料。
+- 目前業務資料白名單為 `trips`、`checklists`、`checklist_items`、`expenses`、`exchange_purchases`、`other_info_items`。帳戶 Email、管理者／使用者個人資料、Auth users、participants、participant Email maps、sessions、owner／creator 身分、token、密碼、附件中繼資料及 Storage 檔案不跨機同步。下載先驗證有差異的 fixture，再將多筆 fixture 在單一 SQL 交易中套用；不得覆蓋 fixture 範圍以外的資料。
 - 新的獨立上傳入口為 `npm run testdata:upload`（`scripts/testdata-upload.mjs`）；新的獨立下載入口為 `npm run testdata:download`（`scripts/testdata-download.mjs`）。上傳入口不下載／匯入；下載入口不 pull／commit／push。兩者皆不得觸碰正式 Supabase。
 - 口令分工已定案：完整口令 `commit/push/資料庫` 已整個廢除，不再是有效指令，收到時不執行任何動作；一般 Git 操作使用 `commit`、`push` 或 `commit/push`；`/上傳資料庫` 僅執行 `npm run testdata:upload`；`/下載資料庫` 僅執行 `npm run testdata:download`。不得把 upload/download 串接到任何 Git 指令或其他自動化流程；`db:sync:local` 只依既有 Git fixture 進行內容比較下載，不得上傳。
 - 若執行特定主機的本機資料庫操作，或要宣稱該主機產生新的驗證結果，仍須確認實際主機識別；不得把家用電腦測試結果誤報為公司電腦證據，也不得在未確認前操作另一台電腦。公司電腦識別基準仍為 Windows `COMPUTERNAME=TPEPC-TM7503-01`、`USERDOMAIN=NICE-GREEN`，專案路徑 `D:\\Project\\Travel-Companion`。
-- **尚待實證：** 三台真實本機 DB 的 A→B→C→A、逆向輪替、首次空白 bootstrap、同時間不同內容變更及第三台加入流程仍待驗收。詳細設計與歷史證據存放於 `docs/archive/supabase-sync/`。
+- Excel RPC 案例集是獨立資料集；案例 unchanged 不得阻擋一般 TRIP fixture 上傳或下載。**尚待實證：** 本次程式單元／SQL 生成測試通過；修改後 A→B、B→A 真實本機資料庫往返仍待實機驗收。三方歷史紀錄保留於 `docs/83_本機測試資料庫同步流程.md` 第 6 節。
 
 # 每次開始工作前：Git 與 Supabase 核對
 - 每次開始任何專案任務，先在專案根目錄檢查 `git status --short --branch`、目前分支與 upstream；再執行 `git fetch origin`，確認本機與遠端差異。不得因任務看似只改文件就跳過。

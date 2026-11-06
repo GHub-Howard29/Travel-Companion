@@ -11,7 +11,6 @@ process.env.SUPABASE_TELEMETRY_DISABLED = "1";
 const root = process.cwd();
 const fixturesRoot = path.resolve(root, "supabase", "test-fixtures");
 const tables = ["trips", "checklists", "checklist_items", "expenses", "exchange_purchases", "other_info_items"];
-const tripPattern = /^trip-[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
 
 function runGit(args) {
   return execFileSync("git.exe", args, { cwd: root, encoding: "utf8", shell: true }).trim();
@@ -63,7 +62,7 @@ function detectSensitive(value, location = "$") {
 async function readRemoteBaseline(directory) {
   const manifest = JSON.parse(await readFile(path.join(directory, "manifest.json"), "utf8"));
   const data = JSON.parse(await readFile(path.join(directory, "data.json"), "utf8"));
-  if (!manifest || !tripPattern.test(manifest.fixtureId) || manifest.fixtureId !== path.basename(directory) ||
+  if (!manifest || typeof manifest.fixtureId !== "string" || !manifest.fixtureId.trim() || manifest.fixtureId !== path.basename(directory) ||
       manifest.schemaVersion !== 1 || !["active", "regression_pending"].includes(manifest.status) ||
       !Array.isArray(manifest.tables) || manifest.tables.length !== tables.length ||
       tables.some((table) => !manifest.tables.includes(table))) {
@@ -150,10 +149,31 @@ export async function runDownload() {
   if (status) throw new Error("下載前 Git 工作樹必須乾淨；請先保存／提交其他變更。");
   assertLocalOnly();
 
-  const excelPlan = await prepareExcelRpcDatasetDownload();
+  let excelPlan;
+  try {
+    excelPlan = await prepareExcelRpcDatasetDownload();
+  } catch (error) {
+    excelPlan = {
+      datasetId: EXCEL_RPC_DATASET_ID,
+      result: "error",
+      error: error.message,
+    };
+  }
   const entries = await readdir(fixturesRoot, { withFileTypes: true });
   const fixturePlans = [];
-  for (const entry of entries.filter((item) => item.isDirectory() && tripPattern.test(item.name))) {
+  for (const entry of entries.filter((item) => item.isDirectory() && item.name !== EXCEL_RPC_DATASET_ID)) {
+    const manifestPath = path.join(fixturesRoot, entry.name, "manifest.json");
+    let manifest;
+    try {
+      manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+    } catch (error) {
+      if (error.code === "ENOENT") continue;
+      throw error;
+    }
+    if (manifest?.status === "deleted" || manifest?.status === "archived" || manifest?.status === "released") continue;
+    if (!manifest || manifest.fixtureId !== entry.name) {
+      throw new Error(`測試 fixture 目錄與 manifest ID 不一致：${entry.name}`);
+    }
     fixturePlans.push(await downloadOne(entry));
   }
 
@@ -165,28 +185,34 @@ export async function runDownload() {
   }
 
   if (excelPlan.result === "downloaded") {
-    await mkdir(path.dirname(excelPlan.localCasesPath), { recursive: true });
-    const temp = excelPlan.localCasesPath + `.tmp-${process.pid}-${Date.now()}`;
     try {
-      await writeFile(temp, JSON.stringify({ cases: excelPlan.cases }, null, 2) + "\n", { flag: "wx" });
-      await rename(temp, excelPlan.localCasesPath);
-    } finally {
-      await rm(temp, { force: true });
+      await mkdir(path.dirname(excelPlan.localCasesPath), { recursive: true });
+      const temp = excelPlan.localCasesPath + `.tmp-${process.pid}-${Date.now()}`;
+      try {
+        await writeFile(temp, JSON.stringify({ cases: excelPlan.cases }, null, 2) + "\n", { flag: "wx" });
+        await rename(temp, excelPlan.localCasesPath);
+      } finally {
+        await rm(temp, { force: true });
+      }
+    } catch (error) {
+      excelPlan = { datasetId: EXCEL_RPC_DATASET_ID, result: "error", error: error.message };
     }
   }
 
   const results = [excelPlan, ...fixturePlans].map(({ data, cases, manifest, localCasesPath, ...summary }) => summary);
   const fixtureChangedCount = changedFixtures.length;
   const excelChanged = excelPlan.result === "downloaded";
+  const excelFailed = excelPlan.result === "error";
   console.log("[testdata-download] 下載檢查完成");
   console.log(`- 資料庫測試行程：${fixtureChangedCount === 0 ? "無需更新" : `已更新 ${fixtureChangedCount} 組`}`);
-  console.log(`- Excel RPC 測試案例：${excelChanged ? "已更新" : "內容相同，無需更新"}`);
+  console.log(`- Excel RPC 測試案例：${excelChanged ? "已更新" : excelFailed ? `未更新：${excelPlan.error}` : "內容相同，無需更新"}`);
   console.log(`- 本機資料庫寫入：${fixtureChangedCount > 0 ? "已完成交易式匯入" : "未執行（內容相同）"}`);
   console.log(JSON.stringify({
-    success: true,
+    success: !excelFailed,
     downloaded: fixtureChangedCount > 0 || excelChanged,
     databaseFixturesApplied: fixtureChangedCount,
     excelCasesUpdated: excelChanged,
+    excelCasesError: excelFailed ? excelPlan.error : null,
     results,
   }, null, 2));
 }

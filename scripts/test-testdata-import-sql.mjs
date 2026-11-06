@@ -77,4 +77,24 @@ assert.match(bootstrapSql, /Fixture target exists but is not marked test data/);
 assert.match(bootstrapSql, /INSERT INTO public\.trips/);
 assert.doesNotMatch(bootstrapSql, /parentVersion|parentChecksum|initial import target already exists/);
 
-console.log("testdata import SQL generation checks passed (transaction, content snapshot, synthetic marker, local-only fields, business keys)");
+const secondTripId = "custom-test-trip-第二筆";
+const secondData = normalizeFixtureRows({
+  trips: [{ id: secondTripId, title: "Second Trip", departure_date: "2026-11-02", currency_config: {}, sidebar_config: {}, content: { testPurpose: "three-way-sync" }, created_at: "2026-11-02T00:00:00Z", updated_at: "2026-11-02T00:00:00Z", is_public: false }],
+  checklists: [{ id: "checklist-2", trip_id: secondTripId, scope: "shared", title: "Second list" }],
+  checklist_items: [{ id: "item-2", checklist_id: "checklist-2", client_item_id: "item-client-2", label: "Second item", is_checked: false, sort_order: 0 }],
+  expenses: [],
+  exchange_purchases: [],
+  other_info_items: [],
+});
+const multiFixtureSql = buildFixtureImportSql([
+  { manifest: { fixtureId: tripId }, data: previousData },
+  { manifest: { fixtureId: secondTripId }, data: secondData },
+]);
+assert.ok(multiFixtureSql.includes(`"id":"${tripId}"`));
+assert.ok(multiFixtureSql.includes(`"id":"${secondTripId}"`));
+assert.ok(multiFixtureSql.startsWith("DO $tc_fixture$"));
+assert.ok(multiFixtureSql.trimEnd().endsWith("END $tc_fixture$;"));
+assert.equal(multiFixtureSql.split("END $tc_fixture$;").length - 1, 1,
+  "multiple trips must be applied in one SQL transaction");
+
+console.log("testdata import SQL generation checks passed (multi-fixture transaction, content snapshot, synthetic marker, local-only fields, business keys)");

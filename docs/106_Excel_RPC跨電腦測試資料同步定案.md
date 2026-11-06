@@ -89,7 +89,7 @@
 - `node scripts/excel-rpc-test-dataset.mjs new-request <caseId>`：為同一案例產生新 request UUID，並確認 RPC 回傳不同 trip_id。這是會新增本機測試行程的明確操作。
 - 本機 request UUID／trip_id 執行紀錄只存 `supabase/.temp/excel-rpc-executions.json`；不得跨機複製或提交 Git。
 
-以上 RPC rebuild 命令實際寫入目前節點 loopback Supabase；一般 validate／prepare／validate-local 不寫入資料庫。執行 rebuild／replay／new-request 前，請確認目前使用的是測試資料庫且工作樹乾淨。本任務未執行任何真實 rebuild、清理、upload 或 download。
+以上 RPC rebuild 命令實際寫入目前節點 loopback Supabase；一般 validate／prepare／validate-local 不寫入資料庫。執行 rebuild／replay／new-request 前，請確認目前使用的是測試資料庫，並確認本次測試可安全清理其建立的資料；Git 工作樹是否有其他修改不影響測試執行。本次未執行任何真實 rebuild、清理、upload 或 download。
 
 ## 8. 完成條件
 

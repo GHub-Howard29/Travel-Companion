@@ -41,10 +41,11 @@ assert.equal(sameFixtureRows(missingRow, fixture, { ignoreTimestamps: true }), f
 assert.equal(sameFixtureRows(fixture, fixture), true);
 
 const downloadSource = await readFile(new URL("./testdata-download.mjs", import.meta.url), "utf8");
+const uploadSource = await readFile(new URL("./testdata-upload.mjs", import.meta.url), "utf8");
 assert.match(downloadSource, /\[testdata-download\] 下載檢查完成/,
   "successful download must print a visible completion summary");
-assert.match(downloadSource, /success: true/,
-  "successful download must emit an explicit success result");
+assert.match(downloadSource, /success: !excelFailed/,
+  "overall result must report an Excel RPC dataset failure independently");
 assert.match(downloadSource, /下載失敗：\$\{error\.message\}/,
   "failed download must print a clear error");
 assert.match(downloadSource, /error\?\.stack/,
@@ -53,4 +54,19 @@ assert.match(downloadSource, /fileURLToPath\(import\.meta\.url\)/,
   "direct CLI detection must convert the module URL to a platform-native path");
 assert.doesNotMatch(downloadSource, /new URL\(import\.meta\.url\)\.pathname/,
   "direct CLI detection must not compare against URL.pathname on Windows");
-console.log("testdata download checks passed (content comparison, visible reporting, and Windows CLI entrypoint)");
+assert.equal(downloadSource.includes("tripPattern"), false,
+  "fixture discovery must not depend on a fixed TRIP ID format");
+assert.match(downloadSource, /try\s*\{\s*excelPlan = await prepareExcelRpcDatasetDownload\(\)/,
+  "RPC dataset validation failure must be isolated from TRIP fixture discovery");
+assert.match(downloadSource, /const fixturePlans = \[\]/,
+  "TRIP fixtures must be planned independently of the RPC dataset");
+assert.match(uploadSource, /where is_public = false and coalesce\(content->>'testPurpose', ''\) = 'three-way-sync'/,
+  "upload must select all private marked test trips");
+assert.equal(uploadSource.includes("tripPattern"), false,
+  "upload must not require a fixed TRIP ID format");
+assert.match(uploadSource, /let excelRpcReport[\s\S]*catch \(error\)[\s\S]*excelRpcReport = \{ fixtureId: EXCEL_RPC_DATASET_ID, result: "error"/,
+  "RPC dataset errors must be reported separately from TRIP fixture processing");
+assert.match(uploadSource, /const candidateIds = await query\([\s\S]*?const fixtureReports = \[\]/,
+  "TRIP fixture scanning must continue after RPC dataset handling");
+
+console.log("testdata download checks passed (multi-fixture IDs, independent RPC handling, content comparison, visible reporting, and Windows CLI entrypoint)");
