@@ -16,7 +16,9 @@ begin;
 
 create table if not exists private.tc_trip_excel_create_requests (
   request_id uuid primary key,
-  user_id uuid not null references auth.users(id) on delete cascade,
+  -- Keep the original owner UUID as an immutable identity marker. Do not
+  -- cascade-delete idempotency evidence when the Auth account is removed.
+  user_id uuid not null,
   payload_hash text not null,
   trip_id text not null,
   response_payload jsonb not null,
@@ -28,6 +30,61 @@ create table if not exists private.tc_trip_excel_create_requests (
 );
 
 revoke all on table private.tc_trip_excel_create_requests from public, anon, authenticated, service_role;
+
+create or replace function public.tc_get_trip_excel_create_request(p_request_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_user_id uuid;
+  v_existing private.tc_trip_excel_create_requests%rowtype;
+begin
+  v_user_id := (select auth.uid());
+  if v_user_id is null then
+    raise exception using errcode = '42501', message = 'TC_EXCEL_AUTH_REQUIRED';
+  end if;
+  if not coalesce(private.tc_is_super_admin(), false) then
+    raise exception using errcode = '42501', message = 'TC_EXCEL_SUPER_ADMIN_REQUIRED';
+  end if;
+  if p_request_id is null then
+    raise exception using errcode = '22023', message = 'TC_EXCEL_REQUEST_ID_REQUIRED';
+  end if;
+
+  select *
+    into v_existing
+    from private.tc_trip_excel_create_requests
+   where request_id = p_request_id
+     and user_id = v_user_id;
+
+  if not found then
+    return jsonb_build_object('status', 'NOT_FOUND', 'request_id', p_request_id);
+  end if;
+  if v_existing.trip_id = 'pending' or v_existing.response_payload = '{}'::jsonb then
+    return jsonb_build_object('status', 'PENDING', 'request_id', p_request_id);
+  end if;
+  if not exists (select 1 from public.trips where id = v_existing.trip_id) then
+    return jsonb_build_object(
+      'status', 'TRIP_DELETED',
+      'request_id', p_request_id,
+      'trip_id', v_existing.trip_id
+    );
+  end if;
+
+  return v_existing.response_payload || jsonb_build_object(
+    'status', 'CREATED',
+    'request_id', p_request_id,
+    'trip_id', v_existing.trip_id,
+    'idempotent_replay', true
+  );
+end;
+$$;
+
+revoke all on function public.tc_get_trip_excel_create_request(uuid)
+  from public, anon, authenticated, service_role;
+grant execute on function public.tc_get_trip_excel_create_request(uuid)
+  to authenticated;
 
 create or replace function public.tc_create_trip_from_excel(
   p_request_id uuid,

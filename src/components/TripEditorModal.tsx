@@ -132,6 +132,13 @@ const clearPendingExcelRequest = (requestId: string): void => {
   }
 };
 
+const getPendingExcelRequestId = (fingerprint: string): string => {
+  const pending = readPendingExcelRequest();
+  return pending?.fingerprint === fingerprint
+    ? pending.requestId
+    : crypto.randomUUID();
+};
+
 const toParticipantAssignmentText = (
   participants: string[],
   participantEmailMap?: Record<string, string>,
@@ -306,9 +313,7 @@ export const TripEditorModal = ({
           currencySymbol,
         );
         const pendingRequest = readPendingExcelRequest();
-        const requestId = pendingRequest?.fingerprint === fingerprint
-          ? pendingRequest.requestId
-          : crypto.randomUUID();
+        const requestId = getPendingExcelRequestId(fingerprint);
         excelRequestFingerprintRef.current = fingerprint;
         setExcelRequestId(requestId);
         setIsExcelResultUnconfirmed(pendingRequest?.fingerprint === fingerprint);
@@ -338,9 +343,7 @@ export const TripEditorModal = ({
       void getExcelRequestFingerprint(excelPreview, code, selectedCurrency?.symbol ?? "")
         .then((fingerprint) => {
           const pendingRequest = readPendingExcelRequest();
-          const requestId = pendingRequest?.fingerprint === fingerprint
-            ? pendingRequest.requestId
-            : crypto.randomUUID();
+          const requestId = getPendingExcelRequestId(fingerprint);
           excelRequestFingerprintRef.current = fingerprint;
           setExcelRequestId(requestId);
           setIsExcelResultUnconfirmed(pendingRequest?.fingerprint === fingerprint);
@@ -358,6 +361,30 @@ export const TripEditorModal = ({
     }
     if (!currencyCode.trim() || !currencySymbol.trim()) {
       setFormError("目前新增 TRIP 的幣別設定不完整，請重新選擇幣別。");
+      return;
+    }
+
+    // Re-read the current form defaults at the final confirmation boundary.
+    // If they changed since preview, require a fresh explicit confirmation.
+    const currentDefaultCurrencyCode = defaultCurrencyCode.trim();
+    const currentDefaultCurrencySymbol = defaultCurrencySymbol.trim();
+    if (
+      currentDefaultCurrencyCode !== currencyCode ||
+      currentDefaultCurrencySymbol !== currencySymbol
+    ) {
+      setCurrencyCode(currentDefaultCurrencyCode);
+      setCurrencySymbol(currentDefaultCurrencySymbol);
+      setIsExcelCurrencyConfirmed(false);
+      setFormError("新增 TRIP 的預設幣別已變更，請確認更新後的幣別，再重新按下建立。");
+      const fingerprint = await getExcelRequestFingerprint(
+        excelPreview,
+        currentDefaultCurrencyCode,
+        currentDefaultCurrencySymbol,
+      );
+      const requestId = getPendingExcelRequestId(fingerprint);
+      excelRequestFingerprintRef.current = fingerprint;
+      setExcelRequestId(requestId);
+      setIsExcelResultUnconfirmed(readPendingExcelRequest()?.fingerprint === fingerprint);
       return;
     }
 

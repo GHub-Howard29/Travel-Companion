@@ -6,6 +6,61 @@ const migration = await readFile(
   "utf8",
 );
 const normalized = migration.toLowerCase();
+const upgradeMigration = await readFile(
+  "supabase/migrations/20261106160000_v3110_trip_excel_request_recovery.sql",
+  "utf8",
+);
+const normalizedUpgrade = upgradeMigration.toLowerCase();
+
+const upgradeRequired = [
+  "begin;",
+  "commit;",
+  "to_regclass('private.tc_trip_excel_create_requests')",
+  "if v_table is null then",
+  "where user_id is null",
+  "v_table",
+  "con.contype = 'f'",
+  "con.conrelid = v_table",
+  "con.confrelid = 'auth.users'::regclass",
+  "drop constraint %i",
+  "alter column user_id set not null",
+  "public.tc_get_trip_excel_create_request",
+  "where request_id = p_request_id",
+  "and user_id = v_user_id",
+  "'status', 'not_found'",
+  "'status', 'trip_deleted'",
+  "security definer",
+  "set search_path = ''",
+  "private.tc_is_super_admin()",
+  "revoke all on function",
+  "grant execute on function",
+  "from public, anon, authenticated, service_role",
+  "to authenticated",
+];
+
+for (const fragment of upgradeRequired) {
+  assert.ok(
+    normalizedUpgrade.includes(fragment.toLowerCase()),
+    "Upgrade migration is missing required safeguard or behavior: " + fragment,
+  );
+}
+
+assert.ok(
+  normalizedUpgrade.includes("for v_constraint in") &&
+    normalizedUpgrade.includes("execute format(") &&
+    normalizedUpgrade.includes("drop constraint %i"),
+  "Upgrade must discover and safely drop matching Auth foreign keys.",
+);
+assert.ok(
+  normalizedUpgrade.includes("con.conrelid = v_table") &&
+    normalizedUpgrade.includes("con.confrelid = 'auth.users'::regclass"),
+  "Upgrade must restrict FK removal to this registry referencing auth.users.",
+);
+assert.doesNotMatch(
+  upgradeMigration,
+  /drop constraint\s+tc_trip_excel_create_requests_user_id_fkey/i,
+  "Upgrade must discover the actual Auth FK name, not assume a generated constraint name.",
+);
 
 const required = [
   "begin;",
@@ -15,6 +70,13 @@ const required = [
   "auth.uid()",
   "private.tc_is_super_admin()",
   "private.tc_trip_excel_create_requests",
+  "user_id uuid not null,",
+  "keep the original owner uuid as an immutable identity marker",
+  "public.tc_get_trip_excel_create_request",
+  "where request_id = p_request_id",
+  "and user_id = v_user_id",
+  "'status', 'not_found'",
+  "'status', 'trip_deleted'",
   "on conflict (request_id) do nothing",
   "payload_hash",
   "public.admin_profiles",
@@ -113,6 +175,10 @@ assert.match(modal, /請先使用同一份 Excel 確認建立結果/);
 assert.match(modal, /defaultCurrencyCode/);
 assert.match(modal, /defaultCurrencySymbol/);
 assert.match(modal, /getExcelRequestFingerprint/);
+assert.match(modal, /getPendingExcelRequestId/);
+assert.match(modal, /預設幣別已變更/);
+assert.match(modal, /currentDefaultCurrencyCode !== currencyCode/);
+assert.match(modal, /currentDefaultCurrencySymbol !== currencySymbol/);
 assert.match(modal, /確認幣別並建立 TRIP/);
 assert.match(app, /defaultCurrencyCode="TWD"/);
 assert.match(app, /defaultCurrencySymbol="NT\$"/);
@@ -121,16 +187,35 @@ assert.doesNotMatch(modal, /Excel 建立尚未開放/);
 const service = await readFile("src/services/tripExcelCreateService.ts", "utf8");
 for (const fragment of [
   "supabase.auth.getSession()",
+  "supabase.auth.refreshSession()",
   "supabase.auth.getUser()",
   'eq("role", "super_admin")',
   'rpc("tc_create_trip_from_excel"',
   "requestId",
   "idempotent_replay",
+  '"tc_get_trip_excel_create_request"',
+  "lookupPayload.status === \"NOT_FOUND\"",
+  "lookupPayload.status === \"TRIP_DELETED\"",
+  "RESULT_UNCONFIRMED",
 ]) {
   assert.ok(service.includes(fragment), "Excel create service is missing: " + fragment);
 }
 assert.match(service, /item\.time/);
 assert.match(service, /item\.departureTime/);
+assert.ok(
+  service.indexOf("supabase.auth.getSession()") <
+    service.indexOf("supabase.auth.refreshSession()") &&
+    service.indexOf("supabase.auth.refreshSession()") <
+      service.indexOf("supabase.auth.getUser()") &&
+    service.indexOf("supabase.auth.getUser()") <
+      service.indexOf('.from("admin_users")') &&
+    service.indexOf('.from("admin_users")') <
+      service.indexOf('rpc("tc_create_trip_from_excel"'),
+  "Session refresh, refreshed-user verification, Super Admin check and RPC must run in order.",
+);
+assert.match(service, /refreshedSession\.user\.id !== expectedUserId/);
+assert.match(service, /normalizeEmail\(refreshedSession\.user\.email\)/);
+assert.doesNotMatch(service, /signInWithOAuth|signInWithIdToken/);
 assert.doesNotMatch(service, /typeColor:\s*item\.typeColor/);
 assert.doesNotMatch(service, /location:\s*item\.location/);
 
