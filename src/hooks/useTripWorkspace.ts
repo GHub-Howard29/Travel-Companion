@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type {
-  AdminProfile,
-  AdminUser,
-  ItineraryItem,
-  TripDetail,
-  TripEditorInput,
-  TripMeta,
+import {
+  DEFAULT_TRIP_CURRENCY,
+  type AdminProfile,
+  type AdminUser,
+  type ItineraryItem,
+  type TripDetail,
+  type TripEditorInput,
+  type TripMeta,
 } from "../types";
 import {
   findDefaultTrip,
@@ -166,8 +167,8 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
     () => selectedTripMeta?.participants ?? ["我", "小明", "小華"],
     [selectedTripMeta?.participants],
   );
-  const currentCurrencyCode = selectedTripMeta?.currencyConfig.code || "TWD";
-  const currentCurrencySymbol = selectedTripMeta?.currencyConfig.symbol || "NT$";
+  const currentCurrencyCode = selectedTripMeta?.currencyConfig.code || DEFAULT_TRIP_CURRENCY.code;
+  const currentCurrencySymbol = selectedTripMeta?.currencyConfig.symbol || DEFAULT_TRIP_CURRENCY.symbol;
   const canUseExpense = Boolean(userEmail);
   const isUsingSharedExpenseBook = canUseExpense && hasEditPermission;
   const expenseMembers =

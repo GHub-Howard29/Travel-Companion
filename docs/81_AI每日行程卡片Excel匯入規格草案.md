@@ -130,21 +130,21 @@ TRIP 基本資料區只有上述兩項。V1 不提供旅程天數、結束日期
 
 **目前狀態（2026-11-06 家用端續作後更新）**：產品欄位契約、正式範本、欄位契約文件及 Office round-trip 已完成。公司端已完成 ExcelJS 解析／嚴格驗證核心、建立方式二選一 UI 與預覽、parser 回歸測試；Excel 專用 RPC migration 已建立並已套用公司端既有 local Supabase V5，包含 request registry、Super Admin／Auth 身分核對、私有 participant Email map 同交易寫入、Trip／特殊 Other Info 寫入及明確函式權限。2026-11-04 重新確認 `supabase status` 的 API endpoint 為 `http://127.0.0.1:54321`，`supabase migration list --local` 顯示 `20261103150000` 已套用；未使用 `--linked`、未執行 reset、未對遠端共享／正式 DB 寫入。以專案指定 Node v22.23.2／npm 10.9.8 重新執行 `verify:trip-excel-import`、`verify:trip-excel-rpc` 均通過；完整 `npm run build`（含既有回歸、TypeScript、production build、PWA、postbuild browser security 及 weather bundle 檢查）exit code 0。正式 Supabase 唯讀比對確認 Super Admin 2 位、`admin_profiles` 2 筆且兩位均 `include_in_new_trip=true`；正式資料庫無此缺漏。公司端 local V5 歷史 snapshot 於 2026-10-27 至 2026-11-03 均記錄 `admin_profiles=[]`；V3.5.4 初始化 migration 已執行，但 2026-11-02 追加兩個 `weather-rc-test` 測試 Auth／Super Admin 帳號時，profile 未同步建立。2026-11-04 已依 V3.5.4 原初始化規則，只補齊 local V5 缺少的三筆 Super Admin profiles（名稱取 Auth metadata；無名稱用 email 前綴，`include_in_new_trip=true`，一般排序 100），未改既有資料。Excel RPC 的 participant 查詢保留與一般建立相同的 `admin_profiles` + `admin_users` + `auth.users` 交集篩選，移除 Excel 專屬的空 profile 拒絕及重複顯示名稱拒絕；不增加 fallback 或新判斷方式。2026-11-04 進一步在 local V5 對已套用 RPC 進行真實 PostgreSQL 測試：成功建立一筆 TRIP 時同時產生一筆 request registry、一筆特殊 Other Info 與 participant email map；相同 request 重送回傳相同 trip_id 且只保留一筆；在建立後刻意觸發例外，確認 TRIP、registry、Other Info 均 rollback 為 0；特殊 Other Info deterministic client_item_id 唯一衝突也使該整批交易 rollback；相同 title/date 使用不同 request UUID 成功建立兩筆不同 trip_id。測試留下 4 筆明確命名的 local V5 測試 TRIP（title 前綴 `Excel RPC` 或 `Allowed duplicate title date`）、對應 4 筆 registry 及 4 筆特殊 Other Info；均使用既有測試 Super Admin 建立，未碰既有兩筆 baseline TRIP，未清理測試資料。管理員與非管理員的 RPC 權限拒絕測試已由使用者確認先前均通過，視為既有驗收結果，不重複執行。2026-11-05 曾做 local V5 Auth 唯讀盤點（4 個 Auth users，其中 3 個對應 Super Admin、另 1 個無 `admin_users` 權限列）；該盤點僅反映目前本機帳號組成，不得用來推翻先前已通過的權限測試。RPC migration 檔與規格文件有未提交修改，local V5 函式已以修改內容套用；需在下一階段完成 migration diff／部署策略核對，不能把已修改本機函式誤認為 migration history 自動更新。仍未完成最終幣別確認／提交 UI、提交時 Session refresh、RPC client 呼叫及結果不明 recovery；IM01–IM10 尚未全部執行，尚未發布。下一步先補上有安全清理策略的自動化 DB tests 與非 Super Admin fixture（若可利用現有可控 Auth 測試工具而無須新增永久帳號），再完成其餘 IM01–IM10，才串接前端提交與 recovery。禁止 commit/push、遠端 DB 寫入或發布，除非另行明確核准。
 
-### Excel V1 實作進度（截至 2026-11-06）
+### Excel V1 實作進度（截至 2026-11-07）
 
 | 項目 | 狀態 | 證據／限制 |
 |---|---|---|
 | ExcelJS V1 解析與嚴格驗證 | 已實作、測試通過 | `src/services/tripExcelImport.ts`；`npm run verify:trip-excel-import` |
-| 新增 TRIP Excel／手動二選一 UI | 已實作預覽階段 | `src/components/TripEditorModal.tsx`；Excel 模式只可選檔、看預覽或關閉，不提供寫入提交 |
+| 新增 TRIP Excel／手動二選一 UI | 已實作；真實瀏覽器流程待驗 | `src/components/TripEditorModal.tsx`；本輪尚未完成實際登入及匯入操作 |
 | Parser 回歸測試 | 已通過 | 正向解析、空白日保留、結束時間預設、標題／時間／metadata／損壞檔拒絕；ExcelJS 輸入已正規化成獨立 ArrayBuffer，通過 TypeScript |
-| Excel RPC／request registry | 已套用公司端 local Supabase V5；核心交易案例部分通過 | `supabase/migrations/20261103150000_v3110_trip_excel_create_rpc.sql`；實測建立成功、同 request 冪等、建立後例外 rollback、特殊 Other Info 唯一衝突 rollback、不同 request 同 title/date 可建立不同 TRIP；local V5 留有 4 筆明確命名測試 TRIP。管理員與非管理員 RPC 權限拒絕測試均已由使用者確認先前通過，不再列為待測；併發同 request 測試仍須依 IM 清單補驗。
+| Excel RPC／request registry | 本機整合測試通過 | `npm run test:trip-excel-rpc-local-integration`；3 天／2 卡片、相同 request 並行冪等、Recovery CREATED／NOT_FOUND、不同 request 建立獨立 TRIP、payload mismatch 拒絕及 transaction rollback 均通過；本輪測試資料已清理，未操作 Remote Supabase。
 | RPC 靜態規格檢查 | 已通過 | `npm run verify:trip-excel-rpc`；目前同時檢查基礎 migration 與 2026-11-06 upgrade migration；不能取代 DB integration tests |
 | Session refresh 與身分確認 | 已實作、靜態檢查通過 | `src/services/tripExcelCreateService.ts`；refresh 後以 `getUser()` 驗證 user id/email，再檢查 Super Admin，不重新啟動 OAuth |
-| 建立結果不明 recovery | 已實作、靜態檢查通過；DB/UI 整合待驗 | 使用相同 request UUID 呼叫 `tc_get_trip_excel_create_request`；只有 owner-bound 查詢回傳且 payload 相符的 `CREATED` 才承認成功；其他不確定狀態保留原 request，不盲目重送 |
+| 建立結果不明 recovery | Service mock 與本機 RPC 測試通過；真實登入斷線 UI 流程待驗 | 使用相同 request UUID 呼叫 `tc_get_trip_excel_create_request`；owner-bound CREATED 才承認成功；NOT_FOUND／TRIP_DELETED／無法確認不盲目換 UUID |
 | Migration 升級策略 | 已建立 forward migration；尚未套用 | `20261106160000_v3110_trip_excel_request_recovery.sql`；針對既有 registry 精準移除指向 `auth.users` 的 FK、保留資料並重建 lookup RPC；必須先確認原 migration 已套用，不可只重跑 `CREATE TABLE IF NOT EXISTS` |
-| 最終幣別來源 | 尚未完成 | `src/App.tsx` 目前仍將 `defaultCurrencyCode="TWD"`、`defaultCurrencySymbol="NT$"` 傳入；預覽確認與變更偵測已有，但尚未接到動態全域幣別來源 |
-| 最終幣別確認、Session refresh、RPC client、結果不明 recovery | 尚未實作 | Excel 建立仍停留在 preview-only |
-| IM01–IM10 完整驗收 | 尚未全部完成 | Parser 專項、RPC 靜態契約、管理員／非管理員 RPC 權限拒絕及部分 local V5 交易案例已通過；同 request 併發及完整 UI→RPC→recovery 流程仍待測，不得宣稱端到端通過 |
+| TRIP 預設幣別來源 | 已核實為共用既有來源 | `src/types/trip.ts` 的 `DEFAULT_TRIP_CURRENCY` 是手動新增與 Excel V1 共用的唯一 TRIP 預設（目前為 TWD／NT$）；`src/App.tsx` 將該常數傳入表單。帳本的 `formCurrency` 是記帳輸入狀態，不是新 TRIP 預設，不應接用。預覽確認及提交前變更偵測沿用同一來源。
+| 最終幣別確認、Session refresh、RPC client、結果不明 recovery | 已實作並完成靜態／service mock／本機 RPC 驗證 | 真實登入瀏覽器操作及斷線後 UI recovery 流程仍待驗 |
+| IM01–IM10 完整驗收 | 尚未全部完成 | Parser、service mock、RPC 靜態契約及本機 DB integration 已通過；真實瀏覽器 UI／登入流程與裝置驗收仍待執行，不得宣稱正式端到端驗收完成 |
 
 **RPC 草稿未套用前的審查事項（2026-11-03 續作更新）**：
 - 已完成原始碼核對：V3.5.2 對 public `tc_*` 函式先撤銷預設 EXECUTE，再逐一授權；新 RPC 已採相同 revoke-all／authenticated-only grant 寫法。V3.9.26 的 participant Email map 存於 `private.trip_participant_email_maps`，新 RPC 草稿已改為同一交易寫入私有表，且不寫入 `trips.content`。

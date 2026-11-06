@@ -180,8 +180,20 @@ assert.match(modal, /預設幣別已變更/);
 assert.match(modal, /currentDefaultCurrencyCode !== currencyCode/);
 assert.match(modal, /currentDefaultCurrencySymbol !== currencySymbol/);
 assert.match(modal, /確認幣別並建立 TRIP/);
-assert.match(app, /defaultCurrencyCode="TWD"/);
-assert.match(app, /defaultCurrencySymbol="NT\$"/);
+assert.match(app, /defaultCurrencyCode=\{DEFAULT_TRIP_CURRENCY\.code\}/);
+assert.match(app, /defaultCurrencySymbol=\{DEFAULT_TRIP_CURRENCY\.symbol\}/);
+assert.match(app, /import \{[\s\S]*?DEFAULT_TRIP_CURRENCY[\s\S]*?from "\.\/types"/);
+assert.match(modal, /trip\?\.currencyConfig\.code \?\? defaultCurrencyCode/);
+assert.match(modal, /trip\?\.currencyConfig\.symbol \?\? defaultCurrencySymbol/);
+const tripTypes = await readFile("src/types/trip.ts", "utf8");
+assert.match(tripTypes, /export const DEFAULT_TRIP_CURRENCY = \{/);
+assert.match(tripTypes, /code: "TWD"/);
+assert.match(tripTypes, /symbol: "NT\$"/);
+assert.match(
+  tripTypes,
+  /Shared default used by the existing manual-create form and Excel V1/,
+  "Manual Trip creation and Excel V1 must retain one shared default currency source.",
+);
 assert.doesNotMatch(modal, /Excel 建立尚未開放/);
 
 const service = await readFile("src/services/tripExcelCreateService.ts", "utf8");

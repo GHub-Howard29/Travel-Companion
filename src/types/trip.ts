@@ -1,6 +1,12 @@
 import type { OtherInfoItem } from "./otherInfo";
 import type { Folder } from "./folder";
 
+/** Shared default used by the existing manual-create form and Excel V1. */
+export const DEFAULT_TRIP_CURRENCY = {
+  code: "TWD",
+  symbol: "NT$",
+} as const;
+
 // 1. 對應 list.json 的行程元資料型別
 export interface TripMeta {
   id: string;

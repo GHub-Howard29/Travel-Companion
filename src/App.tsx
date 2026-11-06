@@ -5,13 +5,14 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } fro
 import { createClient } from "@supabase/supabase-js";
 
 // 旅程型別
-import type {
-  ChecklistItem,
-  Folder,
-  OtherInfoItem,
-  SidebarItemConfig,
-  TripEditorInput,
-  TripMeta,
+import {
+  DEFAULT_TRIP_CURRENCY,
+  type ChecklistItem,
+  type Folder,
+  type OtherInfoItem,
+  type SidebarItemConfig,
+  type TripEditorInput,
+  type TripMeta,
 } from "./types";
 
 // 抽出的畫面元件
@@ -1458,8 +1459,8 @@ function ConfiguredApp({
         <TripEditorModal
           key={`${tripEditorMode}-${selectedTripId || "new"}`}
           mode={tripEditorMode}
-          defaultCurrencyCode="TWD"
-          defaultCurrencySymbol="NT$"
+          defaultCurrencyCode={DEFAULT_TRIP_CURRENCY.code}
+          defaultCurrencySymbol={DEFAULT_TRIP_CURRENCY.symbol}
           trip={tripEditorMode === "edit" ? selectedTripMeta ?? null : null}
           tripDetail={tripEditorMode === "edit" ? currentTrip : null}
           editorEmails={tripEditorMode === "edit" ? currentTripEditorEmails : []}
