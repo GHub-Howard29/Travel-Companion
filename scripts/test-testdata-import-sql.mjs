@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { buildFixtureImportSql, checksumFixture, normalizeFixtureRows } from "./lib/testdata-download-apply.mjs";
+import { buildFixtureImportSql, checksumFixture, latestFixtureTimestamp, normalizeFixtureRows } from "./lib/testdata-download-apply.mjs";
 
 const tripId = "trip-a2131af0-2e96-43ee-8ea4-e71a27df63ab";
 const previousData = normalizeFixtureRows({
@@ -35,6 +35,13 @@ assert.match(sql, /PERFORM 1 FROM public\.trips t WHERE .* FOR UPDATE/);
 assert.doesNotMatch(sql, /parent revision|parentChecksum|parentVersion|checksum mismatch|row count mismatch/);
 assert.match(sql, /checklist_id = 'checklist-1' AND client_item_id = 'item-client-2'/);
 assert.match(sql, /INSERT INTO public\.trips/);
+assert.match(sql, /DISABLE TRIGGER trips_touch_updated_at/);
+assert.match(sql, /ENABLE TRIGGER trips_touch_updated_at/);
+assert.match(sql, /INSERT INTO public\.trips \(id, title, departure_date, currency_config, sidebar_config, content, created_at, updated_at, is_public\)/);
+assert.match(sql, /INSERT INTO public\.checklists \(id, trip_id, scope, title, created_at, updated_at\)/);
+assert.match(sql, /INSERT INTO public\.checklist_items \([^)]*created_at, updated_at/);
+assert.match(sql, /INSERT INTO public\.expenses \([^)]*created_at[^)]*updated_at/);
+assert.equal(latestFixtureTimestamp(data), "2026-11-01T00:00:00.000Z");
 assert.match(sql, /existing_trip\.content -> '__testFixture' IS DISTINCT FROM 'true'::jsonb/,
   "existing explicitly marked legacy synthetic trips must be safe import targets");
 assert.match(sql, /content = \(public\.trips\.content - 'testPurpose' - 'fixtureDescription' - 'checklistData' - '__testFixture'\) \|\| EXCLUDED\.content/,

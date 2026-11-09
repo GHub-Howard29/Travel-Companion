@@ -26,14 +26,22 @@
 - **既有診斷更正原則：** 過去若只在 OpenChatX 預設 shell 讀到 v22.18.0，應更正為「OpenChatX 內建 Node v22.18.0；專案 Node 版本須依專案設定及該主機安裝位置，在專案 PATH 下另行驗證」，不得將其列為專案工具阻塞。
 
 # Supabase A/B 雙機測試資料同步規則
+> **權威規格與優先順序：** 本節摘要必須與 `docs/83_本機測試資料庫同步流程.md` 第 2 節「對等節點與三方共同基準規則」一致；該節是同步方向、Base 初始化、格式相容與停止條件的唯一詳細規格。文件第 6 節及其他舊紀錄只供追溯，凡與第 2 節不一致均已廢止、不可執行。不得重新提出或套用時間戳新舊判斷。
 - 目前維護目標為公司端（A）與家用端（B）雙機；兩端只操作各自的本機 loopback Supabase。Git `origin/develop` 傳遞合成測試業務資料 fixture，不代表整個資料庫快照。
 - 上傳一次搜尋所有 `is_public=false` 且 `content.testPurpose='three-way-sync'` 的 TRIP；每筆 TRIP 保留自己的 ID 與 fixture 目錄，允許多筆批次處理，不要求 TRIP 名稱或 ID 固定格式。不複製 Docker volume，也不使用正式資料庫 dump。
-- 唯一同步依據為本機 DB／案例內容與 Git 目前快照的直接比較：內容相同為 unchanged，內容不同且必要安全驗證通過即可同步。`baselineAt`、version、parentVersion、parentChecksum、checksum、applied state 及時間戳不得作為上傳／下載許可門檻；若保留，只供閱讀或稽核。DB 比較可忽略 trigger 自動更新的 `created_at`／`updated_at`，不得忽略其他業務欄位。
+- **現行唯一同步判斷：Local／Git／Base 三方共同基準。** 方向只依正規化業務內容指紋（SHA-256 等）判斷，不依賴 `created_at`、`updated_at`、`baselineAt`、`exportedAt` 或主機時間。時間戳可靠性已盤點為不足以判斷勝負：內容相同可能時間不同，內容不同也可能時間相同；時間欄位只需在資料匯入時保留來源值。
+- **Base 定義：** 本機 `supabase/.temp/testdata-sync-baselines.json` 保存該節點上次成功同步的共同內容指紋。Git manifest 的 `syncBaseChecksum` 只能作舊格式相容 metadata，不可在本機 Base 缺失時直接當作歷史共同基準。Local 與 Git 相同可建立／修復 Base；Local 缺少且 Git 有有效 fixture 時可經安全下載建立 Base；Git 缺少且 Local 是明確合成測試資料時可經安全上傳建立 Base；兩端都有但不同且無有效 Base 時必須停止人工確認，不可猜方向。
+- **三方分類：** Local=Base、Git=Base → unchanged；只有 Local≠Base → 只允許上傳；只有 Git≠Base → 只允許下載；兩端都≠Base → conflict，不覆蓋任一端。上傳與下載共用同一分類函式，口令方向只允許各自動作；方向不符時提示另一個獨立入口，不可自動切換。
+- **首次 bootstrap：** Local 與 Git 相同時可建立 Base；Local 不存在而 Git 有有效 fixture 時可安全下載後建立；Git 不存在而 Local 是明確標記的合成測試資料時可安全上傳後建立；兩端都有但不同且缺少有效 Base 時必須停止人工確認，絕不可用 Git 目前內容補當歷史 Base。Base 更新只能發生在內容一致或對應資料搬移成功後；不得在錯誤／衝突／push 失敗時提前更新。
+- 不依賴 version／revision／parent／applied state／提交數或版本鏈。Checksum 不是舊 manifest 格式門檻；由實際正規化內容即時計算指紋。Base 本身仍需要有效內容指紋，不能移除三方比較所需的共同歷史。
+- Manifest 的 schemaVersion、counts、syncBaseChecksum、syncedAt 等輔助 metadata 應相容讀取；counts 不一致是統計資訊過期，不可單獨阻擋內容比較。必要資料表、欄位型別、資料範圍、關聯及敏感資料驗證仍必須嚴格執行。
+- Base 缺失或格式無效時，該筆視為無有效共同基準：兩端內容相同可修復；內容不同必須停止。Base 只在內容一致或資料搬移成功後更新，不得在衝突、驗證失敗、寫入失敗或 Git push 失敗時提前更新。
 - 目前業務資料白名單為 `trips`、`checklists`、`checklist_items`、`expenses`、`exchange_purchases`、`other_info_items`。帳戶 Email、管理者／使用者個人資料、Auth users、participants、participant Email maps、sessions、owner／creator 身分、token、密碼、附件中繼資料及 Storage 檔案不跨機同步。下載先驗證有差異的 fixture，再將多筆 fixture 在單一 SQL 交易中套用；不得覆蓋 fixture 範圍以外的資料。
 - 新的獨立上傳入口為 `npm run testdata:upload`（`scripts/testdata-upload.mjs`）；新的獨立下載入口為 `npm run testdata:download`（`scripts/testdata-download.mjs`）。上傳入口不下載／匯入；下載入口不 pull／commit／push。兩者皆不得觸碰正式 Supabase。
+- `--local-test` 僅供明確執行單機往返整合測試：略過一般 Git 工作樹／分支檢查，上傳只改工作目錄 fixture、不 commit/push，下載可讀取該工作目錄 fixture；仍必須通過 loopback Supabase 檢查。不得用於日常同步或跨機交接。
 - 口令分工已定案：完整口令 `commit/push/資料庫` 已整個廢除，不再是有效指令，收到時不執行任何動作；一般 Git 操作使用 `commit`、`push` 或 `commit/push`；`/上傳資料庫` 僅執行 `npm run testdata:upload`；`/下載資料庫` 僅執行 `npm run testdata:download`。不得把 upload/download 串接到任何 Git 指令或其他自動化流程；`db:sync:local` 只依既有 Git fixture 進行內容比較下載，不得上傳。
 - 若執行特定主機的本機資料庫操作，或要宣稱該主機產生新的驗證結果，仍須確認實際主機識別；不得把家用電腦測試結果誤報為公司電腦證據，也不得在未確認前操作另一台電腦。公司電腦識別基準仍為 Windows `COMPUTERNAME=TPEPC-TM7503-01`、`USERDOMAIN=NICE-GREEN`，專案路徑 `D:\\Project\\Travel-Companion`。
-- Excel RPC 案例集是獨立資料集；案例 unchanged 不得阻擋一般 TRIP fixture 上傳或下載。**尚待實證：** 本次程式單元／SQL 生成測試通過；修改後 A→B、B→A 真實本機資料庫往返仍待實機驗收。三方歷史紀錄保留於 `docs/83_本機測試資料庫同步流程.md` 第 6 節。
+- Excel RPC 案例集是獨立資料集；案例 unchanged 不得阻擋一般 TRIP fixture 上傳或下載。**既有驗證紀錄（非本次規格變更的測試結果）：** 過去時間優先規則的單元測試、SQL 生成測試及公司端單機上傳→下載曾通過；其中匯入保留來源時間戳、觸發器恢復、往返後 unchanged 的結果僅證明當時程式行為，不代表時間戳仍可作同步判斷。現行三方共同基準及本次文件修正尚未完成程式實作與回歸測試；不得宣稱新規則已實機驗收。歷史三方節點往返紀錄見 `docs/83_本機測試資料庫同步流程.md` 第 6 節。
 
 # 每次開始工作前：Git 與 Supabase 核對
 - 每次開始任何專案任務，先在專案根目錄檢查 `git status --short --branch`、目前分支與 upstream；再執行 `git fetch origin`，確認本機與遠端差異。不得因任務看似只改文件就跳過。

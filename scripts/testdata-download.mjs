@@ -6,6 +6,7 @@ import os from "node:os";
 import process from "node:process";
 import { EXCEL_RPC_DATASET_ID, normalizeExcelRpcDatasetCases, validateExcelRpcDataset } from "./lib/excel-rpc-test-dataset.mjs";
 import { applyFixtureImport, normalizeFixtureRows } from "./lib/testdata-download-apply.mjs";
+import { classifyThreeWaySync, checksumFixture, createSyncedManifest, readSyncState, resolveBaseChecksum, writeSyncState } from "./lib/testdata-clock-sync.mjs";
 
 process.env.SUPABASE_TELEMETRY_DISABLED = "1";
 const root = process.cwd();
@@ -32,14 +33,14 @@ export function canonical(value) {
   if (value && typeof value === "object") return Object.fromEntries(Object.keys(value).sort().map((key) => [key, canonical(value[key])]));
   return value;
 }
-export function withoutDatabaseTimestamps(row) {
-  const { created_at: _createdAt, updated_at: _updatedAt, ...rest } = row;
-  return canonical(rest);
-}
-export function sameFixtureRows(left, right, { ignoreTimestamps = false } = {}) {
+export function sameFixtureRows(left, right) {
   const normalizedLeft = normalizeFixtureRows(left);
   const normalizedRight = normalizeFixtureRows(right);
-  const normalize = (rows) => rows.map(ignoreTimestamps ? withoutDatabaseTimestamps : canonical).sort((a, b) =>
+  const withoutTimestamps = (row) => {
+    const { created_at: _createdAt, updated_at: _updatedAt, ...businessFields } = row;
+    return businessFields;
+  };
+  const normalize = (rows) => rows.map((row) => canonical(withoutTimestamps(row))).sort((a, b) =>
     JSON.stringify(a).localeCompare(JSON.stringify(b)));
   return tables.every((table) => JSON.stringify(normalize(normalizedLeft[table])) === JSON.stringify(normalize(normalizedRight[table])));
 }
@@ -65,9 +66,9 @@ export async function readRemoteBaseline(directory) {
   const manifest = JSON.parse(await readFile(path.join(directory, "manifest.json"), "utf8"));
   const rawData = JSON.parse(await readFile(path.join(directory, "data.json"), "utf8"));
   if (!manifest || typeof manifest.fixtureId !== "string" || !manifest.fixtureId.trim() || manifest.fixtureId !== path.basename(directory) ||
-      manifest.schemaVersion !== 1 || !["active", "regression_pending"].includes(manifest.status) ||
-      !Array.isArray(manifest.tables) || manifest.tables.length !== tables.length ||
-      tables.some((table) => !manifest.tables.includes(table))) {
+      (manifest.status !== undefined && !["active", "regression_pending"].includes(manifest.status)) ||
+      (manifest.tables !== undefined && (!Array.isArray(manifest.tables) ||
+        tables.some((table) => !manifest.tables.includes(table))))) {
     throw new Error(`遠端 fixture manifest 結構無效：${path.basename(directory)}`);
   }
   if (!rawData || typeof rawData !== "object" || Array.isArray(rawData) ||
@@ -79,7 +80,7 @@ export async function readRemoteBaseline(directory) {
   const data = normalizeFixtureRows(rawData);
   if (data.trips[0].is_public !== false) throw new Error(`遠端 fixture ${manifest.fixtureId} 不是非公開測試行程。`);
   for (const table of tables) {
-    if (!Array.isArray(rawData[table]) || manifest.counts?.[table] !== rawData[table].length) throw new Error(`遠端 fixture ${manifest.fixtureId} 的 ${table} 筆數不符。`);
+    if (!Array.isArray(rawData[table])) throw new Error(`遠端 fixture ${manifest.fixtureId} 缺少必要資料表：${table}`);
   }
   if (["checklists", "expenses", "exchange_purchases", "other_info_items"].some((table) => data[table].some((row) => row.trip_id !== manifest.fixtureId))) {
     throw new Error(`遠端 fixture ${manifest.fixtureId} 含有其他行程資料。`);
@@ -90,7 +91,7 @@ export async function readRemoteBaseline(directory) {
   detectSensitive(data);
   return { manifest, data };
 }
-async function fetchCurrentData(fixtureId) {
+export async function fetchCurrentData(fixtureId) {
   const id = quote(fixtureId);
   const sql = `select json_build_object(
     'trips', coalesce((select json_agg(to_jsonb(t)) from (select id,title,departure_date,currency_config,sidebar_config,content,created_at,updated_at,is_public from public.trips where id=${id}) t),'[]'::json),
@@ -109,7 +110,7 @@ async function fetchCurrentData(fixtureId) {
     return rows[0].payload;
   } finally { await rm(file, { force: true }); }
 }
-async function downloadOne(entry) {
+async function downloadOne(entry, syncState) {
   const directory = path.join(fixturesRoot, entry.name);
   const { manifest, data } = await readRemoteBaseline(directory);
   const actual = await fetchCurrentData(entry.name);
@@ -118,10 +119,36 @@ async function downloadOne(entry) {
       (currentTrip.content?.testPurpose !== "three-way-sync" && currentTrip.content?.__testFixture !== true))) {
     throw new Error(`本機同 ID 行程不是指定測試資料，拒絕覆寫：${entry.name}`);
   }
-  if (sameFixtureRows(actual, data, { ignoreTimestamps: true })) {
-    return { fixtureId: entry.name, result: "unchanged", data: null, manifest: null };
+  const remoteChecksum = checksumFixture(data);
+  const localChecksum = currentTrip ? checksumFixture(actual) : null;
+  const base = resolveBaseChecksum({
+    state: syncState, fixtureId: entry.name,
+    localChecksum, remoteChecksum, localExists: Boolean(currentTrip),
+  });
+  const decision = classifyThreeWaySync({
+    localChecksum, remoteChecksum, baseChecksum: base.checksum, localExists: Boolean(currentTrip),
+  });
+  if (decision.action === "conflict") {
+    const detail = decision.reason === "unknown-common-baseline" || decision.reason === "invalid-common-baseline"
+      ? "找不到有效的本機共同基準；兩端內容不同時必須先人工確認，不可用 Git 目前內容代替歷史 Base。"
+      : "本機與 Git 自上次共同同步後都有各自變更；為保護雙方資料，停止下載。";
+    throw new Error(`fixture ${entry.name} 同步衝突：${detail} 未覆寫任何資料。`);
   }
-  return { fixtureId: entry.name, result: "downloaded", manifest, data };
+  if (decision.action === "unchanged") {
+    return {
+      fixtureId: entry.name, result: "unchanged", reason: decision.reason,
+      baselineSource: base.source, bootstrap: base.bootstrap === true,
+      checksum: remoteChecksum, manifest: base.bootstrap ? manifest : null, data: null,
+    };
+  }
+  if (decision.action === "upload") {
+    return { fixtureId: entry.name, result: "local-changed", reason: decision.reason, baselineSource: base.source, checksum: null, data: null, manifest: null };
+  }
+  return {
+    fixtureId: entry.name, result: "downloaded", reason: decision.reason,
+    baselineSource: base.source, bootstrap: base.bootstrap === true,
+    checksum: remoteChecksum, manifest, data,
+  };
 }
 async function prepareExcelRpcDatasetDownload() {
   const directory = path.join(fixturesRoot, EXCEL_RPC_DATASET_ID);
@@ -148,12 +175,16 @@ async function prepareExcelRpcDatasetDownload() {
 }
 export async function runDownload() {
   if (process.platform !== "win32") throw new Error("此下載入口目前只支援專案 Windows 節點。");
-  if (runGit(["branch", "--show-current"]) !== "develop") throw new Error("下載只允許在 develop 分支。");
-  const upstream = runGit(["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"]);
-  if (upstream !== "origin/develop") throw new Error("develop upstream 必須是 origin/develop。");
-  const status = runGit(["status", "--porcelain=v1", "--untracked-files=all"]);
-  if (status) throw new Error("下載前 Git 工作樹必須乾淨；請先保存／提交其他變更。");
+  const localTestOnly = process.argv.includes("--local-test");
+  if (!localTestOnly) {
+    if (runGit(["branch", "--show-current"]) !== "develop") throw new Error("下載只允許在 develop 分支。");
+    const upstream = runGit(["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"]);
+    if (upstream !== "origin/develop") throw new Error("develop upstream 必須是 origin/develop。");
+    const status = runGit(["status", "--porcelain=v1", "--untracked-files=all"]);
+    if (status) throw new Error("下載前 Git 工作樹必須乾淨；請先保存／提交其他變更。");
+  }
   assertLocalOnly();
+  const syncState = await readSyncState();
 
   let excelPlan;
   try {
@@ -180,7 +211,7 @@ export async function runDownload() {
     if (!manifest || manifest.fixtureId !== entry.name) {
       throw new Error(`測試 fixture 目錄與 manifest ID 不一致：${entry.name}`);
     }
-    fixturePlans.push(await downloadOne(entry));
+    fixturePlans.push(await downloadOne(entry, syncState));
   }
 
   const changedFixtures = fixturePlans
@@ -188,6 +219,15 @@ export async function runDownload() {
     .map(({ manifest, data }) => ({ manifest, data, previousData: null }));
   if (changedFixtures.length) {
     await applyFixtureImport(changedFixtures, { runCli: (args) => runCli(args) });
+  }
+  const baselineUpdates = Object.fromEntries(
+    fixturePlans
+      .filter((item) => ["downloaded", "unchanged"].includes(item.result))
+      .map((item) => [item.fixtureId, item.checksum]),
+  );
+  if (Object.keys(baselineUpdates).length) {
+    const baselinePath = path.resolve(root, "supabase", ".temp", "testdata-sync-baselines.json");
+    await writeSyncState(syncState, baselineUpdates, baselinePath);
   }
 
   if (excelPlan.result === "downloaded") {
@@ -207,16 +247,19 @@ export async function runDownload() {
 
   const results = [excelPlan, ...fixturePlans].map(({ data, cases, manifest, localCasesPath, ...summary }) => summary);
   const fixtureChangedCount = changedFixtures.length;
+  const localChangedCount = fixturePlans.filter((item) => item.result === "local-changed").length;
   const excelChanged = excelPlan.result === "downloaded";
   const excelFailed = excelPlan.result === "error";
   console.log("[testdata-download] 下載檢查完成");
   console.log(`- 資料庫測試行程：${fixtureChangedCount === 0 ? "無需更新" : `已更新 ${fixtureChangedCount} 組`}`);
+  console.log(`- 本機內容有變更、需上傳：${localChangedCount} 組（本次不會覆蓋本機）`);
   console.log(`- Excel RPC 測試案例：${excelChanged ? "已更新" : excelFailed ? `未更新：${excelPlan.error}` : "內容相同，無需更新"}`);
-  console.log(`- 本機資料庫寫入：${fixtureChangedCount > 0 ? "已完成交易式匯入" : "未執行（內容相同）"}`);
+  console.log(`- 本機資料庫寫入：${fixtureChangedCount > 0 ? "已完成交易式匯入" : localChangedCount > 0 ? "未執行（本機有單邊變更，請上傳）" : "未執行（內容相同）"}`);
   console.log(JSON.stringify({
     success: !excelFailed,
     downloaded: fixtureChangedCount > 0 || excelChanged,
     databaseFixturesApplied: fixtureChangedCount,
+    localChangedFixturesPreserved: localChangedCount,
     excelCasesUpdated: excelChanged,
     excelCasesError: excelFailed ? excelPlan.error : null,
     results,

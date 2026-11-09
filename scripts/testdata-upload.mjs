@@ -3,7 +3,8 @@ import { mkdir, readFile, writeFile, rename, rm, readdir } from "node:fs/promise
 import path from "node:path";
 import os from "node:os";
 import process from "node:process";
-import { normalizeFixtureRows } from "./lib/testdata-download-apply.mjs";
+import { countExcludedFixtureFields, normalizeFixtureRows } from "./lib/testdata-download-apply.mjs";
+import { classifyThreeWaySync, checksumFixture, createBaselineRecord, createSyncedManifest, readSyncState, resolveBaseChecksum, writeSyncState } from "./lib/testdata-clock-sync.mjs";
 import { EXCEL_RPC_DATASET_ID, planExcelRpcDatasetUpload, validateExcelRpcDataset } from "./lib/excel-rpc-test-dataset.mjs";
 
 process.env.SUPABASE_TELEMETRY_DISABLED = "1";
@@ -132,13 +133,12 @@ function validateData(data, fixtureId) {
 async function readBaseline(directory) {
   const raw = JSON.parse(await readFile(path.join(directory, "manifest.json"), "utf8"));
   if (["released", "archived", "deleted"].includes(raw?.status)) {
-    return { raw, data: null, needsMigration: false };
+    return { raw, data: null };
   }
   const rawData = JSON.parse(await readFile(path.join(directory, "data.json"), "utf8"));
-  if (!raw || raw.schemaVersion !== 1 || raw.fixtureId !== path.basename(directory) ||
-      !["active", "regression_pending"].includes(raw.status) ||
-      !Array.isArray(raw.tables) || raw.tables.length !== tables.length || tables.some((table) => !raw.tables.includes(table)) ||
-      !raw.counts || typeof raw.counts !== "object" || Array.isArray(raw.counts)) {
+  if (!raw || raw.fixtureId !== path.basename(directory) ||
+      (raw.status !== undefined && !["active", "regression_pending"].includes(raw.status)) ||
+      (raw.tables !== undefined && (!Array.isArray(raw.tables) || tables.some((table) => !raw.tables.includes(table))))) {
     throw new Error(`Fixture manifest 結構無效：${path.basename(directory)}`);
   }
   if (!rawData || typeof rawData !== "object" || Array.isArray(rawData) ||
@@ -149,11 +149,11 @@ async function readBaseline(directory) {
     throw new Error(`Fixture ${raw.fixtureId} 缺少有效的測試用途標記或資料表結構。`);
   }
   const data = normalizeFixtureRows(rawData);
-  for (const table of tables) if (!Array.isArray(rawData[table]) || raw.counts[table] !== rawData[table].length) {
-    throw new Error(`Fixture ${raw.fixtureId} ${table} 結構或筆數不符。`);
+  for (const table of tables) if (!Array.isArray(rawData[table])) {
+    throw new Error(`Fixture ${raw.fixtureId} 缺少必要資料表：${table}`);
   }
   validateData(data, raw.fixtureId);
-  return { raw, data, needsMigration: JSON.stringify(data) !== JSON.stringify(rawData) };
+  return { raw, data };
 }
 async function markTripForSync(tripId) {
   if (typeof tripId !== "string" || !tripId.trim()) throw new Error("行程識別碼不可空白。");
@@ -177,7 +177,9 @@ async function main() {
     return;
   }
   const previewOnly = process.argv.includes("--preview");
-  if (!previewOnly) {
+  const localTestOnly = process.argv.includes("--local-test");
+  if (previewOnly && localTestOnly) throw new Error("--preview 與 --local-test 不可同時使用。");
+  if (!previewOnly && !localTestOnly) {
     if (runGit(["branch", "--show-current"]) !== "develop") throw new Error("上傳只允許在 develop 分支。");
     const upstream = runGit(["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"]);
     if (upstream !== "origin/develop") throw new Error("develop upstream 必須是 origin/develop。");
@@ -189,6 +191,8 @@ async function main() {
   }
 
   assertLocalOnly();
+  const syncState = await readSyncState();
+  const syncStateUpdates = {};
   const published = [];
   const pendingWrites = [];
   const datasetDirectory = path.join(fixturesRoot, EXCEL_RPC_DATASET_ID);
@@ -239,52 +243,68 @@ async function main() {
     const directory = path.join(fixturesRoot, fixtureId);
     let previous = null;
     let previousData = null;
-    let previousNeedsMigration = false;
     try {
-      ({ raw: previous, data: previousData, needsMigration: previousNeedsMigration } = await readBaseline(directory));
+      ({ raw: previous, data: previousData } = await readBaseline(directory));
     } catch (error) {
       if (error?.code !== "ENOENT") throw error;
     }
     if (previous && !["active", "regression_pending"].includes(previous.status)) continue;
     const id = quote(fixtureId);
     const sql = `select json_build_object(
-      'trips', coalesce((select json_agg(to_jsonb(t)) from (select id,title,departure_date,currency_config,sidebar_config,(content - 'participants' - 'participantEmailMap' - 'checklistData' - 'participantMap' - 'participantEmailMaps') || jsonb_build_object('testPurpose', '${fixtureMarker}') as content,created_at,updated_at,is_public from public.trips where id=${id}) t),'[]'::json),
+      'trips', coalesce((select json_agg(to_jsonb(t) - 'created_by') from (select id,title,departure_date,currency_config,sidebar_config,content,participants,created_at,updated_at,is_public from public.trips where id=${id}) t),'[]'::json),
       'checklists', coalesce((select json_agg(to_jsonb(c) - 'created_by' - 'owner_user_id') from (select id,trip_id,scope,title,created_at,updated_at from public.checklists where trip_id=${id} and scope='shared') c),'[]'::json),
       'checklist_items', coalesce((select json_agg(to_jsonb(i) - 'created_by') from (select i.id,i.checklist_id,i.client_item_id,i.label,i.is_checked,i.sort_order,i.created_at,i.updated_at,i.deleted_at,i.category from public.checklist_items i join public.checklists c on c.id=i.checklist_id where c.trip_id=${id} and c.scope='shared') i),'[]'::json),
-      'expenses', coalesce((select json_agg(to_jsonb(e) - 'id' - 'owner_user_id' - 'recorded_by_email' - 'payer' - 'attachment_path' - 'attachment_bucket' - 'attachment_name' - 'attachment_mime' - 'attachment_size' - 'attachment_status' - 'attachment_uploaded_at' - 'attachment_uploaded_by' - 'attachment_last_error') from (select trip_id,title,amount,currency,created_at,expense_date,client_item_id,updated_at,deleted_at from public.expenses where trip_id=${id}) e),'[]'::json),
+      'expenses', coalesce((select json_agg(to_jsonb(e) - 'id' - 'owner_user_id' - 'recorded_by_email' - 'attachment_path' - 'attachment_bucket' - 'attachment_name' - 'attachment_mime' - 'attachment_size' - 'attachment_status' - 'attachment_uploaded_at' - 'attachment_uploaded_by' - 'attachment_last_error') from (select trip_id,title,amount,currency,payer,created_at,expense_date,client_item_id,updated_at,deleted_at from public.expenses where trip_id=${id}) e),'[]'::json),
       'exchange_purchases', coalesce((select json_agg(to_jsonb(e) - 'created_by') from (select id,trip_id,client_item_id,foreign_currency,purchase_date,twd_amount,foreign_amount,created_at,updated_at from public.exchange_purchases where trip_id=${id}) e),'[]'::json),
       'other_info_items', coalesce((select json_agg(to_jsonb(o) - 'created_by') from (select id,trip_id,client_item_id,folder_id,title,content,allowed_roles,sort_order,created_at,updated_at,deleted_at from public.other_info_items where trip_id=${id}) o),'[]'::json)
     ) as payload`;
     const queryRows = await query(sql);
     if (queryRows.length !== 1) throw new Error(`測試行程 ${fixtureId} 的資料查詢筆數不符，停止匯出。`);
-    const rawData = queryNormalize(queryRows[0]);
-    const excluded = {
-      participants: 1,
-      embeddedChecklistData: 0,
-      emailMaps: 0,
-      userAccounts: 0,
-      expensePayers: 0,
-    };
+    const rawData = queryRows[0];
+    const excluded = countExcludedFixtureFields(rawData);
     const data = queryNormalize(rawData);
     validateData(data, fixtureId);
-    const sameContent = previous && !previousNeedsMigration &&
-      JSON.stringify(queryNormalize(data)) === JSON.stringify(queryNormalize(previousData));
-    fixtureReports.push({ fixtureId, result: sameContent ? "unchanged" : previous ? "updated" : "created", excluded });
-    if (sameContent) continue;
+    const localBaseline = createBaselineRecord({ fixtureId, data, sourceHost: hostname });
+    const localChecksum = localBaseline.checksum;
+    const remoteChecksum = previous ? checksumFixture(previousData) : null;
+    const base = resolveBaseChecksum({
+      state: syncState, fixtureId, localChecksum, remoteChecksum, localExists: true,
+    });
+    const syncDecision = previous
+      ? classifyThreeWaySync({ localChecksum, remoteChecksum, baseChecksum: base.checksum })
+      : { action: "upload", reason: "git-fixture-missing" };
+    if (syncDecision.action === "conflict") {
+      const detail = syncDecision.reason === "unknown-common-baseline" || syncDecision.reason === "invalid-common-baseline"
+        ? "找不到有效的本機共同基準；兩端內容不同時必須先人工確認，不可使用 Git manifest 目前內容代替歷史 Base。"
+        : "本機與 Git 自上次共同同步後都有各自變更，為保護雙方資料而停止。";
+      throw new Error(`fixture ${fixtureId} 同步衝突：${detail} 未覆寫任何一端。`);
+    }
+    if (localTestOnly && !previous) throw new Error(`local-test 不允許建立新 fixture：${fixtureId}`);
+    const result = syncDecision.action === "download" ? "git-only-change" :
+      syncDecision.action === "unchanged" ? "unchanged" : previous ? "updated" : "created";
+    fixtureReports.push({ fixtureId, result, reason: syncDecision.reason, baselineSource: base.source, excluded });
+    if (syncDecision.action === "unchanged") {
+      syncStateUpdates[fixtureId] = localChecksum;
+      continue;
+    }
+    if (syncDecision.action === "download") {
+      throw new Error(`fixture ${fixtureId} 的 Git 內容相對共同基準已有變更；本次是 /上傳資料庫，不會自動下載，請先獨立執行 /下載資料庫。`);
+    }
     await mkdir(directory, { recursive: true });
     if (previous && !await assertSafeFixtureUpdate(fixtureId, directory, previous)) {
       throw new Error(`fixture ${fixtureId} 有未經版本化的本機檔案變更，拒絕覆寫。`);
     }
-    const baselineAt = new Date().toISOString();
-    const manifest = {
+    const exportedAt = new Date().toISOString();
+    const manifest = createSyncedManifest({
       schemaVersion: 1, fixtureId,
-      status: previous?.status ?? "active", sourceHost: hostname, baselineAt,
-      exportedAt: baselineAt, tables,
+      status: previous?.status ?? "active", sourceHost: hostname,
+      exportedAt, tables,
       counts: Object.fromEntries(tables.map((table) => [table, data[table].length])),
       note: "Synthetic test data only. User accounts and all participant data are excluded. Synchronization is decided by canonical content comparison.",
-    };
+    }, localChecksum, exportedAt);
     pendingWrites.push({ directory, kind: "fixture", data, manifest });
     published.push({ fixtureId, kind: "fixture" });
+    syncStateUpdates[fixtureId] = localChecksum;
   }
   if (process.argv.includes("--preview")) {
     console.log(JSON.stringify({
@@ -297,10 +317,11 @@ async function main() {
     return;
   }
   if (!published.length) {
+    if (Object.keys(syncStateUpdates).length) await writeSyncState(syncState, syncStateUpdates);
     console.log(JSON.stringify({
       uploaded: false,
       reason: "unchanged",
-      message: "TRIP fixtures 與 Excel RPC 案例集均無內容變更，未建立 commit。",
+      message: "TRIP fixtures 與 Excel RPC 案例集均無需上傳，未建立 commit。",
       fixtures: fixtureReports,
       excelRpc: excelRpcReport,
     }, null, 2));
@@ -369,6 +390,20 @@ async function main() {
       validateData(data, raw.fixtureId);
     }
   }
+  if (localTestOnly) {
+    if (Object.keys(syncStateUpdates).length) await writeSyncState(syncState, syncStateUpdates);
+    console.log(JSON.stringify({
+      uploaded: true,
+      localTestOnly: true,
+      committed: false,
+      pushed: false,
+      fixtures: published,
+      fixtureReports,
+      excelRpc: excelRpcReport,
+      note: "本機往返測試模式：只寫入工作目錄 fixture，未執行 Git stage/commit/push。",
+    }, null, 2));
+    return;
+  }
   for (const file of paths) runGit(["add", "--", file]);
   const staged = runGit(["diff", "--cached", "--name-only"]).split(/\r?\n/).filter(Boolean);
   if (staged.length !== paths.length || staged.some((file) => !paths.includes(file))) throw new Error("上傳 stage 超出 fixture 白名單；停止 commit/push。");
@@ -379,6 +414,7 @@ async function main() {
   const remoteCounts = runGit(["rev-list", "--left-right", "--count", "HEAD...origin/develop"]).split(/\s+/).map(Number);
   if (remoteCounts[0] !== 1 || remoteCounts[1] !== 0) throw new Error("commit 後遠端已變更或分支差異異常；停止 push。");
   runGit(["push", "origin", "develop"]);
+  if (Object.keys(syncStateUpdates).length) await writeSyncState(syncState, syncStateUpdates);
   console.log(JSON.stringify({
     uploaded: true,
     committed: true,

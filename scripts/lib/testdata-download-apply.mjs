@@ -71,8 +71,50 @@ export function normalizeFixtureRows(data) {
   return normalized;
 }
 
+function canonicalFixtureValue(value) {
+  if (Array.isArray(value)) return value.map(canonicalFixtureValue);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(Object.keys(value).sort().map((key) => [key, canonicalFixtureValue(value[key])]));
+  }
+  return value;
+}
+
 export function checksumFixture(data) {
-  return createHash("sha256").update(JSON.stringify(normalizeFixtureRows(data))).digest("hex");
+  // Database timestamps are audit metadata, not business content or sync direction.
+  const normalized = normalizeFixtureRows(data);
+  const content = Object.fromEntries(Object.entries(normalized).map(([table, rows]) => [
+    table,
+    rows.map((row) => {
+      const { created_at: _createdAt, updated_at: _updatedAt, ...businessFields } = row;
+      return businessFields;
+    }),
+  ]));
+  return createHash("sha256").update(JSON.stringify(canonicalFixtureValue(content))).digest("hex");
+}
+
+export function latestFixtureTimestamp(data) {
+  const rows = allowedTables.flatMap((table) => data?.[table] ?? []);
+  const timestamps = rows.map((row) => row.updated_at || row.created_at);
+  if (!timestamps.length || timestamps.some((value) => value === null || value === undefined || value === "")) {
+    throw new Error("測試 Fixture 有資料列缺少 created_at／updated_at，無法判斷資料新舊。");
+  }
+  const parsed = timestamps.map((value) => Date.parse(value));
+  if (parsed.some((value) => !Number.isFinite(value))) throw new Error("測試 Fixture 含無效 created_at／updated_at，無法判斷資料新舊。");
+  return new Date(Math.max(...parsed)).toISOString();
+}
+
+export function countExcludedFixtureFields(data) {
+  const trips = Array.isArray(data?.trips) ? data.trips : [];
+  const content = trips[0]?.content && typeof trips[0].content === "object" ? trips[0].content : {};
+  const countArray = (value) => Array.isArray(value) ? value.length : 0;
+  const countObjectEntries = (value) => value && typeof value === "object" && !Array.isArray(value) ? Object.keys(value).length : 0;
+  return {
+    participants: trips.reduce((sum, trip) => sum + countArray(trip.participants), 0),
+    embeddedChecklistData: countArray(content.checklistData),
+    emailMaps: countObjectEntries(content.participantEmailMap) + countObjectEntries(content.participantEmailMaps),
+    participantMaps: countObjectEntries(content.participantMap),
+    expensePayers: (data?.expenses ?? []).filter((row) => row.payer !== null && row.payer !== undefined && row.payer !== "").length,
+  };
 }
 
 function sqlLiteral(value) {
@@ -81,6 +123,9 @@ function sqlLiteral(value) {
 
 export function buildFixtureImportSql(fixtures) {
   const body = ["DO $tc_fixture$", "DECLARE", "  existing_trip public.trips;", "  match_count integer;", "BEGIN"];
+  for (const [table, trigger] of [["trips", "trips_touch_updated_at"], ["checklists", "checklists_touch_updated_at"], ["checklist_items", "checklist_items_touch_updated_at"], ["expenses", "expenses_touch_updated_at"], ["exchange_purchases", "exchange_purchases_touch_updated_at"], ["other_info_items", "other_info_items_touch_updated_at"]]) {
+    body.push(`  IF EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = '${trigger}' AND tgrelid = 'public.${table}'::regclass AND NOT tgisinternal) THEN EXECUTE 'ALTER TABLE public.${table} DISABLE TRIGGER ${trigger}'; END IF;`);
+  }
   for (const fixture of fixtures) {
     const { manifest, data } = fixture;
     if (!manifest || typeof manifest.fixtureId !== "string" || !manifest.fixtureId.trim() ||
@@ -131,13 +176,13 @@ export function buildFixtureImportSql(fixtures) {
 
     for (const row of data.trips) {
       const json = sqlLiteral(JSON.stringify(row)) + "::jsonb";
-      body.push(`  INSERT INTO public.trips (id, title, departure_date, currency_config, sidebar_config, content, is_public) SELECT r.id, r.title, r.departure_date, r.currency_config, r.sidebar_config, r.content, r.is_public FROM jsonb_populate_record(NULL::public.trips, ${json}) AS r ON CONFLICT (id) DO UPDATE SET title = EXCLUDED.title, departure_date = EXCLUDED.departure_date, currency_config = EXCLUDED.currency_config, sidebar_config = EXCLUDED.sidebar_config, content = (public.trips.content - 'testPurpose' - 'fixtureDescription' - 'checklistData' - '__testFixture') || EXCLUDED.content, is_public = EXCLUDED.is_public;`);
+      body.push(`  INSERT INTO public.trips (id, title, departure_date, currency_config, sidebar_config, content, created_at, updated_at, is_public) SELECT r.id, r.title, r.departure_date, r.currency_config, r.sidebar_config, r.content, r.created_at, r.updated_at, r.is_public FROM jsonb_populate_record(NULL::public.trips, ${json}) AS r ON CONFLICT (id) DO UPDATE SET title = EXCLUDED.title, departure_date = EXCLUDED.departure_date, currency_config = EXCLUDED.currency_config, sidebar_config = EXCLUDED.sidebar_config, content = (public.trips.content - 'testPurpose' - 'fixtureDescription' - 'checklistData' - '__testFixture') || EXCLUDED.content, created_at = EXCLUDED.created_at, updated_at = EXCLUDED.updated_at, is_public = EXCLUDED.is_public;`);
     }
     for (const row of data.checklists) {
       const json = sqlLiteral(JSON.stringify(row)) + "::jsonb";
       body.push(`  SELECT count(*) INTO match_count FROM public.checklists WHERE id = ${sqlLiteral(row.id)} AND (trip_id <> ${tripId} OR scope <> 'shared');`);
       body.push(`  IF match_count > 0 THEN RAISE EXCEPTION 'Fixture checklist id belongs to another scope: %', ${sqlLiteral(row.id)}; END IF;`);
-      body.push(`  INSERT INTO public.checklists (id, trip_id, scope, title) SELECT r.id, r.trip_id, r.scope, r.title FROM jsonb_populate_record(NULL::public.checklists, ${json}) AS r ON CONFLICT (id) DO UPDATE SET title = EXCLUDED.title;`);
+      body.push(`  INSERT INTO public.checklists (id, trip_id, scope, title, created_at, updated_at) SELECT r.id, r.trip_id, r.scope, r.title, r.created_at, r.updated_at FROM jsonb_populate_record(NULL::public.checklists, ${json}) AS r ON CONFLICT (id) DO UPDATE SET title = EXCLUDED.title, created_at = EXCLUDED.created_at, updated_at = EXCLUDED.updated_at;`);
     }
     for (const row of data.checklist_items) {
       const json = sqlLiteral(JSON.stringify(row)) + "::jsonb";
@@ -147,11 +192,11 @@ export function buildFixtureImportSql(fixtures) {
         body.push(`  SELECT count(*) INTO match_count FROM public.checklist_items WHERE checklist_id = ${sqlLiteral(row.checklist_id)} AND client_item_id = ${sqlLiteral(row.client_item_id)} AND id <> ${sqlLiteral(row.id)};`);
         body.push(`  IF match_count > 0 THEN RAISE EXCEPTION 'Fixture checklist business key has a different local id: %', ${sqlLiteral(row.client_item_id)}; END IF;`);
       }
-      body.push(`  INSERT INTO public.checklist_items (id, checklist_id, client_item_id, label, is_checked, sort_order, deleted_at, category) SELECT r.id, r.checklist_id, r.client_item_id, r.label, r.is_checked, r.sort_order, r.deleted_at, r.category FROM jsonb_populate_record(NULL::public.checklist_items, ${json}) AS r ON CONFLICT (id) DO UPDATE SET label = EXCLUDED.label, is_checked = EXCLUDED.is_checked, sort_order = EXCLUDED.sort_order, deleted_at = EXCLUDED.deleted_at, category = EXCLUDED.category;`);
+      body.push(`  INSERT INTO public.checklist_items (id, checklist_id, client_item_id, label, is_checked, sort_order, created_at, updated_at, deleted_at, category) SELECT r.id, r.checklist_id, r.client_item_id, r.label, r.is_checked, r.sort_order, r.created_at, r.updated_at, r.deleted_at, r.category FROM jsonb_populate_record(NULL::public.checklist_items, ${json}) AS r ON CONFLICT (id) DO UPDATE SET label = EXCLUDED.label, is_checked = EXCLUDED.is_checked, sort_order = EXCLUDED.sort_order, created_at = EXCLUDED.created_at, updated_at = EXCLUDED.updated_at, deleted_at = EXCLUDED.deleted_at, category = EXCLUDED.category;`);
     }
     for (const row of data.expenses) {
       const json = sqlLiteral(JSON.stringify(row)) + "::jsonb";
-      body.push(`  INSERT INTO public.expenses (trip_id, client_item_id, title, amount, currency, expense_date, deleted_at) SELECT r.trip_id, r.client_item_id, r.title, r.amount, r.currency, r.expense_date, r.deleted_at FROM jsonb_populate_record(NULL::public.expenses, ${json}) AS r ON CONFLICT (trip_id, client_item_id) DO UPDATE SET title = EXCLUDED.title, amount = EXCLUDED.amount, currency = EXCLUDED.currency, expense_date = EXCLUDED.expense_date, deleted_at = EXCLUDED.deleted_at;`);
+      body.push(`  INSERT INTO public.expenses (trip_id, client_item_id, title, amount, currency, created_at, expense_date, updated_at, deleted_at) SELECT r.trip_id, r.client_item_id, r.title, r.amount, r.currency, r.created_at, r.expense_date, r.updated_at, r.deleted_at FROM jsonb_populate_record(NULL::public.expenses, ${json}) AS r ON CONFLICT (trip_id, client_item_id) DO UPDATE SET title = EXCLUDED.title, amount = EXCLUDED.amount, currency = EXCLUDED.currency, created_at = EXCLUDED.created_at, expense_date = EXCLUDED.expense_date, updated_at = EXCLUDED.updated_at, deleted_at = EXCLUDED.deleted_at;`);
     }
     for (const row of data.exchange_purchases) {
       const json = sqlLiteral(JSON.stringify(row)) + "::jsonb";
@@ -159,7 +204,7 @@ export function buildFixtureImportSql(fixtures) {
       body.push(`  IF match_count > 0 THEN RAISE EXCEPTION 'Fixture exchange purchase id belongs to another trip: %', ${sqlLiteral(row.id)}; END IF;`);
       body.push(`  SELECT count(*) INTO match_count FROM public.exchange_purchases WHERE trip_id = ${tripId} AND client_item_id = ${sqlLiteral(row.client_item_id)} AND id <> ${sqlLiteral(row.id)};`);
       body.push(`  IF match_count > 0 THEN RAISE EXCEPTION 'Fixture exchange purchase business key has a different local id: %', ${sqlLiteral(row.client_item_id)}; END IF;`);
-      body.push(`  INSERT INTO public.exchange_purchases (id, trip_id, client_item_id, foreign_currency, purchase_date, twd_amount, foreign_amount) SELECT r.id, r.trip_id, r.client_item_id, r.foreign_currency, r.purchase_date, r.twd_amount, r.foreign_amount FROM jsonb_populate_record(NULL::public.exchange_purchases, ${json}) AS r ON CONFLICT (id) DO UPDATE SET foreign_currency = EXCLUDED.foreign_currency, purchase_date = EXCLUDED.purchase_date, twd_amount = EXCLUDED.twd_amount, foreign_amount = EXCLUDED.foreign_amount;`);
+      body.push(`  INSERT INTO public.exchange_purchases (id, trip_id, client_item_id, foreign_currency, purchase_date, twd_amount, foreign_amount, created_at, updated_at) SELECT r.id, r.trip_id, r.client_item_id, r.foreign_currency, r.purchase_date, r.twd_amount, r.foreign_amount, r.created_at, r.updated_at FROM jsonb_populate_record(NULL::public.exchange_purchases, ${json}) AS r ON CONFLICT (id) DO UPDATE SET foreign_currency = EXCLUDED.foreign_currency, purchase_date = EXCLUDED.purchase_date, twd_amount = EXCLUDED.twd_amount, foreign_amount = EXCLUDED.foreign_amount, created_at = EXCLUDED.created_at, updated_at = EXCLUDED.updated_at;`);
     }
     for (const row of data.other_info_items) {
       const json = sqlLiteral(JSON.stringify(row)) + "::jsonb";
@@ -169,7 +214,7 @@ export function buildFixtureImportSql(fixtures) {
         body.push(`  SELECT count(*) INTO match_count FROM public.other_info_items WHERE trip_id = ${tripId} AND client_item_id = ${sqlLiteral(row.client_item_id)} AND id <> ${sqlLiteral(row.id)};`);
         body.push(`  IF match_count > 0 THEN RAISE EXCEPTION 'Fixture other-info business key has a different local id: %', ${sqlLiteral(row.client_item_id)}; END IF;`);
       }
-      body.push(`  INSERT INTO public.other_info_items (id, trip_id, client_item_id, folder_id, title, content, allowed_roles, sort_order, deleted_at) SELECT r.id, r.trip_id, r.client_item_id, r.folder_id, r.title, r.content, r.allowed_roles, r.sort_order, r.deleted_at FROM jsonb_populate_record(NULL::public.other_info_items, ${json}) AS r ON CONFLICT (id) DO UPDATE SET folder_id = EXCLUDED.folder_id, title = EXCLUDED.title, content = EXCLUDED.content, allowed_roles = EXCLUDED.allowed_roles, sort_order = EXCLUDED.sort_order, deleted_at = EXCLUDED.deleted_at;`);
+      body.push(`  INSERT INTO public.other_info_items (id, trip_id, client_item_id, folder_id, title, content, allowed_roles, sort_order, created_at, updated_at, deleted_at) SELECT r.id, r.trip_id, r.client_item_id, r.folder_id, r.title, r.content, r.allowed_roles, r.sort_order, r.created_at, r.updated_at, r.deleted_at FROM jsonb_populate_record(NULL::public.other_info_items, ${json}) AS r ON CONFLICT (id) DO UPDATE SET folder_id = EXCLUDED.folder_id, title = EXCLUDED.title, content = EXCLUDED.content, allowed_roles = EXCLUDED.allowed_roles, sort_order = EXCLUDED.sort_order, created_at = EXCLUDED.created_at, updated_at = EXCLUDED.updated_at, deleted_at = EXCLUDED.deleted_at;`);
     }
     const incomingChecklistItemIds = data.checklist_items.map((row) => sqlLiteral(row.id)).join(", ");
     const incomingChecklistIds = data.checklists.map((row) => sqlLiteral(row.id)).join(", ");
@@ -188,6 +233,9 @@ export function buildFixtureImportSql(fixtures) {
         ? `  ${scopeSql} AND ${keySql} NOT IN (${incomingKeys});`
         : `  ${scopeSql};`);
     }
+  }
+  for (const [table, trigger] of [["trips", "trips_touch_updated_at"], ["checklists", "checklists_touch_updated_at"], ["checklist_items", "checklist_items_touch_updated_at"], ["expenses", "expenses_touch_updated_at"], ["exchange_purchases", "exchange_purchases_touch_updated_at"], ["other_info_items", "other_info_items_touch_updated_at"]]) {
+    body.push(`  IF EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = '${trigger}' AND tgrelid = 'public.${table}'::regclass AND NOT tgisinternal) THEN EXECUTE 'ALTER TABLE public.${table} ENABLE TRIGGER ${trigger}'; END IF;`);
   }
   body.push("END $tc_fixture$;");
   return body.join("\n\n") + "\n";
