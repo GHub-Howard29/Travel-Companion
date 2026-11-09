@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "fixtureId": "trip-a2131af0-2e96-43ee-8ea4-e71a27df63ab",
   "status": "active",
-  "sourceHost": "HOWARD-NEWPC",
-  "baselineAt": "2026-11-05T15:44:09.102Z",
-  "exportedAt": "2026-11-05T15:44:09.102Z",
+  "sourceHost": "TPEPC-TM7503-01",
+  "baselineAt": "2026-11-09T02:49:45.433Z",
+  "exportedAt": "2026-11-09T02:49:45.433Z",
   "tables": [
     "trips",
     "checklists",
