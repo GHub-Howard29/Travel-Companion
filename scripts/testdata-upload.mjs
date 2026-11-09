@@ -94,7 +94,7 @@ function validateData(data, fixtureId) {
       data.trips[0].id !== fixtureId || data.trips[0].content?.testPurpose !== fixtureMarker) {
     throw new Error("每個 fixture 必須只包含一筆明確標記的非公開測試 TRIP。");
   }
-  if (data.trips[0].is_public === true) throw new Error("測試行程不允許公開。");
+  if (data.trips[0].is_public !== false) throw new Error("測試行程必須是非公開行程。");
   if (Object.hasOwn(data.trips[0], "participants")) {
     throw new Error("匯出快照不得包含參與者欄位。");
   }
@@ -112,7 +112,6 @@ function validateData(data, fixtureId) {
   if (["checklists", "expenses", "exchange_purchases", "other_info_items"].some((table) => data[table].some((row) => row.trip_id !== fixtureId))) {
     throw new Error("Fixture 含有其他行程資料，禁止上傳。");
   }
-  if (data.trips[0].is_public === true) throw new Error("Fixture 不允許公開行程。");
   if (data.checklists.some((row) => row.scope !== "shared" || row.trip_id !== fixtureId)) throw new Error("Fixture 不允許私人或跨行程 checklist。");
   const checklistIds = new Set(data.checklists.map((row) => row.id));
   if (data.checklist_items.some((row) => !checklistIds.has(row.checklist_id))) throw new Error("Fixture checklist 關聯無效。");
@@ -132,17 +131,29 @@ function validateData(data, fixtureId) {
 }
 async function readBaseline(directory) {
   const raw = JSON.parse(await readFile(path.join(directory, "manifest.json"), "utf8"));
-  const data = JSON.parse(await readFile(path.join(directory, "data.json"), "utf8"));
+  if (["released", "archived", "deleted"].includes(raw?.status)) {
+    return { raw, data: null, needsMigration: false };
+  }
+  const rawData = JSON.parse(await readFile(path.join(directory, "data.json"), "utf8"));
   if (!raw || raw.schemaVersion !== 1 || raw.fixtureId !== path.basename(directory) ||
-      !["active", "regression_pending", "released", "archived", "deleted"].includes(raw.status) ||
-      !Array.isArray(raw.tables) || raw.tables.length !== tables.length || tables.some((table) => !raw.tables.includes(table))) {
+      !["active", "regression_pending"].includes(raw.status) ||
+      !Array.isArray(raw.tables) || raw.tables.length !== tables.length || tables.some((table) => !raw.tables.includes(table)) ||
+      !raw.counts || typeof raw.counts !== "object" || Array.isArray(raw.counts)) {
     throw new Error(`Fixture manifest 結構無效：${path.basename(directory)}`);
   }
-  for (const table of tables) if (!Array.isArray(data[table]) || (raw.counts && raw.counts[table] !== undefined && raw.counts[table] !== data[table].length)) {
+  if (!rawData || typeof rawData !== "object" || Array.isArray(rawData) ||
+      Object.keys(rawData).some((table) => !tables.includes(table)) ||
+      !Array.isArray(rawData.trips) || rawData.trips.length !== 1 ||
+      rawData.trips[0].id !== raw.fixtureId ||
+      (rawData.trips[0].content?.testPurpose !== fixtureMarker && rawData.trips[0].content?.__testFixture !== true)) {
+    throw new Error(`Fixture ${raw.fixtureId} 缺少有效的測試用途標記或資料表結構。`);
+  }
+  const data = normalizeFixtureRows(rawData);
+  for (const table of tables) if (!Array.isArray(rawData[table]) || raw.counts[table] !== rawData[table].length) {
     throw new Error(`Fixture ${raw.fixtureId} ${table} 結構或筆數不符。`);
   }
   validateData(data, raw.fixtureId);
-  return { raw, data };
+  return { raw, data, needsMigration: JSON.stringify(data) !== JSON.stringify(rawData) };
 }
 async function markTripForSync(tripId) {
   if (typeof tripId !== "string" || !tripId.trim()) throw new Error("行程識別碼不可空白。");
@@ -228,8 +239,9 @@ async function main() {
     const directory = path.join(fixturesRoot, fixtureId);
     let previous = null;
     let previousData = null;
+    let previousNeedsMigration = false;
     try {
-      ({ raw: previous, data: previousData } = await readBaseline(directory));
+      ({ raw: previous, data: previousData, needsMigration: previousNeedsMigration } = await readBaseline(directory));
     } catch (error) {
       if (error?.code !== "ENOENT") throw error;
     }
@@ -255,7 +267,8 @@ async function main() {
     };
     const data = queryNormalize(rawData);
     validateData(data, fixtureId);
-    const sameContent = previous && JSON.stringify(queryNormalize(data)) === JSON.stringify(queryNormalize(previousData));
+    const sameContent = previous && !previousNeedsMigration &&
+      JSON.stringify(queryNormalize(data)) === JSON.stringify(queryNormalize(previousData));
     fixtureReports.push({ fixtureId, result: sameContent ? "unchanged" : previous ? "updated" : "created", excluded });
     if (sameContent) continue;
     await mkdir(directory, { recursive: true });

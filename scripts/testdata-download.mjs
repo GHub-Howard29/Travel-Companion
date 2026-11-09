@@ -37,9 +37,11 @@ export function withoutDatabaseTimestamps(row) {
   return canonical(rest);
 }
 export function sameFixtureRows(left, right, { ignoreTimestamps = false } = {}) {
+  const normalizedLeft = normalizeFixtureRows(left);
+  const normalizedRight = normalizeFixtureRows(right);
   const normalize = (rows) => rows.map(ignoreTimestamps ? withoutDatabaseTimestamps : canonical).sort((a, b) =>
     JSON.stringify(a).localeCompare(JSON.stringify(b)));
-  return tables.every((table) => JSON.stringify(normalize(left[table])) === JSON.stringify(normalize(right[table])));
+  return tables.every((table) => JSON.stringify(normalize(normalizedLeft[table])) === JSON.stringify(normalize(normalizedRight[table])));
 }
 function detectSensitive(value, location = "$") {
   if (Array.isArray(value)) {
@@ -59,23 +61,25 @@ function detectSensitive(value, location = "$") {
     throw new Error(`Fixture 疑似含個資或憑證：${location}`);
   }
 }
-async function readRemoteBaseline(directory) {
+export async function readRemoteBaseline(directory) {
   const manifest = JSON.parse(await readFile(path.join(directory, "manifest.json"), "utf8"));
-  const data = JSON.parse(await readFile(path.join(directory, "data.json"), "utf8"));
+  const rawData = JSON.parse(await readFile(path.join(directory, "data.json"), "utf8"));
   if (!manifest || typeof manifest.fixtureId !== "string" || !manifest.fixtureId.trim() || manifest.fixtureId !== path.basename(directory) ||
       manifest.schemaVersion !== 1 || !["active", "regression_pending"].includes(manifest.status) ||
       !Array.isArray(manifest.tables) || manifest.tables.length !== tables.length ||
       tables.some((table) => !manifest.tables.includes(table))) {
     throw new Error(`遠端 fixture manifest 結構無效：${path.basename(directory)}`);
   }
-  if (!data.trips || data.trips.length !== 1 || data.trips[0].id !== manifest.fixtureId ||
-      data.trips[0].content?.testPurpose !== "three-way-sync" ||
-      Object.hasOwn(data.trips[0], "participants") ||
-      JSON.stringify(normalizeFixtureRows(data)) !== JSON.stringify(data)) {
-    throw new Error(`遠端 fixture 的測試標記或帳號／參與者排除格式無效：${manifest.fixtureId}`);
+  if (!rawData || typeof rawData !== "object" || Array.isArray(rawData) ||
+      Object.keys(rawData).some((table) => !tables.includes(table)) ||
+      !Array.isArray(rawData.trips) || rawData.trips.length !== 1 || rawData.trips[0].id !== manifest.fixtureId ||
+      (rawData.trips[0].content?.testPurpose !== "three-way-sync" && rawData.trips[0].content?.__testFixture !== true)) {
+    throw new Error(`遠端 fixture 缺少有效的測試用途標記：${manifest.fixtureId}`);
   }
+  const data = normalizeFixtureRows(rawData);
+  if (data.trips[0].is_public !== false) throw new Error(`遠端 fixture ${manifest.fixtureId} 不是非公開測試行程。`);
   for (const table of tables) {
-    if (!Array.isArray(data[table]) || manifest.counts?.[table] !== data[table].length) throw new Error(`遠端 fixture ${manifest.fixtureId} 的 ${table} 筆數不符。`);
+    if (!Array.isArray(rawData[table]) || manifest.counts?.[table] !== rawData[table].length) throw new Error(`遠端 fixture ${manifest.fixtureId} 的 ${table} 筆數不符。`);
   }
   if (["checklists", "expenses", "exchange_purchases", "other_info_items"].some((table) => data[table].some((row) => row.trip_id !== manifest.fixtureId))) {
     throw new Error(`遠端 fixture ${manifest.fixtureId} 含有其他行程資料。`);
@@ -83,6 +87,7 @@ async function readRemoteBaseline(directory) {
   if (data.checklists.some((row) => row.trip_id !== manifest.fixtureId)) {
     throw new Error(`遠端 fixture ${manifest.fixtureId} checklist 超出該測試行程範圍。`);
   }
+  detectSensitive(data);
   return { manifest, data };
 }
 async function fetchCurrentData(fixtureId) {
@@ -109,7 +114,8 @@ async function downloadOne(entry) {
   const { manifest, data } = await readRemoteBaseline(directory);
   const actual = await fetchCurrentData(entry.name);
   const currentTrip = actual.trips?.[0];
-  if (currentTrip && currentTrip.content?.testPurpose !== "three-way-sync") {
+  if (currentTrip && (currentTrip.is_public !== false ||
+      (currentTrip.content?.testPurpose !== "three-way-sync" && currentTrip.content?.__testFixture !== true))) {
     throw new Error(`本機同 ID 行程不是指定測試資料，拒絕覆寫：${entry.name}`);
   }
   if (sameFixtureRows(actual, data, { ignoreTimestamps: true })) {

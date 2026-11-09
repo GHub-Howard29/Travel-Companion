@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
-import { canonical, withoutDatabaseTimestamps, sameFixtureRows } from "./testdata-download.mjs";
+import { fileURLToPath } from "node:url";
+import { canonical, readRemoteBaseline, withoutDatabaseTimestamps, sameFixtureRows } from "./testdata-download.mjs";
+import { buildFixtureImportSql, normalizeFixtureRows } from "./lib/testdata-download-apply.mjs";
 
 const syncLocalSource = await readFile(new URL("./sync-local-database.mjs", import.meta.url), "utf8");
 assert.match(syncLocalSource, /npm\", \[\"run\", \"testdata:download\"\]/,
@@ -9,7 +11,7 @@ assert.doesNotMatch(syncLocalSource, /testdata:handoff|testdata:import:all/,
   "db:sync:local must not call version-chain handoff/import commands");
 
 const fixture = {
-  trips: [{ id: "tc-test-download", title: "Synthetic", created_at: "2026-11-05T00:00:00Z", updated_at: "2026-11-05T00:00:00Z", content: { __testFixture: true, nested: { b: 2, a: 1 } } }],
+  trips: [{ id: "tc-test-download", title: "Synthetic", created_at: "2026-11-05T00:00:00Z", updated_at: "2026-11-05T00:00:00Z", is_public: false, content: { testPurpose: "three-way-sync", nested: { b: 2, a: 1 } } }],
   checklists: [{ id: "c1", trip_id: "tc-test-download", scope: "shared", title: "List" }],
   checklist_items: [{ id: "i1", checklist_id: "c1", label: "Item" }],
   expenses: [],
@@ -29,7 +31,7 @@ assert.equal(sameFixtureRows(contentChanged, fixture, { ignoreTimestamps: true }
 
 const orderChanged = structuredClone(fixture);
 orderChanged.checklists.reverse();
-orderChanged.trips[0].content = { nested: { a: 1, b: 2 }, __testFixture: true };
+orderChanged.trips[0].content = { nested: { a: 1, b: 2 }, testPurpose: "three-way-sync" };
 assert.equal(sameFixtureRows(orderChanged, fixture, { ignoreTimestamps: true }), true,
   "JSON object key order and row order must not trigger a download");
 
@@ -40,8 +42,69 @@ assert.equal(sameFixtureRows(missingRow, fixture, { ignoreTimestamps: true }), f
 
 assert.equal(sameFixtureRows(fixture, fixture), true);
 
+const legacyFixture = structuredClone(fixture);
+legacyFixture.trips[0].content = {
+  __testFixture: true,
+  checklistData: [{ id: "legacy-checklist", label: "legacy" }],
+  participantEmailMap: { local: "private@example.com" },
+  nested: { b: 2, a: 1 },
+};
+legacyFixture.trips[0].participants = ["local-only participant"];
+legacyFixture.trips[0].owner_user_id = "local-user-id";
+legacyFixture.checklists[0].created_by = "local-user-id";
+const normalizedLegacy = normalizeFixtureRows(legacyFixture);
+assert.equal(normalizedLegacy.trips[0].content.testPurpose, "three-way-sync",
+  "legacy synthetic marker must normalize to the current marker");
+assert.equal(Object.hasOwn(normalizedLegacy.trips[0], "participants"), false,
+  "participant column must never enter a fixture");
+assert.equal(Object.hasOwn(normalizedLegacy.trips[0], "owner_user_id"), false);
+assert.equal(Object.hasOwn(normalizedLegacy.checklists[0], "created_by"), false);
+assert.equal(Object.hasOwn(normalizedLegacy.trips[0].content, "__testFixture"), false);
+assert.equal(Object.hasOwn(normalizedLegacy.trips[0].content, "checklistData"), false);
+assert.equal(Object.hasOwn(normalizedLegacy.trips[0].content, "participantEmailMap"), false);
+assert.equal(sameFixtureRows(legacyFixture, fixture, { ignoreTimestamps: true }), true,
+  "legacy marker and local-only account/participant data must not block download comparison");
+
+const downloadedLocal = structuredClone(fixture);
+downloadedLocal.trips[0].participants = ["this-device-only"];
+downloadedLocal.trips[0].content.participantEmailMap = { local: "private@example.com" };
+downloadedLocal.trips[0].content.checklistData = [{ id: "local-checklist" }];
+assert.equal(sameFixtureRows(downloadedLocal, fixture, { ignoreTimestamps: true }), true,
+  "downloaded local DB must compare equal after preserving local-only participant data");
+assert.equal(sameFixtureRows(downloadedLocal, { ...fixture, trips: [{ ...fixture.trips[0], title: "Edited after download" }] }, { ignoreTimestamps: true }), false,
+  "a real business-data edit after download must remain uploadable");
+
+const checkedInLegacy = JSON.parse(await readFile(new URL("../supabase/test-fixtures/tc-test-sync-example/data.json", import.meta.url), "utf8"));
+const checkedInLegacyManifest = JSON.parse(await readFile(new URL("../supabase/test-fixtures/tc-test-sync-example/manifest.json", import.meta.url), "utf8"));
+const checkedInLegacyNormalized = normalizeFixtureRows(checkedInLegacy);
+const acceptedLegacyBaseline = await readRemoteBaseline(fileURLToPath(new URL("../supabase/test-fixtures/tc-test-sync-example", import.meta.url)));
+assert.equal(acceptedLegacyBaseline.manifest.fixtureId, checkedInLegacyManifest.fixtureId);
+assert.equal(acceptedLegacyBaseline.data.trips[0].content.testPurpose, "three-way-sync");
+const currentBaseline = await readRemoteBaseline(fileURLToPath(new URL("../supabase/test-fixtures/trip-a2131af0-2e96-43ee-8ea4-e71a27df63ab", import.meta.url)));
+assert.equal(currentBaseline.data.trips[0].content.testPurpose, "three-way-sync");
+assert.doesNotThrow(() => buildFixtureImportSql([currentBaseline]),
+  "current-format fixtures must pass the same import contract");
+assert.equal(checkedInLegacyNormalized.trips[0].id, checkedInLegacyManifest.fixtureId);
+assert.equal(checkedInLegacyNormalized.trips[0].content.testPurpose, "three-way-sync",
+  "the previously blocked tc-test-sync-example fixture must normalize to the current contract");
+assert.equal(Object.hasOwn(checkedInLegacyNormalized.trips[0], "participants"), false);
+assert.doesNotThrow(() => buildFixtureImportSql([{
+  manifest: checkedInLegacyManifest,
+  data: checkedInLegacyNormalized,
+}]), "the legacy fixture must pass the same SQL import contract after normalization");
+for (const table of ["trips", "checklists", "checklist_items", "expenses", "exchange_purchases", "other_info_items"]) {
+  assert.equal(checkedInLegacy[table].length, checkedInLegacyManifest.counts[table],
+    `legacy fixture manifest count must remain valid for ${table}`);
+}
+
 const downloadSource = await readFile(new URL("./testdata-download.mjs", import.meta.url), "utf8");
 const uploadSource = await readFile(new URL("./testdata-upload.mjs", import.meta.url), "utf8");
+const tripRepositorySource = await readFile(new URL("../src/services/tripRepository.ts", import.meta.url), "utf8");
+const workspaceSource = await readFile(new URL("../src/hooks/useTripWorkspace.ts", import.meta.url), "utf8");
+assert.match(tripRepositorySource, /content:\s*\{\s*\.\.\.currentRecord\.detail\.content,/,
+  "editing Trip details must preserve testPurpose so the updated DB remains eligible for upload");
+assert.match(workspaceSource, /content:\s*\{\s*\.\.\.storedRecord\.detail\.content,/,
+  "editing itinerary cards must preserve testPurpose so the updated DB remains eligible for upload");
 assert.match(downloadSource, /\[testdata-download\] 下載檢查完成/,
   "successful download must print a visible completion summary");
 assert.match(downloadSource, /success: !excelFailed/,
@@ -60,8 +123,18 @@ assert.match(downloadSource, /try\s*\{\s*excelPlan = await prepareExcelRpcDatase
   "RPC dataset validation failure must be isolated from TRIP fixture discovery");
 assert.match(downloadSource, /const fixturePlans = \[\]/,
   "TRIP fixtures must be planned independently of the RPC dataset");
+assert.match(downloadSource, /normalizeFixtureRows\(rawData\)/,
+  "download must normalize legacy marker and excluded local-only fields before validating");
+assert.match(downloadSource, /currentTrip\.content\?\.__testFixture !== true/,
+  "download may update only an explicitly marked legacy synthetic local target");
 assert.match(uploadSource, /where is_public = false and coalesce\(content->>'testPurpose', ''\) = 'three-way-sync'/,
   "upload must select all private marked test trips");
+assert.match(uploadSource, /rawData\[0\]|rawData\.trips\[0\]\.content\?\.__testFixture/,
+  "upload baseline must recognize the explicitly marked legacy fixture format");
+assert.match(uploadSource, /needsMigration: JSON\.stringify\(data\) !== JSON\.stringify\(rawData\)/,
+  "upload must republish legacy fixtures in the current normalized format");
+assert.match(uploadSource, /!previousNeedsMigration/,
+  "legacy fixture normalization must not be mistaken for unchanged content");
 assert.equal(uploadSource.includes("tripPattern"), false,
   "upload must not require a fixed TRIP ID format");
 assert.match(uploadSource, /let excelRpcReport[\s\S]*catch \(error\)[\s\S]*excelRpcReport = \{ fixtureId: EXCEL_RPC_DATASET_ID, result: "error"/,

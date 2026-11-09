@@ -35,6 +35,10 @@ assert.match(sql, /PERFORM 1 FROM public\.trips t WHERE .* FOR UPDATE/);
 assert.doesNotMatch(sql, /parent revision|parentChecksum|parentVersion|checksum mismatch|row count mismatch/);
 assert.match(sql, /checklist_id = 'checklist-1' AND client_item_id = 'item-client-2'/);
 assert.match(sql, /INSERT INTO public\.trips/);
+assert.match(sql, /existing_trip\.content -> '__testFixture' IS DISTINCT FROM 'true'::jsonb/,
+  "existing explicitly marked legacy synthetic trips must be safe import targets");
+assert.match(sql, /content = \(public\.trips\.content - 'testPurpose' - 'fixtureDescription' - 'checklistData' - '__testFixture'\) \|\| EXCLUDED\.content/,
+  "download must replace the legacy marker with the current testPurpose marker");
 assert.doesNotMatch(sql, /INSERT INTO public\.trips \([^)]*participants/);
 assert.doesNotMatch(sql, /UPDATE SET[^;]*participants/);
 assert.doesNotMatch(sql, /payer/);

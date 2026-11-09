@@ -49,13 +49,19 @@ export function normalizeFixtureRows(data) {
   const normalized = {};
   for (const table of allowedTables) {
     const spec = tableSpecs.find((item) => item.name === table);
-    normalized[table] = [...(data[table] ?? [])].map((row) => ({ ...row })).sort((left, right) =>
+    normalized[table] = [...(data[table] ?? [])].map((row) => Object.fromEntries(
+      spec.columns.filter((column) => Object.hasOwn(row, column)).map((column) => [column, row[column]]),
+    )).sort((left, right) =>
       String(spec.key(left)).localeCompare(String(spec.key(right))));
   }
   for (const trip of normalized.trips) {
     delete trip.participants;
     if (trip.content && typeof trip.content === "object") {
       trip.content = { ...trip.content };
+      if (trip.content.__testFixture === true && !trip.content.testPurpose) {
+        trip.content.testPurpose = "three-way-sync";
+      }
+      delete trip.content.__testFixture;
       for (const key of ["participants", "participantEmailMap", "checklistData", "participantMap", "participantEmailMaps"]) {
         delete trip.content[key];
       }
@@ -114,7 +120,7 @@ export function buildFixtureImportSql(fixtures) {
     }
     const tripId = sqlLiteral(fixtureId);
     body.push(`  SELECT * INTO existing_trip FROM public.trips WHERE id = ${tripId} FOR UPDATE;`);
-    body.push(`  IF FOUND AND existing_trip.content ->> 'testPurpose' IS DISTINCT FROM 'three-way-sync' THEN RAISE EXCEPTION 'Fixture target exists but is not marked test data: %', ${tripId}; END IF;`);
+    body.push(`  IF FOUND AND (existing_trip.is_public IS DISTINCT FROM false OR (existing_trip.content ->> 'testPurpose' IS DISTINCT FROM 'three-way-sync' AND existing_trip.content -> '__testFixture' IS DISTINCT FROM 'true'::jsonb)) THEN RAISE EXCEPTION 'Fixture target exists but is not marked test data: %', ${tripId}; END IF;`);
 
     for (const spec of tableSpecs) {
       const scope = spec.name === "trips" ? `t.id = ${tripId}` :
@@ -125,7 +131,7 @@ export function buildFixtureImportSql(fixtures) {
 
     for (const row of data.trips) {
       const json = sqlLiteral(JSON.stringify(row)) + "::jsonb";
-      body.push(`  INSERT INTO public.trips (id, title, departure_date, currency_config, sidebar_config, content, is_public) SELECT r.id, r.title, r.departure_date, r.currency_config, r.sidebar_config, r.content, r.is_public FROM jsonb_populate_record(NULL::public.trips, ${json}) AS r ON CONFLICT (id) DO UPDATE SET title = EXCLUDED.title, departure_date = EXCLUDED.departure_date, currency_config = EXCLUDED.currency_config, sidebar_config = EXCLUDED.sidebar_config, content = (public.trips.content - 'testPurpose' - 'fixtureDescription' - 'checklistData') || EXCLUDED.content, is_public = EXCLUDED.is_public;`);
+      body.push(`  INSERT INTO public.trips (id, title, departure_date, currency_config, sidebar_config, content, is_public) SELECT r.id, r.title, r.departure_date, r.currency_config, r.sidebar_config, r.content, r.is_public FROM jsonb_populate_record(NULL::public.trips, ${json}) AS r ON CONFLICT (id) DO UPDATE SET title = EXCLUDED.title, departure_date = EXCLUDED.departure_date, currency_config = EXCLUDED.currency_config, sidebar_config = EXCLUDED.sidebar_config, content = (public.trips.content - 'testPurpose' - 'fixtureDescription' - 'checklistData' - '__testFixture') || EXCLUDED.content, is_public = EXCLUDED.is_public;`);
     }
     for (const row of data.checklists) {
       const json = sqlLiteral(JSON.stringify(row)) + "::jsonb";
