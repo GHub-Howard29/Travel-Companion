@@ -1,8 +1,8 @@
 # 新增 TRIP Excel 建立規格草案
 
-> 狀態：V1 產品範圍與欄位契約已定案；目前為分階段實作與驗證中，版本定位為 V3.11.0（MINOR 主要功能）。尚未完成端到端驗收，也未核准 commit/push、遠端資料庫寫入、合併、部署或發布。
+> 狀態（2026-11-11）：V1 產品範圍與欄位契約已定案；目前為分階段實作與驗證中，版本定位為 V3.11.0（MINOR 主要功能）。本次已核准整理文件及一般 develop commit/push；不代表 Excel 功能端到端驗收完成，也不核准 migration、正式資料庫寫入、合併 main、部署或發布。測試資料 fixture 上傳另依根目錄 AGENTS.md 的獨立「/上傳資料庫」流程判斷，與一般 Git 提交分離。
 >
-> 開發狀態（截至 2026-11-06）：ExcelJS 解析／嚴格驗證、預覽 UI、Excel 專用 RPC migration 與先前公司端 local Supabase V5 PostgreSQL 交易測試已有實作及部分通過證據；管理員與非管理員 RPC 權限拒絕測試均由使用者確認先前通過，不再重跑。2026-11-06 家用端 OpenChatX Home 續作已補上提交前既有 Session refresh 與 refresh 後帳號核對、最終確認時的目前幣別 props 比對，以及相同 fingerprint 的 pending request UUID 沿用；另新增 owner-bound 的 request registry 唯讀查詢 RPC，前端在建立 RPC 結果不明時可用同 request UUID 查詢，查到完成結果才視為成功；查不到、仍待確認、對應 TRIP 已刪除或查詢失敗時均保留原 request，不盲目換 UUID 重建。2026-11-06 本輪 `verify:trip-excel-rpc`、`verify:trip-excel-import`、`npx tsc -p tsconfig.app.json --noEmit`、修改檔案 ESLint、完整 `npm run build`（1929 modules、PWA 49 precache entries、postbuild browser security/weather bundle checks）及 `git diff --check` 均通過；上述僅為靜態契約／本機建置驗證，尚未套用新增查詢 RPC 至 local Supabase，也未做實際登入與逾時斷線整合測試。App 目前傳給新增表單的預設值仍是固定 TWD／NT$；本次只確保最終確認會比較最新 props，尚未建立新的動態全域幣別設定來源。本輪沒有操作 local／remote Supabase，沒有 commit/push、合併、部署或發布。不得把靜態契約通過等同端到端驗收。
+> 開發狀態歷史摘要（截至 2026-11-06；2026-11-09～11-10 的瀏覽器解析修正及最新驗收狀態見 12.7）：ExcelJS 解析／嚴格驗證、預覽 UI、Excel 專用 RPC migration 與先前公司端 local Supabase V5 PostgreSQL 交易測試已有實作及部分通過證據；管理員與非管理員 RPC 權限拒絕測試均由使用者確認先前通過，不再重跑。2026-11-06 家用端 OpenChatX Home 續作已補上提交前既有 Session refresh 與 refresh 後帳號核對、最終確認時的目前幣別 props 比對，以及相同 fingerprint 的 pending request UUID 沿用；另新增 owner-bound 的 request registry 唯讀查詢 RPC，前端在建立 RPC 結果不明時可用同 request UUID 查詢，查到完成結果才視為成功；查不到、仍待確認、對應 TRIP 已刪除或查詢失敗時均保留原 request，不盲目換 UUID 重建。2026-11-06 本輪 `verify:trip-excel-rpc`、`verify:trip-excel-import`、`npx tsc -p tsconfig.app.json --noEmit`、修改檔案 ESLint、完整 `npm run build`（1929 modules、PWA 49 precache entries、postbuild browser security/weather bundle checks）及 `git diff --check` 均通過；上述僅為靜態契約／本機建置驗證，尚未套用新增查詢 RPC 至 local Supabase，也未做實際登入與逾時斷線整合測試。App 目前傳給新增表單的預設值仍是固定 TWD／NT$；本次只確保最終確認會比較最新 props，尚未建立新的動態全域幣別設定來源。本輪沒有操作 local／remote Supabase，沒有 commit/push、合併、部署或發布。不得把靜態契約通過等同端到端驗收。
 >
 **重要範圍定案（2026-11-03）：V1 採用新增 TRIP 時匯入 Excel 的 A 流程；使用者在新增 TRIP 時選擇「Excel 建立」或「手動新增」，兩者二選一，Excel 直接建立新 TRIP，不要求先建立空白 TRIP。舊方案 B「既有 TRIP 每日卡片 Excel 匯入／匯出」已捨棄，不屬本功能、不保留為 V1 或後續待辦規格；其單日／零卡片資格、既有卡片覆蓋、地點搜尋與候選確認等規則不得套用至 A。V1 採兩張工作表：第一張為唯一使用者操作的「新增 TRIP」，第二張為系統管理用的隱藏「系統設定」，不增加使用者需填寫的業務欄位；TRIP 基本資料只有 TRIP 名稱及出發日期兩欄；卡片日序最大值推導天數，其他設定由系統預設。
 >
@@ -11,6 +11,8 @@
 > **標準範本工作方式（2026-11-03 更新）：正式 Excel 範本已建立並固定保存於專案資料夾。V1 的版本識別 `template_version=1` 放在系統管理用隱藏工作表「系統設定」，由系統維護，不要求使用者輸入或修改；匯入端仍須嚴格驗證工作表名稱、隱藏狀態、固定儲存格位置與版本值。正式範本已通過 ExcelJS 4.4.0、LibreOffice 25.2.7.2 與 Microsoft Excel 2010（14.0.7015.1000）隔離 round-trip；相容性證據僅涵蓋上述版本組合。**
 >
 > 範圍限制：本文件只規範新增 TRIP 的 Excel 建立流程，包含 TRIP 基本資料及每日行程卡片；不包含已捨棄的既有 TRIP 卡片匯入／匯出功能。
+>
+> **幣別 UI 決策更新（2026-11-09，依真實瀏覽器預覽確認）：** Excel 建立沿用與手動新增共用的 `DEFAULT_TRIP_CURRENCY`（目前 TWD／NT$），不從 Excel 讀取幣別，也不要求使用者手動勾選確認。預覽保留提醒文案，告知使用的是系統預設幣別、非 Excel 讀取值，請使用者依旅程目的地自行留意；提醒僅供告知，不阻擋建立。本文較早段落中要求明確勾選、再次確認或因幣別變更而重新確認的舊規則，均由本決策取代。手動新增原有幣別選擇功能不變。
 >
 > 決策紀錄更新：2026-11-03（新增 TRIP Excel V1 精簡欄位契約已定案；剩餘工作為資料映射、範本技術細節、安全性核對及測試規劃，不代表已核准開始程式實作）。
 
@@ -74,7 +76,7 @@ TRIP 基本資料區只有上述兩項。V1 不提供旅程天數、結束日期
 - 公開行程：沿用目前新增 TRIP 的預設值（目前為不公開）。
 - 顯示農曆日期：沿用目前新增 TRIP 的預設值（目前為開啟）。
 - 旅程型態：沿用目前新增 TRIP 的預設值（目前為跟團／`guided`）。
-- 幣別與符號：沿用目前新增 TRIP 表單當下的預設幣別代碼及符號，不固定指定 TWD，不接受 Excel 覆寫。預覽及最終確認均須顯示幣別代碼與符號，要求使用者依本次旅程目的地明確確認；提交前重新取得設定，若與預覽不同則更新預覽並要求再次確認。
+- 幣別與符號：沿用共用 `DEFAULT_TRIP_CURRENCY`（目前為 TWD／NT$），不接受 Excel 覆寫，也不要求使用者手動勾選或確認。預覽保留提醒文案，告知此為系統預設、非 Excel 讀取值，請依旅程目的地自行留意；提醒不阻擋建立。
 - Sidebar、備忘錄、檢查清單、預設其他資訊資料夾及每日資料結構：由系統建立必要初始結構。
 
 ### 6. 卡片時間、類別與系統欄位
@@ -102,7 +104,7 @@ TRIP 基本資料區只有上述兩項。V1 不提供旅程天數、結束日期
 - 舊版 TRIP 編輯者 Email 五組輸入，已改為不額外指派編輯者。
 - 舊版公開行程、顯示農曆日期、旅程型態欄位，已改為全部沿用系統預設。
 - 舊版兩張或三張工作表／使用說明工作表構想，曾簡化為單一操作工作表；2026-11-03 最新決策再次放寬為兩張工作表：可見「新增 TRIP」及隱藏系統管理用「系統設定」，不增加使用者輸入欄位，版本識別固定存放於第二張表。
-- 幣別規則以 P04-04／P05-01-05 最新決策為準：沿用新增表單當下預設幣別及確認流程，不固定 TWD。
+- 幣別規則以 P04-04／P05-01-05 最新決策為準：沿用共用 `DEFAULT_TRIP_CURRENCY`，預覽僅保留提醒，不需手動確認（2026-11-09 更新）。
 
 ## 新增 TRIP Excel 建立：目前已定案項目總覽（2026-11-03）
 
@@ -116,19 +118,19 @@ TRIP 基本資料區只有上述兩項。V1 不提供旅程天數、結束日期
 | 天數 | 依卡片最大「第幾天」推導，限制 1–30；空白日仍建立 |
 | 參與者／編輯者 | 參與者使用資料庫權威預設；不額外指派編輯者 |
 | 其他 TRIP 設定 | 公開、農曆、旅程型態及其他設定全部沿用目前新增 TRIP 系統預設 |
-| 幣別 | 沿用目前新增表單當下預設幣別代碼及符號；預覽與最終確認明確顯示並確認，設定變更須重新確認 |
+| 幣別 | 沿用手動新增與 Excel 建立共用 `DEFAULT_TRIP_CURRENCY`；預覽顯示幣別並保留提醒文案，不需手動勾選確認 |
 | 系統欄位 | ID、日期陣列、卡片初始結構與其他預設資料均由系統產生 |
 | 權限 | 僅 Super Admin；第一層 UI 顯示限制、第二層確認提交時自動檢查當下 Supabase Session／登入帳號／線上狀態、第三層 RPC 以 JWT 與資料庫權威角色最終授權；不再次啟動 Google OAuth |
 | 雲端完整性 | 僅在線建立；TRIP 與所有卡片整批建立成功後才更新本機快取／UI；結果不明須核對 |
 | 地點與其他副作用 | 不匯入地點／地址／座標／Place ID，不觸發地圖、天氣、路線或照片操作 |
 
-**建立流程共同原則**：新增 TRIP 時由使用者選擇「Excel 建立」或「手動新增」，兩者二選一。Excel 匯入不要求先建立空白 TRIP，也不支援既有 TRIP 卡片匯入／覆蓋。匯入前完成整份驗證，預覽幣別及卡片分布，明確確認後才提交。僅雲端整批建立成功後更新本機權威快取／UI；離線或結果不明時不得本機單獨建立或誤報成功。
+**建立流程共同原則**：新增 TRIP 時由使用者選擇「Excel 建立」或「手動新增」，兩者二選一。Excel 匯入不要求先建立空白 TRIP，也不支援既有 TRIP 卡片匯入／覆蓋。匯入前完成整份驗證，預覽系統預設幣別與提醒文案及卡片分布；幣別不需手動勾選確認。僅雲端整批建立成功後更新本機權威快取／UI；離線或結果不明時不得本機單獨建立或誤報成功。
 
 **跨電腦測試資料重現定案**：Excel RPC 的跨機資料同步及本機重建規則以《[106_Excel_RPC跨電腦測試資料同步定案](106_Excel_RPC跨電腦測試資料同步定案.md)》為準。Git fixture 保存合成測試案例輸入及完整日期／時間／卡片業務資料，不保存 Auth UUID、已完成 request registry、request UUID 或 participant Email map；目的端以本機 Super Admin Session 重呼叫同一 RPC，產生該機自己的 TRIP ID、request registry 與私有參與者關聯。不得把多筆 Excel RPC 測試 TRIP 直接併入舊 `tc-test-sync-example` V5。
 
 **目前狀態（2026-11-06 更新）**：2026-11-06 針對同 request 併發／多日時間保存測試再次檢查：本機 Auth（GoTrue v2.196.0）health endpoint 回應 HTTP 200；但 `scripts/excel-rpc-test-dataset.mjs` 目前只把 `TC_LOCAL_SUPABASE_ACCESS_TOKEN` 直接當 Bearer token，沒有執行登入。先前以 service_role JWT 呼叫 `tc_create_trip_from_excel` 收到 HTTP 403 `permission denied for function tc_create_trip_from_excel`；原因是 migration 只授予 `authenticated` EXECUTE，函式內還要求 `auth.uid()` 非空及 `private.tc_is_super_admin()` 為 true。一般登入使用者仍不夠，必須是 `admin_users.role='super_admin'` 的已登入使用者。`.env.local` 僅確認有 loopback URL／anon key，未找到現成測試帳號／密碼或測試憑證設定；anon key 直接讀取 `admin_users` 被 `tc_current_email` 權限拒絕，未讀取任何管理者 email。既有 `verify-v364-supabase-realtime.mjs` 有臨時 Auth 使用者、授予本機管理角色、正常密碼登入及 finally 清理的範例，但不能直接執行整支腳本代替本次 RPC 測試。**下一步須先確認如何安全取得本機 CLI 管理 key（僅供建立／清理本次隨機臨時測試帳號及其 `admin_users` 權限列），再用 anon key + 臨時帳密 `signInWithPassword` 取得使用者 JWT，讓 runner 以該 JWT 執行 RPC；service_role 不得直接呼叫目標 RPC。** 必須先設計並驗證 finally 清理：只清除本次建立的測試 TRIP、request registry、Other Info、private map、管理權限列及 Auth 使用者，不碰既有資料；無法保證清理就停止。之後才執行 `node scripts/excel-rpc-test-dataset.mjs validate`，再執行 `node scripts/excel-rpc-test-dataset.mjs concurrent multi-day-time-preservation`（先從 fixture 核對案例 ID）。本次併發測試未成功執行、未建立新 TRIP，未修改程式／migration／資料庫權限或 Auth 使用者；沒有 reset、遠端 DB 操作或 commit/push。詳細檢查結果與逐步操作見《[106_Excel_RPC跨電腦測試資料同步定案](106_Excel_RPC跨電腦測試資料同步定案.md)》§9。
 
-**目前狀態（2026-11-06 家用端續作後更新）**：產品欄位契約、正式範本、欄位契約文件及 Office round-trip 已完成。公司端已完成 ExcelJS 解析／嚴格驗證核心、建立方式二選一 UI 與預覽、parser 回歸測試；Excel 專用 RPC migration 已建立並已套用公司端既有 local Supabase V5，包含 request registry、Super Admin／Auth 身分核對、私有 participant Email map 同交易寫入、Trip／特殊 Other Info 寫入及明確函式權限。2026-11-04 重新確認 `supabase status` 的 API endpoint 為 `http://127.0.0.1:54321`，`supabase migration list --local` 顯示 `20261103150000` 已套用；未使用 `--linked`、未執行 reset、未對遠端共享／正式 DB 寫入。以專案指定 Node v22.23.2／npm 10.9.8 重新執行 `verify:trip-excel-import`、`verify:trip-excel-rpc` 均通過；完整 `npm run build`（含既有回歸、TypeScript、production build、PWA、postbuild browser security 及 weather bundle 檢查）exit code 0。正式 Supabase 唯讀比對確認 Super Admin 2 位、`admin_profiles` 2 筆且兩位均 `include_in_new_trip=true`；正式資料庫無此缺漏。公司端 local V5 歷史 snapshot 於 2026-10-27 至 2026-11-03 均記錄 `admin_profiles=[]`；V3.5.4 初始化 migration 已執行，但 2026-11-02 追加兩個 `weather-rc-test` 測試 Auth／Super Admin 帳號時，profile 未同步建立。2026-11-04 已依 V3.5.4 原初始化規則，只補齊 local V5 缺少的三筆 Super Admin profiles（名稱取 Auth metadata；無名稱用 email 前綴，`include_in_new_trip=true`，一般排序 100），未改既有資料。Excel RPC 的 participant 查詢保留與一般建立相同的 `admin_profiles` + `admin_users` + `auth.users` 交集篩選，移除 Excel 專屬的空 profile 拒絕及重複顯示名稱拒絕；不增加 fallback 或新判斷方式。2026-11-04 進一步在 local V5 對已套用 RPC 進行真實 PostgreSQL 測試：成功建立一筆 TRIP 時同時產生一筆 request registry、一筆特殊 Other Info 與 participant email map；相同 request 重送回傳相同 trip_id 且只保留一筆；在建立後刻意觸發例外，確認 TRIP、registry、Other Info 均 rollback 為 0；特殊 Other Info deterministic client_item_id 唯一衝突也使該整批交易 rollback；相同 title/date 使用不同 request UUID 成功建立兩筆不同 trip_id。測試留下 4 筆明確命名的 local V5 測試 TRIP（title 前綴 `Excel RPC` 或 `Allowed duplicate title date`）、對應 4 筆 registry 及 4 筆特殊 Other Info；均使用既有測試 Super Admin 建立，未碰既有兩筆 baseline TRIP，未清理測試資料。管理員與非管理員的 RPC 權限拒絕測試已由使用者確認先前均通過，視為既有驗收結果，不重複執行。2026-11-05 曾做 local V5 Auth 唯讀盤點（4 個 Auth users，其中 3 個對應 Super Admin、另 1 個無 `admin_users` 權限列）；該盤點僅反映目前本機帳號組成，不得用來推翻先前已通過的權限測試。RPC migration 檔與規格文件有未提交修改，local V5 函式已以修改內容套用；需在下一階段完成 migration diff／部署策略核對，不能把已修改本機函式誤認為 migration history 自動更新。仍未完成最終幣別確認／提交 UI、提交時 Session refresh、RPC client 呼叫及結果不明 recovery；IM01–IM10 尚未全部執行，尚未發布。下一步先補上有安全清理策略的自動化 DB tests 與非 Super Admin fixture（若可利用現有可控 Auth 測試工具而無須新增永久帳號），再完成其餘 IM01–IM10，才串接前端提交與 recovery。禁止 commit/push、遠端 DB 寫入或發布，除非另行明確核准。
+**目前狀態（2026-11-06 家用端續作後更新）**：產品欄位契約、正式範本、欄位契約文件及 Office round-trip 已完成。公司端已完成 ExcelJS 解析／嚴格驗證核心、建立方式二選一 UI 與預覽、parser 回歸測試；Excel 專用 RPC migration 已建立並已套用公司端既有 local Supabase V5，包含 request registry、Super Admin／Auth 身分核對、私有 participant Email map 同交易寫入、Trip／特殊 Other Info 寫入及明確函式權限。2026-11-04 重新確認 `supabase status` 的 API endpoint 為 `http://127.0.0.1:54321`，`supabase migration list --local` 顯示 `20261103150000` 已套用；未使用 `--linked`、未執行 reset、未對遠端共享／正式 DB 寫入。以專案指定 Node v22.23.2／npm 10.9.8 重新執行 `verify:trip-excel-import`、`verify:trip-excel-rpc` 均通過；完整 `npm run build`（含既有回歸、TypeScript、production build、PWA、postbuild browser security 及 weather bundle 檢查）exit code 0。正式 Supabase 唯讀比對確認 Super Admin 2 位、`admin_profiles` 2 筆且兩位均 `include_in_new_trip=true`；正式資料庫無此缺漏。公司端 local V5 歷史 snapshot 於 2026-10-27 至 2026-11-03 均記錄 `admin_profiles=[]`；V3.5.4 初始化 migration 已執行，但 2026-11-02 追加兩個 `weather-rc-test` 測試 Auth／Super Admin 帳號時，profile 未同步建立。2026-11-04 已依 V3.5.4 原初始化規則，只補齊 local V5 缺少的三筆 Super Admin profiles（名稱取 Auth metadata；無名稱用 email 前綴，`include_in_new_trip=true`，一般排序 100），未改既有資料。Excel RPC 的 participant 查詢保留與一般建立相同的 `admin_profiles` + `admin_users` + `auth.users` 交集篩選，移除 Excel 專屬的空 profile 拒絕及重複顯示名稱拒絕；不增加 fallback 或新判斷方式。2026-11-04 進一步在 local V5 對已套用 RPC 進行真實 PostgreSQL 測試：成功建立一筆 TRIP 時同時產生一筆 request registry、一筆特殊 Other Info 與 participant email map；相同 request 重送回傳相同 trip_id 且只保留一筆；在建立後刻意觸發例外，確認 TRIP、registry、Other Info 均 rollback 為 0；特殊 Other Info deterministic client_item_id 唯一衝突也使該整批交易 rollback；相同 title/date 使用不同 request UUID 成功建立兩筆不同 trip_id。測試留下 4 筆明確命名的 local V5 測試 TRIP（title 前綴 `Excel RPC` 或 `Allowed duplicate title date`）、對應 4 筆 registry 及 4 筆特殊 Other Info；均使用既有測試 Super Admin 建立，未碰既有兩筆 baseline TRIP，未清理測試資料。管理員與非管理員的 RPC 權限拒絕測試已由使用者確認先前均通過，視為既有驗收結果，不重複執行。2026-11-05 曾做 local V5 Auth 唯讀盤點（4 個 Auth users，其中 3 個對應 Super Admin、另 1 個無 `admin_users` 權限列）；該盤點僅反映目前本機帳號組成，不得用來推翻先前已通過的權限測試。RPC migration 檔與規格文件有未提交修改，local V5 函式已以修改內容套用；需在下一階段完成 migration diff／部署策略核對，不能把已修改本機函式誤認為 migration history 自動更新。2026-11-09 已決定取消 Excel 預覽中的幣別手動勾選／確認，改為沿用共用預設並保留提醒文案；既有程式仍需依新決策調整 UI，確認勾選移除後再驗收。提交時 Session refresh、RPC client 呼叫及結果不明 recovery 的真實瀏覽器流程仍待驗；IM01–IM10 尚未全部執行，尚未發布。下一步先補上有安全清理策略的自動化 DB tests 與非 Super Admin fixture（若可利用現有可控 Auth 測試工具而無須新增永久帳號），再完成其餘 IM01–IM10，才串接前端提交與 recovery。禁止 commit/push、遠端 DB 寫入或發布，除非另行明確核准。
 
 ### Excel V1 實作進度（截至 2026-11-07）
 
@@ -142,8 +144,8 @@ TRIP 基本資料區只有上述兩項。V1 不提供旅程天數、結束日期
 | Session refresh 與身分確認 | 已實作、靜態檢查通過 | `src/services/tripExcelCreateService.ts`；refresh 後以 `getUser()` 驗證 user id/email，再檢查 Super Admin，不重新啟動 OAuth |
 | 建立結果不明 recovery | Service mock 與本機 RPC 測試通過；真實登入斷線 UI 流程待驗 | 使用相同 request UUID 呼叫 `tc_get_trip_excel_create_request`；owner-bound CREATED 才承認成功；NOT_FOUND／TRIP_DELETED／無法確認不盲目換 UUID |
 | Migration 升級策略 | 已建立 forward migration；尚未套用 | `20261106160000_v3110_trip_excel_request_recovery.sql`；針對既有 registry 精準移除指向 `auth.users` 的 FK、保留資料並重建 lookup RPC；必須先確認原 migration 已套用，不可只重跑 `CREATE TABLE IF NOT EXISTS` |
-| TRIP 預設幣別來源 | 已核實為共用既有來源 | `src/types/trip.ts` 的 `DEFAULT_TRIP_CURRENCY` 是手動新增與 Excel V1 共用的唯一 TRIP 預設（目前為 TWD／NT$）；`src/App.tsx` 將該常數傳入表單。帳本的 `formCurrency` 是記帳輸入狀態，不是新 TRIP 預設，不應接用。預覽確認及提交前變更偵測沿用同一來源。
-| 最終幣別確認、Session refresh、RPC client、結果不明 recovery | 已實作並完成靜態／service mock／本機 RPC 驗證 | 真實登入瀏覽器操作及斷線後 UI recovery 流程仍待驗 |
+| TRIP 預設幣別來源 | 已核實為共用既有來源 | `src/types/trip.ts` 的 `DEFAULT_TRIP_CURRENCY` 是手動新增與 Excel V1 共用的唯一 TRIP 預設（目前為 TWD／NT$）；`src/App.tsx` 將該常數傳入表單。帳本的 `formCurrency` 是記帳輸入狀態，不是新 TRIP 預設，不應接用。Excel 預覽顯示同一來源並保留目的地提醒；依 2026-11-09 決策不再要求手動確認。
+| Session refresh、RPC client、結果不明 recovery | 已實作並完成靜態／service mock／本機 RPC 驗證 | 幣別 UI 依 2026-11-09 決策取消手動確認；程式調整尚待實作。真實登入瀏覽器操作及斷線後 UI recovery 流程仍待驗 |
 | IM01–IM10 完整驗收 | 尚未全部完成 | Parser、service mock、RPC 靜態契約及本機 DB integration 已通過；真實瀏覽器 UI／登入流程與裝置驗收仍待執行，不得宣稱正式端到端驗收完成 |
 
 **RPC 草稿未套用前的審查事項（2026-11-03 續作更新）**：
@@ -178,12 +180,12 @@ TRIP 基本資料區只有上述兩項。V1 不提供旅程天數、結束日期
 本節只記錄產品決策；目前有效欄位及行為以本文開頭「新增 TRIP Excel V1 精簡欄位契約」為準。下列決策不得被解讀為手動新增表單的權限或欄位規則也要一併改動。
 
 1. **P01｜Excel 建立權限（三層保護，已定案 2026-11-03）**：只有 Super Admin 可使用新增 TRIP Excel 建立。第一層：前端只向 Super Admin 顯示 Excel 建立入口。第二層：使用者按下確認建立時，系統自動檢查當下 Supabase Session／登入憑證有效性、線上狀態及目前帳號；若 Session 可由 Supabase 正常更新，須先完成更新再確認，若無 Session、更新失敗、帳號不符或狀態無法確認則停止；不再次啟動 Google OAuth、不要求輸入 Google 帳密。第三層：Excel 專用 RPC 依請求 JWT 與 `auth.uid()`，再以 `private.tc_is_super_admin()` 查詢資料庫權威角色，通過才建立。前端 Session、快取角色名單或任何用戶端旗標都不能取代 RPC 授權。既有手動新增權限及 `trips` 通用 INSERT RLS 不因本功能而收緊；Excel 使用獨立安全寫入入口。
-2. **P02｜Excel 可控制資料範圍（已定案）**：Excel V1 僅能指定最新欄位契約列出的 TRIP 名稱、出發日期及六項卡片欄位。TRIP／卡片 ID、建立／更新時間、參與者 Email mapping、編輯者、公開狀態、農曆、旅程型態、幣別及其他系統欄位均不得由 Excel 指定；依系統權威預設或明確確認流程產生。
+2. **P02｜Excel 可控制資料範圍（已定案）**：Excel V1 僅能指定最新欄位契約列出的 TRIP 名稱、出發日期及六項卡片欄位。TRIP／卡片 ID、建立／更新時間、參與者 Email mapping、編輯者、公開狀態、農曆、旅程型態、幣別及其他系統欄位均不得由 Excel 指定；依系統權威預設產生。
 3. **P03｜欄位標題與格式（已定案）**：使用固定繁體中文欄位標題；格式、必要／選填、允許值及範例均以 V1 精簡欄位契約為準，不得自行增欄或改採英文程式欄位名稱。
 4. **P04-01｜固定範本與嚴格驗證（產品原則與範本技術已定案）**：系統提供固定 V1 `.xlsx` 範本，固定兩張工作表：可見「新增 TRIP」及隱藏「系統設定」。`template_version=1` 置於系統設定表固定 A2:B2，不要求使用者輸入或修改；ExcelJS 4.4.0 以原生 worksheet API 讀寫，不使用 custom properties、`contentStatus` 或手動 ZIP/XML。正式範本已完成，並通過 ExcelJS、LibreOffice 25.2.7.2、Microsoft Excel 2010（14.0.7015.1000）隔離開啟／另存回讀；匯入端仍須重新驗證兩張工作表名稱、順序、可見／隱藏狀態、系統識別及版本值、固定座標區塊、標題及欄位值。任何不合約定的非空白值拒絕整份匯入，不猜測、不自動轉換、不靜默忽略。
 5. **P04-02｜記帳參與者（已定案）**：Excel 不提供參與者欄位；建立時使用即時資料庫權威預設名單，即 `admin_profiles.include_in_new_trip=true` 且 Email 同時存在於 `admin_users.role=super_admin` 的交集。手動新增原有參與者管理行為不變。
 6. **P04-03｜可編輯者（已定案）**：Excel 不提供編輯者 Email 欄位；V1 不額外指派 `trip_editor`。需要授權時，建立後使用 App 既有管理功能。
-7. **P04-04｜幣別與符號（已定案）**：Excel 不提供幣別欄位；沿用新增 TRIP 表單當下的預設幣別代碼與符號，不固定 TWD、不接受 Excel 覆寫。預覽及最終確認均顯示幣別並要求明確確認；確認前若預設值改變，必須更新預覽並重新確認。手動新增原有幣別選擇不變。
+7. **P04-04｜幣別與符號（2026-11-09 更新定案）**：Excel 不提供幣別欄位；沿用手動新增 TRIP 與 Excel 建立共用的 `DEFAULT_TRIP_CURRENCY`（目前為 TWD／NT$），不固定另設幣別、不接受 Excel 覆寫。預覽顯示實際採用的預設幣別，並保留提醒文案，告知此值不是從 Excel 讀取、請依旅程目的地留意；不要求手動勾選或確認，提醒不阻擋建立。手動新增原有幣別選擇功能不變。
 8. **P05-01｜正式範本保存（已定案）**：正式範本固定為 `docs/templates/AI新增TRIP標準範本_V1.xlsx`，配套欄位契約為 `docs/templates/AI新增TRIP標準範本_V1_欄位契約.md`；範本待階段 0 技術細節完成後產生。
 9. **P05-01-01｜TRIP 名稱（已定案）**：必填；去除前後空白後不可為空；不另增長度上限或字元白名單。
 10. **P05-01-02｜TRIP 基本資料與天數（已定案）**：TRIP 基本資料只有名稱及出發日期；天數由有效卡片最大日序推導，範圍 1–30。
@@ -211,13 +213,13 @@ TRIP 基本資料區只有上述兩項。V1 不提供旅程天數、結束日期
 | P04-01 | 固定範本與驗證 | 固定兩張工作表：可見「新增 TRIP」及隱藏「系統設定」；`template_version=1` 置於系統設定表固定 A2:B2，採 ExcelJS 4.4.0 原生 worksheet API。`docProps/custom.xml` 無原生 API、`contentStatus` 語意不適合作專用版本欄位，均不採用。ExcelJS round-trip 可直接驗證；Microsoft Excel／LibreOffice 編輯另存保留性仍待隔離驗證。固定座標、標題、系統表識別與 hidden 狀態均重新驗證，任一違規拒絕整份匯入。 |
 | P04-02 | 記帳參與者 | 不提供 Excel 欄位；使用 `admin_profiles.include_in_new_trip=true` 且 Email 同時具有 `admin_users.role=super_admin` 的即時交集名單。 |
 | P04-03 | TRIP 編輯者 | 不提供 Excel 欄位；不額外指派 `trip_editor`。 |
-| P04-04 | 預設幣別 | Excel 不提供幣別代碼、幣別名稱或符號欄；沿用新增 TRIP 表單當下預設幣別代碼及符號，不固定使用 TWD、不接受 Excel 覆寫。預覽及最終確認顯示幣別並要求使用者明確確認；若預覽期間設定改變，更新並要求重新確認。手動新增原有幣別選擇行為不變。 |
+| P04-04 | 預設幣別 | Excel 不提供幣別欄；沿用手動新增與 Excel 建立共用的 `DEFAULT_TRIP_CURRENCY`（目前 TWD／NT$），不接受 Excel 覆寫。預覽顯示實際採用的預設幣別，保留提醒文案說明此值非由 Excel 讀取、請依旅程目的地留意；不要求勾選或明確確認，提醒不阻擋建立。手動新增原有幣別選擇不變。 |
 | P05-01 | 正式範本 | 正式範本已建立於 `docs/templates/AI新增TRIP標準範本_V1.xlsx`，配套契約文件為 `docs/templates/AI新增TRIP標準範本_V1_欄位契約.md`；不得另建互不相容的 V1 範本。 |
 | P05-01-01 | TRIP 名稱 | 必填；去除前後空白後不可為空；V1 不另增長度上限或字元白名單。 |
 | P05-01-02 | TRIP 基本資料與天數 | TRIP 區僅有「TRIP 名稱」「出發日期」兩欄；天數由卡片最大「第幾天」推導，範圍 1–30。 |
 | P05-01-03 | 結束日期計算 | 天數由最大卡片日序推導；結束日期＝出發日期＋（推導天數－1），包含出發日。 |
 | P05-01-04 | TRIP 名稱與日期唯一性 | 不設名稱＋日期唯一限制；允許完全相同的 `title + departure_date` 建立多筆不同 UUID 的 TRIP。UI 顯示仍為 `title (departure_date)`；名稱與日期僅供使用者辨識。 |
-| P05-01-05 | 預設幣別 | 不提供幣別代碼／符號輸入欄；匯入建立沿用系統目前「新增 TRIP」表單的預設幣別代碼與符號，不固定使用 TWD，亦不接受 Excel 覆寫。匯入預覽及最終確認均須顯示幣別與符號，提醒匯入者依本次旅程目的地確認；未經確認不得提交。 |
+| P05-01-05 | 預設幣別 | 不提供幣別代碼／符號輸入欄；匯入建立沿用手動新增與 Excel 建立共用的 `DEFAULT_TRIP_CURRENCY`（目前 TWD／NT$），不接受 Excel 覆寫。預覽顯示幣別並保留提醒文案，說明此值非由 Excel 讀取、請依旅程目的地留意；不需手動勾選或確認，提醒不阻擋提交。 |
 | P05-01-06 | 記帳參與者 | 不提供 Excel 欄位；一律使用資料庫 `admin_profiles` 與 `admin_users` 即時權威預設名單。 |
 | P05-01-07 | TRIP 編輯者 | 不提供 Excel 欄位；不額外指派任何 `trip_editor`。 |
 | P05-01-08 | TRIP 備註 | 不納入 Excel V1。 |
@@ -265,7 +267,7 @@ TRIP 基本資料區只有上述兩項。V1 不提供旅程天數、結束日期
 17. **P04-01：標準範本與嚴格驗證（2026-11-03 更新）**：系統提供固定格式 Excel 範本，由系統 metadata 管理範本版本，使用者不得任意修改版本識別。最新決策允許兩張工作表：可見「新增 TRIP」供使用者填寫，隱藏「系統設定」以固定儲存格保存 `template_version=1`；不增加使用者輸入欄位。匯入時驗證兩張工作表名稱、順序、hidden 狀態、固定識別及版本值、固定座標欄位標題、資料型別及允許值；選填欄位僅依契約允許空白，任何非空白但不符合格式／允許值的資料一律拒絕整份匯入，不猜測、不自動轉換、不靜默忽略。Office round-trip 需於隔離環境另行驗證。
 18. **P04-02：記帳參與者沿用系統預設（2026-11-03 更新）**：Excel 不提供參與者欄位；建立時直接載入資料庫 `admin_profiles` 與 `admin_users` 的即時權威預設參與者名單，不在範本硬編碼姓名或 Email。手動新增表單原有參與者管理功能不變。
 19. **P04-03：可編輯者（2026-11-03 更新）**：Excel 不提供可編輯者 Email 欄位；V1 不額外指派任何 `trip_editor`。需要授權時，使用者於 TRIP 建立後透過 App 既有管理功能處理。
-20. **P04-04：幣別與符號（2026-11-03 更新）**：Excel 不提供幣別代碼或符號欄位。建立時沿用目前新增 TRIP 表單當下的預設代碼與符號，不固定指定 TWD，也不由 DB 預設值取代此產品決策。預覽及最終確認均顯示實際將採用的幣別代碼與符號，要求依本次旅程目的地明確確認；預覽後設定若改變，更新預覽並要求再次確認。手動新增表單原有幣別選擇功能不變。
+20. **P04-04：幣別與符號（2026-11-03 歷史決策，已由 2026-11-09 決策取代）**：當時規劃預覽及最終確認都要求使用者明確確認幣別；現行規則請以本文開頭「幣別 UI 決策更新（2026-11-09）」及 P04-04／P05-01-05 為準。
 21. **P05-01：正式範本保存方式（2026-11-02 同意）**：先完成欄位契約與範本內容定義，再產生一份正式 `.xlsx` 範本，固定保存於專案資料夾，供日後提取、修改及作為匯入格式依據。不建立多份互不相容的範本。建議位置為 `docs/templates/AI新增TRIP標準範本_V1.xlsx`，配套欄位契約文件為 `docs/templates/AI新增TRIP標準範本_V1_欄位契約.md`；檔案應在 P05 欄位契約完成後建立，目前尚未建立。
 
 ## 1. 目標與範圍
@@ -340,8 +342,8 @@ TRIP 基本資料區只有上述兩項。V1 不提供旅程天數、結束日期
 1. 使用者在「新增 TRIP」流程中選擇「Excel 建立」或「手動新增」。選擇 Excel 時直接建立新 TRIP，不先建立空白 TRIP，也不從既有 TRIP 功能選單啟動。Excel 欄位採本文精簡契約，系統以權威預設補齊其他必要資料，建立結果須符合 App 完整資料模型。**此流程僅在網路連線可用且雲端服務可正常連線時開放；離線狀態直接禁止開始。**
 2. 開始匯入前先檢查網路狀態，再以實際雲端請求確認服務可達，並確認使用者具備新增 TRIP 的權限。`navigator.onLine` 只能作為初步訊號，不可單獨視為雲端可用證明。若離線、雲端請求失敗、逾時或無法確認，停止匯入，不進入會修改資料的流程，也不得改成本機暫存建立。
 3. 使用者上傳 `.xlsx`。系統檢查兩張工作表名稱、順序與可見／隱藏狀態，驗證「系統設定」固定識別及 `template_version=1`，再解析「新增 TRIP」固定座標欄位、推導天數、欄位值與時間格式。任何驗證失敗均不得建立 TRIP 或寫入部分卡片，並指出工作表、列號及欄位。
-4. 驗證成功後顯示建立預覽，至少包含 TRIP 名稱、出發日期、依最大卡片日序推導的結束日期與旅程天數、系統目前預設幣別代碼與符號、明確的幣別確認提醒、系統預設參與者摘要（不提供自訂參與者欄位）、編輯者未額外指派提示，以及每日卡片總數與每日分布；列出所有錯誤與警告。幣別確認應由匯入者明確勾選或以等效明確動作完成，未確認不得進入提交。此預覽不包含地點確認摘要、Google 地圖候選或地點確認操作。
-5. 使用者按下「確認建立」後，先重新讀取／取得目前新增 TRIP 流程的系統預設幣別代碼與符號；若與預覽顯示值不同，更新預覽、清除舊的確認狀態並要求匯入者再次確認，不可直接提交。幣別確認有效後，第二層自動檢查當下 Supabase Session／登入帳號／線上狀態；必要時依 Supabase Auth 正常更新 Session，若無有效 Session、更新失敗或帳號不符則停止，不啟動第二次 Google OAuth。接著呼叫 Excel 專用 RPC，由 RPC 依目前請求 JWT、`auth.uid()` 及 `private.tc_is_super_admin()` 再核對權限。只有通過後才提交 TRIP 主資料及每日卡片。TRIP ID、卡片 ID、日期資料及其他系統初始結構由系統產生。若建立提交失敗或結果不明，依雲端建立結果核對流程處理；不得本機單獨建立或誤報成功。
+4. 驗證成功後顯示建立預覽，至少包含 TRIP 名稱、出發日期、依最大卡片日序推導的結束日期與旅程天數、共用 `DEFAULT_TRIP_CURRENCY` 的代碼與符號、系統預設參與者摘要（不提供自訂參與者欄位）、編輯者未額外指派提示，以及每日卡片總數與每日分布；列出所有錯誤與警告。幣別旁保留提醒文案，說明此預設值不是從 Excel 讀取，請依旅程目的地留意；不要求勾選或確認，提醒不阻擋提交。此預覽不包含地點確認摘要、Google 地圖候選或地點確認操作。
+5. 使用者按下「確認建立」後，沿用共用 `DEFAULT_TRIP_CURRENCY` 的代碼與符號（目前 TWD／NT$）；不設幣別勾選／確認門檻。第二層自動檢查當下 Supabase Session／登入帳號／線上狀態；必要時依 Supabase Auth 正常更新 Session，若無有效 Session、更新失敗或帳號不符則停止，不啟動第二次 Google OAuth。接著呼叫 Excel 專用 RPC，由 RPC 依目前請求 JWT、`auth.uid()` 及 `private.tc_is_super_admin()` 再核對權限。只有通過後才提交 TRIP 主資料及每日卡片。TRIP ID、卡片 ID、日期資料及其他系統初始結構由系統產生。若建立提交失敗或結果不明，依雲端建立結果核對流程處理；不得本機單獨建立或誤報成功。
 6. 只有整批雲端建立成功後才回報成功，並以雲端回傳的權威資料更新本機快取／UI。失敗時不得留下部分建立的 TRIP 或卡片；若底層儲存無法保證整批完整性，實作前必須補足原子性或安全補償設計。
 
 ## 7. 匯入初始化、錯誤處理與安全邊界
@@ -447,7 +449,7 @@ RPC 成功回應（建議使用單一 JSON object）至少包含：
 2. 第二層於最終確認提交時執行：檢查當下 Supabase Session／登入憑證／目前帳號及線上狀態；必要時依 Supabase Auth 正常更新 Session。無 Session、更新失敗、帳號不符或無法確認即停止，不啟動第二次 Google OAuth。
 3. 讀取當下 `getAdminProfiles()` 權威預設參與者名單及新增表單預設幣別。
 4. 解析／驗證整份 Excel，建立預覽及目前系統設定摘要。
-5. 使用者明確確認幣別及建立內容；最終提交前重新讀取預設幣別，若有變更則更新預覽並要求重新確認。
+5. 預覽顯示共用預設幣別並保留目的地提醒文案；不要求手動勾選／確認，也不因提醒未讀取而阻擋提交。
 6. 產生並固定 Trip ID、request UUID，呼叫唯一 Excel RPC；RPC 以目前請求 JWT、`auth.uid()` 及 `private.tc_is_super_admin()` 執行第三層最終授權。
 7. RPC transaction 成功後，以 RPC 回傳／讀取的雲端權威資料更新本機快取、Trip list 及 UI；不呼叫一般 `createTrip()` 後續逐項同步流程。
 8. RPC 結果不明時依 8.6 核對；未核實成功前不寫本機權威快取、不切換至新 Trip、不顯示建立成功。
@@ -491,14 +493,14 @@ RPC 成功回應（建議使用單一 JSON object）至少包含：
 
 | 情境 | 預期結果 |
 |---|---|
-| 有效 V1 範本、資料完整 | 顯示差異預覽及系統當下預設幣別／符號；提醒匯入者依本次旅程目的地明確確認幣別；最終提交前再次核對設定，必要時要求重新確認；確認後整批雲端提交成功才更新 UI |
+| 有效 V1 範本、資料完整 | 顯示差異預覽及共用預設幣別／符號；保留提醒文案告知幣別不是從 Excel 讀取、請依旅程目的地留意；不要求手動勾選／確認，整批雲端提交成功才更新 UI |
 | 缺少 `template_version`、空白或未知版本 | 拒絕匯入，資料完全不變，指出範本版本錯誤 |
 | 欄位標題缺少、改名、重複或工作表結構錯誤 | 拒絕匯入，指出工作表／欄位位置，不修改資料 |
 | 新增 TRIP 時選擇 Excel 建立 | 依最新精簡 Excel 欄位契約驗證；系統預設補齊 App 必要資料；不要求先建立空白 TRIP |
 | Excel 輸入欄位少於手動新增表單 | 這是 V1 刻意採用的精簡輸入方式；只要最新 Excel 欄位通過驗證，系統預設資料補齊後仍須建立完整有效 TRIP，不得誤要求補填已決定由系統預設的欄位 |
 | 進入匯入入口時離線或雲端不可達 | 不開放匯入流程，提示連線問題，不讀取 Excel、不建立 Trip、不寫本機、不更新 UI |
-| 匯入預覽中的系統預設幣別 | 顯示目前新增 TRIP 表單使用的幣別代碼與符號，提醒匯入者依本次旅程目的地確認；未明確確認不得提交 |
-| 預覽期間系統預設幣別變更 | 最終確認前重新取得目前系統預設幣別；若與預覽不同，更新幣別與符號、清除先前確認狀態，要求匯入者重新確認後才可提交 |
+| 匯入預覽中的系統預設幣別 | 顯示共用 `DEFAULT_TRIP_CURRENCY` 的代碼與符號；保留提醒文案告知此值非由 Excel 讀取、請依旅程目的地留意；不需勾選確認，提醒不阻擋提交 |
+| 預覽期間系統預設幣別變更 | 建立時採用最新共用預設幣別；更新預覽顯示及提醒文案即可，不設確認狀態或重新勾選流程 |
 | 上傳／預覽期間網路中斷 | 停止後續匯入操作；最終確認前再次預檢，連線未恢復且雲端讀取不可用時不得提交 |
 | 最終確認時離線或雲端服務不可達／無法確認建立可用性 | 停止建立，不寫本機、不更新 UI、不清理照片；恢復連線後須重新確認服務可達與 Super Admin 權限，再由使用者重新確認是否提交 |
 | 雲端明確拒絕提交 | 保留原資料、不更新 UI、不清理照片，回報失敗 |
@@ -507,8 +509,8 @@ RPC 成功回應（建議使用單一 JSON object）至少包含：
 | 最大卡片日序大於 1 | 依卡片最大「第幾天」推導天數並建立完整日期資料；中間沒有卡片的日子仍保留為空白日 |
 | 匯入不提供地點欄位 | 工作簿沒有地點名稱、地址、`location` 或 `location_address` 欄；匯入不做地圖搜尋／候選確認、不設定 Place ID／座標、不觸發天氣或路線；卡片建立後由使用者在 App 內自行設定地圖地點 |
 | 天氣欄位未勾選／V1 匯入 | 不匯入天氣資料，不因匯入觸發天氣更新 |
-| 匯入預覽中的系統預設幣別 | 顯示目前新增 TRIP 表單使用的幣別代碼與符號，提醒匯入者依本次旅程目的地確認；未明確確認不得提交 |
-| 預覽期間系統預設幣別變更 | 最終確認前重新取得目前系統預設幣別；若與預覽不同，更新幣別與符號、清除先前確認狀態，要求匯入者重新確認後才可提交 |
+| 匯入預覽中的系統預設幣別 | 顯示共用 `DEFAULT_TRIP_CURRENCY` 的代碼與符號；保留提醒文案告知此值非由 Excel 讀取、請依旅程目的地留意；不需勾選確認，提醒不阻擋提交 |
+| 預覽期間系統預設幣別變更 | 建立時採用最新共用預設幣別；更新預覽顯示及提醒文案即可，不設確認狀態或重新勾選流程 |
 
 ## 12. V3.11.0 審查與定案工作流程
 
@@ -566,13 +568,13 @@ RPC 成功回應（建議使用單一 JSON object）至少包含：
 6. 本計畫不納入 V3.10.12 的 TC01–TC14 舊版同步驗收重測；除非 V3.11.0 實作實際修改相關程式路徑，且能指出具體受影響行為，才新增最小範圍的回歸項目。
 7. 本文件的產品決策及範圍限制優先於測試便利性；不得為了通過測試而擴大 V1 範圍。
 
-### 12.5 目前階段狀態（2026-11-06 家用端續作核對）
+### 12.5 目前階段狀態（2026-11-10 家用端續作核對）
 
 | 項目 | 狀態 | 備註 |
 |---|---|---|
 | 階段 0：產品契約與範本技術定案 | 產品欄位契約、兩工作表 metadata、ExcelJS／LibreOffice／Microsoft Excel 2010 隔離 round-trip、正式範本及欄位契約文件均已完成 | 已定義可見「新增 TRIP」及隱藏「系統設定」兩張工作表；系統設定表 A1 為固定識別標題、A2:B2 保存精確字串 `template_version=1`。使用 ExcelJS 4.4.0 原生 worksheet API，不採 `docProps/custom.xml` 或 `contentStatus`；使用者頁 TRIP 區 A1:B3、卡片標題 A6:F6、資料自 A7:F 起；隱藏輔助欄 I:N 供六種固定類別清單，資料驗證引用 `$I$1:$N$1`。正式範本 `docs/templates/AI新增TRIP標準範本_V1.xlsx` 及欄位契約文件已建立。隔離測試使用 `%TEMP%` 專用檔：ExcelJS 讀寫、LibreOffice 25.2.7.2 headless 獨立 UserInstallation profile 另存、Microsoft Excel 2010（14.0.7015.1000）獨立 COM instance 另存，最後均由 ExcelJS 讀回，確認兩表名稱／順序、第二表 hidden、metadata 字串、隱藏輔助欄及類別下拉來源保留；未操作使用者既有活頁簿。此證據只涵蓋上述版本組合。不得重新開放已定案欄位。
 | 階段 1：程式資料契約與 SQL 邊界核對 | 已完成程式映射／RLS／trigger 唯讀核對；RPC migration 已套用 local V5，靜態檢查與部分真實 PostgreSQL 交易測試通過 | 已核對 `createTripRecord` 系統預設與 ID、參與者權威來源、六類及 typeColor、日期資料與空白日、時間格式、TRIP／卡片 ID、一般建立服務與通用 RLS。Excel 類別中文值直接映射到 `ItineraryItem.type` 的同名中文值；`typeColor` 取 `ItineraryPage.tsx` 既有 `ITINERARY_TYPE_OPTIONS`。`daysData` key 為 `String(day)`；卡片 ID 使用現有 `createItineraryItemId()`；匯入列維持工作簿順序，不自行按時間排序；嚴格 `HHMM` 驗證後正規化為 App 的 `HH:mm`。本機 Supabase 17.6 唯讀 catalog 確認：`admin_users`、`trips`、`other_info_items` 均啟用 RLS；`trips` INSERT policy 要求 `auth.uid()` 非空且 `tc_is_super_admin()` 或 `tc_is_trip_editor(id)`；`other_info_items` 寫入 policy 要求登入及 `tc_can_edit_other_info(trip_id)`。Super Admin 權威來源為 `private.tc_is_super_admin()`：SECURITY DEFINER、空 `search_path`，以 JWT email 對 `public.admin_users` 的 `role='super_admin'`；`admin_users` 有 `(email, role, trip_id)` unique index。`trips` INSERT 觸發 visibility／participant map guard 及 revision broadcast；guard 會從 content 移除 `participantEmailMap`、`otherInfoItems`，participant map 僅 admin-owned map 寫入 private table；因此不可把其他系統欄位直接塞入 `trips.content`。Other Info 要獨立 INSERT `public.other_info_items`，受 RLS、`allowed_roles` CHECK 與 identity-update trigger；欄位必填包括 `trip_id/folder_id/title/content`，`id` 預設 UUID、`sort_order` 預設 0、`created_by` 預設 `auth.uid()`。`trips.currency_config` DB default 為 JPY，但產品要求沿用當下新增 TRIP UI 的 currency config，故 Excel 專用建立不可盲用 DB default。Excel RPC migration 已套用公司端 local V5；`verify:trip-excel-rpc` 靜態檢查通過，真實 PostgreSQL 已驗證建立成功、同 request 冪等、交易 rollback、特殊 Other Info 唯一衝突 rollback，以及不同 request 同名同日期可建立不同 TRIP。管理員與非管理員 RPC 權限拒絕測試均已由使用者確認先前通過；同 request 併發測試仍待補，不能將局部交易案例視為完整端到端驗收。 |
-| 階段 2：IM01–IM03 | Parser 專項回歸已通過；IM 清單仍需逐項對照補齊 | 2026-11-06 家用端再次執行 `verify:trip-excel-import` 通過；不能單憑專項測試宣稱 IM01–IM03 全部完成。 |
+| 階段 2：IM01–IM03 | Parser 專項回歸通過；瀏覽器端已成功顯示有效檔案預覽；重新載入後再次選檔的 UI 穩定性仍待驗 | 2026-11-09 首次瀏覽器 UI 選取正式範本成功，預覽顯示 TRIP 名稱 `Test TRIP`、出發日期 `2026-12-25`、3 天及 3 張卡片（D1 `08:00–09:00 Test1／交通`、D2 `10:30–11:30 Test2／景點`、D3 `12:00–13:00 Test3／其他`），並顯示預設幣別 TWD／NT$ 提醒；此結果證明當次解析及預覽流程完成，但未按「建立 TRIP」。2026-11-10 再次執行前置自動驗證的既有結果為 `verify:trip-excel-import`、App／Node TypeScript 檢查通過；本輪未重跑。重新載入頁面後 App 正常，但 modal 關閉，尚未完成 reload 後第二次選檔。Parser 專項通過不等同 IM01–IM03 全部完成。 |
 | 階段 3：IM04–IM06 | 核心 RPC 交易與權限案例部分通過；併發覆蓋未完成 | 成功建立、同 request 冪等、rollback、不同 request 同名同日期，以及管理員／非管理員 RPC 權限拒絕案例已有既存通過結果；2026-11-06 僅補強前端建立服務送出前的 Session refresh 與帳號核對，沒有執行 DB 併發測試；同 request 併發仍待補。 |
 | 階段 4：IM07–IM08 | 前端 RPC 呼叫與清單刷新已接通，失敗／結果不明端到端 recovery 仍未完成 | 2026-11-06 核對 `TripEditorModal` → `App.handleTripExcelCreate` → `createTripFromExcel` → `tc_create_trip_from_excel` → `refreshTripOptionsAndSelect` 已有程式接線；本次新增 refresh 後 user ID／Email 驗證、幣別 props 最終比對及 pending UUID 沿用。專項靜態契約、App TypeScript、ESLint 及完整 production build 通過；未在本次工作階段操作任何 Supabase，也未做真實 RPC／UI 建立驗收。結果不明時的雲端 request 查詢與恢復路徑尚待補強，不能視為 IM07–IM08 通過。 |
 | 階段 5：IM09–IM10 | 依 IM 定義逐項確認；未宣稱完成 | 不把一般同步測試資料生命週期或局部 RPC 測試替代地點隔離／跨裝置驗收；本次沒有執行雙裝置測試。 |
@@ -589,3 +591,88 @@ RPC 成功回應（建議使用單一 JSON object）至少包含：
 - 本功能已進入公司端實作；允許在既有 local Supabase V5 套用 migration 並逐步執行 IM01–IM10。此授權不包含操作家用端資料庫或遠端共享／正式資料庫。
 - 實作授權不包含 commit/push、正式資料庫寫入、合併 main、版本標籤、部署或發布；這些操作均須另行明確授權。未完成階段 2–5 的測試及階段 6 最終審查前，不得宣稱 V1 功能驗收完成或進入發布。
 - 後續工作一律依本節編號及狀態逐項推進；不得每次對話重新建立不同的測試清單或執行順序。
+
+### 12.7 瀏覽器 Excel 解析阻塞診斷與驗收紀錄（2026-11-09～2026-11-10）
+
+**問題與根因**
+
+- 使用者以 Excel 編輯並保存正式範本 `docs/templates/AI新增TRIP標準範本_V1.xlsx` 後，瀏覽器端選檔曾停留在「正在驗證工作簿…」，無法完成預覽。調查發現 ExcelJS browser build 依賴 `readable-stream`，其事件串流需要 browser-compatible `events` 與 `process.nextTick`；Vite 曾將 `events` externalize，造成瀏覽器端 stream 初始化／讀取流程無法正常完成。
+- 以 `PassThrough` 暫存探針確認 process shim 後 stream 可正常輸出 `hello`；探針檔 `src/__stream_probe.ts` 已刪除，後續確認檔案不存在，不留測試程式。
+
+**最小修正內容**
+
+- `package.json`／`package-lock.json` 加入正式 runtime dependencies：`events` `^3.3.0`、`process` `^0.11.10`。
+- `src/main.tsx` 在載入應用程式 dependency graph 前先安裝 browser process shim，並將 `App.tsx` 改為動態載入，確保 ExcelJS／readable-stream 使用前 `process.nextTick` 已可用。
+- 新增 `src/process-shim.d.ts`，補足 `process` module 的 TypeScript 宣告。
+- 未新增額外 polyfill 套件、未更動 Excel 欄位契約或匯入流程，不擴大修正範圍。
+
+**已完成驗證**
+
+- 直接於瀏覽器載入 `src/services/tripExcelImport.ts` 並呼叫 `parseTripExcelWorkbook(arrayBuffer)`，成功解析使用者填寫的正式範本：`Test TRIP`、`2026-12-25`、`templateVersion=1`、3 天、3 張卡片；D1／D2／D3 欄位與時間均正確。
+- 2026-11-09 真實瀏覽器 UI 首次選取正式範本成功，預覽顯示 `Test TRIP`、出發日 `2026-12-25`、3 天、3 張卡片及 TWD／NT$ 預設幣別提醒；畫面出現「建立 TRIP」按鈕。當次只驗證預覽，沒有按下建立。
+- `npm run verify:trip-excel-import` 通過，涵蓋有效預覽、空白日保留、嚴格標題、時間與 metadata 拒絕、損壞檔案等 parser 契約。
+- `npx tsc -p tsconfig.app.json --noEmit` 與 `npx tsc -p tsconfig.node.json --noEmit` 通過。
+- `npm run build` 通過（Vite production build exit code 0）；另有 `verify:browser-security`、`verify:weather-forecast-bundle` 通過紀錄。上述 build／驗證是在相關程式變更後執行；2026-11-10 本次僅整理文件，沒有再次重跑。
+
+**仍待驗證與停止邊界**
+
+- 2026-11-10 重新載入本機預覽頁後，App 正常顯示（v3.10.12），新增 TRIP modal 關閉。後續已重新開啟「新增旅程」並切換至「Excel 建立」，確認匯入入口可再次顯示；但瀏覽器檔案選擇器雖成功觸發，透過自動化設定檔案時回傳 `Not allowed`，因此沒有完成第二次選檔及預覽。不得宣稱重複選檔、重新載入後 UI 解析穩定性已通過。
+- 本機測試頁為 `http://127.0.0.1:4174/Travel-Companion/?ui-test=excel-stream-probe-20261109`；目前仍需在該頁重新開啟「新增旅程」→「Excel 建立」並選取同一份範本，確認仍能顯示上述 3 天／3 張卡片預覽。完成後停在預覽畫面即可，不要按「建立 TRIP」。
+- 此階段不建立 TRIP、不執行 Supabase 寫入、不執行 migration、不 commit／push、不部署或發布。正式範本是使用者已填寫並保存的檔案，視為既有使用者修改；任何後續驗證不得覆寫、重新產生或清理該檔案。
+- 本紀錄僅更新瀏覽器解析問題及階段 2 的驗收狀態；IM01–IM03 仍須依 12.2 固定測試清單逐項補齊，階段 3–6 狀態不因本紀錄而改變。
+
+### 12.8 Excel 建立子畫面 UI 精簡與選檔回饋（2026-11-10）
+
+**使用者確認的 UI 決策**
+
+- 從「新增旅程」選擇「Excel 建立」進入匯入子畫面後，不再重複顯示「建立方式」及「手動新增／Excel 建立」兩個切換按鈕；該畫面只保留必要匯入說明、選擇 Excel 檔案按鈕及「取消」。
+- Excel 匯入子畫面隱藏標題列右上角 X，避免出現第二個關閉入口；底部原「關閉」按鈕改名為「取消」。一般手動新增／編輯畫面的關閉行為不變。
+- 選檔按鈕需有明確互動回饋：使用獨立樣式按鈕觸發隱藏的原生 file input，按鈕具 hover、active（按下縮放）及 keyboard focus 視覺狀態；選取後顯示檔名、解析中狀態及驗證成功狀態，且可重新選擇檔案。
+- 不改變 Excel parser、欄位契約、建立交易或權限流程；此 UI 調整不得觸發建立 TRIP。
+
+**4174 登入狀態觀察**
+
+- 使用者回報本機 4174 頁面曾自動登出測試帳號；重新登入後，仍可正常進入 Excel 建立並操作匯入預覽。
+- 此為使用者觀察紀錄，尚未確認登出原因，也沒有證據顯示與 Excel parser／選檔流程有因果關係。本次不擅自修改 Auth、Session refresh 或自動登出政策；若再次發生，另行蒐集當時時間、頁面狀態及 Session 錯誤資訊再定位。
+
+**實作與驗收狀態**
+
+- 2026-11-10 已依上述決策修改 src/components/TripEditorModal.tsx：Excel 模式不再顯示建立方式切換區及右上角 X；底部操作改為「取消」；原生 file input 改由獨立樣式按鈕觸發，按鈕具 hover／active／focus 回饋，選檔後顯示檔名、解析中及解析成功狀態。
+- 使用者在本次修改前已確認當時畫面已選取 Excel 並顯示預覽；修改期間原 4174 分頁已回到旅程主畫面，因此原預覽狀態目前無法保留／確認。後續需重新選取同一範本驗收 UI。仍不得按「建立 TRIP」。
+- 2026-11-10 修改後驗證：`npx eslint src/components/TripEditorModal.tsx --report-unused-disable-directives --max-warnings 0` 通過；`npm run build` 通過（含 App／Node TypeScript 檢查、既有 release regression、Vite production build 1939 modules、PWA 65 precache entries，以及 browser security／weather bundle postbuild checks）。
+- 2026-11-10 使用者後續回報建立方式按鈕點選無明顯反應，且重新選擇檔案出現禁止游標。程式根因已確認：建立方式切換按鈕、選檔按鈕及隱藏 file input 都錯誤地受 `isExcelResultUnconfirmed` disabled 條件限制。已移除這些 UI／選檔控件的該項限制，保留 `isSaving`／`isParsingExcel` 時停用；建立提交仍由 `handleExcelCreate` 的既有條件、request fingerprint 及 request ID 冪等保護把關。此調整不放寬 RPC 權限，也不會觸發建立。修改後 ESLint、`git diff --check` 及完整 `npm run build` 通過。
+- 使用者實際驗收確認重新選擇檔案已恢復；但補充建立入口「手動新增／Excel 建立」兩個按鈕的點擊回饋仍不明顯，須等畫面跳轉才知道成功。已加強兩個按鈕的視覺互動：hover 時位移／陰影及邊框／背景變化、active 時縮放與內陰影、focus-visible 焦點框；目前選取的手動新增顯示明確深色底與選取描邊。僅調整 UI class，不改變 click handler、切換流程、權限或建立邏輯。修改後 ESLint、`git diff --check` 及完整 `npm run build` 均通過；此第二輪視覺回饋仍待使用者在瀏覽器實際確認。
+- 修改後尚未完成真人瀏覽器的選檔按鈕操作驗收。程式更新期間，原 4174 分頁目前顯示旅程主畫面，無法確認修改前的 Excel 預覽狀態仍保留；請重新進入 Excel 建立並選取同一範本，確認畫面只剩說明、選檔按鈕及取消，並實際感受按鈕 hover／按下效果與選檔後檔名／驗證狀態。只驗證預覽，不要按「建立 TRIP」。
+- 2026-11-10 使用者提出最後 Excel 匯入預覽畫面除「建立 TRIP」外，需有取消機制。已新增「取消匯入，返回建立方式」按鈕；點擊會清除目前畫面的預覽、檔名、驗證訊息、request ID 與 fingerprint 狀態，並返回手動／Excel 建立方式選擇。最初版本將 `isExcelResultUnconfirmed` 設為取消停用條件；使用者重新釐清後，該限制已移除。現在兩個取消入口只在 `isSaving`（建立 RPC／後續確認仍在執行）時暫停，結果不明時仍允許退出畫面。
+- 取消畫面不等於取消或回滾已送出的伺服器交易。若本次建立結果不明，`sessionStorage` 的 pending fingerprint／request ID 必須保留，不因 UI 取消而清除；同一次操作恢復相同 Excel 時仍沿用相同 request ID。
+- **重複建立防護的範圍（2026-11-10 釐清）：** 資料庫 `private.tc_trip_excel_create_requests.request_id` 為唯一冪等鍵；同一 request ID 的併發／重送會讀取既有結果，不會再建立第二筆 TRIP；同 request ID 搭配不同 payload 會拒絕。不同 request ID 是新的建立意圖，即使內容、標題或日期相同，仍允許建立另一筆 TRIP。系統不得以相同 Excel 指紋、相同標題／日期或「曾經匯入過」為由，全面阻止使用者主動重複匯入。
+- 前端 fingerprint 僅用於找回同一次尚未確認的請求，不能作為跨次匯入的全域去重限制。單筆 pending sessionStorage 若未處理就被不同內容的新請求覆寫，會失去舊請求的追蹤資訊；目前此處仍列為待補強，不可在結果未核對時清除／覆蓋 pending。資料庫已有 `tc_get_trip_excel_create_request` owner-bound 查詢 RPC，可回傳 `CREATED`、`PENDING`、`NOT_FOUND` 或 `TRIP_DELETED`；後續可用它協助恢復舊請求，但不能藉此限制使用者退出或另起新的匯入操作。
+- 本次取消按鈕調整只改變前端 UI enabled 條件，不呼叫建立 RPC、不寫入資料庫、不修改 migration。驗證尚待執行與紀錄。
+- 本次沒有建立 TRIP、沒有資料庫寫入、沒有 migration、沒有 commit／push、部署或發布。
+
+### 12.9 建立旅程介面配色與側邊欄排序診斷（2026-11-11）
+
+**建立旅程介面 UI 定案與實作**
+
+- 「建立方式」中的「手動新增／Excel 建立」採淡薄荷綠預設狀態：目前以 `emerald-50` 背景、`emerald-200` 邊框及 `emerald-800` 文字呈現；游標／鍵盤焦點移到 Excel 建立時，手動新增暫時回白底，Excel 建立顯示同一淡綠狀態。
+- 新增 TRIP 子畫面中的選檔／取消按鈕採相同互動方向：選檔按鈕為預設淡薄荷綠；游標移入或鍵盤聚焦取消時，取消按鈕顯示淡薄荷綠、選檔按鈕暫回白底；不使用 autofocus，避免開啟畫面時誤觸原生檔案選擇器。
+- 側邊欄的「新增旅程／編輯旅程」按鈕 hover／focus-visible 改用同一 `emerald-50` 淡薄荷綠，保留一般狀態白底及原有 click handler。
+- 上述調整僅為 UI class／hover-focus 狀態，不改變匯入 parser、RPC、建立交易或權限行為。
+
+**測試 TRIP 側邊欄順序診斷（只讀）**
+
+- `AppSidebar.tsx` 第 134–137 行以 `currentTrip.sidebarConfig` 作為功能清單來源，展開登入使用者專屬的私人確認清單；第 229 行依陣列順序 render。`travelToolRegistry.ts` 第 23–37 行將「私人確認清單」插入 `checklist` 後方，因此其位置取決於 TRIP 原始側邊欄設定。
+- `tripRepository.ts` 第 69–76 行的新建預設順序為 itinerary、checklist、special-info、other_info、expense、exchange_rate；第 97–132 行的 `normalizeSidebarConfig` 只移除舊版特殊資訊項、在 checklist 後插入特殊資訊項、必要時補上 exchangeRate，不會全面重排其餘項目。
+- 公開種子 `public/trips/group-tour-2026-10.json`（第 6–12 行）原始 `sidebarConfig` 為 itinerary、checklist、leader_info、other_info、expense，未列 exchangeRate；沖繩種子 `public/trips/free-travel-2026-01.json`（第 6–12 行）亦為相似舊式結構。這證明 repo 中既有 seed fixtures 不是新版完整預設清單，但 normalize 會補上必要特殊資訊與 exchangeRate。
+- 使用者截圖中的測試 TRIP 畫面順序為「測試清單、私人確認清單、領隊導遊聯絡資訊、測試記帳、外幣換算、每日行程」，與新建預設順序明顯不同。依程式渲染方式，最可能原因是該 TRIP 的 `sidebarConfig` 陣列本身保留了另一種順序；不需要測試 TRIP ID 特殊分支即可產生此現象。
+- `PROTECTED_SEED_TRIP_IDS`（`appConstants.ts` 第 38–44 行）目前只用於保護特定 seed TRIP 不可刪除；查得的側邊欄 render／normalize 流程未依此 ID 選擇另一套排序。
+- **尚未查證**：截圖所選測試 TRIP 的實際雲端 `trips.sidebar_config`／詳細 JSON 尚未讀取；尚不能分辨該排序來自雲端保存設定、在本機 seed JSON 或舊版資料正規化後的結果。尚未修改任何 TRIP 資料或排序邏輯。
+
+**下一步建議（尚未授權實作）**
+
+- 先以唯讀方式取得截圖中測試 TRIP 的實際 `sidebar_config`，與相同使用者所見的其他 TRIP 比對；確認差異後，再提出不遺失自訂項目的標準排序方案。不要直接覆寫雲端 JSON 或 seed fixture。
+
+**本輪檢查邊界**
+
+- 2026-11-11 本輪已對修改中的 `TripEditorModal.tsx` 執行 ESLint 與 `git diff --check`，通過；`AppSidebar.tsx` 近期 UI 修改亦有 ESLint／diff check 通過紀錄。尚未對目前整組變更重跑完整 production build 或人工瀏覽器回歸。
+- 本輪未建立 TRIP、未執行 DB 寫入／migration、未改動正式 Supabase，也未部署或發布。

@@ -9,6 +9,20 @@ const template = await readFile(templatePath);
 const createWorkbook = async () => {
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.load(template);
+
+  // The checked-in template may contain preserved sample data for manual
+  // preview testing. Keep that source workbook intact and clear only this
+  // in-memory fixture before each parser test.
+  const inputSheet = workbook.getWorksheet("新增 TRIP");
+  assert.ok(inputSheet);
+  inputSheet.getCell("B2").value = null;
+  inputSheet.getCell("B3").value = null;
+  for (let row = 7; row <= 1006; row += 1) {
+    for (let column = 1; column <= 6; column += 1) {
+      inputSheet.getCell(row, column).value = null;
+    }
+  }
+
   return workbook;
 };
 

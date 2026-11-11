@@ -200,7 +200,7 @@ export default function AppSidebar({
                 <button
                   type="button"
                   onClick={onCreateTrip}
-                  className="flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2 py-2 text-xs font-bold text-slate-700 hover:bg-slate-100"
+                  className="flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2 py-2 text-xs font-bold text-slate-700 transition-colors hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-800 focus-visible:border-emerald-200 focus-visible:bg-emerald-50 focus-visible:text-emerald-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300"
                 >
                   <Plus size={14} /> 新增旅程
                 </button>
@@ -210,7 +210,7 @@ export default function AppSidebar({
                   type="button"
                   onClick={onEditTrip}
                   disabled={!currentTrip}
-                  className="flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2 py-2 text-xs font-bold text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+                  className="flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2 py-2 text-xs font-bold text-slate-700 transition-colors hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-800 focus-visible:border-emerald-200 focus-visible:bg-emerald-50 focus-visible:text-emerald-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 disabled:opacity-50"
                 >
                   <Pencil size={14} /> 編輯旅程
                 </button>

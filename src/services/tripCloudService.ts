@@ -131,7 +131,9 @@ const isTripContent = (value: unknown): value is TripDetail["content"] => {
   return (
     Array.isArray(content.days) &&
     Boolean(content.daysData) &&
-    typeof content.daysData === "object"
+    typeof content.daysData === "object" &&
+    !Array.isArray(content.daysData) &&
+    Object.values(content.daysData).every(Array.isArray)
   );
 };
 

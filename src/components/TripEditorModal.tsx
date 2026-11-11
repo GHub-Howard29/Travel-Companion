@@ -1,6 +1,13 @@
 import { useRef, useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
-import { AlertTriangle, FileSpreadsheet, Save, X } from "lucide-react";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  FileSpreadsheet,
+  LoaderCircle,
+  Save,
+  X,
+} from "lucide-react";
 import {
   parseTripExcelWorkbook,
   type ParsedTripExcel,
@@ -261,11 +268,13 @@ export const TripEditorModal = ({
   } | null>(null);
   const [shrinkConfirmationStep, setShrinkConfirmationStep] = useState<1 | 2>(1);
   const [creationMethod, setCreationMethod] = useState<"manual" | "excel">("manual");
+  const [isExcelCancelHovered, setIsExcelCancelHovered] = useState(false);
+  const [isExcelCancelFocused, setIsExcelCancelFocused] = useState(false);
+  const isExcelCancelActive = isExcelCancelHovered || isExcelCancelFocused;
   const [excelPreview, setExcelPreview] = useState<ParsedTripExcel | null>(null);
   const [excelIssues, setExcelIssues] = useState<TripExcelValidationIssue[]>([]);
   const [excelFileName, setExcelFileName] = useState("");
   const [isParsingExcel, setIsParsingExcel] = useState(false);
-  const [isExcelCurrencyConfirmed, setIsExcelCurrencyConfirmed] = useState(false);
   const [excelRequestId, setExcelRequestId] = useState<string | null>(null);
   const [isExcelResultUnconfirmed, setIsExcelResultUnconfirmed] = useState(false);
   const excelRequestFingerprintRef = useRef<string | null>(null);
@@ -279,7 +288,6 @@ export const TripEditorModal = ({
     setExcelIssues([]);
     setExcelFileName(file?.name ?? "");
     setExcelRequestId(null);
-    setIsExcelCurrencyConfirmed(false);
     setIsExcelResultUnconfirmed(false);
     excelRequestFingerprintRef.current = null;
     if (!file) return;
@@ -317,7 +325,6 @@ export const TripEditorModal = ({
         excelRequestFingerprintRef.current = fingerprint;
         setExcelRequestId(requestId);
         setIsExcelResultUnconfirmed(pendingRequest?.fingerprint === fingerprint);
-        setIsExcelCurrencyConfirmed(false);
       } else {
         setExcelIssues(result.issues);
       }
@@ -338,7 +345,6 @@ export const TripEditorModal = ({
     const selectedCurrency = CURRENCY_OPTIONS.find((item) => item.code === code);
     setCurrencyCode(code);
     setCurrencySymbol(selectedCurrency?.symbol ?? "");
-    setIsExcelCurrencyConfirmed(false);
     if (excelPreview) {
       void getExcelRequestFingerprint(excelPreview, code, selectedCurrency?.symbol ?? "")
         .then((fingerprint) => {
@@ -356,7 +362,7 @@ export const TripEditorModal = ({
   };
 
   const handleExcelCreate = async () => {
-    if (!excelPreview || !excelRequestId || !isExcelCurrencyConfirmed || !canManageEditors) {
+    if (!excelPreview || !excelRequestId || !canManageEditors) {
       return;
     }
     if (!currencyCode.trim() || !currencySymbol.trim()) {
@@ -374,8 +380,7 @@ export const TripEditorModal = ({
     ) {
       setCurrencyCode(currentDefaultCurrencyCode);
       setCurrencySymbol(currentDefaultCurrencySymbol);
-      setIsExcelCurrencyConfirmed(false);
-      setFormError("新增 TRIP 的預設幣別已變更，請確認更新後的幣別，再重新按下建立。");
+      setFormError("新增 TRIP 的預設幣別已更新，請再次按下建立。");
       const fingerprint = await getExcelRequestFingerprint(
         excelPreview,
         currentDefaultCurrencyCode,
@@ -668,22 +673,24 @@ export const TripEditorModal = ({
           <h2 className="text-lg font-bold text-slate-900">
             {mode === "create" ? "新增旅程" : "編輯旅程"}
           </h2>
-          <button
-            type="button"
-            onClick={() => {
-              releaseFocusedControl();
-              onClose();
-            }}
-            disabled={isSaving}
-            className="p-2 rounded-full text-slate-500 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
-            aria-label="關閉"
-            title="關閉"
-          >
-            <X size={18} />
-          </button>
+          {!(mode === "create" && creationMethod === "excel") && (
+            <button
+              type="button"
+              onClick={() => {
+                releaseFocusedControl();
+                onClose();
+              }}
+              disabled={isSaving}
+              className="p-2 rounded-full text-slate-500 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
+              aria-label="關閉"
+              title="關閉"
+            >
+              <X size={18} />
+            </button>
+          )}
         </div>
 
-        {mode === "create" && (
+        {mode === "create" && creationMethod !== "excel" && (
           <section className="rounded-xl border border-slate-200 p-3">
             <p className="text-sm font-bold text-slate-700">建立方式</p>
             <div className="mt-2 grid grid-cols-2 gap-2">
@@ -694,12 +701,10 @@ export const TripEditorModal = ({
                   setExcelPreview(null);
                   setExcelIssues([]);
                   setExcelRequestId(null);
-                  setIsExcelCurrencyConfirmed(false);
                   setIsExcelResultUnconfirmed(false);
                   excelRequestFingerprintRef.current = null;
                 }}
-                disabled={isExcelResultUnconfirmed}
-                className={`rounded-lg border px-3 py-2.5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50 ${creationMethod === "manual" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 text-slate-600"}`}
+                className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-sm font-semibold text-emerald-800 shadow-sm transition-all duration-150 hover:-translate-y-0.5 hover:border-emerald-300 hover:bg-emerald-100 hover:shadow-md active:translate-y-0 active:scale-[0.97] active:shadow-inner focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 focus-visible:ring-offset-2 has-[+button:hover]:border-slate-200 has-[+button:hover]:bg-white has-[+button:hover]:text-slate-700 has-[+button:focus-visible]:border-slate-200 has-[+button:focus-visible]:bg-white has-[+button:focus-visible]:text-slate-700"
               >
                 手動新增
               </button>
@@ -710,12 +715,11 @@ export const TripEditorModal = ({
                   setExcelPreview(null);
                   setExcelIssues([]);
                   setExcelRequestId(null);
-                  setIsExcelCurrencyConfirmed(false);
                   setIsExcelResultUnconfirmed(false);
                   excelRequestFingerprintRef.current = null;
                 }}
-                disabled={!canManageEditors || isExcelResultUnconfirmed}
-                className={`rounded-lg border px-3 py-2.5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50 ${creationMethod === "excel" ? "border-emerald-700 bg-emerald-700 text-white" : "border-slate-200 text-slate-600"}`}
+                disabled={!canManageEditors}
+                className="rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-700 transition-all duration-150 hover:-translate-y-0.5 hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-800 hover:shadow-md active:translate-y-0 active:scale-[0.97] active:shadow-inner focus-visible:border-emerald-200 focus-visible:bg-emerald-50 focus-visible:text-emerald-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <span className="inline-flex items-center justify-center gap-1.5">
                   <FileSpreadsheet size={16} /> Excel 建立
@@ -733,23 +737,47 @@ export const TripEditorModal = ({
             <div>
               <p className="text-sm font-bold text-slate-800">匯入標準 Excel 範本</p>
               <p className="mt-1 text-xs leading-5 text-slate-500">
-                請使用 V1 標準範本。系統先完整驗證，再顯示預覽；確認幣別後會以單一雲端交易建立全新 TRIP。
+                請使用 V1 標準範本。系統先完整驗證，再顯示預覽；建立時會以單一雲端交易建立全新 TRIP。
               </p>
             </div>
+            <button
+              type="button"
+              onClick={() => excelInputRef.current?.click()}
+              disabled={isSaving || isParsingExcel}
+              className={`inline-flex w-full items-center justify-center gap-2 rounded-lg border px-4 py-3 text-sm font-bold shadow-sm transition active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${isExcelCancelActive ? "border-slate-200 bg-white text-slate-700" : "border-emerald-200 bg-emerald-50 text-emerald-800 hover:border-emerald-300 hover:bg-emerald-100"}`}
+            >
+              <FileSpreadsheet size={17} />
+              {excelFileName ? "重新選擇 Excel 檔案" : "選擇 Excel 檔案"}
+            </button>
             <input
               ref={excelInputRef}
               type="file"
               accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
               onChange={handleExcelFileChange}
-              disabled={isExcelResultUnconfirmed || isSaving}
-              className="block w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-slate-700 disabled:opacity-50"
+              disabled={isSaving || isParsingExcel}
+              className="hidden"
               aria-label="選擇新增 TRIP Excel 檔案"
             />
             {excelFileName && (
-              <p className="text-xs text-slate-500">檔案：{excelFileName}</p>
-            )}
-            {isParsingExcel && (
-              <p className="text-sm text-slate-600">正在驗證工作簿…</p>
+              <div
+                aria-live="polite"
+                className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800"
+              >
+                {isParsingExcel ? (
+                  <LoaderCircle size={15} className="shrink-0 animate-spin" />
+                ) : excelPreview ? (
+                  <CheckCircle2 size={15} className="shrink-0" />
+                ) : (
+                  <FileSpreadsheet size={15} className="shrink-0" />
+                )}
+                <span className="min-w-0 break-all">
+                  {isParsingExcel
+                    ? `正在驗證：${excelFileName}`
+                    : excelPreview
+                      ? `已選取並完成驗證：${excelFileName}`
+                      : `已選取：${excelFileName}`}
+                </span>
+              </div>
             )}
             {excelIssues.length > 0 && (
               <div role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-3">
@@ -812,19 +840,9 @@ export const TripEditorModal = ({
                 </div>
                 <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs leading-5 text-amber-900">
                   本次新 TRIP 將使用新增表單目前的預設幣別：<strong>{currencyCode}（{currencySymbol}）</strong>。
-                  請依旅程目的地確認；此設定不會從 Excel 讀取。
-                  {isExcelResultUnconfirmed && " 上次建立結果尚未確認，請確認幣別及資料後使用同一份 Excel 重試；系統會沿用原建立請求。"}
+                  此設定不會從 Excel 讀取，請留意旅程目的地所使用的幣別。
+                  {isExcelResultUnconfirmed && " 上次建立結果尚未確認，請檢視資料後使用同一份 Excel 重試；系統會沿用原建立請求。"}
                 </div>
-                <label className="mt-3 flex items-start gap-2 rounded-lg border border-slate-200 bg-white p-3 text-sm leading-5 text-slate-700">
-                  <input
-                    type="checkbox"
-                    checked={isExcelCurrencyConfirmed}
-                    onChange={(event) => setIsExcelCurrencyConfirmed(event.target.checked)}
-                    disabled={isSaving}
-                    className="mt-0.5 h-4 w-4 shrink-0 accent-emerald-700"
-                  />
-                  <span>我已確認本次旅程使用 {currencyCode}（{currencySymbol}）作為預設幣別。</span>
-                </label>
                 {formError && (
                   <div role="alert" className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700">
                     {formError}
@@ -833,10 +851,27 @@ export const TripEditorModal = ({
                 <button
                   type="button"
                   onClick={() => void handleExcelCreate()}
-                  disabled={!excelRequestId || !isExcelCurrencyConfirmed || isSaving || !canManageEditors}
+                  disabled={!excelRequestId || isSaving || !canManageEditors}
                   className="mt-3 w-full rounded-lg bg-emerald-700 px-4 py-3 text-sm font-bold text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-600"
                 >
-                  {isSaving ? "正在建立並確認雲端資料…" : "確認幣別並建立 TRIP"}
+                  {isSaving ? "正在建立並確認雲端資料…" : "建立 TRIP"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setExcelPreview(null);
+                    setExcelIssues([]);
+                    setExcelFileName("");
+                    setExcelRequestId(null);
+                    setIsExcelResultUnconfirmed(false);
+                    setFormError("");
+                    excelRequestFingerprintRef.current = null;
+                    setCreationMethod("manual");
+                  }}
+                  disabled={isSaving}
+                  className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:border-slate-400 hover:bg-slate-50 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  取消匯入，返回建立方式
                 </button>
               </div>
             )}
@@ -854,10 +889,14 @@ export const TripEditorModal = ({
           <button
             type="button"
             onClick={onClose}
-            disabled={isSaving || isExcelResultUnconfirmed}
-            className="w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={isSaving}
+            onMouseEnter={() => setIsExcelCancelHovered(true)}
+            onMouseLeave={() => setIsExcelCancelHovered(false)}
+            onFocus={() => setIsExcelCancelFocused(true)}
+            onBlur={() => setIsExcelCancelFocused(false)}
+            className={`w-full rounded-lg border px-4 py-3 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${isExcelCancelActive ? "border-emerald-200 bg-emerald-50 text-emerald-800 hover:border-emerald-300 hover:bg-emerald-100" : "border-slate-300 bg-white text-slate-700"}`}
           >
-            {isExcelResultUnconfirmed ? "請先使用同一份 Excel 確認建立結果" : "關閉"}
+            取消
           </button>
         ) : (
           <>
