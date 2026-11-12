@@ -56,7 +56,7 @@ Excel RPC 案例集與一般 TRIP fixtures 均可透過 Git 在 A、B 間取得�
 - 最少涵蓋：單筆建立、同 request 重送、建立交易失敗 rollback、特殊 Other Info 衝突 rollback、不同 request UUID 同名同日期建立多筆、日期／時間／多日序及必要卡片內容保留。
 - 每台電腦使用本機 Auth／Super Admin 獨立執行；非 Super Admin、缺少管理員、結果不明等案例依本機測試能力明確記錄 pass／fail／skipped，不得以來源端 registry row 假冒目的端驗收。
 - active／regression_pending 不可由一般同步程序清除。released 必須明確解除；archived 不得日常重新載入；deleted 必須依共同生命週期與兩端確認規則處理。
-- 任一端新增／修改 Excel RPC 案例後，透過 `/上傳資料庫` 發布案例集；另一端先安全 fast-forward Git，再透過 `/下載資料庫` 取得案例定義，之後才可依本文件第 7.2 節在目的端重建 RPC。一般 TRIP fixtures 同樣使用明確的 upload／download 命令，但其候選搜尋、內容比較及 DB 批次匯入依 `docs/83`。兩種資料集彼此獨立；不以 revision／parent／checksum 判斷衝突。
+- 任一端新增／修改 Excel RPC 案例後，透過 `/上傳資料庫` 發布案例集；另一端先安全 fast-forward Git，再透過 `/下載資料庫` 取得案例定義，之後才可依本文件第 7.2 節在目的端重建 RPC。一般業務資料亦使用明確的 upload／download 命令，但只有來源端有共同基準後變更、目的端沒有基準後變更時才可搬移；雙邊變更即停止，細節依 `docs/83`。兩種資料集彼此獨立；Excel RPC 案例檔維持自己的案例內容更新流程，不套用 DB 時間戳或 checksum／revision 衝突判斷。
 
 ## 6. 命令與安全界線
 
