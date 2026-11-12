@@ -4,9 +4,23 @@
 >
 > 重整前的完整 BUG001～BUG031 內容原檔保留於《[archive/bug-history/03_Bug修正紀錄_完整歷史](archive/bug-history/03_Bug修正紀錄_完整歷史.md)》，沒有刪除。
 >
-> 最後整理：2026-11-02
+> 最後整理：2026-11-12
 
 ## 未修正
+
+## 已修正但尚未發布
+
+### BUG038：TRIP 清單讀取轉換失敗，導致本機旅程清單縮減
+
+- 發現日期：2026-11-12。
+- 使用者回報：離線問題已解決，但 Excel 匯入後讀取 TRIP 仍失敗；原本可見的多筆旅程一度只剩一筆。
+- 根因：6/7 筆 cloud Trip 的 `content.daysData` 含合法 `mode: "guided"` metadata。`sanitizeItineraryCoverPhotos` 與 `removeExpiredTravelEstimates` 遍歷所有 `daysData` 值並直接呼叫 `.map()`，遇到 metadata 字串即拋出 `TypeError: items.map is not a function`，令 strict Trip list 整批轉換失敗。soft-failure 隨後回傳空清單。
+- 次級資料保護問題：reconciliation 曾將某次 cloud list 缺席直接當作撤權依據，導致本機既有 Trip cache 被清理。清單查詢失敗／不完整並不等於永久刪除或撤權。
+- 修正：兩個 sanitizer 限定只處理 `content.days` 宣告且確實為 array 的每日欄位；其他 metadata 原樣保留，缺少 `days` 的 legacy record safe no-op。`isTripContent()` 改為檢查宣告日數對應的每日陣列，不再要求 `daysData` 所有 values 都是 array。reconciliation 改為只有明確 permanent tombstone 或既有明確 pending cleanup IDs 才可清除整筆 local Trip。
+- 資料／UI 恢復：Local Supabase RLS 仍可見 7 筆，participant Email map RPC 7/7 成功；修正後 strict cloud list 回傳 7 筆，Trip metas 共 8 個選項（另含 1 筆 static seed），本機 cache 由 1 筆恢復為 7 筆。瀏覽器重新載入後選單顯示 8 個項目，Test TRIP D1–D3 正常顯示。未刪除或新增 local DB rows，未清空 localStorage，未新增第三筆同名 Test TRIP。
+- 回歸驗證：`npm run verify:trip-lifecycle`、`node scripts/verify-v3926-access-revocation.mjs`、`npm run verify:trip-excel-rpc`、`npm run verify:trip-excel-import`、`npm run test:trip-excel-create-service`、`npm run verify:itinerary-travel`、`npm run verify:v390-place-photos`、`npx tsc -p tsconfig.app.json --noEmit`、完整 `npm run build` 均通過。
+- 範圍：保留同一工作樹中先前 Excel 建立及離線恢復相關變更；未操作正式 Supabase DB／Migration／Secrets，未 commit、push 或部署。
+- 狀態：**本機修正、資料恢復及自動化驗證完成；尚未發布。** 詳細根因、檔案範圍與驗證清單見《[107_TRIP清單讀取失敗與資料保護修復紀錄](107_TRIP清單讀取失敗與資料保護修復紀錄.md)》。
 
 ### BUG032：離線前未開啟 Trip 時照片未預載
 

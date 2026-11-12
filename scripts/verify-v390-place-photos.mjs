@@ -59,8 +59,10 @@ const noReferencesLeft = { ...baseTrip, content: { ...baseTrip.content, daysData
 assert.deepEqual(getUnusedItineraryCoverPaths(baseTrip, oneReferenceLeft), []);
 assert.deepEqual(getUnusedItineraryCoverPaths(baseTrip, noReferencesLeft), [coverPhoto.storagePath]);
 
-const invalidContent = { ...baseTrip.content, daysData: { "1": [{ ...item, coverPhoto: { ...coverPhoto, mime: "image/jpeg" } }], "2": [] } };
-assert.equal(sanitizeItineraryCoverPhotos(invalidContent).daysData["1"][0].coverPhoto, undefined);
+const invalidContent = { ...baseTrip.content, daysData: { "1": [{ ...item, coverPhoto: { ...coverPhoto, mime: "image/jpeg" } }], "2": [], mode: "guided" } };
+const sanitizedInvalidContent = sanitizeItineraryCoverPhotos(invalidContent);
+assert.equal(sanitizedInvalidContent.daysData["1"][0].coverPhoto, undefined);
+assert.equal(sanitizedInvalidContent.daysData.mode, "guided");
 
 const edge = read("supabase/functions/travel-route/index.ts");
 const client = read("src/services/travelRouteService.ts");

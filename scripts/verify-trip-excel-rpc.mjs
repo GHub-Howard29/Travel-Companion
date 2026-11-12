@@ -166,20 +166,32 @@ assert.match(migration, /response_payload = v_result/);
 const app = await readFile("src/App.tsx", "utf8");
 const modal = await readFile("src/components/TripEditorModal.tsx", "utf8");
 assert.match(modal, /onCreateFromExcel/);
-assert.match(modal, /isExcelCurrencyConfirmed/);
 assert.match(modal, /EXCEL_PENDING_REQUEST_KEY/);
 assert.match(modal, /getExcelRequestFingerprint/);
 assert.match(modal, /sessionStorage\.setItem/);
 assert.match(modal, /sessionStorage\.removeItem/);
-assert.match(modal, /請先使用同一份 Excel 確認建立結果/);
+assert.match(modal, /上次建立結果尚未確認，請檢視資料後使用同一份 Excel 重試/);
 assert.match(modal, /defaultCurrencyCode/);
 assert.match(modal, /defaultCurrencySymbol/);
-assert.match(modal, /getExcelRequestFingerprint/);
-assert.match(modal, /getPendingExcelRequestId/);
-assert.match(modal, /預設幣別已變更/);
-assert.match(modal, /currentDefaultCurrencyCode !== currencyCode/);
-assert.match(modal, /currentDefaultCurrencySymbol !== currencySymbol/);
-assert.match(modal, /確認幣別並建立 TRIP/);
+assert.match(modal, /getPendingExcelRequest/);
+assert.match(modal, /decideTripExcelRetry/);
+assert.match(modal, /writePendingExcelRequest\(pendingForRecovery\)/);
+const cloudService = await readFile("src/services/tripCloudService.ts", "utf8");
+assert.match(cloudService, /content\.days\.every\(\(day\) =>/);
+assert.match(cloudService, /daysData may contain legacy metadata/);
+assert.doesNotMatch(
+  cloudService,
+  /Object\.values\(content\.daysData\)\.every\(Array\.isArray\)/,
+  "Trip parsing must allow metadata keys such as daysData.mode while validating declared day arrays.",
+);
+const retryPolicy = await readFile("src/services/tripExcelCreateRetry.ts", "utf8");
+assert.match(retryPolicy, /TRIP_EXCEL_CREATE_COOLDOWN_MS = 60_000/);
+assert.match(retryPolicy, /TRIP_EXCEL_CREATE_MAX_MANUAL_RETRIES = 1/);
+assert.match(retryPolicy, /resultUnconfirmed/);
+assert.match(modal, /selectedCurrencyCode = defaultCurrencyCode\.trim\(\)/);
+assert.match(modal, /selectedCurrencySymbol = defaultCurrencySymbol\.trim\(\)/);
+assert.match(modal, /系統預設幣別：/);
+assert.doesNotMatch(modal, /isExcelCurrencyConfirmed|預設幣別已變更|currentDefaultCurrencyCode !== currencyCode|確認幣別並建立 TRIP/);
 assert.match(app, /defaultCurrencyCode=\{DEFAULT_TRIP_CURRENCY\.code\}/);
 assert.match(app, /defaultCurrencySymbol=\{DEFAULT_TRIP_CURRENCY\.symbol\}/);
 assert.match(app, /import \{[\s\S]*?DEFAULT_TRIP_CURRENCY[\s\S]*?from "\.\/types"/);
@@ -234,4 +246,4 @@ assert.doesNotMatch(service, /location:\s*item\.location/);
 assert.match(app, /onCreateFromExcel=\{handleTripExcelCreate\}/);
 assert.match(app, /refreshTripOptionsAndSelect\(result\.tripId\)/);
 
-console.log("Trip Excel RPC verification passed: database safeguards, Super Admin/session checks, explicit currency confirmation, dedicated RPC wiring, and authoritative refresh.");
+console.log("Trip Excel RPC verification passed: database safeguards, Super Admin/session checks, system-default currency, dedicated RPC wiring, and authoritative refresh.");

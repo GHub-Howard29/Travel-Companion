@@ -1,5 +1,11 @@
 import assert from "node:assert/strict";
 import { createTripFromExcel, TripExcelCreateError } from "../src/services/tripExcelCreateService.ts";
+import {
+  createInitialTripExcelPendingRequest,
+  decideTripExcelRetry,
+  isTripExcelPendingRequest,
+  TRIP_EXCEL_CREATE_COOLDOWN_MS,
+} from "../src/services/tripExcelCreateRetry.ts";
 
 const REQUEST_ID = "9573fdcf-64d6-49bc-8680-8a1253b5343a";
 const USER_ID = "user-super-admin";
@@ -126,6 +132,36 @@ const expectCode = async (promise, code) => {
 };
 
 try {
+  // Retry policy is deterministic and persists a single manual retry + one-minute cooldown.
+  {
+    const initial = createInitialTripExcelPendingRequest("fingerprint-a", REQUEST_ID);
+    assert.equal(isTripExcelPendingRequest(initial), true);
+    assert.deepEqual(decideTripExcelRetry(initial, 10_000), {
+      action: "CREATE", manualRetryCount: 1, cooldownStartedAt: 10_000,
+    });
+    const retried = { ...initial, manualRetryCount: 1, cooldownStartedAt: 10_000 };
+    assert.deepEqual(decideTripExcelRetry(retried, 10_000 + TRIP_EXCEL_CREATE_COOLDOWN_MS - 1), {
+      action: "LOOKUP", reason: "COOLDOWN_ACTIVE", retryAt: 10_000 + TRIP_EXCEL_CREATE_COOLDOWN_MS,
+    });
+    assert.deepEqual(decideTripExcelRetry(retried, 10_000 + TRIP_EXCEL_CREATE_COOLDOWN_MS), {
+      action: "LOOKUP", reason: "COOLDOWN_ELAPSED", retryAt: null,
+    });
+    assert.equal(isTripExcelPendingRequest({ ...retried, manualRetryCount: 1.5 }), false);
+  }
+
+  // Lookup-only recovery never calls the create RPC.
+  {
+    const { client, calls } = createMockClient({
+      lookupResponse: { data: { status: "CREATED", ...validResult({ idempotent_replay: true }) }, error: null },
+    });
+    const result = await createTripFromExcel(client, { ...options, lookupOnly: true });
+    assert.equal(result.tripId, "trip-123");
+    assert.equal(calls.some((call) => call[0] === "rpc" && call[1] === "tc_create_trip_from_excel"), false);
+    assert.deepEqual(calls.filter((call) => call[0] === "rpc").map((call) => call[1]), [
+      "tc_get_trip_excel_create_request",
+    ]);
+  }
+
   // Successful create: verifies the final RPC payload is restricted to V1 fields.
   {
     const { client, calls } = createMockClient();

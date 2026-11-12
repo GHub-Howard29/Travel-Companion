@@ -351,7 +351,7 @@ function ConfiguredApp({
     defaultParticipantProfiles,
     refreshDefaultParticipantProfiles,
     invalidateWorkspaceAccess,
-  } = useTripWorkspace({ supabase });
+  } = useTripWorkspace({ supabase, supabaseUrl });
   const {
     isSystemDeveloper,
     isUsageModalOpen,
@@ -849,6 +849,7 @@ function ConfiguredApp({
     requestId: string,
     currencyCode: string,
     currencySymbol: string,
+    lookupOnly = false,
   ) => {
     if (tripEditorMode !== "create" || adminProfile?.role !== "super_admin") {
       throw new Error("只有 Super Admin 可以使用 Excel 建立 TRIP。");
@@ -869,6 +870,7 @@ function ConfiguredApp({
         currencySymbol,
         expectedUserId: userId,
         expectedUserEmail: userEmail,
+        lookupOnly,
       });
 
       const refreshed = await refreshTripOptionsAndSelect(result.tripId);

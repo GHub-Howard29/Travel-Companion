@@ -4,7 +4,7 @@ import {
   type TripCacheState,
 } from "../storage/tripStorage.ts";
 import type { TripDeletionTombstone } from "./tripCloudService.ts";
-import { isProtectedSeedTripId } from "../constants/appConstants.ts";
+
 import { clearItinerarySyncState, readItinerarySyncState, writeItinerarySyncState } from "../storage/itinerarySyncStorage.ts";
 import { reconcilePendingItinerarySyncState } from "./itinerarySync.ts";
 
@@ -20,30 +20,22 @@ export const decideTripReconciliation = (
   tombstones: TripDeletionTombstone[],
   state: TripCacheState,
 ): TripReconciliationDecision => {
-  const cloudIds = new Set(cloudRecords.map((record) => record.meta.id));
   const tombstoneIds = new Set(tombstones.map((tombstone) => tombstone.tripId));
   const newlyDeletedIds = tombstones
     .filter((tombstone) => tombstone.deletionRevision > state.lastDeletionRevision)
     .map((tombstone) => tombstone.tripId);
-  // V3.9.26: when the authoritative online RLS result no longer includes a
-  // cloud-backed Trip, revoke its cached access on EVERY reconciliation.
-  // This also covers public -> private changes and editor revocation after
-  // the one-time legacy cleanup has already completed.
-  const inaccessibleTripIds = storedRecords
-    .filter((record) =>
-      Boolean(record.cloudUpdatedAt) &&
-      !cloudIds.has(record.meta.id) &&
-      !isProtectedSeedTripId(record.meta.id),
-    )
+  // A missing row in an RLS-filtered cloud list is not proof of deletion.
+  // Only a permanent tombstone authorizes full local Trip removal. This is
+  // intentionally conservative: transient/incomplete visibility must never
+  // wipe an otherwise recoverable local Trip or its associated offline data.
+  const tombstonedStoredIds = storedRecords
+    .filter((record) => tombstoneIds.has(record.meta.id))
     .map((record) => record.meta.id);
   const cleanupTripIds = [
     ...new Set([
       ...state.pendingCleanupTripIds,
       ...newlyDeletedIds,
-      ...inaccessibleTripIds,
-      ...storedRecords
-        .filter((record) => tombstoneIds.has(record.meta.id))
-        .map((record) => record.meta.id),
+      ...tombstonedStoredIds,
     ]),
   ];
   const removedIds = new Set([...cleanupTripIds, ...tombstoneIds]);

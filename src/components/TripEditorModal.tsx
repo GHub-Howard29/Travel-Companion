@@ -26,6 +26,12 @@ import {
   type RemovedDayImpact,
 } from "../utils/tripHelpers";
 import { isProtectedSeedTripId } from "../constants/appConstants";
+import {
+  createInitialTripExcelPendingRequest,
+  decideTripExcelRetry,
+  isTripExcelPendingRequest,
+  type TripExcelPendingRequest,
+} from "../services/tripExcelCreateRetry";
 
 interface TripEditorModalProps {
   mode: "create" | "edit";
@@ -45,6 +51,7 @@ interface TripEditorModalProps {
     requestId: string,
     currencyCode: string,
     currencySymbol: string,
+    lookupOnly?: boolean,
   ) => Promise<void>;
   onDelete?: () => Promise<void>;
   historicalTripEndDate?: string;
@@ -97,20 +104,22 @@ const getExcelRequestFingerprint = async (
     .join("");
 };
 
-const readPendingExcelRequest = (): { fingerprint: string; requestId: string } | null => {
+const readPendingExcelRequest = (): TripExcelPendingRequest | null => {
   try {
     const raw = sessionStorage.getItem(EXCEL_PENDING_REQUEST_KEY);
     if (!raw) return null;
     const parsed: unknown = JSON.parse(raw);
+    if (isTripExcelPendingRequest(parsed)) return parsed;
+    // Backward compatibility with pending records written before retry metadata.
     if (
-      parsed &&
-      typeof parsed === "object" &&
-      "fingerprint" in parsed &&
-      "requestId" in parsed &&
-      typeof parsed.fingerprint === "string" &&
-      typeof parsed.requestId === "string"
+      parsed && typeof parsed === "object" &&
+      "fingerprint" in parsed && "requestId" in parsed &&
+      typeof parsed.fingerprint === "string" && typeof parsed.requestId === "string"
     ) {
-      return { fingerprint: parsed.fingerprint, requestId: parsed.requestId };
+      return {
+        ...createInitialTripExcelPendingRequest(parsed.fingerprint, parsed.requestId),
+        resultUnconfirmed: true,
+      };
     }
   } catch {
     // Storage may be unavailable in privacy-restricted browser contexts.
@@ -118,12 +127,9 @@ const readPendingExcelRequest = (): { fingerprint: string; requestId: string } |
   return null;
 };
 
-const writePendingExcelRequest = (fingerprint: string, requestId: string): void => {
+const writePendingExcelRequest = (pending: TripExcelPendingRequest): void => {
   try {
-    sessionStorage.setItem(
-      EXCEL_PENDING_REQUEST_KEY,
-      JSON.stringify({ fingerprint, requestId }),
-    );
+    sessionStorage.setItem(EXCEL_PENDING_REQUEST_KEY, JSON.stringify(pending));
   } catch {
     // Keep the in-memory request ID even when session storage is unavailable.
   }
@@ -139,12 +145,13 @@ const clearPendingExcelRequest = (requestId: string): void => {
   }
 };
 
-const getPendingExcelRequestId = (fingerprint: string): string => {
+const getPendingExcelRequest = (fingerprint: string): TripExcelPendingRequest => {
   const pending = readPendingExcelRequest();
   return pending?.fingerprint === fingerprint
-    ? pending.requestId
-    : crypto.randomUUID();
+    ? pending
+    : createInitialTripExcelPendingRequest(fingerprint, crypto.randomUUID());
 };
+
 
 const toParticipantAssignmentText = (
   participants: string[],
@@ -277,6 +284,7 @@ export const TripEditorModal = ({
   const [isParsingExcel, setIsParsingExcel] = useState(false);
   const [excelRequestId, setExcelRequestId] = useState<string | null>(null);
   const [isExcelResultUnconfirmed, setIsExcelResultUnconfirmed] = useState(false);
+  const [isExcelLookupOnly, setIsExcelLookupOnly] = useState(false);
   const excelRequestFingerprintRef = useRef<string | null>(null);
   const excelInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -289,6 +297,7 @@ export const TripEditorModal = ({
     setExcelFileName(file?.name ?? "");
     setExcelRequestId(null);
     setIsExcelResultUnconfirmed(false);
+    setIsExcelLookupOnly(false);
     excelRequestFingerprintRef.current = null;
     if (!file) return;
     if (!canManageEditors) {
@@ -315,16 +324,18 @@ export const TripEditorModal = ({
       const result = await parseTripExcelWorkbook(await file.arrayBuffer());
       if (result.success) {
         setExcelPreview(result.data);
+        const selectedCurrencyCode = defaultCurrencyCode.trim();
+        const selectedCurrencySymbol = defaultCurrencySymbol.trim();
         const fingerprint = await getExcelRequestFingerprint(
           result.data,
-          currencyCode,
-          currencySymbol,
+          selectedCurrencyCode,
+          selectedCurrencySymbol,
         );
-        const pendingRequest = readPendingExcelRequest();
-        const requestId = getPendingExcelRequestId(fingerprint);
+        const pendingRequest = getPendingExcelRequest(fingerprint);
         excelRequestFingerprintRef.current = fingerprint;
-        setExcelRequestId(requestId);
-        setIsExcelResultUnconfirmed(pendingRequest?.fingerprint === fingerprint);
+        setExcelRequestId(pendingRequest.requestId);
+        setIsExcelResultUnconfirmed(pendingRequest.resultUnconfirmed);
+        setIsExcelLookupOnly(pendingRequest.manualRetryCount >= 1);
       } else {
         setExcelIssues(result.issues);
       }
@@ -348,11 +359,11 @@ export const TripEditorModal = ({
     if (excelPreview) {
       void getExcelRequestFingerprint(excelPreview, code, selectedCurrency?.symbol ?? "")
         .then((fingerprint) => {
-          const pendingRequest = readPendingExcelRequest();
-          const requestId = getPendingExcelRequestId(fingerprint);
+          const pendingRequest = getPendingExcelRequest(fingerprint);
           excelRequestFingerprintRef.current = fingerprint;
-          setExcelRequestId(requestId);
-          setIsExcelResultUnconfirmed(pendingRequest?.fingerprint === fingerprint);
+          setExcelRequestId(pendingRequest.requestId);
+          setIsExcelResultUnconfirmed(pendingRequest.resultUnconfirmed);
+          setIsExcelLookupOnly(pendingRequest.manualRetryCount >= 1);
         })
         .catch(() => {
           setExcelRequestId(null);
@@ -365,52 +376,60 @@ export const TripEditorModal = ({
     if (!excelPreview || !excelRequestId || !canManageEditors) {
       return;
     }
-    if (!currencyCode.trim() || !currencySymbol.trim()) {
-      setFormError("目前新增 TRIP 的幣別設定不完整，請重新選擇幣別。");
-      return;
-    }
 
-    // Re-read the current form defaults at the final confirmation boundary.
-    // If they changed since preview, require a fresh explicit confirmation.
-    const currentDefaultCurrencyCode = defaultCurrencyCode.trim();
-    const currentDefaultCurrencySymbol = defaultCurrencySymbol.trim();
-    if (
-      currentDefaultCurrencyCode !== currencyCode ||
-      currentDefaultCurrencySymbol !== currencySymbol
-    ) {
-      setCurrencyCode(currentDefaultCurrencyCode);
-      setCurrencySymbol(currentDefaultCurrencySymbol);
-      setFormError("新增 TRIP 的預設幣別已更新，請再次按下建立。");
-      const fingerprint = await getExcelRequestFingerprint(
-        excelPreview,
-        currentDefaultCurrencyCode,
-        currentDefaultCurrencySymbol,
-      );
-      const requestId = getPendingExcelRequestId(fingerprint);
-      excelRequestFingerprintRef.current = fingerprint;
-      setExcelRequestId(requestId);
-      setIsExcelResultUnconfirmed(readPendingExcelRequest()?.fingerprint === fingerprint);
+    // Excel V1 always uses the shared new-Trip system default. The manual
+    // creation form retains its own currency selector; Excel does not.
+    const selectedCurrencyCode = defaultCurrencyCode.trim();
+    const selectedCurrencySymbol = defaultCurrencySymbol.trim();
+    if (!selectedCurrencyCode || !selectedCurrencySymbol) {
+      setFormError("目前新增 TRIP 的預設幣別設定不完整，Excel 建立已停止。");
       return;
     }
 
     setFormError("");
     setIsSaving(true);
     releaseFocusedControl();
+    let pendingForRecovery: TripExcelPendingRequest | null = null;
     try {
-      const fingerprint = excelRequestFingerprintRef.current ??
-        await getExcelRequestFingerprint(excelPreview, currencyCode, currencySymbol);
+      const fingerprint = await getExcelRequestFingerprint(
+        excelPreview,
+        selectedCurrencyCode,
+        selectedCurrencySymbol,
+      );
+      const pending = getPendingExcelRequest(fingerprint);
+      pendingForRecovery = pending;
+      const wasUnconfirmed = isExcelResultUnconfirmed || pending.resultUnconfirmed;
+      const decision = wasUnconfirmed
+        ? decideTripExcelRetry(pending)
+        : { action: "CREATE" as const, manualRetryCount: pending.manualRetryCount, cooldownStartedAt: pending.cooldownStartedAt ?? 0 };
+
       excelRequestFingerprintRef.current = fingerprint;
-      writePendingExcelRequest(fingerprint, excelRequestId);
+      setExcelRequestId(pending.requestId);
+
+      if (decision.action === "CREATE" && wasUnconfirmed) {
+        pending.manualRetryCount = decision.manualRetryCount;
+        pending.cooldownStartedAt = decision.cooldownStartedAt;
+      }
+      setIsExcelLookupOnly(decision.action === "LOOKUP");
+      // Persist before any network call so reload/reopen cannot reset retry limits.
+      writePendingExcelRequest(pending);
+
+      if (decision.action === "BLOCKED") {
+        throw new Error("已達人工重試上限；系統只允許查詢原建立請求。");
+      }
+
       await onCreateFromExcel(
         excelPreview,
-        excelRequestId,
-        currencyCode,
-        currencySymbol,
+        pending.requestId,
+        selectedCurrencyCode,
+        selectedCurrencySymbol,
+        decision.action === "LOOKUP",
       );
-      clearPendingExcelRequest(excelRequestId);
+      clearPendingExcelRequest(pending.requestId);
       setExcelRequestId(null);
       setExcelPreview(null);
       setIsExcelResultUnconfirmed(false);
+      setIsExcelLookupOnly(false);
       excelRequestFingerprintRef.current = null;
     } catch (error) {
       if (
@@ -421,6 +440,11 @@ export const TripEditorModal = ({
         )
       ) {
         setIsExcelResultUnconfirmed(true);
+        if (pendingForRecovery) {
+          pendingForRecovery.resultUnconfirmed = true;
+          writePendingExcelRequest(pendingForRecovery);
+          setIsExcelLookupOnly(pendingForRecovery.manualRetryCount >= 1);
+        }
       }
       const message = error instanceof Error
         ? error.message
@@ -839,9 +863,9 @@ export const TripEditorModal = ({
                   })}
                 </div>
                 <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs leading-5 text-amber-900">
-                  本次新 TRIP 將使用新增表單目前的預設幣別：<strong>{currencyCode}（{currencySymbol}）</strong>。
+                  本次新 TRIP 將使用系統預設幣別：<strong>{defaultCurrencyCode}（{defaultCurrencySymbol}）</strong>。
                   此設定不會從 Excel 讀取，請留意旅程目的地所使用的幣別。
-                  {isExcelResultUnconfirmed && " 上次建立結果尚未確認，請檢視資料後使用同一份 Excel 重試；系統會沿用原建立請求。"}
+                  {isExcelResultUnconfirmed && " 上次建立結果尚未確認，請檢視資料後使用同一份 Excel 重試；系統會沿用原建立請求。人工建立重試最多一次，之後只查詢原請求，不會重複送出建立。"}
                 </div>
                 {formError && (
                   <div role="alert" className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700">
@@ -854,16 +878,21 @@ export const TripEditorModal = ({
                   disabled={!excelRequestId || isSaving || !canManageEditors}
                   className="mt-3 w-full rounded-lg bg-emerald-700 px-4 py-3 text-sm font-bold text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-600"
                 >
-                  {isSaving ? "正在建立並確認雲端資料…" : "建立 TRIP"}
+                  {isSaving
+                    ? (isExcelLookupOnly ? "正在查詢原建立請求…" : "正在建立並確認雲端資料…")
+                    : (isExcelLookupOnly ? "查詢原建立請求" : isExcelResultUnconfirmed ? "人工重試一次" : "建立 TRIP")}
                 </button>
                 <button
                   type="button"
                   onClick={() => {
+                    // Leaving the UI does not cancel an in-flight cloud request.
+                    // Keep its requestId/fingerprint in sessionStorage for recovery.
                     setExcelPreview(null);
                     setExcelIssues([]);
                     setExcelFileName("");
                     setExcelRequestId(null);
                     setIsExcelResultUnconfirmed(false);
+                    setIsExcelLookupOnly(false);
                     setFormError("");
                     excelRequestFingerprintRef.current = null;
                     setCreationMethod("manual");

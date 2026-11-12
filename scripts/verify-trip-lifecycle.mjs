@@ -89,7 +89,7 @@ try {
   decision = decideTripReconciliation(
     [
       record("tombstoned", "2026-09-10T00:00:00.000Z"),
-      record("legacy-cloud-residual", "2026-09-09T00:00:00.000Z"),
+      record("cloud-list-missing-but-not-tombstoned", "2026-09-09T00:00:00.000Z"),
       record("local-only"),
       record("cloud-present", "2026-09-10T00:00:00.000Z"),
       record("already-confirmed", "2026-09-10T00:00:00.000Z"),
@@ -128,8 +128,8 @@ try {
   );
   assert.deepEqual(
     decision.cleanupTripIds,
-    ["pending-cleanup", "tombstoned", "legacy-cloud-residual"],
-    "pending card state must not alter unrelated cleanup result",
+    ["pending-cleanup", "tombstoned"],
+    "only explicit pending cleanup and permanent tombstones may trigger full local Trip cleanup; cloud-list absence alone must not delete a Trip",
   );
   clearItinerarySyncState("cloud-present", "pending-test");
   assert.ok(protectedRecord);
@@ -140,12 +140,12 @@ try {
 
 assert.deepEqual(
   decision.storedRecords.map((item) => item.meta.id),
-  ["local-only", "cloud-present", "already-confirmed", "free-travel-2026-01"],
-  "只移除墓碑及可確認的舊雲端殘留",
+  ["cloud-list-missing-but-not-tombstoned", "local-only", "cloud-present", "already-confirmed", "free-travel-2026-01"],
+  "cloud list absence without a permanent tombstone must preserve cached Trips",
 );
 assert.deepEqual(
   new Set(decision.cleanupTripIds),
-  new Set(["pending-cleanup", "tombstoned", "legacy-cloud-residual"]),
+  new Set(["pending-cleanup", "tombstoned"]),
 );
 assert.equal(decision.nextState.lastDeletionRevision, 5);
 assert.equal(decision.nextState.legacyRepairCompleted, true);

@@ -8,6 +8,8 @@ export interface CreateTripFromExcelOptions {
   currencySymbol: string;
   expectedUserId: string | null;
   expectedUserEmail: string | null;
+  /** Query the original request only; never submits a create RPC. */
+  lookupOnly?: boolean;
 }
 
 export interface CreateTripFromExcelResult {
@@ -89,6 +91,7 @@ export const createTripFromExcel = async (
     currencySymbol,
     expectedUserId,
     expectedUserEmail,
+    lookupOnly = false,
   } = options;
 
   if (!requestId || !expectedUserId || !normalizeEmail(expectedUserEmail)) {
@@ -157,28 +160,35 @@ export const createTripFromExcel = async (
     throw new TripExcelCreateError("OFFLINE", "網路連線已中斷，Excel 建立已停止。");
   }
 
-  // Send only the six V1 fields accepted by the RPC; server-generated IDs,
-  // typeColor and location must never be client-controlled.
-  const cards = buildCreateCards(workbook);
-
-  const { data, error } = await supabase.rpc("tc_create_trip_from_excel", {
-    p_request_id: requestId,
-    p_title: workbook.title,
-    p_departure_date: workbook.departureDate,
-    p_cards: cards,
-    p_currency_code: currencyCode,
-    p_currency_symbol: currencySymbol,
-  });
+  // Retry recovery may be lookup-only during cooldown. It must never submit
+  // another create RPC while that restriction is active.
+  let data: unknown = null;
+  let error: { code?: string; message?: string } | null = null;
+  if (!lookupOnly) {
+    // Send only the six V1 fields accepted by the RPC; server-generated IDs,
+    // typeColor and location must never be client-controlled.
+    const cards = buildCreateCards(workbook);
+    const createResponse = await supabase.rpc("tc_create_trip_from_excel", {
+      p_request_id: requestId,
+      p_title: workbook.title,
+      p_departure_date: workbook.departureDate,
+      p_cards: cards,
+      p_currency_code: currencyCode,
+      p_currency_symbol: currencySymbol,
+    });
+    data = createResponse.data;
+    error = createResponse.error;
+  }
 
   let payload = Array.isArray(data) ? data[0] : data;
-  const resultUnconfirmed = Boolean(error) || !isCreateResult(payload, workbook) ||
+  const resultUnconfirmed = lookupOnly || Boolean(error) || !isCreateResult(payload, workbook) ||
     typeof (payload as Record<string, unknown> | null)?.idempotent_replay !== "boolean";
 
   if (resultUnconfirmed) {
     if (!navigator.onLine) {
       throw new TripExcelCreateError(
         "RESULT_UNCONFIRMED",
-        "連線中斷，無法確認雲端是否已建立。請保留目前檔案；恢復網路後使用相同內容與原建立請求確認。",
+        "目前沒有網路連線，無法查詢原建立請求。請保留目前檔案及原 request ID，恢復網路後再確認。",
         error ?? data,
       );
     }

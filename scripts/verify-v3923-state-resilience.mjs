@@ -80,8 +80,53 @@ assert.match(
 );
 assert.match(
   tripWorkspace,
-  /catch \(error\) \{[\s\S]*Initial cloud workspace load failed; using cached trip data[\s\S]*setIsOnline\(false\)[\s\S]*await loadStoredWorkspace\(\)/,
-  "雲端啟動失敗時必須回退已載入的本機行程，不可直接結束成空白狀態",
+  /catch \(error\) \{[\s\S]*Initial cloud workspace load failed; using cached trip data[\s\S]*if \(!navigator\.onLine\) setIsOnline\(false\)[\s\S]*await loadStoredWorkspace\(\)/,
+  "雲端啟動失敗時必須保留瀏覽器實際連線狀態，並回退已載入的本機行程",
+);
+assert.match(
+  tripWorkspace,
+  /connectivityHealthUrl = `\$\{supabaseUrl\.replace\([\s\S]*auth\/v1\/health`/,
+  "連線探測必須使用目前 Supabase client 對應的同一個 endpoint",
+);
+assert.match(
+  tripWorkspace,
+  /fetch\(\s*connectivityHealthUrl[\s\S]*AbortSignal\.timeout\(5_000\)/,
+  "連線狀態必須透過受限時的 Supabase health probe 恢復，而非只依賴 online 事件",
+);
+assert.match(
+  tripWorkspace,
+  /connectivityRecoveryPendingRef = useRef\(startsOffline\)/,
+  "離線與雲端同步恢復需求必須獨立於 React state 保存，避免 online 事件造成狀態更新競態",
+);
+assert.match(
+  tripWorkspace,
+  /const handleOffline = \(\) => \{[\s\S]*connectivityRecoveryPendingRef\.current = true[\s\S]*setIsOnline\(false\)/,
+  "離線事件必須保留待恢復同步旗標",
+);
+assert.match(
+  tripWorkspace,
+  /const handleOnline = \(\) => \{[\s\S]*connectivityRecoveryPendingRef\.current = true[\s\S]*probeConnectivity\(true\)/,
+  "重新連線事件必須觸發即時健康檢查",
+);
+assert.match(
+  tripWorkspace,
+  /await reconcile\(\);[\s\S]*connectivityRecoveryPendingRef\.current = false/,
+  "只有完成 reconciliation 後才可清除待恢復同步旗標",
+);
+assert.match(
+  tripWorkspace,
+  /Trip reconciliation after connectivity recovery failed; will retry/,
+  "恢復同步失敗時必須保留旗標，待下一輪檢查重試",
+);
+assert.match(
+  tripWorkspace,
+  /window\.setInterval\(\(\) => void probeConnectivity\(\), 30_000\)/,
+  "瀏覽器漏掉 online 事件時，前景 App 必須定期重新校正連線狀態",
+);
+assert.match(
+  tripWorkspace,
+  /document\.addEventListener\("visibilitychange", handleVisibility\)/,
+  "App 回到前景時必須重新檢查連線狀態",
 );
 
 console.log("V3.9.23 狀態保留、私人清單同步、金額輸入與離線啟動回歸驗證通過。");

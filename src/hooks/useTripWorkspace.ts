@@ -81,6 +81,7 @@ import {
 
 interface UseTripWorkspaceOptions {
   supabase: SupabaseClient;
+  supabaseUrl: string;
 }
 
 const LAST_AUTHENTICATED_EMAIL_KEY = "travel_companion_last_authenticated_email";
@@ -97,8 +98,9 @@ const rememberAuthenticatedEmail = (email: string | null | undefined) => {
   }
 };
 
-export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) {
+export default function useTripWorkspace({ supabase, supabaseUrl }: UseTripWorkspaceOptions) {
   const startsOffline = !navigator.onLine;
+  const connectivityHealthUrl = `${supabaseUrl.replace(/\/rest\/v1\/?$/, "")}/auth/v1/health`;
   const [userId, setUserId] = useState<string | null>(null);
   const [userEmail, setUserEmail] = useState<string | null>(() =>
     startsOffline ? readLastAuthenticatedEmail() : null,
@@ -125,9 +127,13 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
   const tripLoadRevisionRef = useRef(0);
   const initialCloudRecordsRef = useRef<Awaited<ReturnType<typeof getCloudTripRecordsStrict>> | null>(null);
   const reconciliationPromiseRef = useRef<Promise<boolean> | null>(null);
+  const reconcileTripWorkspaceRef = useRef<(() => Promise<boolean>) | null>(null);
   const itinerarySavePromisesRef = useRef(new Map<string, Promise<boolean>>());
   const selectedTripIdRef = useRef(selectedTripId);
   const userEmailRef = useRef(userEmail);
+  const isOnlineRef = useRef(isOnline);
+  const isSessionReadyRef = useRef(isSessionReady);
+  const connectivityRecoveryPendingRef = useRef(startsOffline);
   const activeDayRef = useRef(activeDay);
   const currentTripIdRef = useRef<string | null>(null);
   // Invalidate stale async responses before an account transition or logout.
@@ -141,7 +147,9 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
   useEffect(() => {
     selectedTripIdRef.current = selectedTripId;
     userEmailRef.current = userEmail;
-  }, [selectedTripId, userEmail]);
+    isOnlineRef.current = isOnline;
+    isSessionReadyRef.current = isSessionReady;
+  }, [isOnline, isSessionReady, selectedTripId, userEmail]);
 
   useEffect(() => {
     activeDayRef.current = activeDay;
@@ -274,15 +282,72 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
   }, [supabase, invalidateWorkspaceAccess]);
 
   useEffect(() => {
-    const handleOnline = () => setIsOnline(true);
-    const handleOffline = () => setIsOnline(false);
+    let isActive = true;
+    let isProbing = false;
+    let lastProbeAt = 0;
+
+    const probeConnectivity = async (force = false) => {
+      if (!navigator.onLine || isProbing || !isActive) return;
+      const now = Date.now();
+      if (!force && now - lastProbeAt < 15_000) return;
+
+      isProbing = true;
+      lastProbeAt = now;
+      try {
+        const response = await fetch(
+          connectivityHealthUrl,
+          { method: "GET", cache: "no-store", signal: AbortSignal.timeout(5_000) },
+        );
+        if (isActive && response.ok) {
+          setIsOnline(true);
+          if (connectivityRecoveryPendingRef.current && isSessionReadyRef.current) {
+            const reconcile = reconcileTripWorkspaceRef.current;
+            if (!reconcile) return;
+            try {
+              await reconcile();
+              connectivityRecoveryPendingRef.current = false;
+            } catch (error) {
+              console.warn("Trip reconciliation after connectivity recovery failed; will retry", error);
+            }
+          }
+        }
+      } catch {
+        // Do not mark the app offline based on a transient probe failure.
+        // The browser's offline event remains the authoritative hard signal.
+      } finally {
+        isProbing = false;
+      }
+    };
+
+    const handleOnline = () => {
+      connectivityRecoveryPendingRef.current = true;
+      setIsOnline(true);
+      void probeConnectivity(true);
+    };
+    const handleOffline = () => {
+      connectivityRecoveryPendingRef.current = true;
+      setIsOnline(false);
+    };
+    const handleFocus = () => void probeConnectivity();
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") void probeConnectivity();
+    };
+
     window.addEventListener("online", handleOnline);
     window.addEventListener("offline", handleOffline);
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleVisibility);
+    const probeInterval = window.setInterval(() => void probeConnectivity(), 30_000);
+
     return () => {
+      isActive = false;
+      window.clearInterval(probeInterval);
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleVisibility);
     };
-  }, []);
+  }, [connectivityHealthUrl]);
 
   // A second tab can revoke a Trip and remove its local copy. Do not keep
   // rendering the old in-memory private content after the storage change.
@@ -381,6 +446,31 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
   }, [getBasePath, isSessionReady, supabase]);
 
   useEffect(() => {
+    reconcileTripWorkspaceRef.current = reconcileTripWorkspace;
+  }, [reconcileTripWorkspace]);
+
+  useEffect(() => {
+    if (!isSessionReady) return;
+    void fetch(connectivityHealthUrl, {
+      method: "GET",
+      cache: "no-store",
+      signal: AbortSignal.timeout(5_000),
+    }).then((response) => {
+      if (!response.ok) return;
+      setIsOnline(true);
+      if (connectivityRecoveryPendingRef.current) {
+        void reconcileTripWorkspaceRef.current?.().then(() => {
+          connectivityRecoveryPendingRef.current = false;
+        }).catch((error) => {
+          console.warn("Trip reconciliation after startup connectivity recovery failed; will retry", error);
+        });
+      }
+    }).catch(() => {
+      // The initial workspace loader handles failures with the local cache fallback.
+    });
+  }, [connectivityHealthUrl, isSessionReady]);
+
+  useEffect(() => {
     if (!isSessionReady) return;
 
     let isActive = true;
@@ -414,7 +504,9 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
         await reconcileTripWorkspace();
       } catch (error) {
         console.warn("Initial cloud workspace load failed; using cached trip data", error);
-        setIsOnline(false);
+        // A failed reconciliation can be caused by parsing, permissions, or
+        // local storage errors; it does not prove that the browser is offline.
+        if (!navigator.onLine) setIsOnline(false);
         await loadStoredWorkspace();
       }
     };
@@ -769,14 +861,22 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
       didFindPreferredTrip: boolean;
       selectedTrip: TripMeta | null;
     }> => {
-      const nextTrips = await getTripMetas(supabase, getBasePath());
-      const preferredTrip = preferredTripId
-        ? nextTrips.find((trip) => trip.id === preferredTripId) ?? null
+      const confirmedRecord = preferredTripId
+        ? await getCloudTripRecord(supabase, preferredTripId)
         : null;
-      const fallbackTrip = findDefaultTrip(nextTrips) ?? nextTrips[0] ?? null;
+      const nextTrips = await getTripMetas(supabase, getBasePath());
+      const tripMetasById = new Map(nextTrips.map((trip) => [trip.id, trip]));
+      if (confirmedRecord) {
+        tripMetasById.set(confirmedRecord.meta.id, confirmedRecord.meta);
+      }
+      const mergedTrips = sortTripsByDateDesc(Array.from(tripMetasById.values()));
+      const preferredTrip = preferredTripId
+        ? mergedTrips.find((trip) => trip.id === preferredTripId) ?? null
+        : null;
+      const fallbackTrip = findDefaultTrip(mergedTrips) ?? mergedTrips[0] ?? null;
       const nextTrip = preferredTrip ?? fallbackTrip;
 
-      setTripOptions(nextTrips);
+      setTripOptions(mergedTrips);
       setSelectedTripId(nextTrip?.id ?? "");
       setCurrentScreen("itinerary");
       setActiveDay(1);
@@ -791,7 +891,7 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
       }
 
       return {
-        didFindPreferredTrip: Boolean(preferredTrip),
+        didFindPreferredTrip: Boolean(preferredTrip && confirmedRecord),
         selectedTrip: nextTrip,
       };
     },
