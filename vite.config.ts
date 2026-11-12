@@ -48,6 +48,11 @@ export default defineConfig(({ mode }) => {
   const supabaseUrl = process.env.VITE_SUPABASE_URL || env.VITE_SUPABASE_URL
 
   return {
+  resolve: {
+    alias: {
+      process: 'process/browser',
+    },
+  },
   // ⚠️ 嚴格修正：必須是斜線開頭、斜線結尾的儲存庫名稱，不可帶有 https:// 網址
   base: '/Travel-Companion/', 
   plugins: [
