@@ -10,12 +10,12 @@
     "other_info_items"
   ],
   "counts": {
-    "trips": 7,
+    "trips": 1,
     "checklists": 0,
     "checklist_items": 0,
     "expenses": 0,
     "exchange_purchases": 0,
-    "other_info_items": 6
+    "other_info_items": 0
   },
-  "git_last_changed_at": "2026-11-12T10:25:06.081840Z"
+  "git_last_changed_at": "2026-11-12T23:45:34.815956Z"
 }
