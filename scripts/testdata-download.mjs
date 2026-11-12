@@ -176,10 +176,6 @@ async function main() {
     if (!initialize) {
       throw new Error("本機尚未建立同步基準。首次下載必須明確指定：npm run testdata:download -- --initialize");
     }
-    const hasLocalRows = SYNC_TABLES.some((table) => local.data[table].length > 0);
-    if (hasLocalRows) {
-      throw new Error("首次下載要求本機六表同步範圍為空；目前已有資料，為避免覆蓋而停止。");
-    }
     decision = { action: "initial-download" };
   } else {
     decision = classifyTimestampSync({

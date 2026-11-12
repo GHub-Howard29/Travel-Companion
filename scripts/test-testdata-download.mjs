@@ -105,9 +105,21 @@ assert.match(sql, /DELETE FROM public\.checklist_items/);
 assert.match(sql, /DELETE FROM public\.checklists/);
 assert.match(sql, /DELETE FROM public\.expenses/);
 assert.match(sql, /DELETE FROM public\.trips/);
-assert.match(sql, /pg_constraint/);
-assert.match(sql, /information_schema\.columns/);
-assert.match(sql, /public\.trips\.content \|\| EXCLUDED\.content/);
+assert.match(sql, /DELETE FROM public\.checklists c USING public\.trips t/);
+assert.match(sql, /DELETE FROM public\.checklist_items i USING public\.checklists c, public\.trips t/);
+assert.match(sql, /DELETE FROM public\.expenses e USING public\.trips t/);
+assert.match(sql, /DELETE FROM public\.exchange_purchases e USING public\.trips t/);
+assert.match(sql, /DELETE FROM public\.other_info_items o USING public\.trips t/);
+assert.match(sql, /LOCK TABLE public\.trips, public\.checklists, public\.checklist_items, public\.expenses, public\.exchange_purchases, public\.other_info_items, public\.itinerary_card_edit_leases, public\.route_estimate_cache, private\.itinerary_day_history/);
+assert.doesNotMatch(sql, /DELETE FROM public\.checklists c WHERE c\.scope = 'shared'/);
+assert.match(sql, /DELETE FROM public\.trips t WHERE t\.is_public = false/);
+assert.ok(sql.indexOf("DELETE FROM public.trips t WHERE t.is_public = false") < sql.indexOf("INSERT INTO public.trips"));
+assert.ok(sql.indexOf("DELETE FROM public.trips t WHERE t.is_public = false") < sql.indexOf("DELETE FROM public.checklists c USING public.trips t"));
+assert.ok(sql.indexOf("DELETE FROM public.checklists c USING public.trips t") > sql.indexOf("DELETE FROM public.trips t"));
+assert.ok(sql.indexOf("INSERT INTO public.trips") < sql.indexOf("INSERT INTO public.checklists"));
+assert.doesNotMatch(sql, /pg_constraint/);
+assert.doesNotMatch(sql, /information_schema\.columns/);
+assert.match(sql, /content = EXCLUDED\.content/);
 assert.match(sql, /UPDATE tc_testdata\.sync_state SET local_last_changed_at = '2026-11-12T00:00:00\.123456Z'::timestamptz, last_synced_at = '2026-11-12T00:00:00\.123456Z'::timestamptz/);
 assert.match(sql, /END; \$tc_dataset\$;\s*$/);
 assert.doesNotMatch(sql, /^BEGIN;|^COMMIT;/m);
@@ -120,7 +132,8 @@ const initialSql = buildDatabaseDatasetImportSql({
   expectedLastSyncedAt: null,
   initialize: true,
 });
-assert.match(initialSql, /Initial download requires an empty local private-trip dataset/);
+assert.doesNotMatch(initialSql, /Initial download requires an empty local private-trip dataset/);
+assert.match(initialSql, /DELETE FROM public\.trips/);
 
 const publicTrip = normalizeDatabaseDataset({
   ...data,

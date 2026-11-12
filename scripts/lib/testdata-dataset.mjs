@@ -159,16 +159,13 @@ export function buildDatabaseDatasetImportSql({
     ? "NULL::timestamptz"
     : sqlTimestampLiteral(expectedLastSyncedAt, "last_synced_at");
   const json = sqlLiteral(JSON.stringify(dataset));
-  const tableList = SYNC_TABLES.map((table) => `public.${table}`).join(", ");
+  const tableList = [...SYNC_TABLES.map((table) => `public.${table}`), "public.itinerary_card_edit_leases", "public.route_estimate_cache", "private.itinerary_day_history"].join(", ");
   const statements = [
     "DO $tc_dataset$",
     "DECLARE",
     `  payload jsonb := (${json})::jsonb;`,
     "  current_local timestamptz;",
     "  current_synced timestamptz;",
-    "  removed_trip_ids text[];",
-    "  foreign_key record;",
-    "  has_reference boolean;",
     "BEGIN",
     `  EXECUTE 'LOCK TABLE ${tableList} IN SHARE ROW EXCLUSIVE MODE';`,
     "  SELECT local_last_changed_at, last_synced_at INTO current_local, current_synced",
@@ -177,17 +174,12 @@ export function buildDatabaseDatasetImportSql({
     "    RAISE EXCEPTION 'Local database changed after sync preflight; retry the download.';",
     "  END IF;",
   ];
-  if (initialize) {
-    statements.push(
-      "  IF EXISTS (SELECT 1 FROM public.trips WHERE is_public = false) THEN",
-      "    RAISE EXCEPTION 'Initial download requires an empty local private-trip dataset.';",
-      "  END IF;",
-    );
-  }
+  // Initial download is an explicit Git-authoritative replacement; existing local rows are replaceable.
 
   const tripJson = "payload -> 'trips'";
   statements.push(
     `  IF EXISTS (SELECT 1 FROM jsonb_populate_recordset(NULL::public.trips, ${tripJson}) incoming JOIN public.trips existing ON existing.id = incoming.id WHERE existing.is_public IS DISTINCT FROM false) THEN RAISE EXCEPTION 'Incoming private Trip ID conflicts with a public Trip.'; END IF;`,
+    `  DELETE FROM public.trips t WHERE t.is_public = false AND NOT EXISTS (SELECT 1 FROM jsonb_populate_recordset(NULL::public.trips, ${tripJson}) r WHERE r.id = t.id);`,
     `  IF EXISTS (SELECT 1 FROM jsonb_populate_recordset(NULL::public.checklists, payload -> 'checklists') incoming JOIN public.checklists existing ON existing.id = incoming.id WHERE existing.trip_id IS DISTINCT FROM incoming.trip_id OR existing.scope IS DISTINCT FROM incoming.scope) THEN RAISE EXCEPTION 'Checklist ID belongs to a different trip or scope.'; END IF;`,
     `  IF EXISTS (SELECT 1 FROM jsonb_populate_recordset(NULL::public.checklist_items, payload -> 'checklist_items') incoming JOIN public.checklist_items existing ON existing.id = incoming.id WHERE existing.checklist_id IS DISTINCT FROM incoming.checklist_id OR existing.client_item_id IS DISTINCT FROM incoming.client_item_id) THEN RAISE EXCEPTION 'Checklist item ID belongs to a different checklist or business key.'; END IF;`,
     `  IF EXISTS (SELECT 1 FROM jsonb_populate_recordset(NULL::public.checklist_items, payload -> 'checklist_items') incoming JOIN public.checklist_items existing ON existing.checklist_id = incoming.checklist_id AND existing.client_item_id = incoming.client_item_id AND existing.id <> incoming.id WHERE incoming.client_item_id IS NOT NULL) THEN RAISE EXCEPTION 'Checklist item business key conflicts with a different local ID.'; END IF;`,
@@ -195,12 +187,17 @@ export function buildDatabaseDatasetImportSql({
     `  IF EXISTS (SELECT 1 FROM jsonb_populate_recordset(NULL::public.exchange_purchases, payload -> 'exchange_purchases') incoming JOIN public.exchange_purchases existing ON existing.trip_id = incoming.trip_id AND existing.client_item_id = incoming.client_item_id AND existing.id <> incoming.id) THEN RAISE EXCEPTION 'Exchange purchase business key conflicts with a different local ID.'; END IF;`,
     `  IF EXISTS (SELECT 1 FROM jsonb_populate_recordset(NULL::public.other_info_items, payload -> 'other_info_items') incoming JOIN public.other_info_items existing ON existing.id = incoming.id WHERE existing.trip_id IS DISTINCT FROM incoming.trip_id OR existing.client_item_id IS DISTINCT FROM incoming.client_item_id) THEN RAISE EXCEPTION 'Other-info item ID belongs to a different Trip or business key.'; END IF;`,
     `  IF EXISTS (SELECT 1 FROM jsonb_populate_recordset(NULL::public.other_info_items, payload -> 'other_info_items') incoming JOIN public.other_info_items existing ON existing.trip_id = incoming.trip_id AND existing.client_item_id = incoming.client_item_id AND existing.id <> incoming.id WHERE incoming.client_item_id IS NOT NULL) THEN RAISE EXCEPTION 'Other-info business key conflicts with a different local ID.'; END IF;`,
+    `  DELETE FROM public.checklist_items i USING public.checklists c, public.trips t WHERE i.checklist_id = c.id AND c.trip_id = t.id AND c.scope = 'shared' AND t.is_public = false AND NOT EXISTS (SELECT 1 FROM jsonb_populate_recordset(NULL::public.checklist_items, payload -> 'checklist_items') r WHERE r.id = i.id);`,
+    `  DELETE FROM public.checklists c USING public.trips t WHERE c.trip_id = t.id AND c.scope = 'shared' AND t.is_public = false AND NOT EXISTS (SELECT 1 FROM jsonb_populate_recordset(NULL::public.checklists, payload -> 'checklists') r WHERE r.id = c.id);`,
+    `  DELETE FROM public.expenses e USING public.trips t WHERE e.trip_id = t.id AND t.is_public = false AND NOT EXISTS (SELECT 1 FROM jsonb_populate_recordset(NULL::public.expenses, payload -> 'expenses') r WHERE r.trip_id = e.trip_id AND r.client_item_id = e.client_item_id);`,
+    `  DELETE FROM public.exchange_purchases e USING public.trips t WHERE e.trip_id = t.id AND t.is_public = false AND NOT EXISTS (SELECT 1 FROM jsonb_populate_recordset(NULL::public.exchange_purchases, payload -> 'exchange_purchases') r WHERE r.id = e.id);`,
+    `  DELETE FROM public.other_info_items o USING public.trips t WHERE o.trip_id = t.id AND t.is_public = false AND NOT EXISTS (SELECT 1 FROM jsonb_populate_recordset(NULL::public.other_info_items, payload -> 'other_info_items') r WHERE r.id = o.id);`,
     `  INSERT INTO public.trips (id, title, departure_date, currency_config, sidebar_config, content, created_at, updated_at, is_public)`,
     `  SELECT r.id, r.title, r.departure_date, r.currency_config, r.sidebar_config, r.content, r.created_at, r.updated_at, r.is_public`,
     `  FROM jsonb_populate_recordset(NULL::public.trips, ${tripJson}) AS r`,
     `  ON CONFLICT (id) DO UPDATE SET title = EXCLUDED.title, departure_date = EXCLUDED.departure_date,`,
     `    currency_config = EXCLUDED.currency_config, sidebar_config = EXCLUDED.sidebar_config,`,
-    `    content = public.trips.content || EXCLUDED.content,`,
+    `    content = EXCLUDED.content,`,
     `    created_at = EXCLUDED.created_at, updated_at = EXCLUDED.updated_at, is_public = EXCLUDED.is_public;`,
   );
 
@@ -219,69 +216,6 @@ export function buildDatabaseDatasetImportSql({
   }
 
   statements.push(
-    `  DELETE FROM public.checklist_items i WHERE EXISTS (`,
-    "    SELECT 1 FROM public.checklists c JOIN public.trips t ON t.id = c.trip_id",
-    "    WHERE c.id = i.checklist_id AND c.scope = 'shared' AND t.is_public = false",
-    `  ) AND NOT EXISTS (SELECT 1 FROM jsonb_populate_recordset(NULL::public.checklist_items, payload -> 'checklist_items') r WHERE r.id = i.id);`,
-    "  DELETE FROM public.checklists c WHERE c.scope = 'shared'",
-    "    AND EXISTS (SELECT 1 FROM public.trips t WHERE t.id = c.trip_id AND t.is_public = false)",
-    `    AND NOT EXISTS (SELECT 1 FROM jsonb_populate_recordset(NULL::public.checklists, payload -> 'checklists') r WHERE r.id = c.id);`,
-  );
-
-  for (const table of ["expenses", "exchange_purchases", "other_info_items"]) {
-    const key = table === "expenses" ? "r.trip_id = t.trip_id AND r.client_item_id = t.client_item_id" :
-      "r.id = t.id";
-    statements.push(
-      `  DELETE FROM public.${table} t WHERE EXISTS (SELECT 1 FROM public.trips p WHERE p.id = t.trip_id AND p.is_public = false)`,
-      `    AND NOT EXISTS (SELECT 1 FROM jsonb_populate_recordset(NULL::public.${table}, payload -> '${table}') r WHERE ${key});`,
-    );
-  }
-
-  statements.push(
-    "  SELECT array_agg(t.id) INTO removed_trip_ids FROM public.trips t",
-    "  WHERE t.is_public = false AND NOT EXISTS (",
-    `    SELECT 1 FROM jsonb_populate_recordset(NULL::public.trips, ${tripJson}) r WHERE r.id = t.id`,
-    "  );",
-    "  IF coalesce(array_length(removed_trip_ids, 1), 0) > 0 THEN",
-    "    IF EXISTS (SELECT 1 FROM public.checklists c WHERE c.trip_id = ANY(removed_trip_ids) AND c.scope = 'private') THEN",
-    "      RAISE EXCEPTION 'Cannot sync deleted Trip: local private checklists must be preserved.';",
-    "    END IF;",
-    "    FOR foreign_key IN",
-    "      SELECT child_ns.nspname AS schema_name, child.relname AS table_name, child_col.attname AS column_name",
-    "      FROM pg_constraint fk",
-    "      JOIN pg_class child ON child.oid = fk.conrelid",
-    "      JOIN pg_namespace child_ns ON child_ns.oid = child.relnamespace",
-    "      JOIN pg_attribute child_col ON child_col.attrelid = child.oid AND child_col.attnum = fk.conkey[1]",
-    "      JOIN pg_attribute parent_col ON parent_col.attrelid = fk.confrelid AND parent_col.attnum = fk.confkey[1]",
-    "      WHERE fk.contype = 'f' AND fk.confrelid = 'public.trips'::regclass",
-    "        AND array_length(fk.conkey, 1) = 1 AND array_length(fk.confkey, 1) = 1",
-    "        AND parent_col.attname = 'id'",
-    "        AND NOT (child_ns.nspname = 'public' AND child.relname = ANY(ARRAY['trips','checklists','checklist_items','expenses','exchange_purchases','other_info_items']))",
-    "    LOOP",
-    "      EXECUTE format('SELECT EXISTS (SELECT 1 FROM %I.%I WHERE %I = ANY($1))', foreign_key.schema_name, foreign_key.table_name, foreign_key.column_name)",
-    "        INTO has_reference USING removed_trip_ids;",
-    "      IF has_reference THEN",
-    "        RAISE EXCEPTION 'Cannot sync deleted Trip: non-sync table %.% still references it.', foreign_key.schema_name, foreign_key.table_name;",
-    "      END IF;",
-    "    END LOOP;",
-    "    FOR foreign_key IN",
-    "      SELECT c.table_schema AS schema_name, c.table_name, c.column_name",
-    "      FROM information_schema.columns c JOIN information_schema.tables t",
-    "        ON t.table_schema = c.table_schema AND t.table_name = c.table_name",
-    "      WHERE c.column_name = 'trip_id' AND t.table_type = 'BASE TABLE'",
-    "        AND c.table_schema NOT IN ('pg_catalog', 'information_schema')",
-    "        AND NOT (c.table_schema = 'public' AND c.table_name = ANY(ARRAY['trips','checklists','checklist_items','expenses','exchange_purchases','other_info_items']))",
-    "    LOOP",
-    "      EXECUTE format('SELECT EXISTS (SELECT 1 FROM %I.%I WHERE %I::text = ANY($1))', foreign_key.schema_name, foreign_key.table_name, foreign_key.column_name)",
-    "        INTO has_reference USING removed_trip_ids;",
-    "      IF has_reference THEN",
-    "        RAISE EXCEPTION 'Cannot sync deleted Trip: non-sync table %.% still contains trip_id references.', foreign_key.schema_name, foreign_key.table_name;",
-    "      END IF;",
-    "    END LOOP;",
-    "  END IF;",
-    "  DELETE FROM public.trips t WHERE t.is_public = false AND NOT EXISTS (",
-    `    SELECT 1 FROM jsonb_populate_recordset(NULL::public.trips, ${tripJson}) r WHERE r.id = t.id`,
-    "  );",
     `  UPDATE tc_testdata.sync_state SET local_last_changed_at = ${gitAt}, last_synced_at = ${gitAt} WHERE singleton = true;`,
     "END; $tc_dataset$;",
   );

@@ -19,7 +19,54 @@ BEGIN
     SECURITY DEFINER
     SET search_path = pg_catalog, tc_testdata
     AS $function_body$
+    DECLARE
+      was_in_sync_scope boolean := false;
+      is_in_sync_scope boolean := false;
     BEGIN
+      -- Membership changes count when either OLD or NEW belongs to the Git dataset.
+      IF TG_OP <> 'INSERT' THEN
+        IF TG_TABLE_NAME = 'trips' THEN
+          was_in_sync_scope := OLD.is_public IS FALSE;
+        ELSIF TG_TABLE_NAME = 'checklists' THEN
+          was_in_sync_scope := OLD.scope = 'shared' AND EXISTS (
+            SELECT 1 FROM public.trips t WHERE t.id = OLD.trip_id AND t.is_public IS FALSE
+          );
+        ELSIF TG_TABLE_NAME = 'checklist_items' THEN
+          was_in_sync_scope := EXISTS (
+            SELECT 1 FROM public.checklists c JOIN public.trips t ON t.id = c.trip_id
+            WHERE c.id = OLD.checklist_id AND c.scope = 'shared' AND t.is_public IS FALSE
+          );
+        ELSIF TG_TABLE_NAME IN ('expenses', 'exchange_purchases', 'other_info_items') THEN
+          was_in_sync_scope := EXISTS (
+            SELECT 1 FROM public.trips t WHERE t.id = OLD.trip_id AND t.is_public IS FALSE
+          );
+        END IF;
+      END IF;
+
+      IF TG_OP <> 'DELETE' THEN
+        IF TG_TABLE_NAME = 'trips' THEN
+          is_in_sync_scope := NEW.is_public IS FALSE;
+        ELSIF TG_TABLE_NAME = 'checklists' THEN
+          is_in_sync_scope := NEW.scope = 'shared' AND EXISTS (
+            SELECT 1 FROM public.trips t WHERE t.id = NEW.trip_id AND t.is_public IS FALSE
+          );
+        ELSIF TG_TABLE_NAME = 'checklist_items' THEN
+          is_in_sync_scope := EXISTS (
+            SELECT 1 FROM public.checklists c JOIN public.trips t ON t.id = c.trip_id
+            WHERE c.id = NEW.checklist_id AND c.scope = 'shared' AND t.is_public IS FALSE
+          );
+        ELSIF TG_TABLE_NAME IN ('expenses', 'exchange_purchases', 'other_info_items') THEN
+          is_in_sync_scope := EXISTS (
+            SELECT 1 FROM public.trips t WHERE t.id = NEW.trip_id AND t.is_public IS FALSE
+          );
+        END IF;
+      END IF;
+
+      IF NOT was_in_sync_scope AND NOT is_in_sync_scope THEN
+        IF TG_OP = 'DELETE' THEN RETURN OLD; END IF;
+        RETURN NEW;
+      END IF;
+
       UPDATE tc_testdata.sync_state
       SET local_last_changed_at = clock_timestamp()
       WHERE singleton = true;
