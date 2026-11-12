@@ -26,22 +26,17 @@
 - **既有診斷更正原則：** 過去若只在 OpenChatX 預設 shell 讀到 v22.18.0，應更正為「OpenChatX 內建 Node v22.18.0；專案 Node 版本須依專案設定及該主機安裝位置，在專案 PATH 下另行驗證」，不得將其列為專案工具阻塞。
 
 # Supabase A/B 雙機測試資料同步規則
-> **權威規格：** `docs/83_本機測試資料庫同步流程.md` 是唯一現行詳細規格。本節只摘要執行邊界；不得引用舊版 checksum／Local-Git-Base 內容指紋／revision-parent 鏈或 testPurpose 標記規則。
-- 目前維護目標為公司端（A）與家用端（B）雙機；兩端只操作各自的本機 loopback Supabase。Git `origin/develop` 傳遞合成測試業務資料 fixture，不代表整個資料庫快照。
-- 不要求 `testPurpose`、`__testFixture`、固定 TRIP ID／名稱或其他人工標記作為上傳前置條件；六張白名單業務表中合格資料的變更均可進入時間戳判斷。不複製 Docker volume，也不使用正式資料庫 dump。
-- **現行唯一同步判斷：共同 `last_synced_at` 與本地／Git 各自 `last_changed_at`。** 時間戳只判斷各端是否在共同基準後變更，不比較哪端時間較晚。必須涵蓋 INSERT／UPDATE／DELETE；不得使用 checksum、hash、內容指紋、revision／parent／applied state 或 Git commit 時間替代。
-- **共同基準：** `last_synced_at` 以 UTC 保存於兩端及 Git 資料集 metadata，必須一致。基準缺失或不一致、時間戳缺漏／倒退、時鐘偏差導致判斷不可靠時停止；不得以 Git 目前資料或 commit 時間重建歷史基準。
-- **方向規則：** 本地有基準後變更且 Git 無變更，才允許上傳；Git 有基準後變更且本地無變更，才允許下傳；雙方都變更則停止且不覆蓋任一端；雙方都未變更則 unchanged。不得只因對端沒有變更就觸發同步。
-- **首次基準建立：** 只有確認兩端資料一致，或使用者明確指定初始來源並完成受控同步後，才建立共同基準。兩端不同且沒有基準時停止人工確認。共同基準只在資料搬移成功、接收端驗證成功且兩端一致後更新。
-- 不依賴 version／revision／parent／applied state／提交數或版本鏈；不使用 checksum、hash 或內容指紋判斷是否變更。
-- 資料結構、欄位型別、資料範圍、關聯及敏感資料驗證仍必須嚴格執行；這些安全驗證不等同 checksum／內容指紋比較。
-- 共同基準 metadata 缺失或格式無效時，停止自動同步；不得猜測或自行重建。資料發布、寫入或驗證任一步失敗時，不得提前更新共同基準。
-- 目前業務資料白名單為 `trips`、`checklists`、`checklist_items`、`expenses`、`exchange_purchases`、`other_info_items`。帳戶 Email、管理者／使用者個人資料、Auth users、participants、participant Email maps、sessions、owner／creator 身分、token、密碼、附件中繼資料及 Storage 檔案不跨機同步。下載先驗證全部資料，再於單一 SQL 交易中套用；不得覆蓋同步範圍以外的資料。
-- 新的獨立上傳入口為 `npm run testdata:upload`（`scripts/testdata-upload.mjs`）；新的獨立下載入口為 `npm run testdata:download`（`scripts/testdata-download.mjs`）。上傳入口不下載／匯入；下載入口不 pull／commit／push。兩者皆不得觸碰正式 Supabase。
-- 本機測試模式只供明確執行單機整合測試；不得略過 loopback Supabase 檢查，不得用於日常同步或跨機交接。
-- 口令分工：完整口令 `commit/push/資料庫` 已廢止；一般 Git 操作使用 `commit`、`push` 或 `commit/push`；`/上傳資料庫` 僅執行 `npm run testdata:upload`，且必須先通過本地有變更、Git 無變更的時間戳判斷；`/下載資料庫` 僅執行 `npm run testdata:download`，且必須先通過 Git 有變更、本地無變更的時間戳判斷。不得把 upload/download 串接到任何 Git 指令或其他自動化流程。
-- 若執行特定主機的本機資料庫操作，或要宣稱該主機產生新的驗證結果，仍須確認實際主機識別；不得把家用電腦測試結果誤報為公司電腦證據，也不得在未確認前操作另一台電腦。公司電腦識別基準仍為 Windows `COMPUTERNAME=TPEPC-TM7503-01`、`USERDOMAIN=NICE-GREEN`，專案路徑 `D:\\Project\\Travel-Companion`。
-- Git 必須保留基本測試環境、必要 seed／fixture、migrations、schema 與回歸測試資產；日常同步只更新可變業務資料，不得清空或取代基礎環境。Excel RPC 案例集是獨立資料集，依文件 106 管理。**本次時間戳規格已定案但尚未實作／驗收**；舊版同步測試結果不代表新規則已通過。
+> **權威規格：** `docs/83_本機測試資料庫同步流程.md` 是唯一現行詳細規格。本節只摘要實作邊界。
+- A（公司端）與 B（家用端）各自只操作本機 loopback Supabase。Git `origin/develop` 保存一份六表同步資料集，位置為 `supabase/test-fixtures/local-database/`；不複製 Docker volume，也不使用正式資料庫 dump。
+- **三個時間欄位：** `local_last_changed_at` 與 `last_synced_at` 分別保存於每台電腦自己的本機 metadata；`git_last_changed_at` 保存於 Git manifest。A、B 的 `last_synced_at` 各自獨立，不會因另一台上傳／下載而自動改變。
+- 本機專用 SQL `scripts/sql/testdata-sync-clock.sql` 由上／下載入口自動套用，建立單筆 metadata 與六個 INSERT／UPDATE／DELETE Trigger；它不是 Supabase migration，不得部署至正式資料庫。只保留最後變更時間，不記錄逐筆歷史或遞增版本號。
+- **唯一方向判斷：** `local_last_changed_at > last_synced_at` 與 `git_last_changed_at > last_synced_at`。本機有變更且 Git 無變更才允許上傳；Git 有變更且本機無變更才允許下載；兩者都變更即停止；兩者都未變更則 unchanged。時間戳使用 UTC、固定微秒精度；不使用 checksum、hash、revision、parent、applied state 或 Git commit 時間判斷。
+- **首次同步：** 初始來源明確執行 `npm run testdata:upload -- --initialize`；接收端先取得 Git 最新提交，再於本機同步範圍為空時明確執行 `npm run testdata:download -- --initialize`。NULL 基準不可套用一般四象限公式。
+- 同步資料範圍為六張表：`trips`（僅 `is_public=false`）、`checklists`（僅 `scope=shared`）、其對應 `checklist_items`，以及私有行程的 `expenses`、`exchange_purchases`、`other_info_items`。不要求 `testPurpose`、`__testFixture` 或固定 TRIP ID／名稱。
+- 不跨機傳輸 Auth users、參與者／participant Email map、owner／creator 身分、expense payer、帳戶／個資、session、token、密碼、附件中繼資料與 Storage 檔案；Trip 的本機參與者欄位及其他非同步範圍資料必須保留。敏感欄位／Email／憑證檢查不合格時停止。
+- 下載先驗證資料結構、欄位、關聯與刪除影響，再於單一 SQL transaction 套用六表、驗證並將下載端 `local_last_changed_at`／`last_synced_at` 校正為 Git 時間；若刪除 Trip 會影響同步範圍以外的外鍵資料，停止而不連帶刪除。
+- `/上傳資料庫` 只執行 `npm run testdata:upload`；通過判斷後只提交／推送資料集檔案並更新上傳端自己的 `last_synced_at`。`/下載資料庫` 只執行 `npm run testdata:download`；不執行 Git pull／commit／push。兩者皆不得操作正式 Supabase。
+- Excel RPC 案例集是獨立資料集，依文件 106 及 `excel-rpc:dataset:*` 指令管理，不納入一般六表時間戳或上／下載判斷。完整口令 `commit/push/資料庫` 已廢止。
 
 # 每次開始工作前：Git 與 Supabase 核對
 - 每次開始任何專案任務，先在專案根目錄檢查 `git status --short --branch`、目前分支與 upstream；再執行 `git fetch origin`，確認本機與遠端差異。不得因任務看似只改文件就跳過。

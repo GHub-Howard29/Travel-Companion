@@ -89,12 +89,7 @@
     "release:v364:publish-metadata": "node scripts/prepare-v364-release.mjs assert-metadata-ready && gh-pages -d dist --add -m \"Publish V3.6.4 mandatory update metadata\"",
     "release:v364:verify-metadata": "node scripts/prepare-v364-release.mjs verify-metadata",
     "release:v364:cleanup": "node scripts/prepare-v364-release.mjs cleanup",
-    "db:sync:local": "node scripts/sync-local-database.mjs",
-    "test:testdata-revision": "node scripts/test-testdata-revision.mjs",
-    "test:testdata-peer-sync": "node scripts/test-testdata-peer-sync.mjs",
     "test:testdata-clock-sync": "node scripts/test-testdata-clock-sync.mjs",
-    "test:testdata-import-sql": "node scripts/test-testdata-import-sql.mjs",
-    "test:testdata-download-policy": "node scripts/test-testdata-download-policy.mjs",
     "test:testdata-download": "node scripts/test-testdata-download.mjs",
     "test:excel-rpc-dataset": "node scripts/test-excel-rpc-dataset.mjs",
     "excel-rpc:dataset:validate": "node scripts/excel-rpc-test-dataset.mjs validate",
@@ -102,10 +97,7 @@
     "excel-rpc:dataset:validate-local": "node scripts/excel-rpc-test-dataset.mjs validate-local",
     "excel-rpc:dataset:rebuild": "node scripts/excel-rpc-test-dataset.mjs rebuild",
     "testdata:upload": "node scripts/testdata-upload.mjs",
-    "testdata:download": "node scripts/testdata-download.mjs",
-    "testdata:export": "node scripts/testdata-sync.mjs export",
-    "testdata:validate": "node scripts/testdata-sync.mjs validate",
-    "testdata:validate:active": "node scripts/testdata-sync.mjs validate:active"
+    "testdata:download": "node scripts/testdata-download.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
