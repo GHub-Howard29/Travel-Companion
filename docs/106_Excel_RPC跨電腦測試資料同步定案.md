@@ -1,6 +1,6 @@
 # Excel RPC 跨電腦測試資料同步定案
 
-> 本文件只定義 Excel RPC 測試案例集如何在 A（公司端）與 B（家用端）之間獨立傳遞，以及如何在目的端以本機登入狀態重建 RPC 測試。一般測試 TRIP fixtures 的同步範圍、標記方式及批次規則一律依 `docs/83_本機測試資料庫同步流程.md`；每個一般 fixture 目錄包含一筆 TRIP，但可有多個 fixture 一次上傳／下載。Excel RPC 案例集與一般 TRIP fixtures 是兩種獨立資料集，互不作為對方的前置條件。本文件不使用 baselineAt、version、parent、checksum 或 applied state 作為傳輸門檻。
+> 本文件只定義 Excel RPC 測試案例集如何在 A（公司端）與 B（家用端）之間獨立傳遞，以及如何在目的端以本機登入狀態重建 RPC 測試。一般測試資料庫的同步範圍與時間戳判斷一律依 `docs/83_本機測試資料庫同步流程.md`；一般業務資料不再要求 `testPurpose`／`__testFixture` 標記，且上傳／下傳必須通過共同時間戳基準。Excel RPC 案例集是測試輸入定義檔，不是六張業務資料表的 DB 快照，維持獨立案例內容更新流程，互不作為對方的前置條件。
 
 ## 1. 最終目標（已定案）
 
@@ -73,8 +73,8 @@ Excel RPC 案例集與一般 TRIP fixtures 均可透過 Git 在 A、B 間取得�
 - `npm run excel-rpc:dataset:validate`：檢查 Git 版案例集的結構、案例欄位與必要 counts；checksum 若存在僅供參考，不作為驗證門檻。
 - `npm run excel-rpc:dataset:prepare`：在目前節點建立 `supabase/.temp/excel-rpc-test-cases.json` 編輯副本；若副本已存在，拒絕覆寫。
 - 編輯該 `.temp` JSON 後執行 `npm run excel-rpc:dataset:validate-local`：驗證案例欄位、日期、時間、卡片類別及敏感／私有欄位；不以案例 checksum 作為驗證依據。
-- 使用者明確輸入 `/上傳資料庫` 時，`testdata:upload` 會獨立檢查 Excel RPC 案例集，並另行搜尋所有符合 `docs/83` 標記規則的一般 TRIP fixtures。RPC 案例內容相同（unchanged）或案例資料集格式驗證失敗，不會取消一般 TRIP fixtures 的候選搜尋與處理；一般 TRIP fixtures 仍依自身驗證結果處理。RPC 案例內容不同且結構／敏感欄位驗證通過時才發布案例集。共享檔案發布階段若發生檔案系統 I/O 或原子替換失敗，仍依安全原則停止整體上傳，不做不完整發布。程式執行時會將適用的 manifest／cases 明確 stage；不以 applied baseline、version、parent 或 checksum 阻擋。
-- B／A 另一端先自行安全 fast-forward Git，再明確輸入 `/下載資料庫`；`testdata:download` 分別處理 Excel RPC 案例集與一般 TRIP fixtures。RPC 案例副本不同才更新 `.temp` 案例 JSON，不會因下載案例而自動呼叫 RPC 或建立 TRIP；也不會複製 request registry、Auth 或 Email map。RPC 案例準備或本機案例檔更新失敗會獨立記錄，不會取消已驗證的一般 TRIP fixture DB 匯入；命令整體結果仍會如實回報 RPC 錯誤。一般 TRIP fixtures 的差異會依 `docs/83` 驗證後在單一 SQL transaction 批次匯入。
+- 使用者明確輸入 `/上傳資料庫` 時，`testdata:upload` 會獨立檢查 Excel RPC 案例集，並另行依 `docs/83` 的共同基準與時間戳規則判斷一般業務資料。RPC 案例內容相同（unchanged）或案例資料集格式驗證失敗，不會取消一般業務資料的候選判斷與處理；一般業務資料仍須通過「本地有基準後變更、Git 無基準後變更」才可發布。RPC 案例內容不同且結構／敏感欄位驗證通過時才發布案例集。共享檔案發布階段若發生檔案系統 I/O 或原子替換失敗，仍依安全原則停止整體上傳，不做不完整發布。
+- B／A 另一端先自行安全 fast-forward Git，再明確輸入 `/下載資料庫`；`testdata:download` 分別處理 Excel RPC 案例集與一般業務資料。一般業務資料只有在 Git 端有共同基準後變更、且本地端沒有基準後變更時，才可依 `docs/83` 驗證後於單一 SQL transaction 批次匯入；雙邊變更或時間戳基準不可靠時停止。RPC 案例副本不同才更新 `.temp` 案例 JSON，不會因下載案例而自動呼叫 RPC 或建立 TRIP；也不會複製 request registry、Auth 或 Email map。RPC 案例準備或本機案例檔更新失敗會獨立記錄，不會取消已驗證的一般業務資料 DB 匯入；命令整體結果仍會如實回報 RPC 錯誤。
 
 ### 7.2 在目的端本機重建 RPC 測試
 

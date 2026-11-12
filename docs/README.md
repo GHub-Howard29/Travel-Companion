@@ -47,7 +47,7 @@ Travel Companion 是以 Trip 為核心的 Offline First 旅行管理 PWA，使�
 
 - [Supabase 資料庫同步文件索引](81_Supabase_雙電腦_Migration_同步流程.md)：導覽入口，指向正式資料庫與測試資料庫的獨立流程。
 - [正式 Supabase 資料庫 Migration 與部署流程](81_正式Supabase資料庫Migration流程.md)：正式 schema／Migration 管理及部署停止線。
-- [本機測試資料庫同步流程](83_本機測試資料庫同步流程.md)：本機測試 DB、合成 fixture 對等同步與衝突規則。
+- [本機測試資料庫同步流程](83_本機測試資料庫同步流程.md)：本地／Git 變更時間戳與共同同步基準、單邊上傳／下傳、雙邊變更停止及 Git 基本測試環境保留規則。
 - [Supabase 同步設定與驗證歷史](archive/supabase-sync/81_雙電腦同步實際驗證紀錄.md)：保留設計建立與逐次驗證歷程。
 
 ## 歷史版本與發布證據
