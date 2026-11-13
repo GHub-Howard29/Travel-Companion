@@ -13,10 +13,10 @@ const versionMatch = appVersion.match(/APP_VERSION = "([^"]+)"/);
 assert.ok(versionMatch, "必須設定 APP_VERSION");
 const appVersionValue = versionMatch[1];
 
-assert.equal(appVersionValue, "3.10.12");
+assert.match(appVersionValue, /^\d+\.\d+\.\d+$/);
 assert.equal(packageMetadata.version, appVersionValue);
 assert.equal(publicMetadata.version, appVersionValue);
-assert.match(appVersion, /PREVIOUS_RELEASE_VERSION = "3\.10\.11"/);
+assert.match(appVersion, /PREVIOUS_RELEASE_VERSION = "3\.10\.12"/);
 
 assert.match(updateHook, /PENDING_UPDATE_VERSION_KEY/);
 assert.match(updateHook, /import \{ hasStableActivatedReplacement \} from "\.\.\/utils\/serviceWorkerUpdatePolicy"/);

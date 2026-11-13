@@ -1,8 +1,8 @@
 # 新增 TRIP Excel 建立規格草案
 
-> 狀態（2026-11-11）：V1 產品範圍與欄位契約已定案；目前為分階段實作與驗證中，版本定位為 V3.11.0（MINOR 主要功能）。本次已核准整理文件及一般 develop commit/push；不代表 Excel 功能端到端驗收完成，也不核准 migration、正式資料庫寫入、合併 main、部署或發布。測試資料 fixture 上傳另依根目錄 AGENTS.md 的獨立「/上傳資料庫」流程判斷，與一般 Git 提交分離。
+> 狀態（2026-11-13）：V1 產品範圍、正式範本與欄位契約已定案；主要功能、核心自動化驗證及必要資料完整性測試已完成，版本定位為 V3.11.0（MINOR）。目前進入 Release Candidate 收尾與最終審查。真人瀏覽器／PWA Recovery 及 IM09／IM10 專項情境依 Product Owner 決策列為發布後觀察，不作為發布停止線；安全權限、正常建立主路徑、request 冪等、整批交易原子性及失敗不誤報仍為必要門檻。本輪版本 metadata 與 Release Notes 已整理為 3.11.0 RC 候選；尚未 commit/push、合併 main、建立 tag、套用遠端 migration、寫入正式資料庫、部署或正式發布。測試資料 fixture 上傳仍依獨立「/上傳資料庫」流程處理。
 >
-> 開發狀態歷史摘要（截至 2026-11-06；2026-11-09～11-10 的瀏覽器解析修正及最新驗收狀態見 12.7）：ExcelJS 解析／嚴格驗證、預覽 UI、Excel 專用 RPC migration 與先前公司端 local Supabase V5 PostgreSQL 交易測試已有實作及部分通過證據；管理員與非管理員 RPC 權限拒絕測試均由使用者確認先前通過，不再重跑。2026-11-06 家用端 OpenChatX Home 續作已補上提交前既有 Session refresh 與 refresh 後帳號核對、最終確認時的目前幣別 props 比對，以及相同 fingerprint 的 pending request UUID 沿用；另新增 owner-bound 的 request registry 唯讀查詢 RPC，前端在建立 RPC 結果不明時可用同 request UUID 查詢，查到完成結果才視為成功；查不到、仍待確認、對應 TRIP 已刪除或查詢失敗時均保留原 request，不盲目換 UUID 重建。2026-11-06 本輪 `verify:trip-excel-rpc`、`verify:trip-excel-import`、`npx tsc -p tsconfig.app.json --noEmit`、修改檔案 ESLint、完整 `npm run build`（1929 modules、PWA 49 precache entries、postbuild browser security/weather bundle checks）及 `git diff --check` 均通過；上述僅為靜態契約／本機建置驗證，尚未套用新增查詢 RPC 至 local Supabase，也未做實際登入與逾時斷線整合測試。App 目前傳給新增表單的預設值仍是固定 TWD／NT$；本次只確保最終確認會比較最新 props，尚未建立新的動態全域幣別設定來源。本輪沒有操作 local／remote Supabase，沒有 commit/push、合併、部署或發布。不得把靜態契約通過等同端到端驗收。
+> 開發狀態歷史摘要（截至 2026-11-06，僅供沿革追溯；本日之後的正式實作／測試狀態以 §12.7、§12.10 及本文件最新 2026-11-13 決策為準）：ExcelJS 解析／嚴格驗證、預覽 UI、Excel 專用 RPC migration 與先前公司端 local Supabase V5 PostgreSQL 交易測試已有實作及部分通過證據；管理員與非管理員 RPC 權限拒絕測試均由使用者確認先前通過，不再重跑。2026-11-06 家用端 OpenChatX Home 續作已補上提交前既有 Session refresh 與 refresh 後帳號核對、最終確認時的目前幣別 props 比對，以及相同 fingerprint 的 pending request UUID 沿用；另新增 owner-bound 的 request registry 唯讀查詢 RPC，前端在建立 RPC 結果不明時可用同 request UUID 查詢，查到完成結果才視為成功；查不到、仍待確認、對應 TRIP 已刪除或查詢失敗時均保留原 request，不盲目換 UUID 重建。2026-11-06 本輪 `verify:trip-excel-rpc`、`verify:trip-excel-import`、`npx tsc -p tsconfig.app.json --noEmit`、修改檔案 ESLint、完整 `npm run build`（1929 modules、PWA 49 precache entries、postbuild browser security/weather bundle checks）及 `git diff --check` 均通過；上述僅為靜態契約／本機建置驗證，尚未套用新增查詢 RPC 至 local Supabase，也未做實際登入與逾時斷線整合測試。App 目前傳給新增表單的預設值仍是固定 TWD／NT$；本次只確保最終確認會比較最新 props，尚未建立新的動態全域幣別設定來源。本輪沒有操作 local／remote Supabase，沒有 commit/push、合併、部署或發布。不得把靜態契約通過等同端到端驗收。
 >
 **重要範圍定案（2026-11-03）：V1 採用新增 TRIP 時匯入 Excel 的 A 流程；使用者在新增 TRIP 時選擇「Excel 建立」或「手動新增」，兩者二選一，Excel 直接建立新 TRIP，不要求先建立空白 TRIP。舊方案 B「既有 TRIP 每日卡片 Excel 匯入／匯出」已捨棄，不屬本功能、不保留為 V1 或後續待辦規格；其單日／零卡片資格、既有卡片覆蓋、地點搜尋與候選確認等規則不得套用至 A。V1 採兩張工作表：第一張為唯一使用者操作的「新增 TRIP」，第二張為系統管理用的隱藏「系統設定」，不增加使用者需填寫的業務欄位；TRIP 基本資料只有 TRIP 名稱及出發日期兩欄；卡片日序最大值推導天數，其他設定由系統預設。
 >
@@ -128,9 +128,9 @@ TRIP 基本資料區只有上述兩項。V1 不提供旅程天數、結束日期
 
 **跨電腦測試資料重現定案**：Excel RPC 的跨機資料同步及本機重建規則以《[106_Excel_RPC跨電腦測試資料同步定案](106_Excel_RPC跨電腦測試資料同步定案.md)》為準。Git fixture 保存合成測試案例輸入及完整日期／時間／卡片業務資料，不保存 Auth UUID、已完成 request registry、request UUID 或 participant Email map；目的端以本機 Super Admin Session 重呼叫同一 RPC，產生該機自己的 TRIP ID、request registry 與私有參與者關聯。不得把多筆 Excel RPC 測試 TRIP 直接併入舊 `tc-test-sync-example` V5。
 
-**目前狀態（2026-11-06 更新）**：2026-11-06 針對同 request 併發／多日時間保存測試再次檢查：本機 Auth（GoTrue v2.196.0）health endpoint 回應 HTTP 200；但 `scripts/excel-rpc-test-dataset.mjs` 目前只把 `TC_LOCAL_SUPABASE_ACCESS_TOKEN` 直接當 Bearer token，沒有執行登入。先前以 service_role JWT 呼叫 `tc_create_trip_from_excel` 收到 HTTP 403 `permission denied for function tc_create_trip_from_excel`；原因是 migration 只授予 `authenticated` EXECUTE，函式內還要求 `auth.uid()` 非空及 `private.tc_is_super_admin()` 為 true。一般登入使用者仍不夠，必須是 `admin_users.role='super_admin'` 的已登入使用者。`.env.local` 僅確認有 loopback URL／anon key，未找到現成測試帳號／密碼或測試憑證設定；anon key 直接讀取 `admin_users` 被 `tc_current_email` 權限拒絕，未讀取任何管理者 email。既有 `verify-v364-supabase-realtime.mjs` 有臨時 Auth 使用者、授予本機管理角色、正常密碼登入及 finally 清理的範例，但不能直接執行整支腳本代替本次 RPC 測試。**下一步須先確認如何安全取得本機 CLI 管理 key（僅供建立／清理本次隨機臨時測試帳號及其 `admin_users` 權限列），再用 anon key + 臨時帳密 `signInWithPassword` 取得使用者 JWT，讓 runner 以該 JWT 執行 RPC；service_role 不得直接呼叫目標 RPC。** 必須先設計並驗證 finally 清理：只清除本次建立的測試 TRIP、request registry、Other Info、private map、管理權限列及 Auth 使用者，不碰既有資料；無法保證清理就停止。之後才執行 `node scripts/excel-rpc-test-dataset.mjs validate`，再執行 `node scripts/excel-rpc-test-dataset.mjs concurrent multi-day-time-preservation`（先從 fixture 核對案例 ID）。本次併發測試未成功執行、未建立新 TRIP，未修改程式／migration／資料庫權限或 Auth 使用者；沒有 reset、遠端 DB 操作或 commit/push。詳細檢查結果與逐步操作見《[106_Excel_RPC跨電腦測試資料同步定案](106_Excel_RPC跨電腦測試資料同步定案.md)》§9。
+**歷史紀錄（2026-11-06：當時尚未完成的測試準備）**：當時 `scripts/excel-rpc-test-dataset.mjs` 只接受 bearer token，曾以 service_role JWT 呼叫目標 RPC 而收到 HTTP 403；當時因此暫停該 runner 的併發測試，並規劃以短生命週期本機測試身分驗證。這是 11 月 6 日當時的狀態，後續已有不同的本機整合測試 runner 與實際通過結果，不能再當成目前待辦。後續完成紀錄以本節 2026-11-07 更新的整合測試表、§12.5 的 IM04–IM06 修訂及 `scripts/test-trip-excel-rpc-local-integration.mjs` 為準。當時沒有遠端 DB 操作。
 
-**目前狀態（2026-11-06 家用端續作後更新）**：產品欄位契約、正式範本、欄位契約文件及 Office round-trip 已完成。公司端已完成 ExcelJS 解析／嚴格驗證核心、建立方式二選一 UI 與預覽、parser 回歸測試；Excel 專用 RPC migration 已建立並已套用公司端既有 local Supabase V5，包含 request registry、Super Admin／Auth 身分核對、私有 participant Email map 同交易寫入、Trip／特殊 Other Info 寫入及明確函式權限。2026-11-04 重新確認 `supabase status` 的 API endpoint 為 `http://127.0.0.1:54321`，`supabase migration list --local` 顯示 `20261103150000` 已套用；未使用 `--linked`、未執行 reset、未對遠端共享／正式 DB 寫入。以專案指定 Node v22.23.2／npm 10.9.8 重新執行 `verify:trip-excel-import`、`verify:trip-excel-rpc` 均通過；完整 `npm run build`（含既有回歸、TypeScript、production build、PWA、postbuild browser security 及 weather bundle 檢查）exit code 0。正式 Supabase 唯讀比對確認 Super Admin 2 位、`admin_profiles` 2 筆且兩位均 `include_in_new_trip=true`；正式資料庫無此缺漏。公司端 local V5 歷史 snapshot 於 2026-10-27 至 2026-11-03 均記錄 `admin_profiles=[]`；V3.5.4 初始化 migration 已執行，但 2026-11-02 追加兩個 `weather-rc-test` 測試 Auth／Super Admin 帳號時，profile 未同步建立。2026-11-04 已依 V3.5.4 原初始化規則，只補齊 local V5 缺少的三筆 Super Admin profiles（名稱取 Auth metadata；無名稱用 email 前綴，`include_in_new_trip=true`，一般排序 100），未改既有資料。Excel RPC 的 participant 查詢保留與一般建立相同的 `admin_profiles` + `admin_users` + `auth.users` 交集篩選，移除 Excel 專屬的空 profile 拒絕及重複顯示名稱拒絕；不增加 fallback 或新判斷方式。2026-11-04 進一步在 local V5 對已套用 RPC 進行真實 PostgreSQL 測試：成功建立一筆 TRIP 時同時產生一筆 request registry、一筆特殊 Other Info 與 participant email map；相同 request 重送回傳相同 trip_id 且只保留一筆；在建立後刻意觸發例外，確認 TRIP、registry、Other Info 均 rollback 為 0；特殊 Other Info deterministic client_item_id 唯一衝突也使該整批交易 rollback；相同 title/date 使用不同 request UUID 成功建立兩筆不同 trip_id。測試留下 4 筆明確命名的 local V5 測試 TRIP（title 前綴 `Excel RPC` 或 `Allowed duplicate title date`）、對應 4 筆 registry 及 4 筆特殊 Other Info；均使用既有測試 Super Admin 建立，未碰既有兩筆 baseline TRIP，未清理測試資料。管理員與非管理員的 RPC 權限拒絕測試已由使用者確認先前均通過，視為既有驗收結果，不重複執行。2026-11-05 曾做 local V5 Auth 唯讀盤點（4 個 Auth users，其中 3 個對應 Super Admin、另 1 個無 `admin_users` 權限列）；該盤點僅反映目前本機帳號組成，不得用來推翻先前已通過的權限測試。RPC migration 檔與規格文件有未提交修改，local V5 函式已以修改內容套用；需在下一階段完成 migration diff／部署策略核對，不能把已修改本機函式誤認為 migration history 自動更新。2026-11-09 已決定取消 Excel 預覽中的幣別手動勾選／確認，改為沿用共用預設並保留提醒文案；既有程式仍需依新決策調整 UI，確認勾選移除後再驗收。提交時 Session refresh、RPC client 呼叫及結果不明 recovery 的真實瀏覽器流程仍待驗；IM01–IM10 尚未全部執行，尚未發布。下一步先補上有安全清理策略的自動化 DB tests 與非 Super Admin fixture（若可利用現有可控 Auth 測試工具而無須新增永久帳號），再完成其餘 IM01–IM10，才串接前端提交與 recovery。禁止 commit/push、遠端 DB 寫入或發布，除非另行明確核准。
+**歷史狀態（2026-11-06 家用端續作後更新）**：產品欄位契約、正式範本、欄位契約文件及 Office round-trip 已完成。公司端已完成 ExcelJS 解析／嚴格驗證核心、建立方式二選一 UI 與預覽、parser 回歸測試；Excel 專用 RPC migration 已建立並已套用公司端既有 local Supabase V5，包含 request registry、Super Admin／Auth 身分核對、私有 participant Email map 同交易寫入、Trip／特殊 Other Info 寫入及明確函式權限。2026-11-04 重新確認 `supabase status` 的 API endpoint 為 `http://127.0.0.1:54321`，`supabase migration list --local` 顯示 `20261103150000` 已套用；未使用 `--linked`、未執行 reset、未對遠端共享／正式 DB 寫入。以專案指定 Node v22.23.2／npm 10.9.8 重新執行 `verify:trip-excel-import`、`verify:trip-excel-rpc` 均通過；完整 `npm run build`（含既有回歸、TypeScript、production build、PWA、postbuild browser security 及 weather bundle 檢查）exit code 0。正式 Supabase 唯讀比對確認 Super Admin 2 位、`admin_profiles` 2 筆且兩位均 `include_in_new_trip=true`；正式資料庫無此缺漏。公司端 local V5 歷史 snapshot 於 2026-10-27 至 2026-11-03 均記錄 `admin_profiles=[]`；V3.5.4 初始化 migration 已執行，但 2026-11-02 追加兩個 `weather-rc-test` 測試 Auth／Super Admin 帳號時，profile 未同步建立。2026-11-04 已依 V3.5.4 原初始化規則，只補齊 local V5 缺少的三筆 Super Admin profiles（名稱取 Auth metadata；無名稱用 email 前綴，`include_in_new_trip=true`，一般排序 100），未改既有資料。Excel RPC 的 participant 查詢保留與一般建立相同的 `admin_profiles` + `admin_users` + `auth.users` 交集篩選，移除 Excel 專屬的空 profile 拒絕及重複顯示名稱拒絕；不增加 fallback 或新判斷方式。2026-11-04 進一步在 local V5 對已套用 RPC 進行真實 PostgreSQL 測試：成功建立一筆 TRIP 時同時產生一筆 request registry、一筆特殊 Other Info 與 participant email map；相同 request 重送回傳相同 trip_id 且只保留一筆；在建立後刻意觸發例外，確認 TRIP、registry、Other Info 均 rollback 為 0；特殊 Other Info deterministic client_item_id 唯一衝突也使該整批交易 rollback；相同 title/date 使用不同 request UUID 成功建立兩筆不同 trip_id。測試留下 4 筆明確命名的 local V5 測試 TRIP（title 前綴 `Excel RPC` 或 `Allowed duplicate title date`）、對應 4 筆 registry 及 4 筆特殊 Other Info；均使用既有測試 Super Admin 建立，未碰既有兩筆 baseline TRIP，未清理測試資料。管理員與非管理員的 RPC 權限拒絕測試已由使用者確認先前均通過，視為既有驗收結果，不重複執行。2026-11-05 曾做 local V5 Auth 唯讀盤點（4 個 Auth users，其中 3 個對應 Super Admin、另 1 個無 `admin_users` 權限列）；該盤點僅反映目前本機帳號組成，不得用來推翻先前已通過的權限測試。RPC migration 檔與規格文件有未提交修改，local V5 函式已以修改內容套用；需在下一階段完成 migration diff／部署策略核對，不能把已修改本機函式誤認為 migration history 自動更新。2026-11-09 已決定取消 Excel 預覽中的幣別手動勾選／確認，改為沿用共用預設並保留提醒文案；既有程式仍需依新決策調整 UI，確認勾選移除後再驗收。提交時 Session refresh、RPC client 呼叫及結果不明 recovery 的真實瀏覽器流程仍待驗；IM01–IM10 尚未全部執行，尚未發布。下一步先補上有安全清理策略的自動化 DB tests 與非 Super Admin fixture（若可利用現有可控 Auth 測試工具而無須新增永久帳號），再完成其餘 IM01–IM10，才串接前端提交與 recovery。禁止 commit/push、遠端 DB 寫入或發布，除非另行明確核准。
 
 ### Excel V1 實作進度（截至 2026-11-07）
 
@@ -139,7 +139,7 @@ TRIP 基本資料區只有上述兩項。V1 不提供旅程天數、結束日期
 | ExcelJS V1 解析與嚴格驗證 | 已實作、測試通過 | `src/services/tripExcelImport.ts`；`npm run verify:trip-excel-import` |
 | 新增 TRIP Excel／手動二選一 UI | 已實作；真實瀏覽器流程待驗 | `src/components/TripEditorModal.tsx`；本輪尚未完成實際登入及匯入操作 |
 | Parser 回歸測試 | 已通過 | 正向解析、空白日保留、結束時間預設、標題／時間／metadata／損壞檔拒絕；ExcelJS 輸入已正規化成獨立 ArrayBuffer，通過 TypeScript |
-| Excel RPC／request registry | 本機整合測試通過 | `npm run test:trip-excel-rpc-local-integration`；3 天／2 卡片、相同 request 並行冪等、Recovery CREATED／NOT_FOUND、不同 request 建立獨立 TRIP、payload mismatch 拒絕及 transaction rollback 均通過；本輪測試資料已清理，未操作 Remote Supabase。
+| Excel RPC／request registry | 本機整合測試通過 | `npm run test:trip-excel-rpc-local-integration`；3 天／2 卡片、同一 request 並行只建立一筆（冪等 replay）、Recovery CREATED／NOT_FOUND、**相同 title／date／相同 payload 但使用不同 request UUID，成功建立不同 TRIP ID**、payload mismatch 拒絕及 transaction rollback 均通過；測試資料已由腳本 finally 清理，未操作 Remote Supabase。
 | RPC 靜態規格檢查 | 已通過 | `npm run verify:trip-excel-rpc`；目前同時檢查基礎 migration 與 2026-11-06 upgrade migration；不能取代 DB integration tests |
 | Session refresh 與身分確認 | 已實作、靜態檢查通過 | `src/services/tripExcelCreateService.ts`；refresh 後以 `getUser()` 驗證 user id/email，再檢查 Super Admin，不重新啟動 OAuth |
 | 建立結果不明 recovery | Service mock 與本機 RPC 測試通過；真實登入斷線 UI 流程待驗 | 使用相同 request UUID 呼叫 `tc_get_trip_excel_create_request`；owner-bound CREATED 才承認成功；NOT_FOUND／TRIP_DELETED／無法確認不盲目換 UUID |
@@ -522,6 +522,8 @@ RPC 成功回應（建議使用單一 JSON object）至少包含：
 
 ### 12.1 階段與依賴關係
 
+> **發布門檻策略（2026-11-13 更新）：** 原階段 6「階段 0–5 全部完成、IM01–IM10 均有結果」的硬性停止規則，調整為「必要安全與資料完整性條件完成即可進入發布審查；未完成的非阻斷性真人瀏覽器／PWA Recovery 情境轉列 §12.11 發布後觀察」。IM01–IM10 仍保留作為完整驗證矩陣與問題定位索引，但不可再將每一項全部真人驗收當成發布前置條件。任何已知安全漏洞、未授權資料存取、正常建立主路徑失敗、可能部分寫入或雲端／本機狀態誤判仍屬停止線。
+
 | 階段 | 工作內容 | 進入條件 | 完成條件／交付物 | 未完成時禁止進行 |
 |---|---|---|---|---|
 | 0. 產品契約與範本技術定案 | 兩張工作表結構、系統 metadata 儲存座標、固定座標、欄位名稱／型別／必填規則／下拉允許值與匯入範圍 | 產品欄位契約依 2026-11-03 已定案內容整理，不重新開放產品決策；兩工作表契約已選定；ExcelJS／LibreOffice／Microsoft Excel 2010 隔離 round-trip 已通過 | 完成正式範本及欄位契約文件；確認正式範本套用固定版型、資料驗證及格式後，能由 ExcelJS 正確讀回 | 正式範本與欄位契約未完成前，階段 0 不得標記完成，也不得進入 IM01–IM03 正式測試 |
@@ -530,7 +532,7 @@ RPC 成功回應（建議使用單一 JSON object）至少包含：
 | 3. 新 TRIP 建立與提交安全設計（IM04–IM06） | 新 TRIP 建立權限、雲端可用性、Trip ID 主鍵防碰撞、request registry 冪等性及整批寫入原子性 | 階段 0、1 完成；階段 2 的有效解析輸出及建立預覽契約確認 | 新 TRIP 建立流程的狀態轉移、權限、ID 唯一性、request 重送與失敗結果明確；允許不同 request 建立同名同日期 TRIP；確認整批建立完整性可被測試 | 不得執行正式資料庫整批建立驗收 |
 | 4. 本機 Supabase 整批建立與失敗處理（IM07–IM08） | 使用公司端既有 local Supabase V5 測試資料庫驗證建立新 TRIP 與每日卡片成功提交、明確失敗、逾時結果不明、雲端權威資料與本機快取更新順序 | 階段 2、3 均完成；已確認僅連線 `127.0.0.1` 本機 Supabase，並使用本次專用測試 TRIP／request ID | 整批建立成功才更新本機 UI／快取；失敗不留下部分 TRIP／卡片；結果不明能重新核對；新建 TRIP 資料完整性符合規格 | 不得宣稱整批建立完整性通過或進入整體驗收 |
 | 5. 地點欄位排除與既有功能相容性（IM09–IM10） | 確認 Excel 不含地點／地址欄位、不觸發地圖、天氣、路線、照片副作用；其他裝置沿用既有 workspace reconciliation | 階段 0、1、2 完成；IM08 成功建立路徑可供驗證 | 確認匯入只建立 TRIP 與每日卡片，App 原有地點功能及其他模組／同步規則不被改動；不新增 Realtime／同步子系統 | 不得宣稱整體功能驗收完成 |
-| 6. 最終驗收與發布審查 | 彙整所有定案、測試證據、未解問題與不在 V1 範圍的項目 | 階段 0–5 完成，IM01–IM10 及必要回歸測試均有結果 | 提交完整驗收摘要，由 Product Owner 決定是否核准後續發布 | 未完成驗收或未取得發布核准，不得宣告功能完成、建立發布候選或部署 |
+| 6. 最終驗收與發布審查 | 彙整產品範圍、必要安全／資料完整性證據、主要流程測試、必要回歸、未解問題與發布後觀察項目 | 階段 0–1 完成；正常 Excel 解析／預覽與建立主路徑具足夠證據；權限、request 冪等、整批原子性及失敗不誤報等必要保護已驗證；release build 通過 | 提交發布審查摘要，由 Product Owner 核准版本收尾及發布；非阻斷性真人 Recovery 情境列入 §12.11，不要求全數補驗 | 必要安全／資料完整性條件未完成、正常主要流程有已知故障、存在未解重大缺陷，或未取得發布核准時，不得發布 |
 
 ### 12.2 固定測試清單（IM01–IM10）
 
@@ -567,6 +569,7 @@ RPC 成功回應（建議使用單一 JSON object）至少包含：
 5. 每項測試記錄：狀態（未開始／待定案／可測試／通過／失敗／阻塞）、前置條件、環境、操作、預期結果、實際結果及證據。未執行不得標記通過。
 6. 本計畫不納入 V3.10.12 的 TC01–TC14 舊版同步驗收重測；除非 V3.11.0 實作實際修改相關程式路徑，且能指出具體受影響行為，才新增最小範圍的回歸項目。
 7. 本文件的產品決策及範圍限制優先於測試便利性；不得為了通過測試而擴大 V1 範圍。
+8. IM01–IM10 是完整驗證與問題定位矩陣，不代表每個真人瀏覽器／PWA 故障注入案例都是發布停止線；發布門檻依 §12.1 更新後的階段 6 與 §12.11 執行。安全、權限、主要建立路徑、交易原子性及雲端／本機狀態誤判仍不可豁免。
 
 ### 12.5 目前階段狀態（2026-11-10 家用端續作核對）
 
@@ -578,7 +581,7 @@ RPC 成功回應（建議使用單一 JSON object）至少包含：
 | 階段 3：IM04–IM06 | 核心 RPC 交易與權限案例部分通過；併發覆蓋未完成 | 成功建立、同 request 冪等、rollback、不同 request 同名同日期，以及管理員／非管理員 RPC 權限拒絕案例已有既存通過結果；2026-11-06 僅補強前端建立服務送出前的 Session refresh 與帳號核對，沒有執行 DB 併發測試；同 request 併發仍待補。 |
 | 階段 4：IM07–IM08 | 前端 RPC 呼叫與清單刷新已接通，失敗／結果不明端到端 recovery 仍未完成 | 2026-11-06 核對 `TripEditorModal` → `App.handleTripExcelCreate` → `createTripFromExcel` → `tc_create_trip_from_excel` → `refreshTripOptionsAndSelect` 已有程式接線；本次新增 refresh 後 user ID／Email 驗證、幣別 props 最終比對及 pending UUID 沿用。專項靜態契約、App TypeScript、ESLint 及完整 production build 通過；未在本次工作階段操作任何 Supabase，也未做真實 RPC／UI 建立驗收。結果不明時的雲端 request 查詢與恢復路徑尚待補強，不能視為 IM07–IM08 通過。 |
 | 階段 5：IM09–IM10 | 依 IM 定義逐項確認；未宣稱完成 | 不把一般同步測試資料生命週期或局部 RPC 測試替代地點隔離／跨裝置驗收；本次沒有執行雙裝置測試。 |
-| 階段 6：最終審查 | 尚未開始 | 待 IM01–IM10 缺口補齊、前端提交及 recovery 完成後再審查；未取得發布核准。 |
+| 階段 6：最終審查 | 待發布收尾 | 依更新後發布門檻，確認主要流程、安全與資料完整性證據、必要回歸及版本收尾；真人 Recovery／IM09／IM10 未完成情境依 §12.11 列入發布後觀察。 |
 
 ### 12.6 版本與授權狀態
 
@@ -589,7 +592,7 @@ RPC 成功回應（建議使用單一 JSON object）至少包含：
 - 2026-11-03 產品決策更新：取消 TRIP 名稱＋出發日期防衝撞。唯一性只由 `trip-<UUID>`／`trips_pkey(id)` 保證；不同建立 request 可以建立相同名稱及日期的多筆 TRIP。同一 request 的重送仍須冪等，不得重複建立。此決策已同步 P05-01-04、8.1、8.3、8.5、8.8、8.9、IM05、階段依賴與狀態紀錄。
 - 2026-11-03 前一輪規格更新曾僅修改本權威規格文件，未修改程式碼、資料庫或 migration；該輪當時尚未 commit／push。其後文件更新已另行提交並推送，當前狀態以 Git 為準。名稱＋日期唯一索引及 `TRIP_DUPLICATE_TITLE_DATE` 錯誤碼已明確取消；request registry 已納入本次 Excel RPC migration，實際冪等與交易行為仍待本機整合測試。
 - 本功能已進入公司端實作；允許在既有 local Supabase V5 套用 migration 並逐步執行 IM01–IM10。此授權不包含操作家用端資料庫或遠端共享／正式資料庫。
-- 實作授權不包含 commit/push、正式資料庫寫入、合併 main、版本標籤、部署或發布；這些操作均須另行明確授權。未完成階段 2–5 的測試及階段 6 最終審查前，不得宣稱 V1 功能驗收完成或進入發布。
+- 實作授權不包含 commit/push、正式資料庫寫入、合併 main、版本標籤、部署或發布；這些操作均須另行明確授權。發布資格依 §12.1 更新後的必要安全／資料完整性與主要流程門檻判斷；非阻斷性真人瀏覽器／PWA Recovery 情境及 IM09／IM10 專項驗收列入 §12.11 發布後觀察，不得再用「階段 2–5 全部測試完成」作為一律停止發布的規則。
 - 後續工作一律依本節編號及狀態逐項推進；不得每次對話重新建立不同的測試清單或執行順序。
 
 ### 12.7 瀏覽器 Excel 解析阻塞診斷與驗收紀錄（2026-11-09～2026-11-10）
@@ -695,6 +698,36 @@ RPC 成功回應（建議使用單一 JSON object）至少包含：
 - 驗證通過：`npm run test:trip-excel-create-service`、`npm run verify:trip-excel-rpc`、`npm run verify:trip-excel-import`、`npx tsc -p tsconfig.app.json --noEmit`、`npx tsc -p tsconfig.node.json --noEmit`、針對修改檔案的 ESLint，以及完整 `npm run build`（包含 release／PWA／安全驗證及 production bundle）。
 - **發布後觀察（不作為發布停止線）**：建立 RPC 結果不明後 30 秒第二次查詢、查詢成功、查詢仍不明後重新匯入警告、離開後重新選檔恢復、PWA 完全關閉後重新選檔恢復、切換帳號隔離、背景暫停後回前景、localStorage 寫入失敗阻止建立，以及 `REFRESH_UNCONFIRMED` 不顯示重新匯入。這些情境已由 service mock／靜態測試與程式檢查涵蓋，但真人瀏覽器／PWA 行為尚未逐項實測；發布後遇到匯入問題時優先按 §12.11 比對，不要求先補齊全部觀察情境才可發布。
 - 本次沒有建立 TRIP、沒有呼叫真實建立 RPC、沒有執行 migration、沒有寫入 local／remote Supabase、沒有部署、沒有發布、沒有 commit／push。`package.json` 版本仍維持 `3.10.12`，尚未進行 3.11.0 release 收尾。
+
+### 12.11 發布後 Excel 匯入問題觀察與優先排查（2026-11-13）
+
+**觀察原則**
+
+- 本節列出的 Recovery 情境屬發布後觀察，不是 V3.11.0 發布停止線；不要求因未完成真人瀏覽器／PWA 故障注入而延後發布。
+- 使用者回報 Excel 匯入問題時，先確認實際症狀與發生階段，再依下表比對。不可只因問題發生於 Excel 匯入就直接判定是 Recovery；仍須檢查 parser、驗證、Session、RPC、雲端交易、快取刷新與同步。
+- 排查時優先保留：發生時間與時區、App 版本／build、裝置與瀏覽器／PWA、登入帳號是否中途切換、Excel fingerprint（不得記錄工作簿內容）、request ID、RPC／lookup 狀態碼、畫面訊息、網路切換時間，以及 TRIP 清單是否已出現新旅程。不得要求使用者提供 access token、完整 Session 或敏感行程內容。
+
+**已知觀察情境與症狀對照**
+
+| 可能問題／情境 | 使用者可能看到的現象 | 優先核對項目 | 排查與處置方向 |
+|---|---|---|---|
+| 首次 RPC 結果不明，30 秒第二次查詢 | 顯示「正在確認建立結果，請稍候」；等待後畫面有結果 | 同一 request ID、`RESULT_UNCONFIRMED` 時間、30 秒 timer／回前景時間、`lookupAttempted` | 確認只用原 request ID 查詢一次；不可直接要求再次匯入 |
+| 第二次 lookup 查到 CREATED | 等待後自動進入新 TRIP，或清單更新較慢 | lookup 回傳 status、trip_id、fingerprint 比對、清單 refresh 結果 | 區分雲端建立成功與本機清單刷新；若是 `REFRESH_UNCONFIRMED`，重新整理頁面，不可再次匯入 |
+| 第二次 lookup 仍無法確認 | 出現「再次匯入」與重複旅程警告 | 原 request 是否仍未知、第二次 lookup 是否確實只執行一次 | 只有使用者確認風險後才允許新 request ID；後續核對是否出現兩筆旅程，不自動刪除 |
+| 離開流程／重開 App 後 pending 恢復 | 重新進入後需重新選取同一 Excel 才能恢復原請求查詢 | localStorage pending 是否存在、userId 是否一致、fingerprint 是否相同、30 秒期限及 lookupAttempted | 選取同一檔案觸發比對；不同帳號不得接管；若已查詢過，不應再自動查詢第二次 |
+| PWA 完全關閉期間未執行 timer | 關閉期間沒有提示；重開後才恢復確認 | App 關閉時間、再次選檔時間、pending 紀錄及查詢旗標 | 網頁關閉不保證背景計時；重開並選同一檔案後依紀錄恢復，不將此現象單獨判為資料遺失 |
+| 切換登入帳號 | 原帳號的待確認請求在另一帳號下不恢復或不允許查詢 | pending.userId 與目前 auth.uid／email | 不跨帳號查詢；切回原帳號再依流程恢復，避免資料越權 |
+| App 背景暫停後回前景 | 30 秒等待似乎延長，回到畫面後才查詢 | `resultUnconfirmedAt`、前景恢復時間、lookupAttempted | 回前景時若已超過期限，應立即執行尚未執行的唯一一次查詢 |
+| localStorage 無法寫入 | 按下建立前出現錯誤或無法送出 | pending 保存是否成功、瀏覽器儲存空間／隱私限制 | 必須在 RPC 前阻止建立；不可忽略保存失敗而送出，否則重啟後可能失去追蹤資訊 |
+| `REFRESH_UNCONFIRMED` | 雲端已建立，但本機清單沒有顯示新旅程 | RPC／lookup 是否已確認 CREATED、refreshTripOptionsAndSelect 是否失敗 | 提示重新整理頁面；不得出現再次匯入選項，避免重複旅程 |
+| 明確 RPC_FAILED／驗證／權限拒絕 | 立即顯示錯誤，不進入 30 秒等待 | RPC error code、Session、Super Admin 權限、payload validation | 依明確錯誤修正或重新登入；不要誤分類為 RESULT_UNCONFIRMED |
+| Excel 選檔／解析／預覽異常 | 無法選檔、停留解析中、標題／時間／日期錯誤或預覽資料不符 | 檔案版本、worksheet／metadata、parser error 與欄位位置、browser console | 先依 IM01–IM03 parser 契約定位，與 RPC Recovery 分開處理 |
+
+**發布後記錄方式**
+
+- 每次實際問題以獨立 Bug／案例紀錄：重現步驟、預期／實際結果、版本、裝置、錯誤碼、request ID（可安全分享時）、是否產生 TRIP、雲端與本機狀態、根因及修正版本。
+- 只有觀察到實際案例，才將對應項目改為「已發生／待修正」；沒有使用者回報不代表所有情境已實測通過，也不需要為了追求測試清單全綠而擴大發布前工作。
+- 若問題涉及未授權建立、跨帳號資料讀取、部分 TRIP／卡片提交、雲端成功卻誤報失敗、或可造成資料遺失／重複且無法讓使用者辨識，屬安全或資料完整性問題，應即時評估暫停功能或緊急修正，不受一般觀察項目政策限制。
 
 ### 12.9 建立旅程介面配色與側邊欄排序診斷（2026-11-11）
 
