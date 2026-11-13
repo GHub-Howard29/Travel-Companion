@@ -221,7 +221,215 @@
         }
       },
       "created_at": "2026-10-22T08:04:37.747562+00:00",
-      "updated_at": "2026-11-12T23:42:41.123384+00:00",
+      "updated_at": "2026-11-12T23:49:47.217084+00:00",
+      "is_public": false
+    },
+    {
+      "id": "trip-cd1bcf5c-92fc-4f5a-bddb-78e791709e4e",
+      "title": "Test TRIP",
+      "departure_date": "2026-12-25",
+      "currency_config": {
+        "code": "TWD",
+        "symbol": "NT$"
+      },
+      "sidebar_config": [
+        {
+          "id": "itinerary",
+          "title": "每日詳細行程",
+          "type": "itinerary"
+        },
+        {
+          "id": "checklist",
+          "title": "共同檢查清單",
+          "type": "checklist"
+        },
+        {
+          "id": "trip_special_info",
+          "title": "領隊導遊聯絡資訊",
+          "type": "otherInfo"
+        },
+        {
+          "id": "other_info",
+          "title": "其他資訊",
+          "type": "otherInfo"
+        },
+        {
+          "id": "expense",
+          "title": "旅費記帳本",
+          "type": "expense"
+        },
+        {
+          "id": "exchange_rate",
+          "title": "外幣換算",
+          "type": "exchangeRate"
+        }
+      ],
+      "content": {
+        "custom_tab_1": {
+          "mainText": "",
+          "subtitle": "旅程備忘錄"
+        },
+        "days": [
+          1,
+          2,
+          3
+        ],
+        "daysData": {
+          "1": [
+            {
+              "departureTime": "09:00",
+              "desc": "1",
+              "id": "3e96be4e-9d6c-4df9-9345-2224453cbf67",
+              "location": "",
+              "time": "08:00",
+              "title": "Test1",
+              "type": "交通",
+              "typeColor": "bg-emerald-50 text-emerald-700 border-emerald-200"
+            }
+          ],
+          "2": [
+            {
+              "departureTime": "11:30",
+              "desc": "2",
+              "id": "72bf4f67-e44c-4978-bd93-a469184b94ac",
+              "location": "",
+              "time": "10:30",
+              "title": "Test2",
+              "type": "景點",
+              "typeColor": "bg-purple-50 text-purple-700 border-purple-200"
+            }
+          ],
+          "3": [
+            {
+              "departureTime": "13:00",
+              "desc": "3",
+              "id": "e18be81b-3998-46e2-b9c0-b6398d28a07d",
+              "location": "",
+              "time": "12:00",
+              "title": "Test3",
+              "type": "其他",
+              "typeColor": "bg-slate-50 text-slate-700 border-slate-200"
+            }
+          ],
+          "mode": "guided"
+        },
+        "mode": "guided",
+        "otherInfoFolders": [
+          {
+            "createdAt": "2026-11-13T04:02:12.664102+00:00",
+            "id": "other-info-attractions",
+            "isSystem": true,
+            "isVisible": true,
+            "order": 1,
+            "parentId": null,
+            "title": "景點",
+            "tripId": "trip-cd1bcf5c-92fc-4f5a-bddb-78e791709e4e",
+            "updatedAt": "2026-11-13T04:02:12.664102+00:00"
+          },
+          {
+            "createdAt": "2026-11-13T04:02:12.664102+00:00",
+            "id": "other-info-flights",
+            "isSystem": true,
+            "isVisible": true,
+            "order": 2,
+            "parentId": null,
+            "title": "機票",
+            "tripId": "trip-cd1bcf5c-92fc-4f5a-bddb-78e791709e4e",
+            "updatedAt": "2026-11-13T04:02:12.664102+00:00"
+          },
+          {
+            "createdAt": "2026-11-13T04:02:12.664102+00:00",
+            "id": "other-info-hotels",
+            "isSystem": true,
+            "isVisible": true,
+            "order": 3,
+            "parentId": null,
+            "title": "飯店",
+            "tripId": "trip-cd1bcf5c-92fc-4f5a-bddb-78e791709e4e",
+            "updatedAt": "2026-11-13T04:02:12.664102+00:00"
+          },
+          {
+            "createdAt": "2026-11-13T04:02:12.664102+00:00",
+            "id": "other-info-transport",
+            "isSystem": true,
+            "isVisible": true,
+            "order": 4,
+            "parentId": null,
+            "title": "交通",
+            "tripId": "trip-cd1bcf5c-92fc-4f5a-bddb-78e791709e4e",
+            "updatedAt": "2026-11-13T04:02:12.664102+00:00"
+          },
+          {
+            "createdAt": "2026-11-13T04:02:12.664102+00:00",
+            "id": "other-info-tickets",
+            "isSystem": true,
+            "isVisible": true,
+            "order": 5,
+            "parentId": null,
+            "title": "票券",
+            "tripId": "trip-cd1bcf5c-92fc-4f5a-bddb-78e791709e4e",
+            "updatedAt": "2026-11-13T04:02:12.664102+00:00"
+          },
+          {
+            "createdAt": "2026-11-13T04:02:12.664102+00:00",
+            "id": "other-info-insurance",
+            "isSystem": true,
+            "isVisible": true,
+            "order": 6,
+            "parentId": null,
+            "title": "保險",
+            "tripId": "trip-cd1bcf5c-92fc-4f5a-bddb-78e791709e4e",
+            "updatedAt": "2026-11-13T04:02:12.664102+00:00"
+          },
+          {
+            "createdAt": "2026-11-13T04:02:12.664102+00:00",
+            "id": "other-info-visa",
+            "isSystem": true,
+            "isVisible": true,
+            "order": 7,
+            "parentId": null,
+            "title": "簽證",
+            "tripId": "trip-cd1bcf5c-92fc-4f5a-bddb-78e791709e4e",
+            "updatedAt": "2026-11-13T04:02:12.664102+00:00"
+          },
+          {
+            "createdAt": "2026-11-13T04:02:12.664102+00:00",
+            "id": "other-info-food",
+            "isSystem": true,
+            "isVisible": true,
+            "order": 8,
+            "parentId": null,
+            "title": "美食",
+            "tripId": "trip-cd1bcf5c-92fc-4f5a-bddb-78e791709e4e",
+            "updatedAt": "2026-11-13T04:02:12.664102+00:00"
+          },
+          {
+            "createdAt": "2026-11-13T04:02:12.664102+00:00",
+            "id": "other-info-shopping",
+            "isSystem": true,
+            "isVisible": true,
+            "order": 9,
+            "parentId": null,
+            "title": "購物",
+            "tripId": "trip-cd1bcf5c-92fc-4f5a-bddb-78e791709e4e",
+            "updatedAt": "2026-11-13T04:02:12.664102+00:00"
+          },
+          {
+            "createdAt": "2026-11-13T04:02:12.664102+00:00",
+            "id": "other-info-other",
+            "isSystem": true,
+            "isVisible": true,
+            "order": 99,
+            "parentId": null,
+            "title": "其他",
+            "tripId": "trip-cd1bcf5c-92fc-4f5a-bddb-78e791709e4e",
+            "updatedAt": "2026-11-13T04:02:12.664102+00:00"
+          }
+        ],
+        "showLunarDate": true
+      },
+      "created_at": "2026-11-13T04:02:12.662218+00:00",
+      "updated_at": "2026-11-13T04:02:12.662218+00:00",
       "is_public": false
     }
   ],
@@ -229,5 +437,19 @@
   "checklist_items": [],
   "expenses": [],
   "exchange_purchases": [],
-  "other_info_items": []
+  "other_info_items": [
+    {
+      "id": "27e53207-72b8-48f9-85d4-1a2b7d4cbd27",
+      "trip_id": "trip-cd1bcf5c-92fc-4f5a-bddb-78e791709e4e",
+      "client_item_id": "trip-cd1bcf5c-92fc-4f5a-bddb-78e791709e4e-guided-special-info",
+      "folder_id": "special-info-guided",
+      "title": "領隊導遊聯絡資訊",
+      "content": "領隊：\n電話：\n導遊：\n電話：\n集合提醒：",
+      "allowed_roles": null,
+      "sort_order": 1,
+      "created_at": "2026-11-13T04:02:12.662218+00:00",
+      "updated_at": "2026-11-13T04:02:12.662218+00:00",
+      "deleted_at": null
+    }
+  ]
 }
