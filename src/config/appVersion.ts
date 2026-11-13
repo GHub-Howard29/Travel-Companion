@@ -1,19 +1,19 @@
 /** App 發布版本設定；須與 public/app-version.json 保持一致。 */
-export const APP_VERSION = "3.10.12";
+export const APP_VERSION = "3.11.0";
 
 /**
  * 最近一次已發布版本；此版本必須存在於 versionHistory.ts。
  * production build 會驗證這個規則，避免升版後遺漏版本歷史。
  */
-export const PREVIOUS_RELEASE_VERSION = "3.10.11";
+export const PREVIOUS_RELEASE_VERSION = "3.10.12";
 
-export const RELEASE_DATE = "2026-11-01";
+export const RELEASE_DATE = "2026-11-13";
 
 export const RELEASE_NOTES = [
-  "每日行程卡片新增雲端重新驗證、離線 pending 保護與逐筆衝突處理。",
-  "新增卡片編輯租約，避免不同裝置同時修改同一張卡片。",
-  "背景同步不再顯示短暫同步提示，保留手動操作回饋與錯誤訊息。",
-  "改善變更摘要更新方式，避免摘要畫面閃動。",
+  "新增 TRIP 時可直接匯入標準 Excel 範本，建立 TRIP 基本資料與每日行程卡片。",
+  "提供固定 V1 範本、欄位驗證與匯入預覽，並由系統推導旅程天數。",
+  "Excel 建立僅限 Super Admin；透過雲端整批交易、request 冪等與結果核對保護資料完整性。",
+  "結果不明時保留原 request，30 秒後自動查詢一次；無法確認時才由使用者決定是否重新匯入。",
 ];
 
 /** 目前版本發布時保存的更新政策；不隨執行中客戶端是否已達最低版本而改變。 */

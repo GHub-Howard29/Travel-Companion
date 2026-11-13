@@ -126,6 +126,7 @@ assert.equal(formatTravelDuration(90 * 60), "1 小時 30 分鐘");
 assert.equal(formatTravelDistance(800), "800 公尺");
 assert.equal(formatTravelDistance(8_400), "8.4 公里");
 const expiredContent = removeExpiredTravelEstimates({
+    days: [1],
     daysData: {
       "1": [{
         ...origin,
@@ -154,11 +155,29 @@ assert.deepEqual(
   getAdjacentTravelOriginIndexesNeedingEstimate([origin, destination], 1),
   [],
 );
-const unchangedContent = { daysData: { "1": [{ ...origin, travelToNext: undefined }] } };
+const unchangedContent = { days: [1], daysData: { "1": [{ ...origin, travelToNext: undefined }] } };
 assert.equal(removeExpiredTravelEstimates(unchangedContent), unchangedContent);
+const legacyContentWithoutDeclaredDays = { daysData: { "1": [{ ...origin }] } };
+assert.equal(removeExpiredTravelEstimates(legacyContentWithoutDeclaredDays), legacyContentWithoutDeclaredDays);
+const metadataContent = {
+  days: [1],
+  daysData: { "1": [{ ...origin, travelToNext: undefined }], mode: "guided" },
+};
+const sanitizedMetadataContent = removeExpiredTravelEstimates(metadataContent);
+assert.equal(sanitizedMetadataContent.daysData.mode, "guided");
+assert.deepEqual(sanitizedMetadataContent.daysData["1"], metadataContent.daysData["1"]);
+const metadataRecord = sanitizeStoredTripRecord({
+  meta: { id: "metadata-trip", title: "Metadata Trip", departureDate: "2026-09-12", participants: ["A"], currencyConfig: { code: "TWD", symbol: "NT$" } },
+  detail: { id: "metadata-trip", title: "Metadata Trip", departureDate: "2026-09-12", sidebarConfig: [], content: metadataContent },
+  editorEmails: [],
+  updatedAt: "2026-09-12T00:00:00.000Z",
+});
+assert.equal(metadataRecord.detail.content.daysData.mode, "guided");
+assert.deepEqual(metadataRecord.detail.content.daysData["1"], metadataContent.daysData["1"]);
 const expiredRecord = sanitizeStoredTripRecord({
   meta: { id: "test-trip" },
   detail: { id: "test-trip", content: {
+    days: [1],
     daysData: { "1": [{
       ...origin,
       travelToNext: { ...validEstimate, expiresAt: "2020-01-01T00:00:00.000Z" },

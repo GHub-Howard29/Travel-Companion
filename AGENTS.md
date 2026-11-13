@@ -1,33 +1,49 @@
 # Codex 協作指示
 
 - 使用中文撰寫 commit 訊息。
-- 未經明確指示，不自動 commit 或 push。**一般 `commit`、`push` 或 `commit/push` 指令只授權該次明確要求的 Git 操作，不代表觸發換電腦交接流程。只有使用者明確輸入完整指令 `commit/push/工作結束`，才授權執行本文件「換電腦交接流程」：檢查任務與 Git 狀態、整理文件及執行適用驗證、只提交／推送本次任務範圍內且安全可交付的一般程式碼／文件變更，再執行 `npm run testdata:handoff:publish`、確認結果並產生另一台電腦的接手指引。若工作樹含無關或歸屬不明的變更、驗證失敗、分支／遠端狀態不安全，須保留現況並停止受影響的寫入操作，不可使用 `git add .`、強制覆寫或 reset。完整交接指令不等於正式發布授權：不合併 `main`、不部署、不清除資料、不自行切換分支。若不在 `develop`，不可自行切分支執行測試資料 publish；須回報狀態與阻礙。單純一般工作完成、暫停對話或提及換電腦，都不得由 AI 自行推斷為交接觸發。
+- 未經明確指示，不自動 commit 或 push。**Git 與測試資料庫操作完全分離：** 一般 `commit`、`push`、`commit/push` 只依明確要求執行一般 Git commit／push。完整口令 `commit/push/資料庫` 已整個廢除，不再是有效指令；收到該完整口令時不執行任何動作，應告知使用者改用明確的 Git 指令或獨立資料庫口令。任何 Git 口令均不得呼叫 fixture export、upload、download、import、`testdata:handoff:publish` 或任何資料庫同步程式。
+- **資料庫上傳觸發詞：** 使用者明確輸入 `/上傳資料庫` 時，只執行 `npm run testdata:upload`（`scripts/testdata-upload.mjs`）。此命令自行檢查並只上傳合格的本機合成 fixture 到 `origin/develop`；不得執行一般程式碼／文件 commit，不得 download/import，不得 pull，不得順便執行其他資料庫同步入口。必須保留既有分支、upstream、工作樹、敏感資料與 fixture 驗證安全停止條件；有無關／歸屬不明變更或安全檢查失敗時停止並回報。
+- **資料庫下載觸發詞：** 使用者明確輸入 `/下載資料庫` 時，只執行 `npm run testdata:download`（`scripts/testdata-download.mjs`）。此命令只讀取本機 Git 已提交的 fixture 並更新目前主機自己的 loopback Supabase；不得執行 Git pull、commit、push、upload 或舊的 `db:sync:local`。若本機 Git 尚未取得目標 fixture，停止並明確提示需由使用者另外執行 Git pull／更新，不可自動替使用者執行。
+- 上述 `/上傳資料庫`、`/下載資料庫` 是獨立資料庫操作口令；不得因一般任務完成、Git 操作、對話提及或另一口令而自動觸發。兩者皆不得連線或寫入正式 Supabase。
+- 一般 Git 操作仍須檢查 Git 狀態、分支/upstream 與遠端差異，整理文件及執行適用驗證，只提交／推送本次任務範圍內且安全可交付的檔案；若工作樹含無關或歸屬不明變更、驗證失敗、分支／遠端狀態不安全，須保留現況並停止受影響的寫入操作，不可使用 `git add .`、強制覆寫或 reset。一般 Git 操作不合併 `main`、不部署、不清除資料、不自行切換分支；若不在 `develop`，不得自行切分支或推測同步方向，須回報狀態與阻礙。
 - 在重要結論、規劃或實作前，先檢查需求、前提、限制與可驗證證據；簡單且低風險的請求採相稱深度，不必為形式而展開冗長分析。
 - 若發現邏輯缺口、互相衝突的條件、未經證實的假設或可能影響結果的認知偏差，應直接說明具體證據、影響與可執行的改善方式。若差異會實質改變結果且無法安全推定，再請使用者決定。
 - 不因迎合而隱瞞問題，也不為反對而反對；在安全、授權與既定範圍內，仍應忠實執行使用者的明確要求。
 - 清楚區分已確認事實、合理推論、建議方案與尚未完成的驗證，不把未測試或未發布的結果描述成已完成。
-
 # Node.js 執行環境辨識（OpenChatX Home／OpenChatX 通用）
 - **不得將 OpenChatX 內建 Node.js 當成專案 Node.js。** OpenChatX Home／OpenChatX 的 Bash、MCP 或其他命令程序可能預設使用 OpenChatX 自帶的 runtime Node；例如家用端曾回報 `C:\Users\A-Haw\AppData\Local\Programs\OpenChatX\runtime\bin\node.exe`（v22.18.0），公司端曾回報 `C:\Users\ahow_ho\AppData\Local\Programs\OpenChatX\runtime\bin\node.exe`（v22.18.0）。這些都是 OpenChatX 工具執行環境，不代表 Travel-Companion 的 Node 版本，也不代表專案所安裝的 Node 不存在或版本錯誤。實際路徑及版本須以當次命令程序的檢查結果為準，不可把某一台主機的使用者目錄或 runtime 路徑套用到另一台主機。
-- Travel-Companion 專案 Node 版本以專案 `.nvmrc`、`package.json` 的 `engines.node` 及指定主機上的實際安裝目錄為準；目前專案要求 `22.23.2`。家用端與公司端均應使用各自主機實際安裝的專案 Node，不可因兩端安裝位置不同而改變專案版本要求。公司端已確認安裝於 `C:\nvm\v22.23.2\node.exe`；其他主機不得未經檢查直接假定使用相同路徑。
-- **每次進行 Node／npm、依賴、測試、lint、build 或 Supabase CLI 的版本檢查時，必須先在當次命令程序內明確將該主機的專案 Node 目錄放到 PATH 最前端，再執行版本與工具命令。** PowerShell 範例（僅適用於已確認專案 Node 位於該路徑的主機）：
-  `$env:PATH = 'C:\nvm\v22.23.2;' + $env:PATH`
-  然後執行 `node --version`，確認輸出 `v22.23.2`；再確認 `npm --version` 為 `10.9.8`。若專案 Node 安裝於其他目錄，應代入該主機經查證的實際目錄，不得照抄範例路徑。
-- 為避免誤判，必要時先記錄 `(Get-Command node).Source` 與 `node --version`；若來源仍是 OpenChatX `runtime\\bin\\node.exe`，代表命令尚未切換到專案 Node，必須先修正 PATH，不能回報專案版本不符或要求使用者重裝 Node。
+- Travel-Companion 專案 Node 版本以專案 `.nvmrc`、`package.json` 的 `engines.node` 及指定主機上的實際安裝目錄為準；目前專案要求 `22.23.2`。家用端與公司端均應使用各自主機實際安裝的專案 Node，不可因兩端安裝位置不同而改變專案版本要求。其他主機不得未經檢查直接假定使用公司端或家用端的 Node 路徑。
+- **Node 工作流程（兼顧正確性與 Token／命令成本）：**
+  1. 每次開始一項 Travel-Companion 專案任務時，先確認目前實際執行主機身分（Windows `COMPUTERNAME`／`USERDOMAIN`）；若本次工作階段已取得且主機未切換，可沿用該身分，不需在每條命令重複查詢。
+  2. 對該主機，優先沿用本工作階段或可信診斷紀錄中已驗證的專案 Node 安裝目錄；只有首次接觸該主機、路徑未記錄、檔案不存在、版本不符或疑似安裝異動時，才重新搜尋與驗證實際路徑。不得直接套用另一台主機的路徑。
+  3. 每次執行依賴 Node／npm 的命令（包含 Node／npm 版本檢查、依賴安裝、測試、lint、build、Supabase CLI）時，必須在該次命令程序內將已確認的專案 Node 目錄放到 PATH 最前端，再執行命令。PowerShell 範例：`$env:PATH = '<該主機已確認的專案 Node 目錄>;' + $env:PATH`。這是單次程序設定，不寫入使用者或系統永久環境變數。
+  4. 不需每次執行所有 Node 工具版本檢查；只檢查本次任務實際使用的工具，且必要時記錄 `(Get-Command node).Source`，確認解析到專案 Node 而非 OpenChatX `runtime\\bin\\node.exe`。
+  5. 若主機身分、Node 路徑或版本有疑義，先停止依賴該環境的命令並查證；不得把 OpenChatX 內建 Node 的版本誤報為專案版本錯誤，也不得因此要求使用者重裝 Node。
+- 公司端目前已驗證專案 Node 位於 `C:\nvm\v22.23.2\node.exe`，npm 為 `10.9.8`；此路徑只適用於已確認的公司主機 `TPEPC-TM7503-01`／`NICE-GREEN`，其他主機必須獨立確認。
+- **公司端瀏覽器操作工具政策（預設且強制）：** 在公司主機 `TPEPC-TM7503-01`／`NICE-GREEN` 執行 Travel-Companion 相關瀏覽器操作、分頁讀取、頁面導覽或 UI 驗證時，唯一允許使用 `open-browser-use` 原生 CLI（直接執行已安裝的 native CLI／其命令）；不得使用 `open-browser-use-office` MCP 工具執行瀏覽器操作，也不得每次工作開始時重新測試或排查該 MCP。此限制只適用公司端，不延伸至家用端。只有使用者明確解除本規則，或明確核准改用新工具／新流程後，才可變更。若原生 CLI 本身故障，回報具體錯誤並停止該項瀏覽器操作，不可自行切回 MCP。
+- 公司端原生 CLI 可執行檔目前已驗證位於 `C:\nvm\v22.23.2\node_modules\open-browser-use\native\windows-amd64\open-browser-use.exe`，版本 `0.1.42`；CLI npm wrapper 入口為 `C:\nvm\v22.23.2\node_modules\open-browser-use\cli\open-browser-use.js`。以上路徑僅適用已確認的公司主機；若日後升級、搬移或更換工具，需經使用者核准後更新。
 - 專案工具檢查及測試命令可採單次程序 PATH 覆寫；不得擅自修改 OpenChatX 全域 runtime、安裝目錄或使用者全域 Node 設定。除非使用者另行授權，不做永久性環境變數修改。
 - **既有診斷更正原則：** 過去若只在 OpenChatX 預設 shell 讀到 v22.18.0，應更正為「OpenChatX 內建 Node v22.18.0；專案 Node 版本須依專案設定及該主機安裝位置，在專案 PATH 下另行驗證」，不得將其列為專案工具阻塞。
 
-# Supabase 雙電腦同步流程設定狀態
-- 雙電腦同步流程的設定建立工作已完成；原先為該流程建立的公司電腦專屬限制已解除。後續依目前指定的 OpenChatX 主機與實際 Git／Supabase 狀態操作，不因連線主機是公司或家用電腦而一律停止。
-- 若執行特定主機的本機資料庫操作，或要宣稱該主機產生新的驗證結果，仍須確認實際主機識別；不得把家用電腦測試結果誤報為公司電腦證據，也不得在未確認前操作另一台電腦。公司電腦識別基準仍為 Windows `COMPUTERNAME=TPEPC-TM7503-01`、`USERDOMAIN=NICE-GREEN`，專案路徑 `D:\\Project\\Travel-Companion`。
-- **尚待實證：** 實際操作產生新的資料庫資料後，兩端同步版本確認及自動化交接尚未實證；真正 A→B→A 雙向交接、兩端各自新增資料合併與生命週期端到端驗收亦待真實事件發生時補驗，不刻意製造新測試資料。詳細設計與歷史證據存放於 `docs/archive/supabase-sync/`。
+# Supabase A/B 雙機測試資料同步規則
+> **權威規格：** `docs/83_本機測試資料庫同步流程.md` 是唯一現行詳細規格。本節只摘要實作邊界。
+- A（公司端）與 B（家用端）各自只操作本機 loopback Supabase。Git `origin/develop` 保存一份六表同步資料集，位置為 `supabase/test-fixtures/local-database/`；不複製 Docker volume，也不使用正式資料庫 dump。
+- **三個時間欄位：** `local_last_changed_at` 與 `last_synced_at` 分別保存於每台電腦自己的本機 metadata；`git_last_changed_at` 保存於 Git manifest。A、B 的 `last_synced_at` 各自獨立，不會因另一台上傳／下載而自動改變。
+- 本機專用 SQL `scripts/sql/testdata-sync-clock.sql` 由上／下載入口自動套用，建立單筆 metadata 與六個 INSERT／UPDATE／DELETE Trigger；它不是 Supabase migration，不得部署至正式資料庫。只保留最後變更時間，不記錄逐筆歷史或遞增版本號。
+- **唯一方向判斷：** `local_last_changed_at > last_synced_at` 與 `git_last_changed_at > last_synced_at`。本機有變更且 Git 無變更才允許上傳；Git 有變更且本機無變更才允許下載；兩者都變更即停止；兩者都未變更則 unchanged。時間戳使用 UTC、固定微秒精度；不使用 checksum、hash、revision、parent、applied state 或 Git commit 時間判斷。
+- **首次同步：** 初始來源明確執行 `npm run testdata:upload -- --initialize`；接收端先取得 Git 最新提交，再於本機同步範圍為空時明確執行 `npm run testdata:download -- --initialize`。NULL 基準不可套用一般四象限公式。
+- 同步資料範圍為六張表：`trips`（僅 `is_public=false`）、`checklists`（僅 `scope=shared`）、其對應 `checklist_items`，以及私有行程的 `expenses`、`exchange_purchases`、`other_info_items`。不要求 `testPurpose`、`__testFixture` 或固定 TRIP ID／名稱。
+- 不跨機傳輸 Auth users、參與者／participant Email map、owner／creator 身分、expense payer、帳戶／個資、session、token、密碼、附件中繼資料與 Storage 檔案；Trip 的本機參與者欄位及其他非同步範圍資料必須保留。敏感欄位／Email／憑證檢查不合格時停止。
+- 下載先驗證資料結構、欄位、關聯與刪除影響，再於單一 SQL transaction 套用六表、驗證並將下載端 `local_last_changed_at`／`last_synced_at` 校正為 Git 時間；若刪除 Trip 會影響同步範圍以外的外鍵資料，停止而不連帶刪除。
+- `/上傳資料庫` 只執行 `npm run testdata:upload`；通過判斷後只提交／推送資料集檔案並更新上傳端自己的 `last_synced_at`。`/下載資料庫` 只執行 `npm run testdata:download`；不執行 Git pull／commit／push。兩者皆不得操作正式 Supabase。
+- Excel RPC 案例集是獨立資料集，依文件 106 及 `excel-rpc:dataset:*` 指令管理，不納入一般六表時間戳或上／下載判斷。完整口令 `commit/push/資料庫` 已廢止。
 
 # 每次開始工作前：Git 與 Supabase 核對
 - 每次開始任何專案任務，先在專案根目錄檢查 `git status --short --branch`、目前分支與 upstream；再執行 `git fetch origin`，確認本機與遠端差異。不得因任務看似只改文件就跳過。
 - 若工作目錄乾淨、目前分支是 `develop`，且遠端只有可安全 fast-forward 的新提交，允許直接執行 `git pull --ff-only origin develop`，然後確認最新 commit 與工作目錄狀態。
 - 若工作目錄有未提交修改或 untracked 檔案，先判斷是否屬於本次任務；一般任務不得自動切分支、stash、覆寫或 reset，應保留現況並回報。唯一例外是使用者已明確下達「進行發布流程」，且逐一檢視後確認所有待提交變更均屬於本次發布候選時，可依標準發布流程只 stage 明確檔案並提交；任何無關或歸屬不明的變更都必須停止。一般任務若目前分支不是 `develop`，不得自行切換。標準發布流程則可在工作樹乾淨、分支／upstream 已核對、遠端差異可安全處理且目前階段要求時，依序切換 `develop`／`main`；不得因發布需要而忽略遠端分歧、強制覆寫或 reset。沒有 upstream 或本機與遠端分歧時，仍須停止並回報差異，先處理安全同步方案。
-- 雙電腦合成測試資料交接共用既有 `testdata-sync.mjs`，不建立第二套發布流程。接收端仍由 `npm run db:sync:local` 自動執行 `npm run testdata:handoff` 偵測及驗證；來源端有合格 fixture 變更時使用 `npm run testdata:handoff:publish`，在 develop／upstream、工作樹、fixture 驗證、精確檔案白名單及遠端快轉安全條件全部通過後，才自動 stage fixture manifest/data、commit、push origin/develop。有任何非預期檔案、敏感資料、衝突、分支／upstream 異常或遠端分歧即停止；不自動 pull、reset、merge main、部署或清除資料。無變更則略過 commit/push。完整雙向交接、兩端各自新增資料的合併及生命週期驗收，待真實需求發生時補驗，不刻意製造測試資料。
-- **換電腦交接流程（僅由完整指令觸發）：** 只有使用者明確輸入 `commit/push/工作結束` 才執行完整交接；一般 `commit`、`push`、`commit/push`、單次工作完成、暫停對話或提及換電腦都不觸發。收到完整指令後，先檢查分支/upstream、遠端差異與工作樹，確認哪些變更屬於本次交接；整理相關文件並執行適用驗證，僅對本次任務範圍內、驗證合格且無無關／歸屬不明變更的一般程式碼與文件進行精確 stage、commit、push。不可用 `git add .`，不可覆蓋、reset、強制推送或自動切換分支。之後在 `develop` 直接執行 `npm run testdata:handoff:publish`；不可先執行 `npm run testdata:handoff`，避免先產生 fixture 差異而觸發安全停止。此 publish 入口自行判斷有無合格 fixture 變更，無變更就略過 commit/push；有變更時只有安全檢查全數通過才會精確提交／推送 fixture。若不在 `develop`、本機 Supabase 不可用、存在無關／歸屬不明變更、驗證失敗或 Git／fixture 安全檢查失敗，停止受影響的寫入操作並回報未完成項目，不可繞過檢查或宣稱已同步。最後提供一般 commit/push、fixture 交接、剩餘未提交內容與接收端接手指引。此流程不是正式發布：不合併 `main`、不部署、不清除資料；一般 commit/push 指令本身仍不授權執行本流程。
+- **舊換電腦／資料庫交接流程（已停用，2026-11-04）：** 本段後續內容是歷史存檔，不得照此執行。歷史完整口令 `commit/push/資料庫` 已不再觸發資料庫交接。現行三個互斥入口為：一般 `commit`／`push`／`commit/push`（包括歷史完整口令 `commit/push/資料庫`）只做 Git；`/上傳資料庫` 只執行 `npm run testdata:upload`；`/下載資料庫` 只執行 `npm run testdata:download`。不得互相串接。
+- **舊規則正文（已廢止、不可執行，僅留歷史）：** 原規則曾規定只有使用者明確輸入 `commit/push/資料庫` 才執行完整交接；一般 `commit`、`push`、`commit/push`、單次工作完成、暫停對話或提及換電腦都不觸發。收到完整指令後，先檢查分支/upstream、遠端差異與工作樹，確認哪些變更屬於本次交接；整理相關文件並執行適用驗證，僅對本次任務範圍內、驗證合格且無無關／歸屬不明變更的一般程式碼與文件進行精確 stage、commit、push。不可用 `git add .`，不可覆蓋、reset、強制推送或自動切換分支。**提交前 Fixture 格式相容性檢查：** 若本次一般程式碼／文件變更修改 `scripts/testdata-sync.mjs` 的 `readFixture`／manifest schema 驗證、`scripts/lib/testdata-revision.mjs` 的 revision 驗證，或其他會提高 Fixture manifest 格式要求的路徑，必須在一般 commit 前執行 `npm run testdata:validate:active`；`assertHandoffGitState()` 亦會在偵測到這些同步驗證程式變更時自動呼叫同一驗證函式，確保完整 `commit/push/資料庫` 流程不會漏掉檢查。此命令逐一讀取所有現存 `tc-test-*` fixture，僅對 `active`／`regression_pending` 狀態套用新版完整 manifest、父版本 Git 歷史、資料結構、筆數、敏感欄位與 checksum 驗證，任一此類 fixture 不合格即停止一般 commit/push。驗證成功後，才可提交同步程式／文件；若本次同時修正 fixture manifest，應將精確修正一併納入同一組已驗證變更，確保遠端程式與 fixture 格式相容。此檢查只讀檔案，不連線或修改資料庫；不得因格式驗證而執行 fixture publish。之後在 `develop` 直接執行 `npm run testdata:handoff:publish`；不可先執行 `npm run testdata:handoff`，避免先產生 fixture 差異而觸發安全停止。此 publish 入口自行判斷有無合格 fixture 變更，無變更就略過 commit/push；有變更時只有安全檢查全數通過才會精確提交／推送 fixture。若不在 `develop`、本機 Supabase 不可用、存在無關／歸屬不明變更、驗證失敗或 Git／fixture 安全檢查失敗，停止受影響的寫入操作並回報未完成項目，不可繞過檢查或宣稱已同步。最後提供一般 commit/push、fixture 交接、剩餘未提交內容與接收端接手指引。此流程不是正式發布：不合併 `main`、不部署、不清除資料；一般 commit/push 指令本身仍不授權執行本流程。
 - Git pull 只同步檔案，不代表 Supabase 本機資料庫已同步。若任務涉及資料庫或 migration，另行檢查 `npx supabase status` 與 `npx supabase migration list --local`；確認 Docker／本機 Supabase 正常後，檢視所有待套用 migration SQL，再決定是否執行 `npx supabase migration up --local`。
 - 套用可能刪除／重建資料、改變欄位型別或主鍵、刪欄位／索引、改寫資料、影響附件關聯的 migration 前，必須先建立可辨識且可還原的本機資料備份，並確認備份檔存在且非空。若無法可靠備份、無法確認還原方式，或 migration 會影響 Supabase Storage 物件，先停止並回報，不得冒險執行。一般純新增且不破壞既有資料的 migration 仍須先檢視 SQL 與驗證條件。
 - 不得自動執行 `db reset`、刪除 Docker volume、`migration repair`、`db push --linked` 或其他正式環境寫入操作；正式 Supabase 的部署、資料修復或其他不可逆操作必須先取得使用者明確核准。
@@ -54,7 +70,9 @@
 - 當新版 worker 已是 activated replacement（`registration.active !== previousController`、狀態為 `activated`，且沒有 `waiting`／`installing`），由 `useAppUpdate` 唯一 reload owner 寫入最新版本並直接 reload；不得轉入 `ready-to-reload` 或要求使用者再次點擊。
 - `handoffState === "active"` 且 `registration.active` 已確認為 activated 時，沿用同一個唯一 reload owner 直接 reload；`skipWaiting` 只能送出一次，避免重複接管競態。
 - 只有上述已驗證的 active／controlled 狀態可以完成更新；真正 timeout／error 必須保留目前版本並停止本次流程，不得宣告已更新。不得以靜態 metadata、單純 reload 或延長 timeout 取代 active／handoff 證據。
-- 任何修改 `useAppUpdate`、Service Worker、版本 metadata 或發布流程的工作，都必須更新並通過 `npm run verify:v3924-update-handoff` 與 `npm run verify:v3913-update-race`；不得以靜態 metadata、單純 reload 或單次本機頁面載入取代 active/controller handoff 證據。
+- 每次 `npm run build` 必須執行 `npm run verify:pwa-update-policy`，檢查目前 App／package／公開 metadata 版本與更新設定一致，以及 Vite PWA prompt 模式與版本 metadata 不進入 precache。此腳本只做設定一致性與 build 子測試掛載檢查，不重複實作版本演算法或 Worker lifecycle 測試。
+- PWA 行為測試由既有專責腳本負責：`verify:update-policy`（版本政策演算法）、`verify:v3924-update-handoff`（主動更新與 handoff）、`verify:v31011-pwa-reload-confirmation`（stable replacement、waiting-only、pending marker／新頁面確認）、`verify:v3913-update-race`（更新與行程修訂競態）。這些項目必須保留在 build 鏈中；避免在新測試複製相同案例。若未來經 Product Owner 核准更動政策，才同步調整相關測試與規格。
+- 任何修改 `useAppUpdate`、Service Worker、版本 metadata 或發布流程的工作，除 build 內的 `verify:pwa-update-policy` 外，都必須更新並通過 `npm run verify:v3924-update-handoff`、`npm run verify:v31011-pwa-reload-confirmation` 與 `npm run verify:v3913-update-race`；不得以靜態 metadata、單純 reload 或單次本機頁面載入取代 active/controller handoff 證據。
 
 # 天氣正式鏈路驗證硬性規則
 - 本機 Edge Function 成功不代表正式天氣鏈路成功；正式發布前必須區分 endpoint／授權、Google Places 座標、座標快取、Open-Meteo、lease／RPC、天氣快取寫入及 APP 顯示結果。

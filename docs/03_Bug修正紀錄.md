@@ -4,9 +4,23 @@
 >
 > 重整前的完整 BUG001～BUG031 內容原檔保留於《[archive/bug-history/03_Bug修正紀錄_完整歷史](archive/bug-history/03_Bug修正紀錄_完整歷史.md)》，沒有刪除。
 >
-> 最後整理：2026-10-30
+> 最後整理：2026-11-12
 
 ## 未修正
+
+## 已修正但尚未發布
+
+### BUG038：TRIP 清單讀取轉換失敗，導致本機旅程清單縮減
+
+- 發現日期：2026-11-12。
+- 使用者回報：離線問題已解決，但 Excel 匯入後讀取 TRIP 仍失敗；原本可見的多筆旅程一度只剩一筆。
+- 根因：6/7 筆 cloud Trip 的 `content.daysData` 含合法 `mode: "guided"` metadata。`sanitizeItineraryCoverPhotos` 與 `removeExpiredTravelEstimates` 遍歷所有 `daysData` 值並直接呼叫 `.map()`，遇到 metadata 字串即拋出 `TypeError: items.map is not a function`，令 strict Trip list 整批轉換失敗。soft-failure 隨後回傳空清單。
+- 次級資料保護問題：reconciliation 曾將某次 cloud list 缺席直接當作撤權依據，導致本機既有 Trip cache 被清理。清單查詢失敗／不完整並不等於永久刪除或撤權。
+- 修正：兩個 sanitizer 限定只處理 `content.days` 宣告且確實為 array 的每日欄位；其他 metadata 原樣保留，缺少 `days` 的 legacy record safe no-op。`isTripContent()` 改為檢查宣告日數對應的每日陣列，不再要求 `daysData` 所有 values 都是 array。reconciliation 改為只有明確 permanent tombstone 或既有明確 pending cleanup IDs 才可清除整筆 local Trip。
+- 資料／UI 恢復：Local Supabase RLS 仍可見 7 筆，participant Email map RPC 7/7 成功；修正後 strict cloud list 回傳 7 筆，Trip metas 共 8 個選項（另含 1 筆 static seed），本機 cache 由 1 筆恢復為 7 筆。瀏覽器重新載入後選單顯示 8 個項目，Test TRIP D1–D3 正常顯示。未刪除或新增 local DB rows，未清空 localStorage，未新增第三筆同名 Test TRIP。
+- 回歸驗證：`npm run verify:trip-lifecycle`、`node scripts/verify-v3926-access-revocation.mjs`、`npm run verify:trip-excel-rpc`、`npm run verify:trip-excel-import`、`npm run test:trip-excel-create-service`、`npm run verify:itinerary-travel`、`npm run verify:v390-place-photos`、`npx tsc -p tsconfig.app.json --noEmit`、完整 `npm run build` 均通過。
+- 範圍：保留同一工作樹中先前 Excel 建立及離線恢復相關變更；未操作正式 Supabase DB／Migration／Secrets，未 commit、push 或部署。
+- 狀態：**本機修正、資料恢復及自動化驗證完成；尚未發布。** 詳細根因、檔案範圍與驗證清單見《[107_TRIP清單讀取失敗與資料保護修復紀錄](107_TRIP清單讀取失敗與資料保護修復紀錄.md)》。
 
 ### BUG032：離線前未開啟 Trip 時照片未預載
 
@@ -56,7 +70,10 @@
 
 ### BUG036：天氣文案未完全遵循定稿與仍出現舊訊息
 
-- 回歸測試（2026-10-30，HOWARD-NEWPC／本機隔離驗證）：`npm run verify:v3101-weather-forecast` 通過，確認前後端 W15 使用定稿「目前為長期預報，請於出發前再次確認天氣」，前端不再產生「長期預報，仍可能變動」，Edge Function 不含已撤回的「目前不更新天氣；顯示上次成功取得的資料」分支；`npm run build` 的 `verify:weather-forecast-bundle` 通過，確認定稿文案存在於產物且已撤回文案不存在於前端 JavaScript；Deno `deno check supabase/functions/weather-forecast/index.ts` 通過。**正式 Supabase ACTIVE version／部署原始碼、正式 API response 與正式 UI 本輪均未查驗／未呼叫**，不得據此宣告 BUG036 正式環境已修正；正式部署仍須另行授權並按流程核對。判定：Git 本機原始碼與前端 bundle 契約通過；正式 Edge Function／API／UI 待驗。
+- 驗收結案（2026-11-02）：Product Owner 確認正式環境 API／UI 已通過驗收，定稿 W15「目前為長期預報，請於出發前再次確認天氣」及舊訊息移除均符合預期；BUG036 正式解除。此結案以 Product Owner 的正式驗收確認為依據。既有資料未另保存本次 API response、正式函式 SHA 或驗收截圖，因此不補寫未取得的技術細節。
+
+
+- 本機回歸測試（2026-10-30，HOWARD-NEWPC／隔離驗證）：`npm run verify:v3101-weather-forecast`、`npm run build` 中的 `verify:weather-forecast-bundle` 與 Deno `deno check supabase/functions/weather-forecast/index.ts` 均通過；確認 W15 定稿文案存在，兩句舊文案不再由對應本機程式／bundle 產生。此段僅記錄當時本機驗證範圍；正式環境驗收狀態以後續 2026-11-02 結案紀錄為準。
 - 問題：正式畫面出現使用者已要求移除的「目前不更新天氣；顯示上次成功取得的資料」；另外，定稿 W15「目前為長期預報，請於出發前再次確認天氣」與前端實際顯示的「長期預報，仍可能變動」不一致。
 - 定稿依據：`docs/95_天氣文案校稿與逐項確認紀錄.md` 的 W01–W23 為文案索引；W15 已定稿為「目前為長期預報，請於出發前再次確認天氣」。需遵守文案適用狀態，不得只因文字曾在舊版本出現就沿用。
 - 前端證據：`src/components/ItineraryPage.tsx` 約第 2455–2472 行，`statusMessage` 預設取自 `weather.message`，再依狀態覆蓋訊息；若後端回傳不在前端覆蓋條件中的舊 `message`，前端會保留並顯示它。約第 2503 行仍直接渲染「長期預報，仍可能變動」，與 W15 定稿不一致。
@@ -69,9 +86,12 @@
 - 建議處理：以 W01–W23 作為唯一文案來源，釐清每個後端狀態到文案的映射；移除已撤回訊息的可達分支，校正 W15 前端文字；加入靜態檢查／契約測試，避免舊文案重新進入程式與正式 bundle。部署後以指定卡片情境檢查實際回應與 UI。
 - 電腦限制變更（2026-10-30）：Product Owner 明確解除原先僅允許在 `TPEPC-TM7503-01` 實作的限制，理由是兩台電腦的工作目錄均為乾淨狀態；因此可在目前的 `HOWARD-NEWPC` 實作，不再因主機名稱阻擋本地程式修改。此變更只解除 BUG036 的實作主機限制，不代表正式環境部署已獲授權。
 - 執行順序與交接：先確認本機與 `origin/develop` 同步，再完成 BUG034、BUG035、BUG036、BUG037 的相關回歸測試。程式修正與本機驗證完成後，仍須依正式發布流程，分別核對 GitHub Pages 與正式 `weather-forecast` Edge Function；正式部署原始碼／版本必須與 Git 修正一致，並以實際 API response 和正式 UI 驗證。GitHub Pages 成功不代表 Edge Function 已更新。
-- 狀態修正（2026-10-31）：BUG036 的後端與前端文案修正已完成 Git commit `9a08bd9`（2026-10-30），並已包含於 V3.10.10 Git tag；V3.10.10 正式發布紀錄記載 `weather-forecast` 已部署至 ACTIVE version 15。故 BUG036 不應再標示為「待正式部署」；目前僅保留 ACTIVE version 15 的正式部署原始碼 SHA／Git commit 對照，以及指定 API response、正式 UI 驗收待確認。現有資料未保存 version 15 的部署原始碼 SHA 與指定 API response，不能推定已完整驗收，也不能據此要求再次部署。
+- 歷史狀態修正（2026-10-31）：當時僅確認 Git commit `9a08bd9` 已納入 V3.10.10，發布文件記載 `weather-forecast` 部署至 ACTIVE version 15；因缺少 SHA／API 證據，當時保留正式驗收待確認。此為 2026-10-31 當時狀態，已由 2026-11-02 Product Owner 正式 API／UI 驗收結案更新，不再是目前待辦。
 
 ### BUG037：長期預報的天氣欄位底色不符合已定案規則
+
+- 驗收結案（2026-11-02）：Product Owner 確認修正已部署，並已通過 Android 手機實機驗收；外層天氣欄位淺藍、三點展開的額外狀態訊息淺綠，符合已定案規則。BUG037 正式解除。此結案以 Product Owner 的部署及 Android 實機驗收確認為依據；目前文件未另保存部署 commit／版本及實機截圖，不補寫未取得的技術細節。
+
 
 - 問題：長期預報整個天氣欄位使用淺綠底色；需求是所有天氣預報欄位統一淺藍底色，只有點擊三個點後展開的額外狀態訊息使用淺綠底色。
 - 前端證據：`src/components/ItineraryPage.tsx` 約第 2447 行的外層天氣容器，會在 `long_range` 或 `isLongRangeForecast(...)` 成立時套用 `border-emerald-100 bg-emerald-50`；約第 2489 行的三點展開訊息本身另有獨立 `border-emerald-100 bg-emerald-50`。因此目前長期預報的綠底是外層容器明確套用的條件結果，不是三點訊息樣式向外繼承。
@@ -79,8 +99,8 @@
 - 影響：預報類別意外改變整個欄位的視覺語意，且與使用者明確要求不符。
 - 建議處理：將外層容器底色規則與三點展開訊息分離；外層天氣預報容器固定淺藍，展開訊息固定淺綠。長期預報提醒文字也應同步核對 BUG036 的 W15 定稿。
 - 本次修正：天氣欄位外層容器固定使用 `border-sky-100 bg-sky-50 text-slate-700`；移除長期預報／歷史快取狀態對外層底色的切換條件。三點展開的額外狀態訊息維持獨立淺綠底色，不改變其他文案或 BUG036 範圍。
-- 本機驗證：`npm run verify:v3101-weather-forecast` 已通過，並以完整 `npm run build` 通過專項與既有回歸、目的地時區資格測試、TypeScript、production build 及 browser-security。未執行正式部署；正式網站 UI 與裝置實測待發布流程補驗。
-- 狀態：程式修正與本機自動化驗證完成；未部署，待既有發布流程驗收。
+- 本機驗證：`npm run verify:v3101-weather-forecast` 已通過，並以完整 `npm run build` 通過專項與既有回歸、目的地時區資格測試、TypeScript、production build 及 browser-security。
+- 正式驗收結案（2026-11-02）：Product Owner 確認修正已部署，且 Android 手機實機驗收通過。此為正式部署／裝置驗收的最終狀態；先前「未部署、待補驗」僅代表當時本機驗證階段，已由本次結案更新。
 
 ## 已解除／不再列入待驗
 

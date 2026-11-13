@@ -1,6 +1,18 @@
-import { useState } from "react";
-import type { FormEvent } from "react";
-import { AlertTriangle, Save, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import type { ChangeEvent, FormEvent } from "react";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  FileSpreadsheet,
+  LoaderCircle,
+  Save,
+  X,
+} from "lucide-react";
+import {
+  parseTripExcelWorkbook,
+  type ParsedTripExcel,
+  type TripExcelValidationIssue,
+} from "../services/tripExcelImport";
 import type {
   AdminProfile,
   TripDetail,
@@ -14,18 +26,35 @@ import {
   type RemovedDayImpact,
 } from "../utils/tripHelpers";
 import { isProtectedSeedTripId } from "../constants/appConstants";
+import {
+  createInitialTripExcelPendingRequest,
+  getTripExcelRecoveryDelay,
+  isTripExcelPendingRequest,
+  TRIP_EXCEL_CREATE_RECOVERY_DELAY_MS,
+  type TripExcelPendingRequest,
+} from "../services/tripExcelCreateRetry";
 
 interface TripEditorModalProps {
   mode: "create" | "edit";
+  defaultCurrencyCode: string;
+  defaultCurrencySymbol: string;
   trip: TripMeta | null;
   tripDetail: TripDetail | null;
   editorEmails: string[];
   superAdminEmails: string[];
   defaultParticipantProfiles: AdminProfile[];
   canManageEditors: boolean;
+  userId: string | null;
   isOpen: boolean;
   onClose: () => void;
   onSubmit: (input: TripEditorInput) => Promise<void>;
+  onCreateFromExcel: (
+    workbook: ParsedTripExcel,
+    requestId: string,
+    currencyCode: string,
+    currencySymbol: string,
+    lookupOnly?: boolean,
+  ) => Promise<void>;
   onDelete?: () => Promise<void>;
   historicalTripEndDate?: string;
 }
@@ -46,6 +75,77 @@ const splitLines = (value: string): string[] => {
 };
 
 const toTextareaValue = (items: string[]): string => items.join("\n");
+
+const EXCEL_PENDING_REQUEST_KEY = "tc_v311_excel_pending_request";
+
+const getExcelRequestFingerprint = async (
+  workbook: ParsedTripExcel,
+  currencyCode: string,
+  currencySymbol: string,
+): Promise<string> => {
+  const payload = JSON.stringify({
+    title: workbook.title.trim(),
+    departureDate: workbook.departureDate,
+    cards: workbook.cards.map(({ day, item }) => ({
+      day,
+      time: item.time,
+      departureTime: item.departureTime,
+      title: item.title,
+      type: item.type,
+      desc: item.desc ?? "",
+    })),
+    currencyCode,
+    currencySymbol,
+  });
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(payload),
+  );
+  return Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+};
+
+const readPendingExcelRequest = (): TripExcelPendingRequest | null => {
+  try {
+    const raw = localStorage.getItem(EXCEL_PENDING_REQUEST_KEY);
+    if (!raw) return null;
+    const parsed: unknown = JSON.parse(raw);
+    return isTripExcelPendingRequest(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+};
+
+const writePendingExcelRequest = (pending: TripExcelPendingRequest): boolean => {
+  try {
+    localStorage.setItem(EXCEL_PENDING_REQUEST_KEY, JSON.stringify(pending));
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+const clearPendingExcelRequest = (requestId: string): void => {
+  const pending = readPendingExcelRequest();
+  if (pending?.requestId !== requestId) return;
+  try {
+    localStorage.removeItem(EXCEL_PENDING_REQUEST_KEY);
+  } catch {
+    // A stale local record is harmless after the request has been verified.
+  }
+};
+
+const getPendingExcelRequest = (
+  userId: string,
+  fingerprint: string,
+): TripExcelPendingRequest => {
+  const pending = readPendingExcelRequest();
+  return pending?.userId === userId && pending.fingerprint === fingerprint
+    ? pending
+    : createInitialTripExcelPendingRequest(userId, fingerprint, crypto.randomUUID());
+};
+
 
 const toParticipantAssignmentText = (
   participants: string[],
@@ -116,15 +216,19 @@ const getInitialTripMode = (
 
 export const TripEditorModal = ({
   mode,
+  defaultCurrencyCode,
+  defaultCurrencySymbol,
   trip,
   tripDetail,
   editorEmails,
   superAdminEmails,
   defaultParticipantProfiles,
   canManageEditors,
+  userId,
   isOpen,
   onClose,
   onSubmit,
+  onCreateFromExcel,
   onDelete,
   historicalTripEndDate,
 }: TripEditorModalProps) => {
@@ -152,10 +256,10 @@ export const TripEditorModal = ({
     toTextareaValue(editorEmails),
   );
   const [currencyCode, setCurrencyCode] = useState(
-    trip?.currencyConfig.code ?? "TWD",
+    trip?.currencyConfig.code ?? defaultCurrencyCode,
   );
   const [currencySymbol, setCurrencySymbol] = useState(
-    trip?.currencyConfig.symbol ?? "NT$",
+    trip?.currencyConfig.symbol ?? defaultCurrencySymbol,
   );
   const [formError, setFormError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
@@ -165,14 +269,297 @@ export const TripEditorModal = ({
     impacts: RemovedDayImpact[];
   } | null>(null);
   const [shrinkConfirmationStep, setShrinkConfirmationStep] = useState<1 | 2>(1);
+  const [creationMethod, setCreationMethod] = useState<"manual" | "excel">("manual");
+  const [isExcelCancelHovered, setIsExcelCancelHovered] = useState(false);
+  const [isExcelCancelFocused, setIsExcelCancelFocused] = useState(false);
+  const isExcelCancelActive = isExcelCancelHovered || isExcelCancelFocused;
+  const [excelPreview, setExcelPreview] = useState<ParsedTripExcel | null>(null);
+  const [excelIssues, setExcelIssues] = useState<TripExcelValidationIssue[]>([]);
+  const [excelFileName, setExcelFileName] = useState("");
+  const [isParsingExcel, setIsParsingExcel] = useState(false);
+  const [excelRequestId, setExcelRequestId] = useState<string | null>(null);
+  const [isExcelResultUnconfirmed, setIsExcelResultUnconfirmed] = useState(false);
+  const [isExcelWaitingForConfirmation, setIsExcelWaitingForConfirmation] = useState(false);
+  const [canReimportExcel, setCanReimportExcel] = useState(false);
+  const excelRequestFingerprintRef = useRef<string | null>(null);
+  const excelInputRef = useRef<HTMLInputElement | null>(null);
+  const excelRecoveryTimerRef = useRef<number | null>(null);
+  const handleExcelCreateRef = useRef<
+    (action: "create" | "lookup" | "reimport") => Promise<void>
+  >(async () => undefined);
 
-  if (!isOpen) return null;
+  useEffect(() => () => {
+    if (excelRecoveryTimerRef.current !== null) {
+      window.clearTimeout(excelRecoveryTimerRef.current);
+    }
+  }, []);
+
+  const scheduleExcelRecoveryLookup = (
+    pending: TripExcelPendingRequest,
+    delay: number,
+  ) => {
+    if (excelRecoveryTimerRef.current !== null) {
+      window.clearTimeout(excelRecoveryTimerRef.current);
+    }
+    setIsExcelWaitingForConfirmation(true);
+    excelRecoveryTimerRef.current = window.setTimeout(() => {
+      excelRecoveryTimerRef.current = null;
+      void handleExcelCreateRef.current("lookup");
+    }, delay);
+    // Keep the timer associated with this exact request.
+    excelRequestFingerprintRef.current = pending.fingerprint;
+  };
+
+  const handleExcelFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    setExcelPreview(null);
+    setExcelIssues([]);
+    setExcelFileName(file?.name ?? "");
+    setExcelRequestId(null);
+    setIsExcelResultUnconfirmed(false);
+    setIsExcelWaitingForConfirmation(false);
+    setCanReimportExcel(false);
+    excelRequestFingerprintRef.current = null;
+    if (excelRecoveryTimerRef.current !== null) {
+      window.clearTimeout(excelRecoveryTimerRef.current);
+      excelRecoveryTimerRef.current = null;
+    }
+    if (!file) return;
+    if (!canManageEditors || !userId) {
+      setExcelIssues([{
+        worksheet: "新增 TRIP",
+        row: 1,
+        field: "權限",
+        message: "只有已登入的 Super Admin 可以使用 Excel 建立 TRIP。",
+      }]);
+      return;
+    }
+    if (!file.name.toLowerCase().endsWith(".xlsx")) {
+      setExcelIssues([{
+        worksheet: "新增 TRIP",
+        row: 1,
+        field: "檔案",
+        message: "請選擇 .xlsx 格式的 Excel 檔案。",
+      }]);
+      return;
+    }
+
+    setIsParsingExcel(true);
+    try {
+      const result = await parseTripExcelWorkbook(await file.arrayBuffer());
+      if (result.success) {
+        const selectedCurrencyCode = defaultCurrencyCode.trim();
+        const selectedCurrencySymbol = defaultCurrencySymbol.trim();
+        const fingerprint = await getExcelRequestFingerprint(
+          result.data,
+          selectedCurrencyCode,
+          selectedCurrencySymbol,
+        );
+        const storedPending = readPendingExcelRequest();
+        if (storedPending && storedPending.userId !== userId) {
+          clearPendingExcelRequest(storedPending.requestId);
+        } else if (
+          storedPending &&
+          storedPending.userId === userId &&
+          storedPending.fingerprint !== fingerprint
+        ) {
+          setExcelIssues([{
+            worksheet: "新增 TRIP",
+            row: 1,
+            field: "待確認請求",
+            message: "目前有另一份 Excel 的建立結果尚未確認。請先選取原本的 Excel，完成確認後再匯入其他檔案。",
+          }]);
+          return;
+        }
+
+        const pendingRequest = getPendingExcelRequest(userId, fingerprint);
+        setExcelPreview(result.data);
+        excelRequestFingerprintRef.current = fingerprint;
+        setExcelRequestId(pendingRequest.requestId);
+
+        const hasStoredPending = storedPending?.userId === userId &&
+          storedPending.fingerprint === fingerprint;
+        if (hasStoredPending) {
+          setIsExcelResultUnconfirmed(true);
+          if (pendingRequest.lookupAttempted) {
+            setCanReimportExcel(true);
+          } else {
+            scheduleExcelRecoveryLookup(
+              pendingRequest,
+              getTripExcelRecoveryDelay(pendingRequest),
+            );
+          }
+        }
+      } else {
+        setExcelIssues(result.issues);
+      }
+    } catch {
+      setExcelIssues([{
+        worksheet: "新增 TRIP",
+        row: 1,
+        field: "工作簿",
+        message: "讀取檔案時發生錯誤，請確認檔案完整後再試。",
+      }]);
+    } finally {
+      setIsParsingExcel(false);
+      event.target.value = "";
+    }
+  };
 
   const handleCurrencyChange = (code: string) => {
     const selectedCurrency = CURRENCY_OPTIONS.find((item) => item.code === code);
     setCurrencyCode(code);
     setCurrencySymbol(selectedCurrency?.symbol ?? "");
+    if (excelPreview) {
+      void getExcelRequestFingerprint(excelPreview, code, selectedCurrency?.symbol ?? "")
+        .then((fingerprint) => {
+          if (!userId) return;
+          const storedPending = readPendingExcelRequest();
+          if (storedPending?.userId === userId && storedPending.fingerprint !== fingerprint) {
+            setExcelRequestId(null);
+            setFormError("目前有另一份 Excel 的建立結果尚未確認，請先完成原請求確認。");
+            return;
+          }
+          const pendingRequest = getPendingExcelRequest(userId, fingerprint);
+          excelRequestFingerprintRef.current = fingerprint;
+          setExcelRequestId(pendingRequest.requestId);
+          setIsExcelResultUnconfirmed(pendingRequest.resultUnconfirmedAt !== null);
+          setCanReimportExcel(pendingRequest.lookupAttempted);
+        })
+        .catch(() => {
+          setExcelRequestId(null);
+          setFormError("無法建立安全的重試識別碼，請重新載入 Excel 檔案。");
+        });
+    }
   };
+
+  const handleExcelCreate = async (action: "create" | "lookup" | "reimport" = "create") => {
+    if (!excelPreview || !canManageEditors || !userId || isSaving) return;
+    if (action === "lookup" && !excelRequestId) return;
+    if (action === "create" && (isExcelWaitingForConfirmation || isExcelResultUnconfirmed)) return;
+
+    if (action === "reimport") {
+      const confirmed = window.confirm(
+        "上一次建立可能已在雲端成功。重新匯入可能產生重複旅程；若出現重複，請自行檢查旅程清單並選擇、刪除多餘旅程。確定要重新匯入嗎？",
+      );
+      if (!confirmed) return;
+      const oldPending = readPendingExcelRequest();
+      if (oldPending?.userId === userId) clearPendingExcelRequest(oldPending.requestId);
+      setCanReimportExcel(false);
+      setIsExcelResultUnconfirmed(false);
+      setIsExcelWaitingForConfirmation(false);
+    }
+
+    const selectedCurrencyCode = defaultCurrencyCode.trim();
+    const selectedCurrencySymbol = defaultCurrencySymbol.trim();
+    if (!selectedCurrencyCode || !selectedCurrencySymbol) {
+      setFormError("目前新增 TRIP 的預設幣別設定不完整，Excel 建立已停止。");
+      return;
+    }
+
+    setFormError("");
+    setIsSaving(true);
+    setIsExcelWaitingForConfirmation(action === "lookup");
+    releaseFocusedControl();
+    let pendingForRecovery: TripExcelPendingRequest | null = null;
+    let lookupStarted = false;
+    try {
+      const fingerprint = await getExcelRequestFingerprint(
+        excelPreview,
+        selectedCurrencyCode,
+        selectedCurrencySymbol,
+      );
+      const pending = action === "reimport"
+        ? createInitialTripExcelPendingRequest(userId, fingerprint, crypto.randomUUID())
+        : getPendingExcelRequest(userId, fingerprint);
+      pendingForRecovery = pending;
+
+      if (action === "lookup" && pending.lookupAttempted) {
+        setCanReimportExcel(true);
+        setIsExcelWaitingForConfirmation(false);
+        return;
+      }
+      if (action === "lookup") {
+        pending.lookupAttempted = true;
+      }
+
+      if (!writePendingExcelRequest(pending)) {
+        throw new Error("無法保存待確認請求，為避免失去原 request ID，已停止送出建立請求。請確認瀏覽器儲存空間後重試。");
+      }
+      lookupStarted = action === "lookup";
+
+      excelRequestFingerprintRef.current = fingerprint;
+      setExcelRequestId(pending.requestId);
+
+      await onCreateFromExcel(
+        excelPreview,
+        pending.requestId,
+        selectedCurrencyCode,
+        selectedCurrencySymbol,
+        action === "lookup",
+      );
+
+      clearPendingExcelRequest(pending.requestId);
+      setExcelRequestId(null);
+      setExcelPreview(null);
+      setIsExcelResultUnconfirmed(false);
+      setIsExcelWaitingForConfirmation(false);
+      setCanReimportExcel(false);
+      excelRequestFingerprintRef.current = null;
+    } catch (error) {
+      const errorCode = error instanceof Error && "code" in error
+        ? String(error.code)
+        : "";
+      if (errorCode === "RESULT_UNCONFIRMED" && pendingForRecovery) {
+        setIsExcelResultUnconfirmed(true);
+        if (action === "lookup") {
+          pendingForRecovery.lookupAttempted = true;
+          setCanReimportExcel(true);
+          setIsExcelWaitingForConfirmation(false);
+        } else {
+          pendingForRecovery.resultUnconfirmedAt = Date.now();
+          pendingForRecovery.lookupAttempted = false;
+        }
+        if (!writePendingExcelRequest(pendingForRecovery)) {
+          setCanReimportExcel(false);
+          setFormError("無法更新待確認紀錄，請勿重新匯入，以免產生重複旅程。請確認瀏覽器儲存空間後重新開啟原 Excel 流程。");
+          if (action !== "lookup") {
+            scheduleExcelRecoveryLookup(pendingForRecovery, TRIP_EXCEL_CREATE_RECOVERY_DELAY_MS);
+          }
+        } else if (action !== "lookup") {
+          scheduleExcelRecoveryLookup(pendingForRecovery, TRIP_EXCEL_CREATE_RECOVERY_DELAY_MS);
+          setFormError("");
+        }
+      } else if (errorCode === "REFRESH_UNCONFIRMED") {
+        if (pendingForRecovery) clearPendingExcelRequest(pendingForRecovery.requestId);
+        setExcelRequestId(null);
+        setIsExcelResultUnconfirmed(false);
+        setIsExcelWaitingForConfirmation(false);
+        setCanReimportExcel(false);
+        setFormError("雲端已確認建立成功，但旅程清單尚未更新。請重新整理頁面確認；不要再次匯入，以免產生重複旅程。");
+      } else if (action !== "lookup") {
+        if (pendingForRecovery) clearPendingExcelRequest(pendingForRecovery.requestId);
+        setIsExcelResultUnconfirmed(false);
+        setIsExcelWaitingForConfirmation(false);
+        setCanReimportExcel(false);
+        setFormError(error instanceof Error ? error.message : "Excel 建立失敗，請檢查資料後再試。");
+      } else {
+        setIsExcelWaitingForConfirmation(false);
+        if (lookupStarted) {
+          setIsExcelResultUnconfirmed(true);
+          setCanReimportExcel(true);
+        } else {
+          setCanReimportExcel(false);
+        }
+        setFormError(error instanceof Error ? error.message : "第二次查詢未能確認建立結果；上一次建立仍可能成功，重新匯入前請留意重複旅程風險。");
+      }
+    } finally {
+      setIsSaving(false);
+    }
+  };
+  useEffect(() => {
+    handleExcelCreateRef.current = handleExcelCreate;
+  });
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -305,6 +692,8 @@ export const TripEditorModal = ({
     setIsDeleting(false);
   };
 
+  if (!isOpen) return null;
+
   if (pendingShrink) {
     const originalDayCount = tripDetail?.content.days.length ?? dayCount;
     const firstDay = pendingShrink.impacts[0].day;
@@ -416,21 +805,233 @@ export const TripEditorModal = ({
           <h2 className="text-lg font-bold text-slate-900">
             {mode === "create" ? "新增旅程" : "編輯旅程"}
           </h2>
-          <button
-            type="button"
-            onClick={() => {
-              releaseFocusedControl();
-              onClose();
-            }}
-            className="p-2 rounded-full text-slate-500 hover:bg-slate-100"
-            aria-label="關閉"
-            title="關閉"
-          >
-            <X size={18} />
-          </button>
+          {!(mode === "create" && creationMethod === "excel") && (
+            <button
+              type="button"
+              onClick={() => {
+                releaseFocusedControl();
+                onClose();
+              }}
+              disabled={isSaving}
+              className="p-2 rounded-full text-slate-500 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
+              aria-label="關閉"
+              title="關閉"
+            >
+              <X size={18} />
+            </button>
+          )}
         </div>
 
-        {historicalTripEndDate && (
+        {mode === "create" && creationMethod !== "excel" && (
+          <section className="rounded-xl border border-slate-200 p-3">
+            <p className="text-sm font-bold text-slate-700">建立方式</p>
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setCreationMethod("manual");
+                  setExcelPreview(null);
+                  setExcelIssues([]);
+                  setExcelRequestId(null);
+                  setIsExcelResultUnconfirmed(false);
+                  excelRequestFingerprintRef.current = null;
+                }}
+                className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-sm font-semibold text-emerald-800 shadow-sm transition-all duration-150 hover:-translate-y-0.5 hover:border-emerald-300 hover:bg-emerald-100 hover:shadow-md active:translate-y-0 active:scale-[0.97] active:shadow-inner focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 focus-visible:ring-offset-2 has-[+button:hover]:border-slate-200 has-[+button:hover]:bg-white has-[+button:hover]:text-slate-700 has-[+button:focus-visible]:border-slate-200 has-[+button:focus-visible]:bg-white has-[+button:focus-visible]:text-slate-700"
+              >
+                手動新增
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setCreationMethod("excel");
+                  setExcelPreview(null);
+                  setExcelIssues([]);
+                  setExcelRequestId(null);
+                  setIsExcelResultUnconfirmed(false);
+                  excelRequestFingerprintRef.current = null;
+                }}
+                disabled={!canManageEditors}
+                className="rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-700 transition-all duration-150 hover:-translate-y-0.5 hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-800 hover:shadow-md active:translate-y-0 active:scale-[0.97] active:shadow-inner focus-visible:border-emerald-200 focus-visible:bg-emerald-50 focus-visible:text-emerald-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <span className="inline-flex items-center justify-center gap-1.5">
+                  <FileSpreadsheet size={16} /> Excel 建立
+                </span>
+              </button>
+            </div>
+            {!canManageEditors && (
+              <p className="mt-2 text-xs text-slate-500">Excel 建立僅限 Super Admin 使用。</p>
+            )}
+          </section>
+        )}
+
+        {mode === "create" && creationMethod === "excel" ? (
+          <section className="space-y-3">
+            <div>
+              <p className="text-sm font-bold text-slate-800">匯入標準 Excel 範本</p>
+              <p className="mt-1 text-xs leading-5 text-slate-500">
+                請使用 V1 標準範本。系統先完整驗證，再顯示預覽；建立時會以單一雲端交易建立全新 TRIP。
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => excelInputRef.current?.click()}
+              disabled={isSaving || isParsingExcel}
+              className={`inline-flex w-full items-center justify-center gap-2 rounded-lg border px-4 py-3 text-sm font-bold shadow-sm transition active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${isExcelCancelActive ? "border-slate-200 bg-white text-slate-700" : "border-emerald-200 bg-emerald-50 text-emerald-800 hover:border-emerald-300 hover:bg-emerald-100"}`}
+            >
+              <FileSpreadsheet size={17} />
+              {excelFileName ? "重新選擇 Excel 檔案" : "選擇 Excel 檔案"}
+            </button>
+            <input
+              ref={excelInputRef}
+              type="file"
+              accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+              onChange={handleExcelFileChange}
+              disabled={isSaving || isParsingExcel}
+              className="hidden"
+              aria-label="選擇新增 TRIP Excel 檔案"
+            />
+            {excelFileName && (
+              <div
+                aria-live="polite"
+                className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800"
+              >
+                {isParsingExcel ? (
+                  <LoaderCircle size={15} className="shrink-0 animate-spin" />
+                ) : excelPreview ? (
+                  <CheckCircle2 size={15} className="shrink-0" />
+                ) : (
+                  <FileSpreadsheet size={15} className="shrink-0" />
+                )}
+                <span className="min-w-0 break-all">
+                  {isParsingExcel
+                    ? `正在驗證：${excelFileName}`
+                    : excelPreview
+                      ? `已選取並完成驗證：${excelFileName}`
+                      : `已選取：${excelFileName}`}
+                </span>
+              </div>
+            )}
+            {excelIssues.length > 0 && (
+              <div role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-3">
+                <p className="text-sm font-bold text-rose-800">Excel 驗證失敗，尚未建立任何 TRIP。</p>
+                <ul className="mt-2 space-y-1 text-xs text-rose-700">
+                  {excelIssues.map((issue, index) => (
+                    <li key={`${issue.worksheet}-${issue.row}-${issue.field}-${index}`}>
+                      {issue.worksheet} 第 {issue.row} 列／{issue.field}：{issue.message}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {excelPreview && (
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50/40 p-3">
+                <p className="text-sm font-bold text-slate-900">預覽資料</p>
+                <dl className="mt-2 grid grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <dt className="text-xs text-slate-500">TRIP 名稱</dt>
+                    <dd className="font-semibold text-slate-800">{excelPreview.title}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-slate-500">出發日期</dt>
+                    <dd className="font-semibold text-slate-800">{excelPreview.departureDate}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-slate-500">旅程天數</dt>
+                    <dd className="font-semibold text-slate-800">{excelPreview.dayCount} 天</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-slate-500">行程卡片</dt>
+                    <dd className="font-semibold text-slate-800">{excelPreview.cardCount} 張</dd>
+                  </div>
+                </dl>
+                <div className="mt-3 space-y-2">
+                  {excelPreview.days.map((day) => {
+                    const items = excelPreview.daysData[String(day)] ?? [];
+                    return (
+                      <div key={day} className="rounded-lg border border-slate-200 bg-white p-2.5">
+                        <div className="flex items-center justify-between">
+                          <p className="text-sm font-bold text-slate-800">第 {day} 天</p>
+                          <span className="text-xs text-slate-500">{items.length} 張卡片</span>
+                        </div>
+                        {items.length > 0 ? (
+                          <ul className="mt-1 space-y-1">
+                            {items.map((item) => (
+                              <li key={item.id} className="text-xs leading-5 text-slate-700">
+                                <span className="font-semibold">{item.time}–{item.departureTime}</span>
+                                {" · "}{item.title}
+                                <span className="ml-1 text-slate-500">（{item.type}）</span>
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="mt-1 text-xs text-slate-400">此日沒有卡片，將保留為空白日。</p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs leading-5 text-amber-900">
+                  本次新 TRIP 將使用系統預設幣別：<strong>{defaultCurrencyCode}（{defaultCurrencySymbol}）</strong>。
+                  此設定不會從 Excel 讀取，請留意旅程目的地所使用的幣別。
+                  {isExcelWaitingForConfirmation && " 建立結果尚未確認，系統會在 30 秒後自動查詢一次，請稍候。"}
+                  {canReimportExcel && " 第二次查詢後仍無法確認上一次結果。上一次建立可能已成功；重新匯入可能產生重複旅程，若發現重複，請自行檢查、選擇並刪除多餘旅程。"}
+                  {isExcelResultUnconfirmed && !isExcelWaitingForConfirmation && !canReimportExcel && " 建立結果尚未確認，請勿重新匯入；請依上方提示恢復網路／登入狀態後，再開啟原 Excel 流程確認。"}
+                </div>
+                {formError && (
+                  <div role="alert" className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700">
+                    {formError}
+                  </div>
+                )}
+                {canReimportExcel ? (
+                  <button
+                    type="button"
+                    onClick={() => void handleExcelCreate("reimport")}
+                    disabled={isSaving || !canManageEditors}
+                    className="mt-3 w-full rounded-lg bg-amber-700 px-4 py-3 text-sm font-bold text-white hover:bg-amber-800 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-600"
+                  >
+                    再次匯入（可能產生重複旅程）
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => void handleExcelCreate("create")}
+                    disabled={!excelRequestId || isSaving || !canManageEditors || isExcelResultUnconfirmed}
+                    className="mt-3 w-full rounded-lg bg-emerald-700 px-4 py-3 text-sm font-bold text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-600"
+                  >
+                    {isSaving
+                      ? (isExcelWaitingForConfirmation ? "正在確認建立結果，請稍候…" : "正在建立並確認雲端資料…")
+                      : isExcelResultUnconfirmed ? "等待確認結果…" : "建立 TRIP"}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    // Leaving the UI does not cancel an in-flight cloud request.
+                    // Keep the minimal request identity in localStorage for recovery.
+                    setExcelPreview(null);
+                    setExcelIssues([]);
+                    setExcelFileName("");
+                    setExcelRequestId(null);
+                    setIsExcelResultUnconfirmed(false);
+                    setIsExcelWaitingForConfirmation(false);
+                    setCanReimportExcel(false);
+                    if (excelRecoveryTimerRef.current !== null) {
+                      window.clearTimeout(excelRecoveryTimerRef.current);
+                      excelRecoveryTimerRef.current = null;
+                    }
+                    setFormError("");
+                    excelRequestFingerprintRef.current = null;
+                    setCreationMethod("manual");
+                  }}
+                  disabled={isSaving}
+                  className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:border-slate-400 hover:bg-slate-50 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  離開匯入流程，返回建立方式
+                </button>
+              </div>
+            )}
+          </section>
+        ) : historicalTripEndDate && (
           <section className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">
             <p className="font-bold">正在編輯歷史行程</p>
             <p className="mt-1 leading-6 text-amber-800">
@@ -439,6 +1040,21 @@ export const TripEditorModal = ({
           </section>
         )}
 
+        {mode === "create" && creationMethod === "excel" ? (
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={isSaving}
+            onMouseEnter={() => setIsExcelCancelHovered(true)}
+            onMouseLeave={() => setIsExcelCancelHovered(false)}
+            onFocus={() => setIsExcelCancelFocused(true)}
+            onBlur={() => setIsExcelCancelFocused(false)}
+            className={`w-full rounded-lg border px-4 py-3 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${isExcelCancelActive ? "border-emerald-200 bg-emerald-50 text-emerald-800 hover:border-emerald-300 hover:bg-emerald-100" : "border-slate-300 bg-white text-slate-700"}`}
+          >
+            取消
+          </button>
+        ) : (
+          <>
         {formError && (
           <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700">
             {formError}
@@ -610,6 +1226,8 @@ export const TripEditorModal = ({
               </p>
             )}
           </div>
+        )}
+          </>
         )}
       </form>
     </div>

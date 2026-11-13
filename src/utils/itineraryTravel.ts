@@ -193,26 +193,30 @@ export const removeExpiredTravelEstimates = (
   now = Date.now(),
 ): TripDetail["content"] => {
   let changed = false;
+  const declaredDays = new Set(Array.isArray(content.days) ? content.days.map(String) : []);
   const daysData = Object.fromEntries(
-    Object.entries(content.daysData).map(([day, items]) => [
-      day,
-      items.map((item) => {
-        if (!item.travelToNext) return item;
-        const preferredMode = getPreferredTravelMode(item);
-        const itemWithPreference = item.travelModeToNext === preferredMode
-          ? item
-          : (() => {
-              changed = true;
-              return { ...item, travelModeToNext: preferredMode };
-            })();
-        const expiresAt = new Date(item.travelToNext.expiresAt).getTime();
-        if (Number.isFinite(expiresAt) && expiresAt > now) return itemWithPreference;
-        changed = true;
-        const nextItem = { ...itemWithPreference };
-        delete nextItem.travelToNext;
-        return nextItem;
-      }),
-    ]),
+    Object.entries(content.daysData).map(([day, items]) => {
+      if (!declaredDays.has(day) || !Array.isArray(items)) return [day, items];
+      return [
+        day,
+        items.map((item) => {
+          if (!item.travelToNext) return item;
+          const preferredMode = getPreferredTravelMode(item);
+          const itemWithPreference = item.travelModeToNext === preferredMode
+            ? item
+            : (() => {
+                changed = true;
+                return { ...item, travelModeToNext: preferredMode };
+              })();
+          const expiresAt = new Date(item.travelToNext.expiresAt).getTime();
+          if (Number.isFinite(expiresAt) && expiresAt > now) return itemWithPreference;
+          changed = true;
+          const nextItem = { ...itemWithPreference };
+          delete nextItem.travelToNext;
+          return nextItem;
+        }),
+      ];
+    }),
   );
 
   return changed ? { ...content, daysData } : content;

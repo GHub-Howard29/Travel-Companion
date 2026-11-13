@@ -43,17 +43,21 @@ export const sanitizeItineraryCoverPhotos = (
   content: TripDetail["content"],
 ): TripDetail["content"] => {
   let changed = false;
+  const declaredDays = new Set(Array.isArray(content.days) ? content.days.map(String) : []);
   const daysData = Object.fromEntries(
-    Object.entries(content.daysData).map(([day, items]) => [
-      day,
-      items.map((item) => {
-        if (item.coverPhoto === undefined || isItineraryCoverPhoto(item.coverPhoto)) return item;
-        changed = true;
-        const nextItem = { ...item };
-        delete nextItem.coverPhoto;
-        return nextItem;
-      }),
-    ]),
+    Object.entries(content.daysData).map(([day, items]) => {
+      if (!declaredDays.has(day) || !Array.isArray(items)) return [day, items];
+      return [
+        day,
+        items.map((item) => {
+          if (item.coverPhoto === undefined || isItineraryCoverPhoto(item.coverPhoto)) return item;
+          changed = true;
+          const nextItem = { ...item };
+          delete nextItem.coverPhoto;
+          return nextItem;
+        }),
+      ];
+    }),
   );
   return changed ? { ...content, daysData } : content;
 };

@@ -12,7 +12,9 @@ assert.match(workspace,/getTripDetail\([\s\S]*workspaceEpochRef\.current === exp
 assert.match(app,/handleLogout = async[\s\S]*invalidateWorkspaceAccess\(\)/);
 assert.match(app,/handleLogout = async[\s\S]*clearSharedTripDataAfterAccessLoss/);
 assert.match(shared,/clearItineraryCoverOfflineCache\(tripId\)/);
-assert.match(reconciliation,/inaccessibleTripIds[\s\S]*!cloudIds\.has\(record\.meta\.id\)/);
+assert.match(reconciliation,/Only a permanent tombstone authorizes full local Trip removal/);
+assert.doesNotMatch(reconciliation,/inaccessibleTripIds|!cloudIds\.has\(record\.meta\.id\)/);
+assert.match(reconciliation,/const tombstonedStoredIds = storedRecords[\s\S]*tombstoneIds\.has\(record\.meta\.id\)/);
 assert.doesNotMatch(reconciliation,/const legacyResidualIds = state\.legacyRepairCompleted/);
 assert.match(workspace,/window\.addEventListener\("storage", onTripCacheChanged\)/);
 assert.match(workspace,/event\.key !== "travel_companion_custom_trips"/);

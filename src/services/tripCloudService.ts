@@ -128,10 +128,20 @@ const isTripContent = (value: unknown): value is TripDetail["content"] => {
   if (!value || typeof value !== "object") return false;
   const content = value as TripDetail["content"];
 
-  return (
-    Array.isArray(content.days) &&
-    Boolean(content.daysData) &&
-    typeof content.daysData === "object"
+  if (
+    !Array.isArray(content.days) ||
+    !content.daysData ||
+    typeof content.daysData !== "object" ||
+    Array.isArray(content.daysData)
+  ) {
+    return false;
+  }
+
+  // daysData may contain legacy metadata such as "mode" alongside day arrays.
+  // Validate only keys declared in content.days; do not reject the whole Trip
+  // because an auxiliary metadata property is not an itinerary array.
+  return content.days.every((day) =>
+    Array.isArray((content.daysData as Record<string, unknown>)[String(day)]),
   );
 };
 

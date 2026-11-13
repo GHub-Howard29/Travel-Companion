@@ -14,6 +14,17 @@ export type VersionHistoryItem = {
 
 export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
+    version: "3.10.12",
+    date: "2026-11-01",
+    isMandatoryRelease: false,
+    notes: [
+      "每日行程卡片新增雲端重新驗證、離線 pending 保護與逐筆衝突處理。",
+      "新增卡片編輯租約，避免不同裝置同時修改同一張卡片。",
+      "背景同步不再顯示短暫同步提示，保留手動操作回饋與錯誤訊息。",
+      "改善變更摘要更新方式，避免摘要畫面閃動。",
+    ],
+  },
+  {
     version: "3.10.11",
     date: "2026-10-31",
     isMandatoryRelease: false,

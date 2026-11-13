@@ -5,13 +5,14 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } fro
 import { createClient } from "@supabase/supabase-js";
 
 // 旅程型別
-import type {
-  ChecklistItem,
-  Folder,
-  OtherInfoItem,
-  SidebarItemConfig,
-  TripEditorInput,
-  TripMeta,
+import {
+  DEFAULT_TRIP_CURRENCY,
+  type ChecklistItem,
+  type Folder,
+  type OtherInfoItem,
+  type SidebarItemConfig,
+  type TripEditorInput,
+  type TripMeta,
 } from "./types";
 
 // 抽出的畫面元件
@@ -93,6 +94,11 @@ import {
   APP_SOURCE_CLIENT_ID,
 } from "./services/tripDataRevisionService";
 import { syncItineraryCoverOfflineCache } from "./services/itineraryCoverOfflineCache";
+import {
+  createTripFromExcel,
+  TripExcelCreateError,
+} from "./services/tripExcelCreateService";
+import type { ParsedTripExcel } from "./services/tripExcelImport";
 
 const ExpenseScreen = lazy(() => import("./components/expense/ExpenseScreen"));
 const ItineraryPage = lazy(() =>
@@ -345,7 +351,7 @@ function ConfiguredApp({
     defaultParticipantProfiles,
     refreshDefaultParticipantProfiles,
     invalidateWorkspaceAccess,
-  } = useTripWorkspace({ supabase });
+  } = useTripWorkspace({ supabase, supabaseUrl });
   const {
     isSystemDeveloper,
     isUsageModalOpen,
@@ -838,6 +844,51 @@ function ConfiguredApp({
       setIsLoading(false);
     }
   };
+  const handleTripExcelCreate = async (
+    workbook: ParsedTripExcel,
+    requestId: string,
+    currencyCode: string,
+    currencySymbol: string,
+    lookupOnly = false,
+  ) => {
+    if (tripEditorMode !== "create" || adminProfile?.role !== "super_admin") {
+      throw new Error("只有 Super Admin 可以使用 Excel 建立 TRIP。");
+    }
+    if (!userId || !userEmail) {
+      throw new Error("目前沒有有效的登入帳號，請重新登入後再試。");
+    }
+    if (!isOnline || !navigator.onLine) {
+      throw new Error("新增旅程需要網路連線，Excel 建立已停止。");
+    }
+
+    setIsLoading(true);
+    try {
+      const result = await createTripFromExcel(supabase, {
+        requestId,
+        workbook,
+        currencyCode,
+        currencySymbol,
+        expectedUserId: userId,
+        expectedUserEmail: userEmail,
+        lookupOnly,
+      });
+
+      const refreshed = await refreshTripOptionsAndSelect(result.tripId);
+      if (!refreshed.didFindPreferredTrip || refreshed.selectedTrip?.id !== result.tripId) {
+        throw new TripExcelCreateError(
+          "REFRESH_UNCONFIRMED",
+          "雲端已確認建立，但旅程清單尚未找到新 TRIP。請使用同一份 Excel 重試；系統會沿用相同建立請求，不會重複新增。",
+        );
+      }
+
+      setIsTripEditorOpen(false);
+      setIsMenuOpen(false);
+    } catch (error) {
+      setIsLoading(false);
+      throw error;
+    }
+  };
+
   const handleTripDelete = async () => {
     if (!selectedTripId || !canEditTripMaster) return;
 
@@ -1410,15 +1461,19 @@ function ConfiguredApp({
         <TripEditorModal
           key={`${tripEditorMode}-${selectedTripId || "new"}`}
           mode={tripEditorMode}
+          defaultCurrencyCode={DEFAULT_TRIP_CURRENCY.code}
+          defaultCurrencySymbol={DEFAULT_TRIP_CURRENCY.symbol}
           trip={tripEditorMode === "edit" ? selectedTripMeta ?? null : null}
           tripDetail={tripEditorMode === "edit" ? currentTrip : null}
           editorEmails={tripEditorMode === "edit" ? currentTripEditorEmails : []}
           superAdminEmails={superAdminEmails}
           defaultParticipantProfiles={defaultParticipantProfiles}
           canManageEditors={adminProfile?.role === "super_admin"}
+          userId={userId}
           isOpen={isTripEditorOpen}
           onClose={() => setIsTripEditorOpen(false)}
           onSubmit={handleTripEditorSubmit}
+          onCreateFromExcel={handleTripExcelCreate}
           onDelete={
             tripEditorMode === "edit" && adminProfile?.role === ROLE.SUPER_ADMIN
               ? handleTripDelete

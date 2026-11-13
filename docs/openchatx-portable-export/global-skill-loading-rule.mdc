@@ -1,0 +1,33 @@
+---
+description: "全域 Skill 搜尋與載入強制規則，確保使用完整識別名稱並驗證載入結果。"
+globs: ""
+alwaysApply: true
+---
+
+# OpenChatX Skill 載入強制規則
+
+## 適用範圍
+所有 OpenChatX 工作階段及所有專案。
+
+## 強制要求
+1. 執行涉及 OpenChatX 工具操作的任務時，先確認是否有適用的 Skill。
+2. 若適用 Skill 尚未載入，必須先使用 `skill_search` 搜尋。
+3. 載入 Skill 時，必須原樣使用搜尋結果回傳的完整 `name`；不得自行縮短、修改或猜測名稱。
+4. 不得將 Skill 的顯示名稱直接當成載入識別名稱。
+5. 載入失敗時，記錄完整錯誤訊息，重新搜尋並確認名稱及 Toolbox 註冊狀態。
+6. 未成功讀取 Skill 內容，不得宣稱已遵循該 Skill。
+7. Skill 已載入且內容仍在目前工作階段上下文時，不必重複載入。
+
+## 指定通用 Skill
+涉及 OpenChatX 工具使用、工具選擇、Schema 查詢、Shell、MCP、Skills、Rules、Jobs、Nodes 等工作時，優先搜尋並載入 `openchatx-tool-usage`。
+
+實際載入時必須採用搜尋結果回傳的完整名稱，例如 `skills.openchatx-tool-usage`。不得硬編碼短名稱作為載入參數。
+
+## 驗證要求
+每次載入應確認：
+- Skill 搜尋成功。
+- 完整名稱正確。
+- Skill 載入成功。
+- Skill 內容可讀取。
+
+失敗時應回報實際錯誤，不得假設 Skill 已成功載入。
