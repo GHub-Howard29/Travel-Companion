@@ -14,6 +14,16 @@ export type VersionHistoryItem = {
 
 export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
+    version: "3.11.0",
+    date: "2026-11-13",
+    isMandatoryRelease: false,
+    notes: [
+      "新增 TRIP 時可直接匯入標準 Excel 範本，建立 TRIP 基本資料與每日行程卡片。",
+      "新增 V1 範本版本識別與匯入預覽，並由系統推導旅程天數。",
+      "Excel 建立僅限 Super Admin，透過雲端整批交易與 request 冪等保護資料完整性。",
+    ],
+  },
+  {
     version: "3.10.12",
     date: "2026-11-01",
     isMandatoryRelease: false,
