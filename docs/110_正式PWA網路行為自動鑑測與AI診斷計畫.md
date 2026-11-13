@@ -317,3 +317,148 @@
 - **工具問題定位更新：**目前已確認的缺口是 Open Browser Use 對外沒有持續 CDP 事件介面，而不是 Node.js 缺少 WebSocket 能力，也不是 MCP 服務健康異常。優先評估兩條路徑：A. 在 Open Browser Use 後端增加受控的事件訂閱／緩衝讀取介面；B. 使用獨立、專用 Chrome profile 啟動隔離瀏覽器並提供 CDP WebSocket endpoint。兩條路徑都需要進一步檢視工具實作或建立隔離測試；本次未修改擴充功能、Native Host、Chrome 設定或啟動參數。
 - 本次僅盤點工具介面、程序及設定資訊；未 attach debugger、未啟用 Network domain、未收集任何 PWA 網路事件，未修改使用者分頁或瀏覽器狀態。
 - 下一步：先取得 Open Browser Use Native Host／extension 的唯讀原始碼檢視權限，確認其 debugger event 是否已在內部處理、能否安全轉送；若不具備可行介面，再評估隔離 Chrome 路徑。未取得授權前，不修改工具或建立採集器。
+
+### 2026-11-13 V3.11.0 Android PWA 更新重複接管失敗回報與跨版本根因核對
+
+> 本節為使用者實機回報及唯讀原始碼／歷史紀錄比對；不是已完成的根因實證，也不是正式 T01–T06 網路鑑測。未修改 App、Service Worker、瀏覽器、OpenChatX 工具或正式資料。
+
+#### 使用者實際回報
+
+- 正式部署版本更新提示顯示目前版本 `3.10.12`、可更新至 `3.11.0`，發布日期 `2026-11-13`。
+- 使用者按下「馬上更新」後，畫面長時間停留在「等待新版接管…」，接著出現重新更新／重試提示；再次操作持續重複，形成無限循環。
+- 使用者確認不需要再次下載或重新安裝：直接關閉並重新啟動 Android PWA，即可進入最新版本 `3.11.0`。
+- 此回報顯示新版可在 PWA 冷啟動時執行；更新期間的接管、狀態判定或 reload 流程有異常。尚未取得故障當下 registration／Worker／controller 的實際快照，不能據此單獨確定是哪一個 lifecycle 分支失敗。
+
+#### 歷史修復與實機證據整合
+
+| 版本／紀錄 | 已有證據與修復內容 | 對本次分析的意義 |
+|---|---|---|
+| V3.9.21／V3.9.22，文件 70 | Android 更新後可能白畫面，關閉重啟可恢復；修復重點涵蓋 waiting／SKIP_WAITING、controllerchange、reload 時序。3.9.21→3.9.22 新流程仍需下一跳驗證，另曾遇資料 revision 與更新下載競態。 | 不能只檢查 Worker API，還要檢查更新前資料同步、舊頁面與新頁面的切換時序。 |
+| V3.9.24，文件 72 | 3.9.23→3.9.24 曾出現等待後重試；當時根因包含啟動未主動更新檢查、active replacement 被誤判未準備好、handoff 只等待 controller 完成。修復後 3.9.23→3.9.24 Android 真實跨版本回歸通過，並記錄 3.9.24→3.9.25 手機更新正常。 | 已有真實案例證明 active-but-not-controller 是合法狀態，不能把 controllerchange 當唯一成功條件。 |
+| V3.9.27，文件 76 | 修正新版 Service Worker 已 active、頁面仍由舊 controller 控制時，等待逾時誤報更新失敗；該發布紀錄未列 Android 實機驗收。 | 這個狀態判斷問題曾再次出現；須區分自動化驗證與實機證據。 |
+| V3.10.11／V3.10.12，文件 103、105 | 3.10.11 收斂 stable active replacement、waiting-only SKIP_WAITING、新 document pending-version 確認；原本已明確將 Android 真實跨版本驗收留待下一版。使用者於 2026-11-01 確認 3.10.11→3.10.12 Android PWA 實機更新不再卡住。 | 3.10.12 實機通過是已確認的正向證據，不得再描述成未完成；但該次觀察沒有逐項記錄 Worker lifecycle 值。 |
+| V3.11.0，本次回報 | 使用者於 2026-11-13 實機回報由 3.10.12 更新至 3.11.0 時無限等待／重試；關閉重啟後即進入 3.11.0。 | 顯示同類使用者體驗回歸；實際 Worker 狀態與版本載入證據待擷取。 |
+
+#### V3.10.12 至 V3.11.0 程式差異核對
+
+- 比對 `v3.10.12..v3.11.0`：`src/hooks/useAppUpdate.ts` 與 `src/utils/serviceWorkerUpdatePolicy.ts` 沒有差異；`src/components/UpdatePrompt.tsx` 亦沒有差異。
+- 本次指定範圍內唯一可見的相關設定差異是 `vite.config.ts` 新增 `process: 'process/browser'` alias；目前沒有證據證明此 alias 會造成 Service Worker handoff 失敗。
+- 因此現有證據不支持「V3.11.0 直接修改 PWA handoff 程式而引入回歸」；仍須核對 3.11.0 正式 SW／HTML／Bundle 部署產物、實際載入版本及 Android 當下 Worker 狀態。
+
+#### 目前程式碼的具體待驗疑點
+
+1. `src/hooks/useAppUpdate.ts` 約第 114–136 行，`waitForServiceWorkerHandoff()` 的 active 判斷：
+   - `expectedWorkerActivated` 僅接受 `expectedWorker === registration.active`。
+   - `replacementActive` 僅在 `expectedWorker === null` 時才接受其他已 activated 的 replacement。
+   - 因此若原先捕捉的 waiting Worker A 與最後成為 active 的 Worker B 不同，而 B 已 activated 且已取代舊 controller，兩個條件可能都不成立。這是由目前程式分支直接推得的狀態缺口；故障當下是否真的出現 A／B 不同，仍未知。
+2. `src/hooks/useAppUpdate.ts` 約第 452–477 行，建立 12 秒 handoff Promise 後，先 `await updateServiceWorker(false)`，再 await handoff 結果。已唯讀檢查 `node_modules/vite-plugin-pwa/dist/client/build/register.js`：該 API 會等待 register Promise 並呼叫 Workbox `messageSkipWaiting()`，本身不等待 Worker 接管。因此不能把它直接當作已證實根因；仍需確認註冊 Promise、SKIP_WAITING 訊息及 Worker statechange 的實際先後。
+3. `waitForServiceWorkerHandoff()` 的 `replacementActive` 分支目前以 `expectedWorker === null` 作為前提，與上列 A／B 身分變動情境需一併核對，不能只增加 timeout 或重試次數。
+4. 目前 handoff timeout 僅能在程式執行到 await handoff Promise 後被消費；應檢查所有前置 Promise 是否有終止保證，並確保 UI 在每個失敗路徑均可結束等待、提供恢復方式。
+5. 使用者重啟後即能進入新版，與「新版 SW／資產已部署並可冷啟動，但舊 document 的即時 handoff／reload 未完成」一致；這是高相關線索，不等同證明已經取得有效的 active replacement。
+
+#### 綜合判定（截至 2026-11-13）
+
+- **已確認：** 同類型 Android PWA 更新提示循環在 3.9.x 多次出現；3.9.24 的 active-but-not-controller 判斷曾有一個已修復且完成實機回歸的案例；3.10.11 的修正已由使用者在 3.10.12 實機確認有效；3.11.0 再次出現等待／重試循環，而冷啟動可進入 3.11.0。
+- **已確認：** `v3.10.12..v3.11.0` 的核心更新 Hook 與 Worker 判斷 helper 未變更；本次不能把問題直接歸因於 3.11.0 對這兩個檔案的修改。
+- **高度相關待驗：** Worker A／B 身分變動造成 handoff active 判斷落空；handoff Promise 前置等待的終止性；正式部署 SW／precache／HTML／Bundle 一致性及 Android PWA 實際載入狀態。
+- **尚未確認：** 故障當下 `registration.active`、`waiting`、`installing`、`navigator.serviceWorker.controller` 的物件身分與 state；SKIP_WAITING 是否送達正確 Worker；controllerchange 是否觸發；12 秒 timeout 是否實際執行；重新啟動時使用的 bundle／SW 版本。
+- 不得把「3.10.12 曾實機通過」推廣成所有 lifecycle 組合均已驗證；也不得因 3.11.0 再發生，就否定 3.10.12 當時的實機成功結果。
+
+#### 下一階段調查順序（仍為唯讀；不等於授權實作）
+
+1. 核對 Git tag `v3.11.0`、main 合併 commit、gh-pages commit、公開 `app-version.json`、`sw.js`、manifest、HTML 與 JS bundle，確認部署產物同一版本且無舊／新資產混用。
+2. 對照 `v3.9.24`、`v3.9.27`、`v3.10.11`、`v3.10.12`、`v3.11.0` 的 `useAppUpdate.ts`、Service Worker 設定與專項 regression，製作逐次變更矩陣，找出每次修正實際解決哪個狀態、哪些狀態未被測試。
+3. 以可重現的 Worker mock／整合測試覆蓋 expected Worker A 被 Worker B 取代、active replacement 但舊 controller、無 controllerchange、SKIP_WAITING 訊息不完成、registration Promise 不完成、handoff timeout 等情境；測試需驗證 UI 終止等待與不重複下載。
+4. 若要取得真實 Android lifecycle，先評估能否唯讀擷取安全且不含使用者資料的狀態快照；不得蒐集 token、Cookie、請求本文或業務資料。
+5. 在根因及回歸測試定案前，不修改 `useAppUpdate.ts`、Service Worker 設定、正式部署或版本號；修復方案另經 Product Owner 核准後實作。
+
+#### 操作範圍
+
+- 本次只讀取 Git 歷史、版本紀錄、更新 Hook、helper、回歸腳本與已安裝 Workbox／vite-plugin-pwa 程式碼。
+- 未修改 App 程式、測試、設定、瀏覽器、Native Host、OpenChatX MCP 或正式資料；未安裝依賴；未執行正式 T01–T06；未 Commit／Push／部署。
+
+### 2026-11-13 更新完成後改採使用者重新啟動之唯讀可行性驗證
+
+> 驗證目的：評估是否能將目前「下載後等待舊頁面 Worker handoff 並自動 reload」改為「確認新版安裝完成後顯示重新啟動指引，由使用者關閉並重新開啟 PWA」，減少 Android 舊頁面卡在 controllerchange／handoff 的機會。本輪只檢查程式、設定、既有 regression 與 Service Worker API 文件；未修改程式或執行 Android 實機測試。
+
+#### 已確認的專案現況
+
+- `vite.config.ts` 使用 `registerType: 'prompt'`、`workbox.clientsClaim: true`，precache glob 為 `js/css/html/ico/png/svg/json`，排除 `app-version.json`，並啟用 `cleanupOutdatedCaches`。
+- `src/hooks/useAppUpdate.ts` 的目前更新步驟為：資料同步 preflight → `registration.update()` → 最長 30 秒等待 `registration.waiting` 或 stable activated replacement → 若 waiting 存在則設定 pending version、送單次 `updateServiceWorker(false)` → 等待 handoff 最長 12 秒 → 舊頁面觸發 reload；失敗顯示可重試訊息。這正是使用者回報停在「等待新版接管…」的 UI 路徑。
+- `src/components/UpdatePrompt.tsx` 的階段文字包含「正在下載新版…」「等待新版接管…」，逾時／錯誤時主要按鈕變成「重試更新」。目前沒有「已準備完成，請關閉並重新啟動」的獨立完成狀態。
+- 目前 `hasStableActivatedReplacement()` 要求 active worker 已 activated、不同於 previous controller，且 waiting/installing 均為 null；現有 3.10.11 regression 也明確測試 installing、waiting 尚存在時不可提前當成 stable replacement。
+- `public/app-version.json` 被排除於 precache，方便版本檢查讀取最新 metadata；新 document 啟動後只有當 pending target version 與 bundle `APP_VERSION` 相同，才會確認更新版本並清除 pending marker。這個「新 document 實際啟動版本」驗證應保留，不能以 Worker installed／activated 取代。
+- 既有 `scripts/verify-v31011-pwa-reload-confirmation.mjs` 主要對程式碼結構及 helper 狀態進行 assertion；未模擬完整 Service Worker lifecycle、所有同源 clients 關閉、Android task 關閉或實機離線重新啟動。
+- 3.11.0 正式 build 紀錄含 65 個 precache entries（6,723.47 KiB）；此為當時 build 產物統計，不代表這次使用者手機上的下載狀態，也不等於 runtime cache／API／外部資源全數下載。
+
+#### API 語義及可行性界線
+
+- `ServiceWorkerRegistration.waiting` 回傳目前 state 為 `installed` 的 Worker；`updatefound` 只表示 `installing` property 取得新的 Worker。兩者是 lifecycle 訊號，不是「新 document 已經執行目標版本」的證明。參考 MDN：`https://developer.mozilla.org/en-US/docs/Web/API/ServiceWorkerRegistration/waiting`、`https://developer.mozilla.org/en-US/docs/Web/API/ServiceWorkerRegistration/updatefound_event`。
+- 在本專案 Workbox precache generateSW 設定下，成功走完 install/precache 才能視為本版本 precache 清單中必要資產已進入該 Worker 的安裝快取流程；仍須另外驗證 install 失敗、cache write/quota、必要資產是否被 glob 收錄，以及部署 HTML／hashed bundle 是否一致。不得把 `registration.update()` Promise resolve、Worker state 為 installed、或單一 metadata version 相同單獨當作完成更新。
+- 若不送 `SKIP_WAITING`，waiting Worker 通常要等仍受舊 active Worker 控制的 clients 都關閉，才可自然進入 activation；任何同 scope 的其他 tab／PWA window client 可能使等待持續。使用者滑除 Android 最近使用的 PWA task，不能當成「所有相關 clients 已消失」的保證，必須在實際 Android Chrome／WebAPK 環境驗證。
+- 若送出一次 `SKIP_WAITING`，可要求 waiting Worker 提前進入 activation，但不代表舊 document 已由新 Worker 控制；舊頁面與新版 Worker 可短暫並存。對 Travel-Companion，送出前仍須完成同步／編輯保護，且只可發給當下真實的 `registration.waiting`，不可向 `installing` Worker 發送。
+- PWA 網頁本身不能可靠強制終止 Chrome／Android WebAPK host process，也不能保證釋放整個程序記憶體。網頁按鈕不應標示為「關閉並重新啟動」並暗示可強制 kill；可以顯示 Android 關閉／重新開啟步驟。從最近使用畫面滑除 task 是使用者端操作，不等於網站能保證 OS process 已退出。
+
+#### 建議採用的驗證目標流程（尚未定案、未實作）
+
+1. 使用者按「馬上更新」後，先執行既有資料同步／未儲存變更保護，並重新取得版本 metadata。
+2. 執行 `registration.update()`，觀察 `updatefound`、`installing.statechange`，等待 Worker 成功進入 `installed`／`registration.waiting`，並確認無 installing worker；若 Worker 轉為 redundant、install rejected、等待逾時或離線，明確回報「新版尚未準備好」，不得顯示完成或寫入已更新版本。
+3. 對 waiting Worker 採單次、明確的策略：要嘛驗證只保留 waiting 讓使用者關閉所有 clients 後自然 activation；要嘛在資料保護完成後只對當下 `registration.waiting` 送單次 `SKIP_WAITING`，然後停止等待舊頁面 controllerchange。不可把兩種策略混在一起，也不可無限制重試。現階段無法僅靠靜態程式碼決定哪一種在 Android PWA 更可靠，需 PoC 與真機比較。
+4. 確認新版已準備好的條件後，舊頁面轉成獨立完成畫面：「新版已下載完成（版本 X），請關閉目前 App，再從桌面圖示重新開啟」。不再顯示「重試更新」作為一般 handoff timeout 的預設動作；提供簡明 Android 關閉指引。這個畫面只能表示「新版 Worker／必要 precache 已準備」，不可宣稱 App 已經在執行新版。
+5. 使用者重開後，以新 document 的 `APP_VERSION` 與儲存的 pending target 比對；一致才標記更新成功並清除 pending marker。若仍是舊版，保留診斷資訊，顯示可理解的復原提示；不能盲目再次下載或把舊版錯記為成功。
+
+#### 必要 PoC／驗收矩陣
+
+| 案例 | 狀態／操作 | 必須觀察的結果 |
+|---|---|---|
+| U1 正常安裝 | 舊版 PWA、單一 client、網路正常 | 新 Worker 完整 installed/waiting；完成畫面只在安裝完成後出現 |
+| U2 安裝失敗 | 模擬 precache 資產 404／快取寫入失敗／Worker redundant | 不顯示已準備完成，不寫入成功版本；舊版仍可用 |
+| U3 waiting 自然啟用 | 不送 SKIP_WAITING，關閉唯一 PWA client 後重新開啟 | 確認 waiting → activating → activated 的實際時序；新頁面執行目標 APP_VERSION |
+| U4 多 clients | 另一個同 scope tab／PWA window 保持開啟 | 驗證 waiting 是否被阻擋；UI 清楚說明需關閉其他視窗，不可假報已更新 |
+| U5 單次 SKIP_WAITING | 資料 preflight 完成後對實際 waiting worker 送一次 | Worker 可 activation；舊頁面不等待 controllerchange，重新開啟後新 bundle 版本正確 |
+| U6 舊頁仍使用中 | 送 SKIP_WAITING 前後持續操作舊頁面 | 不發生未保存資料遺失、跨版操作或舊頁寫入錯誤；若無法保證，採等待關閉 clients 的保守策略 |
+| U7 網路中斷 | 下載／安裝期間斷線 | 不顯示完成；恢復網路後可安全續試，不清理舊版必要快取 |
+| U8 重新啟動版本錯誤 | 完成頁顯示 target，但新 document APP_VERSION 仍為舊版 | 不確認成功、不清除 pending marker；提供診斷／恢復路徑 |
+| U9 離線冷啟動 | 安裝完成後斷網，關閉再重開 | 若 precache 涵蓋必要 shell，應可啟動目標版本；遠端資料功能按既有離線政策顯示狀態 |
+| U10 Android task／程序 | Android 安裝型 PWA，分別正常返回、關閉視窗、最近使用畫面滑除再開啟 | 記錄實際 client 與 Worker lifecycle；不得把 task 滑除等同 process 一定被 kill |
+
+#### 階段性結論
+
+- **可行：** 將「舊頁面 handoff／自動 reload」由必要成功條件降為非必要，改為「新版安裝成功 → 完成頁 → 使用者關閉並重新啟動 → 新 document APP_VERSION 確認」。此方案可避開舊頁面長時間輪詢 controllerchange 的問題。
+- **不能直接宣稱已解決：** 手動重啟不會自動保證 waiting Worker 啟用；多 clients 可能阻擋自然 activation，SKIP_WAITING 又需要驗證舊頁安全性。Android 滑除 task 亦不保證程序記憶體已釋放。
+- **成功判定分級：** (A) Worker 安裝／precache 完成＝「新版已準備」；(B) Worker activated＝「新版 Worker 已啟用」；(C) 新 document 回報 `APP_VERSION === targetVersion`＝「App 已完成更新」。產品 UI 在 A 階段只能顯示「請重新啟動」，最終成功只在 C 階段成立。
+- **目前驗證結果：架構可行性初步通過；Service Worker 多 client lifecycle 與 Android 實機可靠性尚未通過。** 尚不能核准替換正式流程，下一步應先建立隔離 PoC 與 U1–U10 驗收，再決定保留 waiting 或單次 SKIP_WAITING 策略。
+
+#### 本次操作範圍
+
+- 唯讀檢查 `vite.config.ts`、`src/hooks/useAppUpdate.ts`、`src/components/UpdatePrompt.tsx`、`src/utils/serviceWorkerUpdatePolicy.ts`、`scripts/verify-v31011-pwa-reload-confirmation.mjs`、文件 103／108／110 與既有 V3.11.0 build 記錄。
+- 查閱 MDN `ServiceWorkerRegistration.waiting` 與 `updatefound` 官方 API 說明；本次未連接使用者 Android 手機、未取得真實 Worker snapshot。
+- 未修改 App 程式、測試、設定或正式資料；未安裝依賴、未 build、未 deploy、未 commit／push。僅追加本文件驗證紀錄。
+
+## 16. 2026-11-13 PWA 更新改採接管後自動刷新實作紀錄
+
+### 目標與範圍
+
+- 使用者決定不要求手動關閉／重啟 PWA，改為新版 Service Worker 確實接管目前頁面後，由 App 自動重新載入。
+- 僅調整更新流程及其回歸檢查，不變更版本號、PWA precache 設定、部署流程或資料同步邏輯。
+
+### 實作內容
+
+1. 保留資料同步 preflight、`registration.update()`、等待 Worker 完整安裝及只對實際 `registration.waiting` 發送一次 `SKIP_WAITING`。
+2. handoff 成功條件收斂為：`navigator.serviceWorker.controller` 必須與本次捕捉的 `expectedWorker` 是同一個物件，且其 state 為 `activated`、`registration.active` 亦指向該 Worker。只看到 Worker `activated` 不足以觸發 reload。
+3. 收到確認接管後才記錄 pending target，執行一次 `window.location.reload()`；不以一般 HTTP 快取清除或 `reload(true)` 作為更新手段。
+4. handoff 最長等待 15 秒。逾時時保留 pending target、顯示可理解的錯誤與重新開啟 App 指引，不自動重複刷新或重新下載。
+5. 以 `localStorage` 記錄每個 target version 的自動刷新嘗試；同一版本若已刷新過仍未成功，不再自動刷新，以避免更新迴圈。新 document 啟動時，只有 `APP_VERSION` 與 pending target 完全一致才確認成功並清除 pending／reload attempt；若版本不符，保留標記及 console 診斷。
+6. 更新 `scripts/verify-v31011-pwa-reload-confirmation.mjs`，檢查指定 Worker 接管判斷、單次刷新、版本防迴圈及新 document 版本確認。
+
+### 驗證狀態
+
+- `scripts/verify-v31011-pwa-reload-confirmation.mjs`：通過（Node `v22.23.2`、npm `10.9.8`）。
+- 尚未完成 TypeScript app/node 檢查、完整 `npm run build`、Android PWA 真機更新測試及多 client 實測；不能因此宣稱正式問題已完全解決。
+- 未部署、未 commit／push。
+
+### 風險與後續驗收
+
+- `window.location.reload()` 仍會由瀏覽器正常導覽流程載入頁面；是否在 Android Chrome／WebAPK 每次都由已確認的新 Worker 提供 HTML 與 assets，仍須真機驗證。
+- 必須測試單一 PWA client、多個同 scope clients、Worker install 失敗、網路中斷、版本 metadata 與 bundle 不一致、離線冷啟動，以及刷新後仍執行舊 bundle 的防迴圈行為。
+- 本次只做本機實作與測試，未執行正式部署。

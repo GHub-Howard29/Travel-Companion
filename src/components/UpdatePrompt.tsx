@@ -50,7 +50,7 @@ export function UpdatePrompt({
         : updatePhase === "downloading"
           ? "正在下載新版…"
           : updatePhase === "waiting-control"
-            ? "等待新版接管…"
+            ? "正在切換新版…"
             : "正在檢查更新…"
       : updateError
         ? "重試更新"

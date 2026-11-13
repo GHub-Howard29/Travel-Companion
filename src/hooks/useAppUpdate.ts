@@ -29,6 +29,8 @@ export type AppUpdatePhase =
 const RELEASE_NOTICE_STORAGE_KEY = "travel_companion_seen_app_version";
 const VERSION_POLICY_STORAGE_KEY = "travel_companion_app_version_policy";
 const PENDING_UPDATE_VERSION_KEY = "travel_companion_pending_update_version";
+const UPDATE_RELOAD_ATTEMPT_KEY = "travel_companion_update_reload_attempt";
+const HANDOFF_TIMEOUT_MS = 15000;
 
 const getRuntimeDisplayMode = () => {
   const standaloneNavigator = navigator as Navigator & { standalone?: boolean };
@@ -54,13 +56,27 @@ const getPendingUpdateVersion = () => localStorage.getItem(PENDING_UPDATE_VERSIO
 const clearPendingUpdateVersion = () => {
   localStorage.removeItem(PENDING_UPDATE_VERSION_KEY);
 };
+const getReloadAttemptVersion = () => localStorage.getItem(UPDATE_RELOAD_ATTEMPT_KEY);
+const setReloadAttemptVersion = (version: string) => {
+  localStorage.setItem(UPDATE_RELOAD_ATTEMPT_KEY, version);
+};
+const clearReloadAttemptVersion = () => {
+  localStorage.removeItem(UPDATE_RELOAD_ATTEMPT_KEY);
+};
 
 const confirmPendingUpdateForCurrentBundle = () => {
   const pendingVersion = getPendingUpdateVersion();
-  if (pendingVersion !== APP_VERSION) return false;
+  if (!pendingVersion) return false;
+  if (pendingVersion !== APP_VERSION) {
+    console.warn(
+      `PWA update reload did not reach the target bundle. Expected ${pendingVersion}, received ${APP_VERSION}.`,
+    );
+    return false;
+  }
 
   setStoredAppVersion(APP_VERSION);
   clearPendingUpdateVersion();
+  clearReloadAttemptVersion();
   return true;
 };
 const getStoredVersionPolicy = (): AppVersionMetadata | null => {
@@ -96,13 +112,12 @@ const fetchLatestVersionMetadata = async (): Promise<AppVersionMetadata | null> 
   }
 };
 
-type ServiceWorkerHandoffState = "controlled" | "active" | "timeout";
+type ServiceWorkerHandoffState = "controlled" | "timeout";
 
 const waitForServiceWorkerHandoff = (
   registration: ServiceWorkerRegistration,
-  previousController: ServiceWorker | null,
-  expectedWorker: ServiceWorker | null,
-  timeoutMs = 12000,
+  expectedWorker: ServiceWorker,
+  timeoutMs = HANDOFF_TIMEOUT_MS,
 ): Promise<ServiceWorkerHandoffState> => {
   if (!("serviceWorker" in navigator)) return Promise.resolve("timeout");
 
@@ -114,25 +129,14 @@ const waitForServiceWorkerHandoff = (
     const getState = (): ServiceWorkerHandoffState | null => {
       const controller = navigator.serviceWorker.controller;
       const activeWorker = registration.active;
-      const controllerAligned =
-        Boolean(controller) &&
-        controller !== previousController &&
-        controller?.state === "activated" &&
-        activeWorker === controller;
-
-      if (controllerAligned) return "controlled";
-
-      const expectedWorkerActivated =
+      const expectedWorkerControlsPage =
         expectedWorker !== null &&
-        expectedWorker.state === "activated" &&
+        controller === expectedWorker &&
+        controller.state === "activated" &&
         activeWorker === expectedWorker;
-      const replacementActive =
-        expectedWorker === null &&
-        Boolean(activeWorker) &&
-        activeWorker !== previousController &&
-        activeWorker?.state === "activated";
 
-      if (expectedWorkerActivated || replacementActive) return "active";
+      if (expectedWorkerControlsPage) return "controlled";
+
       return null;
     };
 
@@ -279,9 +283,20 @@ export const useAppUpdate = () => {
   const reloadStartedRef = useRef(false);
   const lastWorkerUpdateCheckAtRef = useRef(0);
 
-  const reloadOnce = useCallback(() => {
+  const reloadOnce = useCallback((targetVersion: string) => {
     if (reloadStartedRef.current) return;
+    const attemptedVersion = getReloadAttemptVersion();
+    if (attemptedVersion === targetVersion) {
+      setUpdateError(
+        `新版 ${targetVersion} 尚未完成載入確認，已停止自動刷新以避免循環。請重新開啟 App 後再確認版本。`,
+      );
+      setUpdatePhase("idle");
+      return;
+    }
+
     reloadStartedRef.current = true;
+    setReloadAttemptVersion(targetVersion);
+    setPendingUpdateVersion(targetVersion);
     window.location.reload();
   }, []);
 
@@ -374,6 +389,8 @@ export const useAppUpdate = () => {
 
   const update = useCallback(async (beforeUpdate?: () => Promise<void>) => {
     if (updateInProgressRef.current) return;
+    // A deliberate user retry starts a new bounded attempt after a prior reload failed to confirm.
+    clearReloadAttemptVersion();
     if (!policy.hasUpdate) {
       setStoredAppVersion(APP_VERSION);
       setReleaseNoticeVisible(false);
@@ -420,7 +437,7 @@ export const useAppUpdate = () => {
         () => Boolean(registration.waiting),
       );
       if (!workerReady) {
-        setUpdateError("新版尚未下載完成，請稍後再試；這不代表目前網路一定異常。");
+        setUpdateError("新版尚未下載完成，請確認網路連線後再試；目前版本仍可繼續使用。");
         setUpdatePhase("idle");
         return;
       }
@@ -429,52 +446,49 @@ export const useAppUpdate = () => {
         registration,
         previousController,
       );
-      if (activatedReplacement) {
-        setPendingUpdateVersion(latestMetadata.version);
-        reloadOnce();
+      if (activatedReplacement && navigator.serviceWorker.controller === registration.active) {
+        reloadOnce(latestMetadata.version);
         return;
       }
 
-      const updateServiceWorker = updateServiceWorkerRef.current;
-      if (!updateServiceWorker) {
-        setUpdateError("新版已偵測到，但更新處理器尚未就緒，請稍後再試。");
-        setUpdatePhase("idle");
-        return;
-      }
-
-      const expectedWorker = registration.waiting;
+      const waitingWorker = registration.waiting;
+      const expectedWorker = waitingWorker ?? (activatedReplacement ? registration.active : null);
       if (!expectedWorker) {
         setUpdateError("新版尚未進入可接管狀態，請稍後再試；目前版本仍可正常使用。");
         setUpdatePhase("idle");
         return;
       }
+
+      const updateServiceWorker = updateServiceWorkerRef.current;
+      if (waitingWorker && !updateServiceWorker) {
+        setUpdateError("新版已偵測到，但更新處理器尚未就緒，請稍後再試。");
+        setUpdatePhase("idle");
+        return;
+      }
+
       setUpdatePhase("waiting-control");
       const handoffPromise = waitForServiceWorkerHandoff(
         registration,
-        previousController,
         expectedWorker,
       );
 
-      // 記錄待套用版本而非已更新版本；即使舊頁面未觀察到 handoff，
-      // 若 worker 隨後成功啟用，新 document 仍可確認版本並完成紀錄。
+      // 先記錄目標版本；只有新 document 的 bundle 版本吻合時才會確認完成。
       setPendingUpdateVersion(latestMetadata.version);
 
-      // vite-plugin-pwa 的 prompt 模式在此只需要送出一次 SKIP_WAITING。
-      // reload 由本 hook 在確認新 worker 已 active／接管後統一控制，避免重複觸發競態。
-      await updateServiceWorker(false);
+      // waiting worker 才送一次 SKIP_WAITING；已 active 的 replacement 只等待 clientsClaim 接管。
+      if (waitingWorker) {
+        await updateServiceWorker!(false);
+      }
       const handoffState = await handoffPromise;
 
       if (handoffState === "controlled") {
-        reloadOnce();
+        reloadOnce(latestMetadata.version);
         return;
       }
 
-      if (handoffState === "active" && registration.active?.state === "activated") {
-        reloadOnce();
-        return;
-      }
-
-      setUpdateError("新版接管確認逾時；請稍後再按「馬上更新」，不要連續重複點擊。\n目前版本仍可正常使用。");
+      setUpdateError(
+        `新版已要求接管，但 ${HANDOFF_TIMEOUT_MS / 1000} 秒內未確認由新版 Service Worker 控制。請稍後重試，或重新開啟 App；不會自動重複刷新。`,
+      );
       setUpdatePhase("idle");
     } catch (error) {
       console.warn("PWA Service Worker update failed.", error);

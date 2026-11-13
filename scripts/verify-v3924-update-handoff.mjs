@@ -32,26 +32,31 @@ assert.match(
 
 assert.match(
   updateHook,
-  /const activatedReplacement = hasStableActivatedReplacement\([\s\S]*registration,[\s\S]*previousController,[\s\S]*\)[\s\S]*setPendingUpdateVersion\(latestMetadata\.version\)[\s\S]*reloadOnce\(\)/,
-  "新版已 active 但舊頁面仍由舊 controller 控制時，必須先記錄待套用版本並直接重新載入",
+  /const activatedReplacement = hasStableActivatedReplacement\([\s\S]*registration,[\s\S]*previousController,[\s\S]*\)[\s\S]*activatedReplacement && navigator\.serviceWorker\.controller === registration\.active[\s\S]*reloadOnce\(latestMetadata\.version\)/,
+  "只有 replacement worker 已穩定且已控制目前頁面時，才可直接重新載入",
 );
 
 assert.match(
   updateHook,
-  /const expectedWorker = registration\.waiting;[\s\S]*if \(!expectedWorker\)[\s\S]*新版尚未進入可接管狀態/,
-  "SKIP_WAITING 只能針對確實存在的 waiting worker；installing 不可當成可接管目標",
+  /const waitingWorker = registration\.waiting;[\s\S]*const expectedWorker = waitingWorker \?\? \(activatedReplacement \? registration\.active : null\)[\s\S]*if \(!expectedWorker\)/,
+  "SKIP_WAITING 僅針對 waiting worker；已 active 的 replacement 則只等待 clientsClaim 接管",
+);
+assert.match(
+  updateHook,
+  /if \(waitingWorker\) \{\s*await updateServiceWorker!\(false\);\s*\}/,
+  "只有本次捕捉到 waiting worker 時才送出單次 SKIP_WAITING",
 );
 
 assert.match(
   updateHook,
-  /setPendingUpdateVersion\(latestMetadata\.version\)[\s\S]*await updateServiceWorker\(false\)/,
-  "發出單次 SKIP_WAITING 前必須保存待套用版本，讓新 document 能在舊頁面 handoff 逾時後確認更新",
+  /setPendingUpdateVersion\(latestMetadata\.version\)[\s\S]*if \(waitingWorker\) \{\s*await updateServiceWorker!\(false\);\s*\}/,
+  "發出單次 SKIP_WAITING 前必須保存待套用版本，讓新 document 能核對目標版本",
 );
 
 assert.match(
   updateHook,
-  /timeoutMs = 12000/,
-  "PWA handoff 應沿用已通過實機驗證的 12 秒狀態判定窗口，不以延長等待掩蓋流程問題",
+  /HANDOFF_TIMEOUT_MS = 15000/,
+  "PWA handoff 採固定 15 秒上限，逾時後停止自動刷新並顯示復原方式",
 );
 
 assert.match(
@@ -62,17 +67,22 @@ assert.match(
 
 assert.match(
   updateHook,
-  /if \(handoffState === "active" && registration\.active\?\.state === "activated"\) \{[\s\S]*reloadOnce\(\)/,
-  "active worker handoff 必須確認 activated，再由唯一 reload owner 重新載入",
+  /if \(handoffState === "controlled"\) \{[\s\S]*reloadOnce\(latestMetadata\.version\)/,
+  "只有新 Worker 已控制目前頁面時，才由唯一 reload owner 重新載入",
+);
+assert.doesNotMatch(
+  updateHook,
+  /handoffState === "active"/,
+  "Worker 僅進入 active 但尚未控制目前頁面時，不可觸發刷新",
 );
 
 const activatedReplacementBlock = updateHook.match(
-  /if \(activatedReplacement\) \{([\s\S]*?)\n      \}/,
+  /if \(activatedReplacement && navigator\.serviceWorker\.controller === registration\.active\) \{([\s\S]*?)\n      \}/,
 )?.[1] ?? "";
 assert.match(
   activatedReplacementBlock,
-  /setPendingUpdateVersion\(latestMetadata\.version\)[\s\S]*reloadOnce\(\)/,
-  "active replacement 必須由唯一更新流程直接套用並重新載入",
+  /reloadOnce\(latestMetadata\.version\)/,
+  "replacement 已控制目前頁面時，必須由唯一更新流程重新載入",
 );
 
 assert.doesNotMatch(
