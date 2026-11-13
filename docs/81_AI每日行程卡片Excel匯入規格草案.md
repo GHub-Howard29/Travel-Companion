@@ -685,13 +685,15 @@ RPC 成功回應（建議使用單一 JSON object）至少包含：
 
 **V3.11.0 簡化 Recovery 實作紀錄（2026-11-13）**
 
+> **發布策略更新（2026-11-13，Product Owner 定案）：** 下列真人瀏覽器／PWA Recovery 故障情境全部改列為「發布後觀察項目」，不得單獨或合併作為 V3.11.0 的發布停止線。發布前仍須完成正常主要流程、安全權限、資料庫交易完整性、版本收尾及必要發布檢查；不能因本決策略過已知安全／資料完整性缺陷或正常建立路徑錯誤。上線後若使用者回報 Excel 匯入問題，第一優先依 §12.11 的對照表比對已知觀察情境，再依實際 request ID、錯誤碼、帳號、頁面狀態及雲端資料判斷，不預設一定是 Recovery 問題。
+
 - 已將 `TripExcelCreateRetry` 改為 30 秒單次 Recovery policy；pending 紀錄改存 `userId`、`fingerprint`、`requestId`、`startedAt`、`resultUnconfirmedAt`、`lookupAttempted`。
 - `TripEditorModal` 使用 `localStorage` 保存單筆待確認紀錄；在送出建立 RPC 前必須先成功保存，否則阻止建立。首次結果不明後顯示等待文案，30 秒後以原 request ID 執行唯一一次 lookup；lookup 開始前先持久化 `lookupAttempted`，避免 App／PWA 重啟後重複自動查詢。
 - 第二次 lookup 仍不明或查詢已嘗試但無法確認時，才允許使用者按「再次匯入」；操作前以確認對話框警告可能重複旅程，並以新 request ID 建立。舊 request 的資料庫冪等紀錄不刪除、不取消；系統不自動刪除任何 TRIP。
 - 帳號不同時不會接管或查詢舊 request；重新進入時須重新選取相同 Excel，依 fingerprint 找回原 request。未保存完整 Excel 工作簿。`REFRESH_UNCONFIRMED` 代表雲端建立已確認但本機清單更新未確認，已獨立阻止再次匯入並提示重新整理頁面。
 - 修改檔案：`src/components/TripEditorModal.tsx`、`src/services/tripExcelCreateRetry.ts`、`src/services/tripExcelCreateService.ts`、`src/App.tsx`、`scripts/test-trip-excel-create-service.mjs`、`scripts/verify-trip-excel-rpc.mjs`；同步更新本規格與 `docs/02_產品開發路線圖.md`。
 - 驗證通過：`npm run test:trip-excel-create-service`、`npm run verify:trip-excel-rpc`、`npm run verify:trip-excel-import`、`npx tsc -p tsconfig.app.json --noEmit`、`npx tsc -p tsconfig.node.json --noEmit`、針對修改檔案的 ESLint，以及完整 `npm run build`（包含 release／PWA／安全驗證及 production bundle）。
-- **尚待真人瀏覽器／PWA 驗收**：正常建立、建立 RPC 結果不明後 30 秒第二次查詢、查詢成功、查詢仍不明後重新匯入警告、離開後重新選檔恢復、PWA 完全關閉後重新選檔恢復、切換帳號隔離、背景暫停後回前景、localStorage 寫入失敗阻止建立，以及 `REFRESH_UNCONFIRMED` 不顯示重新匯入。
+- **發布後觀察（不作為發布停止線）**：建立 RPC 結果不明後 30 秒第二次查詢、查詢成功、查詢仍不明後重新匯入警告、離開後重新選檔恢復、PWA 完全關閉後重新選檔恢復、切換帳號隔離、背景暫停後回前景、localStorage 寫入失敗阻止建立，以及 `REFRESH_UNCONFIRMED` 不顯示重新匯入。這些情境已由 service mock／靜態測試與程式檢查涵蓋，但真人瀏覽器／PWA 行為尚未逐項實測；發布後遇到匯入問題時優先按 §12.11 比對，不要求先補齊全部觀察情境才可發布。
 - 本次沒有建立 TRIP、沒有呼叫真實建立 RPC、沒有執行 migration、沒有寫入 local／remote Supabase、沒有部署、沒有發布、沒有 commit／push。`package.json` 版本仍維持 `3.10.12`，尚未進行 3.11.0 release 收尾。
 
 ### 12.9 建立旅程介面配色與側邊欄排序診斷（2026-11-11）
