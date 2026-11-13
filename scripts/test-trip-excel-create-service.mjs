@@ -2,9 +2,9 @@ import assert from "node:assert/strict";
 import { createTripFromExcel, TripExcelCreateError } from "../src/services/tripExcelCreateService.ts";
 import {
   createInitialTripExcelPendingRequest,
-  decideTripExcelRetry,
+  getTripExcelRecoveryDelay,
   isTripExcelPendingRequest,
-  TRIP_EXCEL_CREATE_COOLDOWN_MS,
+  TRIP_EXCEL_CREATE_RECOVERY_DELAY_MS,
 } from "../src/services/tripExcelCreateRetry.ts";
 
 const REQUEST_ID = "9573fdcf-64d6-49bc-8680-8a1253b5343a";
@@ -132,21 +132,18 @@ const expectCode = async (promise, code) => {
 };
 
 try {
-  // Retry policy is deterministic and persists a single manual retry + one-minute cooldown.
+  // Recovery persists one request per user and allows exactly one delayed lookup after 30 seconds.
   {
-    const initial = createInitialTripExcelPendingRequest("fingerprint-a", REQUEST_ID);
+    const initial = createInitialTripExcelPendingRequest(USER_ID, "fingerprint-a", REQUEST_ID, 10_000);
     assert.equal(isTripExcelPendingRequest(initial), true);
-    assert.deepEqual(decideTripExcelRetry(initial, 10_000), {
-      action: "CREATE", manualRetryCount: 1, cooldownStartedAt: 10_000,
-    });
-    const retried = { ...initial, manualRetryCount: 1, cooldownStartedAt: 10_000 };
-    assert.deepEqual(decideTripExcelRetry(retried, 10_000 + TRIP_EXCEL_CREATE_COOLDOWN_MS - 1), {
-      action: "LOOKUP", reason: "COOLDOWN_ACTIVE", retryAt: 10_000 + TRIP_EXCEL_CREATE_COOLDOWN_MS,
-    });
-    assert.deepEqual(decideTripExcelRetry(retried, 10_000 + TRIP_EXCEL_CREATE_COOLDOWN_MS), {
-      action: "LOOKUP", reason: "COOLDOWN_ELAPSED", retryAt: null,
-    });
-    assert.equal(isTripExcelPendingRequest({ ...retried, manualRetryCount: 1.5 }), false);
+    assert.equal(initial.lookupAttempted, false);
+    assert.equal(getTripExcelRecoveryDelay(initial, 10_000), TRIP_EXCEL_CREATE_RECOVERY_DELAY_MS);
+    assert.equal(getTripExcelRecoveryDelay(initial, 10_000 + TRIP_EXCEL_CREATE_RECOVERY_DELAY_MS - 1), 1);
+    assert.equal(getTripExcelRecoveryDelay(initial, 10_000 + TRIP_EXCEL_CREATE_RECOVERY_DELAY_MS), 0);
+    const unconfirmed = { ...initial, resultUnconfirmedAt: 12_000 };
+    assert.equal(getTripExcelRecoveryDelay(unconfirmed, 12_000), TRIP_EXCEL_CREATE_RECOVERY_DELAY_MS);
+    assert.equal(isTripExcelPendingRequest({ ...unconfirmed, lookupAttempted: "false" }), false);
+    assert.equal(isTripExcelPendingRequest({ ...unconfirmed, userId: "" }), false);
   }
 
   // Lookup-only recovery never calls the create RPC.

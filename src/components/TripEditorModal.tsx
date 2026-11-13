@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
 import {
   AlertTriangle,
@@ -28,8 +28,9 @@ import {
 import { isProtectedSeedTripId } from "../constants/appConstants";
 import {
   createInitialTripExcelPendingRequest,
-  decideTripExcelRetry,
+  getTripExcelRecoveryDelay,
   isTripExcelPendingRequest,
+  TRIP_EXCEL_CREATE_RECOVERY_DELAY_MS,
   type TripExcelPendingRequest,
 } from "../services/tripExcelCreateRetry";
 
@@ -43,6 +44,7 @@ interface TripEditorModalProps {
   superAdminEmails: string[];
   defaultParticipantProfiles: AdminProfile[];
   canManageEditors: boolean;
+  userId: string | null;
   isOpen: boolean;
   onClose: () => void;
   onSubmit: (input: TripEditorInput) => Promise<void>;
@@ -106,32 +108,21 @@ const getExcelRequestFingerprint = async (
 
 const readPendingExcelRequest = (): TripExcelPendingRequest | null => {
   try {
-    const raw = sessionStorage.getItem(EXCEL_PENDING_REQUEST_KEY);
+    const raw = localStorage.getItem(EXCEL_PENDING_REQUEST_KEY);
     if (!raw) return null;
     const parsed: unknown = JSON.parse(raw);
-    if (isTripExcelPendingRequest(parsed)) return parsed;
-    // Backward compatibility with pending records written before retry metadata.
-    if (
-      parsed && typeof parsed === "object" &&
-      "fingerprint" in parsed && "requestId" in parsed &&
-      typeof parsed.fingerprint === "string" && typeof parsed.requestId === "string"
-    ) {
-      return {
-        ...createInitialTripExcelPendingRequest(parsed.fingerprint, parsed.requestId),
-        resultUnconfirmed: true,
-      };
-    }
+    return isTripExcelPendingRequest(parsed) ? parsed : null;
   } catch {
-    // Storage may be unavailable in privacy-restricted browser contexts.
+    return null;
   }
-  return null;
 };
 
-const writePendingExcelRequest = (pending: TripExcelPendingRequest): void => {
+const writePendingExcelRequest = (pending: TripExcelPendingRequest): boolean => {
   try {
-    sessionStorage.setItem(EXCEL_PENDING_REQUEST_KEY, JSON.stringify(pending));
+    localStorage.setItem(EXCEL_PENDING_REQUEST_KEY, JSON.stringify(pending));
+    return true;
   } catch {
-    // Keep the in-memory request ID even when session storage is unavailable.
+    return false;
   }
 };
 
@@ -139,17 +130,20 @@ const clearPendingExcelRequest = (requestId: string): void => {
   const pending = readPendingExcelRequest();
   if (pending?.requestId !== requestId) return;
   try {
-    sessionStorage.removeItem(EXCEL_PENDING_REQUEST_KEY);
+    localStorage.removeItem(EXCEL_PENDING_REQUEST_KEY);
   } catch {
-    // The request remains protected by the in-memory state for this modal.
+    // A stale local record is harmless after the request has been verified.
   }
 };
 
-const getPendingExcelRequest = (fingerprint: string): TripExcelPendingRequest => {
+const getPendingExcelRequest = (
+  userId: string,
+  fingerprint: string,
+): TripExcelPendingRequest => {
   const pending = readPendingExcelRequest();
-  return pending?.fingerprint === fingerprint
+  return pending?.userId === userId && pending.fingerprint === fingerprint
     ? pending
-    : createInitialTripExcelPendingRequest(fingerprint, crypto.randomUUID());
+    : createInitialTripExcelPendingRequest(userId, fingerprint, crypto.randomUUID());
 };
 
 
@@ -230,6 +224,7 @@ export const TripEditorModal = ({
   superAdminEmails,
   defaultParticipantProfiles,
   canManageEditors,
+  userId,
   isOpen,
   onClose,
   onSubmit,
@@ -284,11 +279,36 @@ export const TripEditorModal = ({
   const [isParsingExcel, setIsParsingExcel] = useState(false);
   const [excelRequestId, setExcelRequestId] = useState<string | null>(null);
   const [isExcelResultUnconfirmed, setIsExcelResultUnconfirmed] = useState(false);
-  const [isExcelLookupOnly, setIsExcelLookupOnly] = useState(false);
+  const [isExcelWaitingForConfirmation, setIsExcelWaitingForConfirmation] = useState(false);
+  const [canReimportExcel, setCanReimportExcel] = useState(false);
   const excelRequestFingerprintRef = useRef<string | null>(null);
   const excelInputRef = useRef<HTMLInputElement | null>(null);
+  const excelRecoveryTimerRef = useRef<number | null>(null);
+  const handleExcelCreateRef = useRef<
+    (action: "create" | "lookup" | "reimport") => Promise<void>
+  >(async () => undefined);
 
-  if (!isOpen) return null;
+  useEffect(() => () => {
+    if (excelRecoveryTimerRef.current !== null) {
+      window.clearTimeout(excelRecoveryTimerRef.current);
+    }
+  }, []);
+
+  const scheduleExcelRecoveryLookup = (
+    pending: TripExcelPendingRequest,
+    delay: number,
+  ) => {
+    if (excelRecoveryTimerRef.current !== null) {
+      window.clearTimeout(excelRecoveryTimerRef.current);
+    }
+    setIsExcelWaitingForConfirmation(true);
+    excelRecoveryTimerRef.current = window.setTimeout(() => {
+      excelRecoveryTimerRef.current = null;
+      void handleExcelCreateRef.current("lookup");
+    }, delay);
+    // Keep the timer associated with this exact request.
+    excelRequestFingerprintRef.current = pending.fingerprint;
+  };
 
   const handleExcelFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -297,15 +317,20 @@ export const TripEditorModal = ({
     setExcelFileName(file?.name ?? "");
     setExcelRequestId(null);
     setIsExcelResultUnconfirmed(false);
-    setIsExcelLookupOnly(false);
+    setIsExcelWaitingForConfirmation(false);
+    setCanReimportExcel(false);
     excelRequestFingerprintRef.current = null;
+    if (excelRecoveryTimerRef.current !== null) {
+      window.clearTimeout(excelRecoveryTimerRef.current);
+      excelRecoveryTimerRef.current = null;
+    }
     if (!file) return;
-    if (!canManageEditors) {
+    if (!canManageEditors || !userId) {
       setExcelIssues([{
         worksheet: "新增 TRIP",
         row: 1,
         field: "權限",
-        message: "只有 Super Admin 可以使用 Excel 建立 TRIP。",
+        message: "只有已登入的 Super Admin 可以使用 Excel 建立 TRIP。",
       }]);
       return;
     }
@@ -323,7 +348,6 @@ export const TripEditorModal = ({
     try {
       const result = await parseTripExcelWorkbook(await file.arrayBuffer());
       if (result.success) {
-        setExcelPreview(result.data);
         const selectedCurrencyCode = defaultCurrencyCode.trim();
         const selectedCurrencySymbol = defaultCurrencySymbol.trim();
         const fingerprint = await getExcelRequestFingerprint(
@@ -331,11 +355,41 @@ export const TripEditorModal = ({
           selectedCurrencyCode,
           selectedCurrencySymbol,
         );
-        const pendingRequest = getPendingExcelRequest(fingerprint);
+        const storedPending = readPendingExcelRequest();
+        if (storedPending && storedPending.userId !== userId) {
+          clearPendingExcelRequest(storedPending.requestId);
+        } else if (
+          storedPending &&
+          storedPending.userId === userId &&
+          storedPending.fingerprint !== fingerprint
+        ) {
+          setExcelIssues([{
+            worksheet: "新增 TRIP",
+            row: 1,
+            field: "待確認請求",
+            message: "目前有另一份 Excel 的建立結果尚未確認。請先選取原本的 Excel，完成確認後再匯入其他檔案。",
+          }]);
+          return;
+        }
+
+        const pendingRequest = getPendingExcelRequest(userId, fingerprint);
+        setExcelPreview(result.data);
         excelRequestFingerprintRef.current = fingerprint;
         setExcelRequestId(pendingRequest.requestId);
-        setIsExcelResultUnconfirmed(pendingRequest.resultUnconfirmed);
-        setIsExcelLookupOnly(pendingRequest.manualRetryCount >= 1);
+
+        const hasStoredPending = storedPending?.userId === userId &&
+          storedPending.fingerprint === fingerprint;
+        if (hasStoredPending) {
+          setIsExcelResultUnconfirmed(true);
+          if (pendingRequest.lookupAttempted) {
+            setCanReimportExcel(true);
+          } else {
+            scheduleExcelRecoveryLookup(
+              pendingRequest,
+              getTripExcelRecoveryDelay(pendingRequest),
+            );
+          }
+        }
       } else {
         setExcelIssues(result.issues);
       }
@@ -359,11 +413,18 @@ export const TripEditorModal = ({
     if (excelPreview) {
       void getExcelRequestFingerprint(excelPreview, code, selectedCurrency?.symbol ?? "")
         .then((fingerprint) => {
-          const pendingRequest = getPendingExcelRequest(fingerprint);
+          if (!userId) return;
+          const storedPending = readPendingExcelRequest();
+          if (storedPending?.userId === userId && storedPending.fingerprint !== fingerprint) {
+            setExcelRequestId(null);
+            setFormError("目前有另一份 Excel 的建立結果尚未確認，請先完成原請求確認。");
+            return;
+          }
+          const pendingRequest = getPendingExcelRequest(userId, fingerprint);
           excelRequestFingerprintRef.current = fingerprint;
           setExcelRequestId(pendingRequest.requestId);
-          setIsExcelResultUnconfirmed(pendingRequest.resultUnconfirmed);
-          setIsExcelLookupOnly(pendingRequest.manualRetryCount >= 1);
+          setIsExcelResultUnconfirmed(pendingRequest.resultUnconfirmedAt !== null);
+          setCanReimportExcel(pendingRequest.lookupAttempted);
         })
         .catch(() => {
           setExcelRequestId(null);
@@ -372,13 +433,23 @@ export const TripEditorModal = ({
     }
   };
 
-  const handleExcelCreate = async () => {
-    if (!excelPreview || !excelRequestId || !canManageEditors) {
-      return;
+  const handleExcelCreate = async (action: "create" | "lookup" | "reimport" = "create") => {
+    if (!excelPreview || !canManageEditors || !userId || isSaving) return;
+    if (action === "lookup" && !excelRequestId) return;
+    if (action === "create" && (isExcelWaitingForConfirmation || isExcelResultUnconfirmed)) return;
+
+    if (action === "reimport") {
+      const confirmed = window.confirm(
+        "上一次建立可能已在雲端成功。重新匯入可能產生重複旅程；若出現重複，請自行檢查旅程清單並選擇、刪除多餘旅程。確定要重新匯入嗎？",
+      );
+      if (!confirmed) return;
+      const oldPending = readPendingExcelRequest();
+      if (oldPending?.userId === userId) clearPendingExcelRequest(oldPending.requestId);
+      setCanReimportExcel(false);
+      setIsExcelResultUnconfirmed(false);
+      setIsExcelWaitingForConfirmation(false);
     }
 
-    // Excel V1 always uses the shared new-Trip system default. The manual
-    // creation form retains its own currency selector; Excel does not.
     const selectedCurrencyCode = defaultCurrencyCode.trim();
     const selectedCurrencySymbol = defaultCurrencySymbol.trim();
     if (!selectedCurrencyCode || !selectedCurrencySymbol) {
@@ -388,72 +459,107 @@ export const TripEditorModal = ({
 
     setFormError("");
     setIsSaving(true);
+    setIsExcelWaitingForConfirmation(action === "lookup");
     releaseFocusedControl();
     let pendingForRecovery: TripExcelPendingRequest | null = null;
+    let lookupStarted = false;
     try {
       const fingerprint = await getExcelRequestFingerprint(
         excelPreview,
         selectedCurrencyCode,
         selectedCurrencySymbol,
       );
-      const pending = getPendingExcelRequest(fingerprint);
+      const pending = action === "reimport"
+        ? createInitialTripExcelPendingRequest(userId, fingerprint, crypto.randomUUID())
+        : getPendingExcelRequest(userId, fingerprint);
       pendingForRecovery = pending;
-      const wasUnconfirmed = isExcelResultUnconfirmed || pending.resultUnconfirmed;
-      const decision = wasUnconfirmed
-        ? decideTripExcelRetry(pending)
-        : { action: "CREATE" as const, manualRetryCount: pending.manualRetryCount, cooldownStartedAt: pending.cooldownStartedAt ?? 0 };
+
+      if (action === "lookup" && pending.lookupAttempted) {
+        setCanReimportExcel(true);
+        setIsExcelWaitingForConfirmation(false);
+        return;
+      }
+      if (action === "lookup") {
+        pending.lookupAttempted = true;
+      }
+
+      if (!writePendingExcelRequest(pending)) {
+        throw new Error("無法保存待確認請求，為避免失去原 request ID，已停止送出建立請求。請確認瀏覽器儲存空間後重試。");
+      }
+      lookupStarted = action === "lookup";
 
       excelRequestFingerprintRef.current = fingerprint;
       setExcelRequestId(pending.requestId);
-
-      if (decision.action === "CREATE" && wasUnconfirmed) {
-        pending.manualRetryCount = decision.manualRetryCount;
-        pending.cooldownStartedAt = decision.cooldownStartedAt;
-      }
-      setIsExcelLookupOnly(decision.action === "LOOKUP");
-      // Persist before any network call so reload/reopen cannot reset retry limits.
-      writePendingExcelRequest(pending);
-
-      if (decision.action === "BLOCKED") {
-        throw new Error("已達人工重試上限；系統只允許查詢原建立請求。");
-      }
 
       await onCreateFromExcel(
         excelPreview,
         pending.requestId,
         selectedCurrencyCode,
         selectedCurrencySymbol,
-        decision.action === "LOOKUP",
+        action === "lookup",
       );
+
       clearPendingExcelRequest(pending.requestId);
       setExcelRequestId(null);
       setExcelPreview(null);
       setIsExcelResultUnconfirmed(false);
-      setIsExcelLookupOnly(false);
+      setIsExcelWaitingForConfirmation(false);
+      setCanReimportExcel(false);
       excelRequestFingerprintRef.current = null;
     } catch (error) {
-      if (
-        error instanceof Error &&
-        "code" in error &&
-        ["RPC_FAILED", "RESULT_UNCONFIRMED", "REFRESH_UNCONFIRMED"].includes(
-          String(error.code),
-        )
-      ) {
+      const errorCode = error instanceof Error && "code" in error
+        ? String(error.code)
+        : "";
+      if (errorCode === "RESULT_UNCONFIRMED" && pendingForRecovery) {
         setIsExcelResultUnconfirmed(true);
-        if (pendingForRecovery) {
-          pendingForRecovery.resultUnconfirmed = true;
-          writePendingExcelRequest(pendingForRecovery);
-          setIsExcelLookupOnly(pendingForRecovery.manualRetryCount >= 1);
+        if (action === "lookup") {
+          pendingForRecovery.lookupAttempted = true;
+          setCanReimportExcel(true);
+          setIsExcelWaitingForConfirmation(false);
+        } else {
+          pendingForRecovery.resultUnconfirmedAt = Date.now();
+          pendingForRecovery.lookupAttempted = false;
         }
+        if (!writePendingExcelRequest(pendingForRecovery)) {
+          setCanReimportExcel(false);
+          setFormError("無法更新待確認紀錄，請勿重新匯入，以免產生重複旅程。請確認瀏覽器儲存空間後重新開啟原 Excel 流程。");
+          if (action !== "lookup") {
+            scheduleExcelRecoveryLookup(pendingForRecovery, TRIP_EXCEL_CREATE_RECOVERY_DELAY_MS);
+          }
+        } else if (action !== "lookup") {
+          scheduleExcelRecoveryLookup(pendingForRecovery, TRIP_EXCEL_CREATE_RECOVERY_DELAY_MS);
+          setFormError("");
+        }
+      } else if (errorCode === "REFRESH_UNCONFIRMED") {
+        if (pendingForRecovery) clearPendingExcelRequest(pendingForRecovery.requestId);
+        setExcelRequestId(null);
+        setIsExcelResultUnconfirmed(false);
+        setIsExcelWaitingForConfirmation(false);
+        setCanReimportExcel(false);
+        setFormError("雲端已確認建立成功，但旅程清單尚未更新。請重新整理頁面確認；不要再次匯入，以免產生重複旅程。");
+      } else if (action !== "lookup") {
+        if (pendingForRecovery) clearPendingExcelRequest(pendingForRecovery.requestId);
+        setIsExcelResultUnconfirmed(false);
+        setIsExcelWaitingForConfirmation(false);
+        setCanReimportExcel(false);
+        setFormError(error instanceof Error ? error.message : "Excel 建立失敗，請檢查資料後再試。");
+      } else {
+        setIsExcelWaitingForConfirmation(false);
+        if (lookupStarted) {
+          setIsExcelResultUnconfirmed(true);
+          setCanReimportExcel(true);
+        } else {
+          setCanReimportExcel(false);
+        }
+        setFormError(error instanceof Error ? error.message : "第二次查詢未能確認建立結果；上一次建立仍可能成功，重新匯入前請留意重複旅程風險。");
       }
-      const message = error instanceof Error
-        ? error.message
-        : "無法確認 Excel 建立結果。請保留目前檔案並以相同內容重試。";
-      setFormError(message);
     } finally {
       setIsSaving(false);
     }
   };
+  useEffect(() => {
+    handleExcelCreateRef.current = handleExcelCreate;
+  });
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -585,6 +691,8 @@ export const TripEditorModal = ({
     await onDelete();
     setIsDeleting(false);
   };
+
+  if (!isOpen) return null;
 
   if (pendingShrink) {
     const originalDayCount = tripDetail?.content.days.length ?? dayCount;
@@ -865,34 +973,52 @@ export const TripEditorModal = ({
                 <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs leading-5 text-amber-900">
                   本次新 TRIP 將使用系統預設幣別：<strong>{defaultCurrencyCode}（{defaultCurrencySymbol}）</strong>。
                   此設定不會從 Excel 讀取，請留意旅程目的地所使用的幣別。
-                  {isExcelResultUnconfirmed && " 上次建立結果尚未確認，請檢視資料後使用同一份 Excel 重試；系統會沿用原建立請求。人工建立重試最多一次，之後只查詢原請求，不會重複送出建立。"}
+                  {isExcelWaitingForConfirmation && " 建立結果尚未確認，系統會在 30 秒後自動查詢一次，請稍候。"}
+                  {canReimportExcel && " 第二次查詢後仍無法確認上一次結果。上一次建立可能已成功；重新匯入可能產生重複旅程，若發現重複，請自行檢查、選擇並刪除多餘旅程。"}
+                  {isExcelResultUnconfirmed && !isExcelWaitingForConfirmation && !canReimportExcel && " 建立結果尚未確認，請勿重新匯入；請依上方提示恢復網路／登入狀態後，再開啟原 Excel 流程確認。"}
                 </div>
                 {formError && (
                   <div role="alert" className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700">
                     {formError}
                   </div>
                 )}
-                <button
-                  type="button"
-                  onClick={() => void handleExcelCreate()}
-                  disabled={!excelRequestId || isSaving || !canManageEditors}
-                  className="mt-3 w-full rounded-lg bg-emerald-700 px-4 py-3 text-sm font-bold text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-600"
-                >
-                  {isSaving
-                    ? (isExcelLookupOnly ? "正在查詢原建立請求…" : "正在建立並確認雲端資料…")
-                    : (isExcelLookupOnly ? "查詢原建立請求" : isExcelResultUnconfirmed ? "人工重試一次" : "建立 TRIP")}
-                </button>
+                {canReimportExcel ? (
+                  <button
+                    type="button"
+                    onClick={() => void handleExcelCreate("reimport")}
+                    disabled={isSaving || !canManageEditors}
+                    className="mt-3 w-full rounded-lg bg-amber-700 px-4 py-3 text-sm font-bold text-white hover:bg-amber-800 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-600"
+                  >
+                    再次匯入（可能產生重複旅程）
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => void handleExcelCreate("create")}
+                    disabled={!excelRequestId || isSaving || !canManageEditors || isExcelResultUnconfirmed}
+                    className="mt-3 w-full rounded-lg bg-emerald-700 px-4 py-3 text-sm font-bold text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-600"
+                  >
+                    {isSaving
+                      ? (isExcelWaitingForConfirmation ? "正在確認建立結果，請稍候…" : "正在建立並確認雲端資料…")
+                      : isExcelResultUnconfirmed ? "等待確認結果…" : "建立 TRIP"}
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => {
                     // Leaving the UI does not cancel an in-flight cloud request.
-                    // Keep its requestId/fingerprint in sessionStorage for recovery.
+                    // Keep the minimal request identity in localStorage for recovery.
                     setExcelPreview(null);
                     setExcelIssues([]);
                     setExcelFileName("");
                     setExcelRequestId(null);
                     setIsExcelResultUnconfirmed(false);
-                    setIsExcelLookupOnly(false);
+                    setIsExcelWaitingForConfirmation(false);
+                    setCanReimportExcel(false);
+                    if (excelRecoveryTimerRef.current !== null) {
+                      window.clearTimeout(excelRecoveryTimerRef.current);
+                      excelRecoveryTimerRef.current = null;
+                    }
                     setFormError("");
                     excelRequestFingerprintRef.current = null;
                     setCreationMethod("manual");
@@ -900,7 +1026,7 @@ export const TripEditorModal = ({
                   disabled={isSaving}
                   className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:border-slate-400 hover:bg-slate-50 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  取消匯入，返回建立方式
+                  離開匯入流程，返回建立方式
                 </button>
               </div>
             )}

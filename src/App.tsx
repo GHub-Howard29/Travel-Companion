@@ -1469,6 +1469,7 @@ function ConfiguredApp({
           superAdminEmails={superAdminEmails}
           defaultParticipantProfiles={defaultParticipantProfiles}
           canManageEditors={adminProfile?.role === "super_admin"}
+          userId={userId}
           isOpen={isTripEditorOpen}
           onClose={() => setIsTripEditorOpen(false)}
           onSubmit={handleTripEditorSubmit}

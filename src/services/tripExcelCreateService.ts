@@ -160,8 +160,7 @@ export const createTripFromExcel = async (
     throw new TripExcelCreateError("OFFLINE", "網路連線已中斷，Excel 建立已停止。");
   }
 
-  // Retry recovery may be lookup-only during cooldown. It must never submit
-  // another create RPC while that restriction is active.
+  // Delayed recovery is lookup-only. It must never submit another create RPC.
   let data: unknown = null;
   let error: { code?: string; message?: string } | null = null;
   if (!lookupOnly) {
