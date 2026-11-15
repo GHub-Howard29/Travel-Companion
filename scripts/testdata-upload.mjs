@@ -94,6 +94,7 @@ async function readLocalSnapshot() {
     : validateSyncTimestamp(payload.last_synced_at, "last_synced_at");
   const data = validateDatabaseDataset(normalizeDatabaseDataset(payload.data));
   return { localLastChangedAt, lastSyncedAt, data };
+
 }
 
 async function readGitDataset() {
@@ -252,6 +253,7 @@ async function main() {
     console.log(JSON.stringify({
       preview: true,
       action: decision.action,
+      trip_ids: data.trips.map((trip) => ({ id: trip.id, title: trip.title, is_public: trip.is_public })),
       wouldPublish: { manifest, counts: manifest.counts },
       note: "預覽模式未寫入 fixture、未 commit/push，也未更新本機 last_synced_at。",
     }, null, 2));

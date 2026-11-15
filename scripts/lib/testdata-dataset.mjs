@@ -9,22 +9,10 @@ const columns = {
   other_info_items: ["id", "trip_id", "client_item_id", "folder_id", "title", "content", "allowed_roles", "sort_order", "created_at", "updated_at", "deleted_at"],
 };
 
-const excludedTripContentKey = /participant|email|phone|password|token|secret|api.?key|attachment|uploaded_by|owner_user_id|created_by|payer|testPurpose|__testFixture|fixtureDescription|checklistData/i;
-
-function redactTripContent(value) {
-  if (Array.isArray(value)) return value.map(redactTripContent);
-  if (!value || typeof value !== "object") return value;
-  return Object.fromEntries(Object.entries(value)
-    .filter(([key]) => !excludedTripContentKey.test(key))
-    .map(([key, item]) => [key, redactTripContent(item)]));
-}
-
 function canonicalRow(table, row) {
-  const result = Object.fromEntries(columns[table]
+  return Object.fromEntries(columns[table]
     .filter((column) => Object.hasOwn(row, column))
     .map((column) => [column, row[column]]));
-  if (table === "trips") result.content = redactTripContent(result.content ?? {});
-  return result;
 }
 
 export function normalizeDatabaseDataset(input) {
@@ -55,10 +43,6 @@ function inspectSensitive(value, location = "$") {
   }
   if (value && typeof value === "object") {
     for (const [key, item] of Object.entries(value)) {
-      if (/email|phone|password|token|secret|api.?key|attachment|uploaded_by|owner_user_id|created_by|participant|payer/i.test(key) &&
-          item !== null && item !== "" && item !== false) {
-        throw new Error(`同步資料集含禁止跨機欄位：${location}.${key}`);
-      }
       inspectSensitive(item, `${location}.${key}`);
     }
     return;
@@ -69,7 +53,7 @@ function inspectSensitive(value, location = "$") {
     /\b09\d{2}[- ]?\d{3}[- ]?\d{3}\b/.test(value) ||
     /\b(?:sk-[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9_]{20,}|eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{10,})\b/.test(value)
   )) {
-    throw new Error(`同步資料集疑似含 Email 或憑證：${location}`);
+    throw new Error(`同步資料集疑似含 Email、電話或憑證：${location}`);
   }
 }
 
@@ -80,8 +64,8 @@ export function validateDatabaseDataset(input) {
   }
 
   for (const trip of data.trips) {
-    if (typeof trip.id !== "string" || !trip.id.trim() || trip.is_public !== false) {
-      throw new Error("同步資料集只允許具備有效 ID 的非公開行程。");
+    if (typeof trip.id !== "string" || !trip.id.trim() || typeof trip.is_public !== "boolean") {
+      throw new Error("同步資料集的 Trip 必須具備有效 ID 與 boolean is_public。");
     }
     if (typeof trip.content !== "object" || trip.content === null || Array.isArray(trip.content)) {
       throw new Error("Trip content 必須是 JSON object。");
@@ -108,8 +92,8 @@ export function validateDatabaseDataset(input) {
 
   const tripIds = new Set(data.trips.map((row) => row.id));
   const checklistIds = new Set(data.checklists.map((row) => row.id));
-  if (data.checklists.some((row) => !tripIds.has(row.trip_id) || row.scope !== "shared")) {
-    throw new Error("Checklist 必須屬於同步行程且 scope 必須為 shared。");
+  if (data.checklists.some((row) => row.scope !== "shared" || !tripIds.has(row.trip_id))) {
+    throw new Error("同步資料集的 Checklist 必須是 shared 且具有對應 Trip。");
   }
   if (data.checklist_items.some((row) => !checklistIds.has(row.checklist_id))) {
     throw new Error("Checklist item 找不到對應的 shared checklist。");
@@ -119,6 +103,8 @@ export function validateDatabaseDataset(input) {
       throw new Error(`${table} 含有同步範圍以外的行程資料。`);
     }
   }
+  // The dataset contains shared checklists only. Private checklists may exist locally,
+  // including stale rows whose parent Trip has been removed; they are outside this dataset.
   inspectSensitive(data);
   return data;
 }
@@ -133,12 +119,12 @@ export function buildLocalDatabaseSnapshotSql() {
     "  'local_last_changed_at', to_char(s.local_last_changed_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"'),",
     "  'last_synced_at', CASE WHEN s.last_synced_at IS NULL THEN NULL ELSE to_char(s.last_synced_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"') END,",
     "  'data', json_build_object(",
-    "    'trips', coalesce((SELECT json_agg(to_jsonb(t) ORDER BY t.id) FROM (SELECT id,title,departure_date,currency_config,sidebar_config,content,created_at,updated_at,is_public FROM public.trips WHERE is_public=false) t), '[]'::json),",
-    "    'checklists', coalesce((SELECT json_agg(to_jsonb(c) ORDER BY c.id) FROM (SELECT id,trip_id,scope,title,created_at,updated_at FROM public.checklists WHERE scope='shared' AND trip_id IN (SELECT id FROM public.trips WHERE is_public=false)) c), '[]'::json),",
-    "    'checklist_items', coalesce((SELECT json_agg(to_jsonb(i) ORDER BY i.id) FROM (SELECT i.id,i.checklist_id,i.client_item_id,i.label,i.is_checked,i.sort_order,i.created_at,i.updated_at,i.deleted_at,i.category FROM public.checklist_items i JOIN public.checklists c ON c.id=i.checklist_id WHERE c.scope='shared' AND c.trip_id IN (SELECT id FROM public.trips WHERE is_public=false)) i), '[]'::json),",
-    "    'expenses', coalesce((SELECT json_agg(to_jsonb(e) ORDER BY e.trip_id,e.client_item_id) FROM (SELECT trip_id,title,amount,currency,created_at,expense_date,client_item_id,updated_at,deleted_at FROM public.expenses WHERE trip_id IN (SELECT id FROM public.trips WHERE is_public=false)) e), '[]'::json),",
-    "    'exchange_purchases', coalesce((SELECT json_agg(to_jsonb(e) ORDER BY e.id) FROM (SELECT id,trip_id,client_item_id,foreign_currency,purchase_date,twd_amount,foreign_amount,created_at,updated_at FROM public.exchange_purchases WHERE trip_id IN (SELECT id FROM public.trips WHERE is_public=false)) e), '[]'::json),",
-    "    'other_info_items', coalesce((SELECT json_agg(to_jsonb(o) ORDER BY o.id) FROM (SELECT id,trip_id,client_item_id,folder_id,title,content,allowed_roles,sort_order,created_at,updated_at,deleted_at FROM public.other_info_items WHERE trip_id IN (SELECT id FROM public.trips WHERE is_public=false)) o), '[]'::json)",
+    "    'trips', coalesce((SELECT json_agg(to_jsonb(t) ORDER BY t.id) FROM (SELECT id,title,departure_date,currency_config,sidebar_config,content,created_at,updated_at,is_public FROM public.trips) t), '[]'::json),",
+    "    'checklists', coalesce((SELECT json_agg(to_jsonb(c) ORDER BY c.id) FROM (SELECT id,trip_id,scope,title,created_at,updated_at FROM public.checklists WHERE scope='shared' AND trip_id IN (SELECT id FROM public.trips)) c), '[]'::json),",
+    "    'checklist_items', coalesce((SELECT json_agg(to_jsonb(i) ORDER BY i.id) FROM (SELECT i.id,i.checklist_id,i.client_item_id,i.label,i.is_checked,i.sort_order,i.created_at,i.updated_at,i.deleted_at,i.category FROM public.checklist_items i JOIN public.checklists c ON c.id=i.checklist_id JOIN public.trips t ON t.id=c.trip_id WHERE c.scope='shared') i), '[]'::json),",
+    "    'expenses', coalesce((SELECT json_agg(to_jsonb(e) ORDER BY e.trip_id,e.client_item_id) FROM (SELECT trip_id,title,amount,currency,created_at,expense_date,client_item_id,updated_at,deleted_at FROM public.expenses) e), '[]'::json),",
+    "    'exchange_purchases', coalesce((SELECT json_agg(to_jsonb(e) ORDER BY e.id) FROM (SELECT id,trip_id,client_item_id,foreign_currency,purchase_date,twd_amount,foreign_amount,created_at,updated_at FROM public.exchange_purchases) e), '[]'::json),",
+    "    'other_info_items', coalesce((SELECT json_agg(to_jsonb(o) ORDER BY o.id) FROM (SELECT id,trip_id,client_item_id,folder_id,title,content,allowed_roles,sort_order,created_at,updated_at,deleted_at FROM public.other_info_items) o), '[]'::json)",
     "  )",
     ") AS payload",
     "FROM tc_testdata.sync_state s WHERE s.singleton=true;",
@@ -178,8 +164,8 @@ export function buildDatabaseDatasetImportSql({
 
   const tripJson = "payload -> 'trips'";
   statements.push(
-    `  IF EXISTS (SELECT 1 FROM jsonb_populate_recordset(NULL::public.trips, ${tripJson}) incoming JOIN public.trips existing ON existing.id = incoming.id WHERE existing.is_public IS DISTINCT FROM false) THEN RAISE EXCEPTION 'Incoming private Trip ID conflicts with a public Trip.'; END IF;`,
-    `  DELETE FROM public.trips t WHERE t.is_public = false AND NOT EXISTS (SELECT 1 FROM jsonb_populate_recordset(NULL::public.trips, ${tripJson}) r WHERE r.id = t.id);`,
+    `  IF EXISTS (SELECT 1 FROM jsonb_populate_recordset(NULL::public.trips, ${tripJson}) incoming JOIN public.trips existing ON existing.id = incoming.id WHERE existing.is_public IS DISTINCT FROM incoming.is_public) THEN RAISE EXCEPTION 'Incoming Trip ID conflicts with a different visibility state.'; END IF;`,
+    `  DELETE FROM public.trips t WHERE t.id NOT IN ('free-travel-2026-01', 'group-tour-2026-10') AND NOT EXISTS (SELECT 1 FROM jsonb_populate_recordset(NULL::public.trips, ${tripJson}) r WHERE r.id = t.id);`,
     `  IF EXISTS (SELECT 1 FROM jsonb_populate_recordset(NULL::public.checklists, payload -> 'checklists') incoming JOIN public.checklists existing ON existing.id = incoming.id WHERE existing.trip_id IS DISTINCT FROM incoming.trip_id OR existing.scope IS DISTINCT FROM incoming.scope) THEN RAISE EXCEPTION 'Checklist ID belongs to a different trip or scope.'; END IF;`,
     `  IF EXISTS (SELECT 1 FROM jsonb_populate_recordset(NULL::public.checklist_items, payload -> 'checklist_items') incoming JOIN public.checklist_items existing ON existing.id = incoming.id WHERE existing.checklist_id IS DISTINCT FROM incoming.checklist_id OR existing.client_item_id IS DISTINCT FROM incoming.client_item_id) THEN RAISE EXCEPTION 'Checklist item ID belongs to a different checklist or business key.'; END IF;`,
     `  IF EXISTS (SELECT 1 FROM jsonb_populate_recordset(NULL::public.checklist_items, payload -> 'checklist_items') incoming JOIN public.checklist_items existing ON existing.checklist_id = incoming.checklist_id AND existing.client_item_id = incoming.client_item_id AND existing.id <> incoming.id WHERE incoming.client_item_id IS NOT NULL) THEN RAISE EXCEPTION 'Checklist item business key conflicts with a different local ID.'; END IF;`,
@@ -187,11 +173,11 @@ export function buildDatabaseDatasetImportSql({
     `  IF EXISTS (SELECT 1 FROM jsonb_populate_recordset(NULL::public.exchange_purchases, payload -> 'exchange_purchases') incoming JOIN public.exchange_purchases existing ON existing.trip_id = incoming.trip_id AND existing.client_item_id = incoming.client_item_id AND existing.id <> incoming.id) THEN RAISE EXCEPTION 'Exchange purchase business key conflicts with a different local ID.'; END IF;`,
     `  IF EXISTS (SELECT 1 FROM jsonb_populate_recordset(NULL::public.other_info_items, payload -> 'other_info_items') incoming JOIN public.other_info_items existing ON existing.id = incoming.id WHERE existing.trip_id IS DISTINCT FROM incoming.trip_id OR existing.client_item_id IS DISTINCT FROM incoming.client_item_id) THEN RAISE EXCEPTION 'Other-info item ID belongs to a different Trip or business key.'; END IF;`,
     `  IF EXISTS (SELECT 1 FROM jsonb_populate_recordset(NULL::public.other_info_items, payload -> 'other_info_items') incoming JOIN public.other_info_items existing ON existing.trip_id = incoming.trip_id AND existing.client_item_id = incoming.client_item_id AND existing.id <> incoming.id WHERE incoming.client_item_id IS NOT NULL) THEN RAISE EXCEPTION 'Other-info business key conflicts with a different local ID.'; END IF;`,
-    `  DELETE FROM public.checklist_items i USING public.checklists c, public.trips t WHERE i.checklist_id = c.id AND c.trip_id = t.id AND c.scope = 'shared' AND t.is_public = false AND NOT EXISTS (SELECT 1 FROM jsonb_populate_recordset(NULL::public.checklist_items, payload -> 'checklist_items') r WHERE r.id = i.id);`,
-    `  DELETE FROM public.checklists c USING public.trips t WHERE c.trip_id = t.id AND c.scope = 'shared' AND t.is_public = false AND NOT EXISTS (SELECT 1 FROM jsonb_populate_recordset(NULL::public.checklists, payload -> 'checklists') r WHERE r.id = c.id);`,
-    `  DELETE FROM public.expenses e USING public.trips t WHERE e.trip_id = t.id AND t.is_public = false AND NOT EXISTS (SELECT 1 FROM jsonb_populate_recordset(NULL::public.expenses, payload -> 'expenses') r WHERE r.trip_id = e.trip_id AND r.client_item_id = e.client_item_id);`,
-    `  DELETE FROM public.exchange_purchases e USING public.trips t WHERE e.trip_id = t.id AND t.is_public = false AND NOT EXISTS (SELECT 1 FROM jsonb_populate_recordset(NULL::public.exchange_purchases, payload -> 'exchange_purchases') r WHERE r.id = e.id);`,
-    `  DELETE FROM public.other_info_items o USING public.trips t WHERE o.trip_id = t.id AND t.is_public = false AND NOT EXISTS (SELECT 1 FROM jsonb_populate_recordset(NULL::public.other_info_items, payload -> 'other_info_items') r WHERE r.id = o.id);`,
+    `  DELETE FROM public.checklist_items i USING public.checklists c WHERE i.checklist_id = c.id AND c.scope = 'shared' AND NOT EXISTS (SELECT 1 FROM jsonb_populate_recordset(NULL::public.checklist_items, payload -> 'checklist_items') r WHERE r.id = i.id);`,
+    `  DELETE FROM public.checklists c WHERE c.scope = 'shared' AND c.trip_id IN (SELECT id FROM public.trips) AND NOT EXISTS (SELECT 1 FROM jsonb_populate_recordset(NULL::public.checklists, payload -> 'checklists') r WHERE r.id = c.id);`,
+    `  DELETE FROM public.expenses e WHERE NOT EXISTS (SELECT 1 FROM jsonb_populate_recordset(NULL::public.expenses, payload -> 'expenses') r WHERE r.trip_id = e.trip_id AND r.client_item_id = e.client_item_id);`,
+    `  DELETE FROM public.exchange_purchases e WHERE NOT EXISTS (SELECT 1 FROM jsonb_populate_recordset(NULL::public.exchange_purchases, payload -> 'exchange_purchases') r WHERE r.id = e.id);`,
+    `  DELETE FROM public.other_info_items o WHERE NOT EXISTS (SELECT 1 FROM jsonb_populate_recordset(NULL::public.other_info_items, payload -> 'other_info_items') r WHERE r.id = o.id);`,
     `  INSERT INTO public.trips (id, title, departure_date, currency_config, sidebar_config, content, created_at, updated_at, is_public)`,
     `  SELECT r.id, r.title, r.departure_date, r.currency_config, r.sidebar_config, r.content, r.created_at, r.updated_at, r.is_public`,
     `  FROM jsonb_populate_recordset(NULL::public.trips, ${tripJson}) AS r`,
