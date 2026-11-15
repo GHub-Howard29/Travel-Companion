@@ -392,6 +392,13 @@ export const TripEditorModal = ({
         }
       } else {
         setExcelIssues(result.issues);
+        if (import.meta.env.DEV && result.diagnostics.length > 0) {
+          console.groupCollapsed(
+            `[Trip Excel import diagnostics] ${file.name}: ${result.diagnostics.length} invalid cell(s)`,
+          );
+          console.table(result.diagnostics);
+          console.groupEnd();
+        }
       }
     } catch {
       setExcelIssues([{

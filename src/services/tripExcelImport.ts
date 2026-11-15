@@ -36,9 +36,28 @@ export interface TripExcelValidationIssue {
   message: string;
 }
 
+export interface TripExcelCellDiagnostic {
+  worksheet: string;
+  address: string;
+  field: string;
+  cellType: number;
+  valueType: string;
+  valueSummary: string;
+  hyperlinkTextType: string;
+  hyperlinkTextSummary: string;
+  hyperlinkUrlType: string;
+  hyperlinkUrlSummary: string;
+  cellTextType: string;
+  cellTextSummary: string;
+}
+
 export type TripExcelParseResult =
   | { success: true; data: ParsedTripExcel }
-  | { success: false; issues: TripExcelValidationIssue[] };
+  | {
+    success: false;
+    issues: TripExcelValidationIssue[];
+    diagnostics: TripExcelCellDiagnostic[];
+  };
 
 const WORKSHEET_NAME = "新增 TRIP";
 const METADATA_SHEET_NAME = "系統設定";
@@ -62,6 +81,77 @@ const addIssue = (
   worksheet = WORKSHEET_NAME,
 ) => issues.push({ worksheet, row, field, message });
 
+const summarizeCellValue = (value: ExcelJS.CellValue): string => {
+  if (value === null || value === undefined) return String(value);
+  if (value instanceof Date) return "Date";
+  if (typeof value === "string") {
+    const text = value.length > 80 ? `${value.slice(0, 77)}...` : value;
+    return JSON.stringify(text);
+  }
+  if (typeof value !== "object") return String(value);
+  if ("richText" in value && Array.isArray(value.richText)) {
+    return `{ richText: ${value.richText.length} run(s) }`;
+  }
+  if ("formula" in value) return "{ formula: <present> }";
+  if ("hyperlink" in value) return "{ hyperlink: <present>, text: <see cell.text> }";
+  if ("text" in value) return "{ text: <present> }";
+  if ("result" in value) return `{ result: ${typeof value.result} }`;
+  return `{ object keys: ${Object.keys(value).slice(0, 8).join(", ")} }`;
+};
+
+const summarizeDiagnosticPart = (value: unknown): string => {
+  if (value === null || value === undefined) return String(value);
+  if (typeof value === "string") {
+    return JSON.stringify(value.length > 80 ? `${value.slice(0, 77)}...` : value);
+  }
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  if (Array.isArray(value)) return `Array(${value.length})`;
+  if (typeof value === "object") return `Object(${Object.keys(value).slice(0, 8).join(", ")})`;
+  return typeof value;
+};
+
+const getCellDiagnostic = (
+  cell: ExcelJS.Cell,
+  worksheet: string,
+  field: string,
+): TripExcelCellDiagnostic => {
+  const rawValue: unknown = cell.value;
+  const hyperlinkText = rawValue && typeof rawValue === "object" && "text" in rawValue
+    ? rawValue.text
+    : undefined;
+  const hyperlinkUrl = rawValue && typeof rawValue === "object" && "hyperlink" in rawValue
+    ? rawValue.hyperlink
+    : undefined;
+  const cellText: unknown = cell.text;
+  return {
+    worksheet,
+    address: cell.address,
+    field,
+    cellType: cell.type,
+    valueType: rawValue === null ? "object" : typeof rawValue,
+    valueSummary: summarizeCellValue(cell.value),
+    hyperlinkTextType: hyperlinkText === null ? "object" : typeof hyperlinkText,
+    hyperlinkTextSummary: summarizeDiagnosticPart(hyperlinkText),
+    hyperlinkUrlType: hyperlinkUrl === null ? "object" : typeof hyperlinkUrl,
+    hyperlinkUrlSummary: summarizeDiagnosticPart(hyperlinkUrl),
+    cellTextType: cellText === null ? "object" : typeof cellText,
+    cellTextSummary: summarizeDiagnosticPart(cellText),
+  };
+};
+
+const readCellText = (value: unknown): string | null => {
+  if (typeof value === "string") return value;
+  if (!value || typeof value !== "object") return null;
+
+  if ("richText" in value && Array.isArray(value.richText)) {
+    const text = value.richText
+      .map((part) => (part && typeof part.text === "string" ? part.text : ""))
+      .join("");
+    return text || null;
+  }
+  return null;
+};
+
 const cellValue = (value: ExcelJS.CellValue): unknown => {
   if (value instanceof Date) return value;
   if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
@@ -69,16 +159,14 @@ const cellValue = (value: ExcelJS.CellValue): unknown => {
   }
   if (!value || typeof value !== "object") return value;
 
+  if ("hyperlink" in value && "text" in value) {
+    return readCellText(value.text);
+  }
   if ("richText" in value && Array.isArray(value.richText)) {
-    return value.richText
-      .map((part) => (part && typeof part.text === "string" ? part.text : ""))
-      .join("");
+    return readCellText(value);
   }
-  if ("text" in value && typeof value.text === "string") {
-    return value.text;
-  }
-  if ("hyperlink" in value && "text" in value && typeof value.text === "string") {
-    return value.text;
+  if ("text" in value) {
+    return readCellText(value.text);
   }
   if ("result" in value) {
     return cellValue(value.result as ExcelJS.CellValue);
@@ -145,24 +233,26 @@ export const parseTripExcelWorkbook = async (
         field: "工作簿",
         message: "無法讀取 Excel 檔案，請使用標準 .xlsx 範本。",
       }],
+      diagnostics: [],
     };
   }
 
   const issues: TripExcelValidationIssue[] = [];
+  const diagnostics: TripExcelCellDiagnostic[] = [];
   const actualNames = workbook.worksheets.map((sheet) => sheet.name);
   if (
     actualNames.length !== REQUIRED_SHEET_NAMES.length ||
     REQUIRED_SHEET_NAMES.some((name, index) => actualNames[index] !== name)
   ) {
     addIssue(issues, 1, "工作表", "工作表必須依序且僅包含「新增 TRIP」及「系統設定」。");
-    return { success: false, issues };
+    return { success: false, issues, diagnostics: [] };
   }
 
   const sheet = workbook.getWorksheet(WORKSHEET_NAME);
   const metadata = workbook.getWorksheet(METADATA_SHEET_NAME);
   if (!sheet || !metadata) {
     addIssue(issues, 1, "工作表", "缺少必要工作表。");
-    return { success: false, issues };
+    return { success: false, issues, diagnostics: [] };
   }
 
   if (metadata.state !== "hidden") {
@@ -209,17 +299,26 @@ export const parseTripExcelWorkbook = async (
     addIssue(issues, 1, "I:N", "類別輔助欄 I:N 必須保持隱藏。");
   }
 
-  const title = readText(cellValue(sheet.getCell("B2").value));
-  if (!title) addIssue(issues, 2, "TRIP 名稱", "必填，且必須為文字。");
+  const tripTitleCell = sheet.getCell("B2");
+  const title = readText(cellValue(tripTitleCell.value));
+  if (!title) {
+    addIssue(issues, 2, "TRIP 名稱", "必填，且必須為文字。");
+    diagnostics.push(getCellDiagnostic(tripTitleCell, WORKSHEET_NAME, "TRIP 名稱"));
+  }
 
-  const departureDate = formatDate(cellValue(sheet.getCell("B3").value));
-  if (!departureDate) addIssue(issues, 3, "出發日期", "必須是有效日期，格式為 YYYY-MM-DD。");
+  const departureDateCell = sheet.getCell("B3");
+  const departureDate = formatDate(cellValue(departureDateCell.value));
+  if (!departureDate) {
+    addIssue(issues, 3, "出發日期", "必須是有效日期，格式為 YYYY-MM-DD。");
+    diagnostics.push(getCellDiagnostic(departureDateCell, WORKSHEET_NAME, "出發日期"));
+  }
 
   const cards: ParsedTripExcelCard[] = [];
   for (let row = 7; row <= MAX_CARD_ROW; row += 1) {
-    const values = Array.from({ length: 6 }, (_, column) =>
-      cellValue(sheet.getCell(row, column + 1).value),
+    const rowCells = Array.from({ length: 6 }, (_, column) =>
+      sheet.getCell(row, column + 1),
     );
+    const values = rowCells.map((cell) => cellValue(cell.value));
     if (values.every(isBlank)) continue;
 
     const [dayValue, startValue, endValue, titleValue, categoryValue, descriptionValue] = values;
@@ -244,12 +343,17 @@ export const parseTripExcelWorkbook = async (
     if (startTime && endTime && endTime < startTime) {
       addIssue(issues, row, "結束時間", "不得早於開始時間；V1 不支援跨午夜。");
     }
-    if (!cardTitle) addIssue(issues, row, "行程名稱", "必填，且必須為文字。");
+    if (!cardTitle) {
+      addIssue(issues, row, "行程名稱", "必填，且必須為文字。");
+      diagnostics.push(getCellDiagnostic(rowCells[3], WORKSHEET_NAME, "行程名稱"));
+    }
     if (!category || !TRIP_EXCEL_CATEGORY_OPTIONS.includes(category as TripExcelCategory)) {
       addIssue(issues, row, "類別", "必須是交通、住宿、景點、餐飲、自駕、其他其中一項。");
+      diagnostics.push(getCellDiagnostic(rowCells[4], WORKSHEET_NAME, "類別"));
     }
     if (!isBlank(descriptionValue) && typeof descriptionValue !== "string") {
       addIssue(issues, row, "描述", "描述必須為文字或空白。");
+      diagnostics.push(getCellDiagnostic(rowCells[5], WORKSHEET_NAME, "描述"));
     }
 
     if (
@@ -279,6 +383,33 @@ export const parseTripExcelWorkbook = async (
     addIssue(issues, 7, "行程卡片", "至少需要一筆完整有效的行程卡片。");
   }
   const dayCount = cards.reduce((maximum, card) => Math.max(maximum, card.day), 0);
+  if (issues.length > 0) {
+    const diagnosticKeys = new Set(
+      diagnostics.map((diagnostic) => `${diagnostic.worksheet}!${diagnostic.address}`),
+    );
+    issues.forEach((issue) => {
+      if (issue.worksheet !== WORKSHEET_NAME || issue.row < 1 || !issue.field) return;
+      const columnByField: Record<string, number> = {
+        "第幾天": 1,
+        "開始時間": 2,
+        "結束時間": 3,
+        "行程名稱": 4,
+        "類別": 5,
+        "描述": 6,
+        "TRIP 名稱": 2,
+        "出發日期": 2,
+      };
+      const column = columnByField[issue.field];
+      if (!column) return;
+      const cell = sheet.getCell(issue.field === "TRIP 名稱" ? "B2" :
+        issue.field === "出發日期" ? "B3" : issue.row, column);
+      const key = `${issue.worksheet}!${cell.address}`;
+      if (diagnosticKeys.has(key)) return;
+      diagnostics.push(getCellDiagnostic(cell, issue.worksheet, issue.field));
+      diagnosticKeys.add(key);
+    });
+    return { success: false, issues, diagnostics };
+  }
   if (title && departureDate && issues.length === 0) {
     const days = Array.from({ length: dayCount }, (_, index) => index + 1);
     const daysData = Object.fromEntries(days.map((day) => [String(day), [] as ItineraryItem[]]));
@@ -299,5 +430,5 @@ export const parseTripExcelWorkbook = async (
     };
   }
 
-  return { success: false, issues };
+  return { success: false, issues, diagnostics };
 };

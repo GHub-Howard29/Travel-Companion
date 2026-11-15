@@ -88,6 +88,46 @@ const objectCellResult = await parseTripExcelWorkbook(new Uint8Array(objectCellB
 assert.equal(objectCellResult.success, false);
 if (!objectCellResult.success) {
   assert.ok(objectCellResult.issues.some((issue) => issue.field === "行程名稱"));
+  const titleDiagnostic = objectCellResult.diagnostics.find(
+    (diagnostic) => diagnostic.address === "D7",
+  );
+  assert.ok(titleDiagnostic);
+  assert.equal(titleDiagnostic.worksheet, "新增 TRIP");
+  assert.equal(titleDiagnostic.field, "行程名稱");
+  assert.equal(titleDiagnostic.cellType, objectCellSheet.getCell("D7").type);
+  assert.equal(titleDiagnostic.valueType, "object");
+  assert.match(titleDiagnostic.valueSummary, /formula/);
+  assert.equal(titleDiagnostic.hyperlinkTextType, "undefined");
+  assert.equal(titleDiagnostic.hyperlinkTextSummary, "undefined");
+  assert.equal(titleDiagnostic.hyperlinkUrlType, "undefined");
+  assert.equal(titleDiagnostic.hyperlinkUrlSummary, "undefined");
+  assert.equal(titleDiagnostic.cellTextType, "string");
+  assert.equal(titleDiagnostic.cellTextSummary, '""');
+}
+
+const hyperlinkWorkbook = await createWorkbook();
+const hyperlinkSheet = hyperlinkWorkbook.getWorksheet("新增 TRIP");
+assert.ok(hyperlinkSheet);
+hyperlinkSheet.getCell("B2").value = "超連結文字診斷測試";
+hyperlinkSheet.getCell("B3").value = "2027-07-01";
+hyperlinkSheet.getCell("A7").value = 1;
+hyperlinkSheet.getCell("B7").value = "0900";
+hyperlinkSheet.getCell("C7").value = "1000";
+hyperlinkSheet.getCell("D7").value = {
+  text: {
+    richText: [
+      { text: "松山城入口", font: { bold: true } },
+      { text: "/搭纜車", font: { underline: true } },
+    ],
+  },
+  hyperlink: "https://maps.app.goo.gl/xBDVatMsasGrHc5j7",
+};
+hyperlinkSheet.getCell("E7").value = "景點";
+const hyperlinkBuffer = await hyperlinkWorkbook.xlsx.writeBuffer();
+const hyperlinkResult = await parseTripExcelWorkbook(new Uint8Array(hyperlinkBuffer));
+assert.equal(hyperlinkResult.success, true);
+if (hyperlinkResult.success) {
+  assert.equal(hyperlinkResult.data.daysData["1"][0].title, "松山城入口/搭纜車");
 }
 
 const richTextWorkbook = await createWorkbook();
