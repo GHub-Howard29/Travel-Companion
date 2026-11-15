@@ -2,10 +2,15 @@
 
 > 本文件只保留未完成、待補驗或待評估工作；不累積 `[x]` 歷史。
 >
-> 目前狀態以《[14_專案現況總覽](14_專案現況總覽.md)》為準。最後整理：2026-11-13。
+> 目前狀態以《[14_專案現況總覽](14_專案現況總覽.md)》為準。最後整理：2026-11-15。
+
+## V3.11.2 發布前待驗
+
+- [ ] 共享帳本 UI／網路驗收：進入帳本頁可初始讀取並接收 Realtime 更新；斷線重連後可補讀；離開頁面後解除訂閱；自訂側邊欄的帳本頁類型亦須涵蓋。
+- [ ] 回歸確認個人帳本、帳目新增／修改／刪除、附件流程及 Trip 初始雲端載入未受影響；必要時驗證 recovery pending 在離線／重連情境下只於 reconciliation 完成後清除。
+- [ ] 完成 V3.11.2 RC 發布前檢查及必要人工／實機驗收；未完成前不得標記正式發布或部署。詳細範圍見《[113_V3.11.2_RC驗證與發布準備紀錄](113_V3.11.2_RC驗證與發布準備紀錄.md)》。
 
 ## 已確認 BUG 待處理
-
 - [x] **BUG034：V3.10.8 發布紀錄混入 V3.10.9 內容。** 已將 V3.10.9 發布證據分離至《[102_V3.10.9_正式發布紀錄](102_V3.10.9_正式發布紀錄.md)》，V3.10.8 留在《[101_V3.10.8_正式發布紀錄](101_V3.10.8_正式發布紀錄.md)》，並更新文件入口。`npm run verify:docs-links` 通過（120 份 Markdown、241 個本地目標）；完整建置結果記錄於本次最終驗證。原始 commit、workflow、公開 smoke 與未部署 Edge Function 的證據均保留，不改寫歷史事實。詳細見《[03_Bug修正紀錄](03_Bug修正紀錄.md)》。
 - [x] **BUG035：卡片過期且無可用天氣快取時未自動取消天氣勾選。** 已實作：僅在 Edge Function 明確回報 `ineligible` 且合併後快取無可用天氣／`fetched_at` 時，才於卡片 ID、地點、目的地日期和到達時間都仍一致的條件下自動取消勾選；由既有 `onSaveTripDetail` 路徑儲存並沿用遠端變更檢查／版本衝突保護。服務端需判定目的地當地資格及遠端快取，前端不再只依 UTC 日期自行推定無快取。本機專用天氣契約、ESLint、`git diff --check` 與完整 `npm run build` 已通過；正式／跨裝置端到端驗收尚待執行。詳細見《[03_Bug修正紀錄](03_Bug修正紀錄.md)》。
 
@@ -66,6 +71,10 @@
 - [x] Offline Revision Notice（V3.9.16）：已修正離線或 revision/access 檢查失敗時將「無法確認遠端」誤設為 `available` 的問題；離線不再新增「行程資料已有更新」通知，既有已確認通知維持，恢復連線後再重新檢查。
 - [x] Personal Book UX（V3.9.16）：個人帳本每筆記帳成功後不再跳出 alert；帳本頁固定顯示「個人帳本僅儲存在此裝置」、備份風險說明與「個人帳本・僅存本機」標籤。
 - [ ] 以目前正式版按風險補驗尚未被近期回歸直接覆蓋的舊功能：角色／歷史唯讀與撤權、路線付費 API／正式 OAuth／Android 外部開圖、單日／多日複製，以及離線／pending／跨裝置組合。iOS 不列入既定待驗清單；若實際使用者回報 iOS 問題，再依回報證據重新立案。
+
+## 區段預報開始實作前必要工作
+
+- [ ] **區段預報實作前必要工程準備**：API／時區 P0 證據已完成並整合：production `/v1/forecast` 已有正式 hourly payload 實測；Historical Forecast API 已完成 IANA→UTC 時窗、DST 23／25 小時及半開區間驗證；Open-Meteo 原有授權初核與 APP 來源署名／授權文字亦已有既存紀錄。API 未變更，不重複呼叫或重做 UTC／授權驗證。已完成：(1) 依已定案 WMO `weather_code` P0～P28 優先級建立 Edge Function domain helper `supabase/functions/weather-forecast/weather-code-priority.mjs`，fixture 測試直接引用同一 helper，並補齊前端 Code 97「強雷雨」顯示對照；(2) IANA midnight→UTC 共用 helper `supabase/functions/weather-forecast/timezone-utc.ts` 與 `destinationDayUtcWindow` 已建立，fixture 直接引用正式 helper，Node 22 regression 與 TypeScript 靜態檢查通過；Deno 2.2.7 runtime regression 已通過 5 項測試，並已通過完整 weather-forecast Edge Function `deno check`。仍待完成：(3) 前端 `departure_time` request／fingerprint 與 Edge 已儲存卡片資料契約；(4) Cron 與使用者請求對同 Place/date 所有有效引用卡片逐一 OR 判斷；(5) interval schema／Migration／RLS／RPC／lease／purge／座標變更交易設計；(6) batch 與實際 Edge CPU／wall time 驗證；(7) 每日預報不變的 golden regression 清單。Hourly API calls/day 壓力情境及 JSONB 原始儲存量初估已完成，詳見《[112_區段預報P0技術驗證與實作前檢查紀錄](112_區段預報P0技術驗證與實作前檢查紀錄.md)》§2.5；正式 DB row／索引／TOAST 儲存量與 Edge CPU 仍待實作後量測。只有實作時遇到具體 production API 參數錯誤，才針對該錯誤做最小驗證。證據及細項見《[112_區段預報P0技術驗證與實作前檢查紀錄](112_區段預報P0技術驗證與實作前檢查紀錄.md)》與《[79_天氣預報功能規格草案](79_天氣預報功能規格草案.md)》第 2.7 節。此項仍未完成前，不進入 production implementation。
 
 ## 待定案功能
 

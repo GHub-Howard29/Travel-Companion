@@ -92,6 +92,7 @@ const WEATHER_CODES: Record<number, { label: string; icon: string }> = {
   86: { label: "強陣雪", icon: "❄️" },
   95: { label: "雷雨", icon: "⛈️" },
   96: { label: "雷雨伴隨冰雹", icon: "⛈️" },
+  97: { label: "強雷雨", icon: "⛈️" },
   99: { label: "強雷雨伴隨冰雹", icon: "⛈️" },
 };
 
