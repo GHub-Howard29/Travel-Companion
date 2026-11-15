@@ -351,7 +351,7 @@ function ConfiguredApp({
     defaultParticipantProfiles,
     refreshDefaultParticipantProfiles,
     invalidateWorkspaceAccess,
-  } = useTripWorkspace({ supabase, supabaseUrl });
+  } = useTripWorkspace({ supabase });
   const {
     isSystemDeveloper,
     isUsageModalOpen,
@@ -544,6 +544,11 @@ function ConfiguredApp({
     selectedTripId,
     expenseBookTripId,
     isUsingSharedExpenseBook,
+    isExpenseBookPageActive:
+      resolveTravelToolType(
+        currentScreen,
+        currentTrip?.sidebarConfig.find((screen) => screen.id === currentScreen),
+      ) === "expense",
     canWriteSharedExpense: canEditSharedTrip,
     canExportAllSharedExpenses: role === ROLE.SUPER_ADMIN,
     currentCurrencyCode,

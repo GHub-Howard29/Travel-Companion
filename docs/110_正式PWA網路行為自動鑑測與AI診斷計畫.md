@@ -462,6 +462,96 @@
 - `window.location.reload()` 仍會由瀏覽器正常導覽流程載入頁面；是否在 Android Chrome／WebAPK 每次都由已確認的新 Worker 提供 HTML 與 assets，仍須真機驗證。
 - 必須測試單一 PWA client、多個同 scope clients、Worker install 失敗、網路中斷、版本 metadata 與 bundle 不一致、離線冷啟動，以及刷新後仍執行舊 bundle 的防迴圈行為。
 - 本次只做本機實作與測試，未執行正式部署。
+
+## 17. 2026-11-14 Open Browser Use CDP 事件採集傳輸驗證紀錄
+
+> 本節記錄正式 PWA 網路行為鑑測開始前，針對 Open Browser Use 事件傳輸路徑進行的隔離式 P0 驗證。這不是正式 T01–T06 鑑測，也不代表第 8 節所有工具穩定性門檻已通過。
+
+### 17.1 驗證目標與範圍
+
+- 確認 Chrome Extension 收到的 CDP Network 事件，是否可經 Native Host relay 傳送至獨立收集器。
+- 確認 Windows 主機上 Native Host 使用的 AF_UNIX socket 可由原生 Winsock 用戶端持續讀取。
+- 驗證收集器在無事件的閒置期間仍能維持連線，並可依設定期限自動結束。
+- 本輪只對獨立 `about:blank` 測試分頁啟用 CDP Network domain；載入 `https://example.com/` 作為受控事件來源。未使用或操作使用者既有頁籤，未連接正式 PWA 或 Supabase。
+
+### 17.2 原始碼及環境觀察
+
+- 依 Open Browser Use `v1.1.0` 原始碼檢查，Chrome Extension 的 `chrome.debugger.onEvent` 會送出 `onCDPEvent` 通知；Native Host relay 將非 request-response 類通知廣播給已連線的本機 socket clients；JavaScript SDK 提供 `onNotification()` 接收器。
+- Extension → Native Host → local socket event relay 路徑在原始碼中存在。MCP server 的一般 `tools/list`／`tools/call` 工具介面本身不是持續事件串流訂閱 API，不能以單次 MCP CDP command 成功取代通知接收驗證。
+- 本機 Native Host `active.json` 所列 socket 為 Windows AF_UNIX 路徑。Node.js `net.createConnection(path)` 測試曾回報 `EACCES`；該主機以 Winsock 原生 AF_UNIX client 連線成功。現有證據支持 Node Windows IPC transport 與 Go AF_UNIX listener 可能不相容的假說，但尚未以最小 Node 測試排除其他因素，故不列為已確認根因。
+- 初次 PowerShell/C# 收集器曾因 `recv` 阻塞而未能由主迴圈檢查期限；已改以 Winsock `SO_RCVTIMEO`（1 秒）設定接收逾時，將逾時回傳映射為可繼續檢查期限的狀態。
+
+### 17.3 P0 實測結果
+
+| 項目 | 實測結果 |
+|---|---|
+| 獨立測試分頁 | Chrome tab ID `278045230`，`about:blank` 起始 |
+| 受控事件來源 | `https://example.com/` |
+| CDP 啟用 | `Network.enable` 成功 |
+| 傳輸路徑 | Chrome debugger event → Extension `onCDPEvent` → Native Host relay → Windows AF_UNIX socket → PowerShell/C# 收集器 |
+| 10 分鐘持續連線 | 成功；實際 `600.3` 秒 |
+| 目標分頁事件 | 共 `43` 筆 Network 事件 |
+| 事件類型 | `Network.requestWillBeSent` 9、`Network.responseReceived` 9、`Network.dataReceived` 15、`Network.loadingFinished` 9、`Network.policyUpdated` 1 |
+| Frame 解析錯誤 | `0` |
+| 自動停止 | 到達 600 秒期限後自行結束，狀態記錄為 `reachedDeadline=true` |
+| 敏感資料處理 | 僅保存 UTC 時間、tab ID、CDP method 及 params 欄位名稱；不保存 request／response body 或欄位值 |
+
+補充：43 筆事件均來自測試分頁首次載入。後續 10 分鐘主要為閒置維持連線，並未在閒置中段另行觸發第二次 reload。因此本次證明的是「連線可跨越 10 分鐘閒置並正常自動停止」，不是「閒置後再次觸發事件仍成功」的完整驗證。
+
+### 17.4 清理及專案影響
+
+- 收集器程序已停止，臨時資料夾 `%TEMP%\\obu-p0-cdp-collector` 已移除。
+- 已對測試分頁成功執行 `Network.disable` 及 `Page.close`；再次列出使用者分頁時未見測試 tab ID `278045230`。
+- `D:\\Project\\Travel-Companion` 的 `git status --short` 無輸出，工作目錄乾淨。
+- 未修改 App、Extension、Native Host、MCP server 或正式資料；未安裝 npm 依賴或 Go；未執行正式 T01–T06；未 build、deploy、commit 或 push。
+
+### 17.5 階段判定與未確認事項
+
+- **已確認：** 在本次隔離環境與受控分頁下，Extension → Native Host → Windows AF_UNIX → 獨立 PowerShell/C# 收集器可成功傳送 CDP Network 事件；連線能維持 600.3 秒，閒置期間接收逾時可被處理，收集器依期限自動停止。
+- **尚未確認：** MCP server 是否持續接收並轉送 `onCDPEvent` 通知至 OpenChatX 呼叫端。本輪收集器直接連 Native Host socket，未經 MCP server，因此不能把上述成功延伸為 MCP → OpenChatX 已通過。
+- **尚未確認：** 跨 Browser Session 分頁 ownership／claim 行為、10 分鐘內多次事件突發及其完整性、採集器斷線重連與事件缺口標記、Service Worker／WebSocket 的全事件採集能力，以及 Android PWA 背景行為。
+- **尚未確認：** Node.js `EACCES` 的確切根因；Windows Node IPC 與 Native Host AF_UNIX transport 不相容目前僅為待驗假說。
+- **整體判定：** Extension → Native Host → AF_UNIX 獨立收集器這一段的 P0 隔離傳輸及 10 分鐘連線測試通過；Open Browser Use 完整工具穩定性驗收仍未通過，第 8 節前置門檻仍未滿足。不得因此開始正式 T01–T06。
+
+### 17.6 下一步（唯讀調查，不等於授權實作）
+
+1. 檢查本機 Open Browser Use MCP server 實際啟動入口、SDK 使用方式與連線生命週期，確認是否建立長連線並註冊 `onNotification()`；不只根據工具清單推論其內部實作。
+2. 以隔離分頁及非敏感事件驗證 MCP server 是否真的收到 `onCDPEvent`，以及通知是否可到達 OpenChatX 呼叫端；若目前 MCP transport 沒有可用的事件串流介面，記錄具體限制，不修改正式 server。
+3. 若 MCP 事件轉送可行，再補做閒置中段第二次觸發事件、多次突發、斷線／重連與事件缺口測試，並檢查收集器的有界緩衝及停止機制。
+4. 完成上述調查後重新評估第 8 節工具穩定性門檻；仍須在每次正式鑑測前依第 7 節核對正式版本並取得 Product Owner 確認。
+5. `docs/110` 本節只記錄本次已觀察結果。若要同步修改 `docs/README.md`、路線圖、TODO 或專案現況總覽，另行依權威文件流程核對後更新；本次不擴大修改其他文件。
+
+### 17.7 2026-11-14 MCP Server 實際事件轉送路徑唯讀檢查
+
+#### 本機啟動與版本確認
+
+- OpenChatX 設定的 `open-browser-use-office` 是 local stdio MCP server，啟動命令為 `C:\\nvm\\v22.23.2\\node.exe C:\\nvm\\v22.23.2\\node_modules\\open-browser-use\\cli\\open-browser-use.js mcp --session-id openchatx`。
+- 本機 `open-browser-use` npm 套件版本為 `0.1.42`；實際執行的 Windows binary `version` 亦回報 `0.1.42`。本次以 GitHub repository `iFurySt/open-browser-use` 的 `v0.1.42` tag 對照原始碼，避免把先前檢查的 `v1.1.0` 直接當成本機套件版本。
+- `cli/open-browser-use.js` 僅負責依平台選擇 native binary，並以 `spawn(..., { stdio: "inherit" })` 傳遞參數與 stdio；實際 MCP server 執行於 Go binary。
+
+#### 原始碼確認的關鍵行為
+
+- `cmd/open-browser-use/mcp.go` 的 `newMCPCommand()` 明確建立 stdio MCP server，`RunE` 呼叫 `server.serve(os.Stdin, os.Stdout)`；`serve()` 逐行讀取 stdin JSON-RPC，依序處理訊息並僅輸出該次處理所產生的 response，未建立獨立事件輸出迴圈。
+- `initializeResult()` 宣告的 capability 只有 `tools`（`listChanged: false`），沒有宣告 logging、experimental event stream 或其他事件訂閱能力。`handleMessage()` 對沒有 request ID 的通知直接回傳 nil；支援的主要請求為 `initialize`、`ping`、`tools/list`、`tools/call`。
+- `cmd/open-browser-use/main.go` 的 `actionRunner.invoke()` 將每個工具操作交給 `invokeWithProfile()`。該函式每次呼叫都透過 `dialBrowserSocketForProfile()` 連線 Native Host socket、送出單一 JSON-RPC request，讀取對應 response 後由 `defer conn.Close()` 關閉連線；不是常駐事件訂閱連線。
+- `readResponseForID()` 雖註解指出可能遇到 JSON-RPC notifications 或其他 response，但實際行為是持續讀取直到找到指定 request ID，期間遇到的通知只會被略過，不會轉交給 MCP stdio writer 或 OpenChatX。
+- `internal/host/relay.go` 的 `dispatchExtensionPayload()` 對非 response 類 payload 呼叫 `broadcast()`，把通知送到當下已連線的本機 socket clients。由於 MCP server 的工具呼叫採單次連線、response 到達後即關閉，沒有常駐 client 接收這些廣播；沒有連線的時間點也沒有接收者。
+
+#### 階段結論
+
+- **已確認的架構限制：** 本機 `0.1.42` MCP server 的現有實作是「stdio MCP request/response → 每次工具呼叫短連線 Native Host socket → 等待對應 response → 關閉 socket」。它沒有註冊 `onNotification()` 常駐接收器，也沒有把 Native Host `onCDPEvent` 通知轉送成 MCP server-initiated notification。即使通知恰好在單次工具呼叫期間到達，也會在 `readResponseForID()` 等待 response 時被略過。
+- **根因定位：** Extension → Native Host relay 的廣播機制已由 P0 獨立 collector 證明可用；目前 MCP → OpenChatX 事件缺口不是前段 Extension 沒有發送事件，而是 MCP server 的現行連線生命週期與 response-only 實作沒有持續接收及轉送事件的機制。
+- **尚未確認：** OpenChatX MCP host 是否接受並呈現 MCP server 主動送出的 JSON-RPC notification；這需要獨立、隔離的最小 stdio MCP notification PoC，不能只依 Open Browser Use server 現有工具清單推定 OpenChatX host 不支援。
+- **未做事項：** 本次只讀取本機啟動設定、套件版本、binary version 與上游 `v0.1.42` 原始碼；沒有修改 MCP 設定、重啟正式 MCP server、修改套件／binary、Extension、Native Host 或 Travel-Companion App。
+
+#### 下一步
+
+1. 先設計一個與正式 `open-browser-use-office` 完全隔離的最小 stdio MCP notification PoC，只發送不含敏感資料的固定測試通知，以確認 OpenChatX MCP host 是否會接收及暴露 server-initiated notifications。
+2. 此 PoC 需要新增臨時 MCP server 設定並觸發 OpenChatX MCP hot reload；執行前須另行取得使用者明確同意。不得改動或重啟現有 `open-browser-use-office` 設定。
+3. 若 OpenChatX host 可接收通知，再評估最小事件橋接設計：常駐 Native Host socket client、僅 metadata 的有界佇列、事件過濾／背壓、MCP notification 輸出、斷線重連及缺口標記。若 host 不接收，改採 OpenChatX 可讀取的受控事件日誌／輪詢方案。
+4. 在上述橋接能力通過前，Open Browser Use 事件轉送前置門檻仍未通過，不開始正式 T01–T06。
+
+
 ## 18. 2026-11-15 背景閒置網路流量與費用檢討方向（討論紀錄）
 
 > 本節整理目前對話中已完成的原始碼盤點與初步推斷，供後續逐項討論使用。這不是新增的完整測試計畫，也不取代本文件既有正式鑑測規格。此階段不修改 App 程式、不調整設定、不執行正式鑑測。
@@ -521,9 +611,9 @@
 - 本文件 17.3 的 43 筆 Network events 是 example.com 首次載入的受控測試事件，不是 Travel-Companion 流量，也不是背景閒置統計。
 - 本節僅記錄目前的推斷與討論方式；後續需以實際程式碼與使用者逐項確認為準。
 
-### 18.6 已確認並定案的兩項調整方向（尚未實作）
+### 18.6 已確認並定案的兩項調整方向（已實作，建置驗證通過）
 
-以下兩項已由使用者確認，作為後續最小修改的依據；本節只記錄決策，不代表已修改程式、已完成測試或已部署。
+以下兩項已由使用者確認並完成最小範圍實作。已完成程式碼檢查、回歸驗證及正式 production build；尚未部署。
 
 #### 決策一：共享帳本僅在帳本頁面啟用即時同步
 
@@ -547,6 +637,16 @@
 - reconciliation 成功才清除 recovery pending；未完成或失敗時保留 pending。應避免將目前回傳「選取的 Trip 是否被移除」的 boolean 誤當成同步成功旗標。
 - 不新增常態輪詢或複雜重試機制；保留必要的離線／恢復與 Trip 資料一致性保護。
 
+#### 實作與驗證結果（2026-11-15）
+
+- 程式修改：`src/App.tsx`、`src/hooks/useExpenseBook.ts`、`src/hooks/useTripWorkspace.ts`。
+- 共享帳本：只有目前頁面類型為 expense 時才讀取共享帳本、建立 Realtime 訂閱及啟用前景／網路事件刷新；移除固定 30 秒刷新。離頁會清除 debounce timer、事件監聽並解除 Channel；Realtime 重新訂閱成功時補讀。
+- Auth Health：移除 `/auth/v1/health` 固定探測、30 秒 interval 及 Session Ready 後額外 Health GET；保留必要 Trip 初始載入。只有 recovery pending 時才由 online、focus、visibility 或 Session Ready 觸發 Trip reconciliation。
+- Reconciliation 結果新增 `completed` 狀態，與 `selectedTripWasRemoved` 分開；只有 reconciliation 確實完成才清除 recovery pending，原本供其他功能使用的 boolean 回傳契約維持不變。
+- 回歸驗證更新：`scripts/verify-v3915-expense-mobile.mjs`、`scripts/verify-v3923-state-resilience.mjs`。
+- 驗證結果：兩項回歸腳本通過；`tsc -p tsconfig.app.json --noEmit`、`tsc -p tsconfig.node.json --noEmit` 通過；本次修改檔案 ESLint 通過；`npm run build`（包含專案完整驗證、production build、PWA 產物及 postbuild 檢查）通過。
+- **尚未部署，也尚未將本次程式修改 commit／push。**
+
 ### 18.7 後續討論介面與既有正式計畫的關係
 
 - 本節的單一畫面討論是使用者選擇的理解及決策方式，不是新增或替代正式鑑測流程。
@@ -554,3 +654,12 @@
 - 若討論後決定需要修改，先記錄使用者確認的決策與預期效果，再另行執行最小修改及必要驗證；未經同意不修改。
 - 正式 PWA T01–T06、版本核對與工具穩定性門檻仍依本文件原有規定管理，不因本次單項討論而自動啟動。
 
+### 17.8 隔離式 MCP Notification PoC 準備
+
+- 已在 `%TEMP%\\obu-mcp-notification-probe\\server.mjs` 建立無 npm 依賴的獨立 Node.js stdio MCP 測試伺服器；不屬於 Travel-Companion repository，也不修改正式 `open-browser-use-office`。
+- 本機以 Node.js `v22.23.2` 透過 stdin/stdout 管線完成基本協定自測：回覆 `initialize`、收到 `notifications/initialized` 後送出 `notifications/message`（固定字串 `P0_NOTIFICATION_PROBE_RECEIVED`）、並回覆 `tools/list`。輸出包含合法 JSON-RPC initialize response、server-initiated notification 及 tools/list response。
+- **目前只驗證 PoC 程式可產生標準 JSON-RPC notification；尚未註冊到 OpenChatX，因此尚未驗證 OpenChatX host 是否收到或呈現通知。**
+- 已取得使用者明確同意，於 OpenChatX 新增獨立 `obu-mcp-notification-probe` local stdio server，設定指向 `%TEMP%\\obu-mcp-notification-probe\\server.mjs`；`mcp_server_manage` 回報 `Saved and hot-reloaded MCP server configuration`、`ok=true`、`restart_required=false`。既有 `open-browser-use-office` 設定未修改，也未重啟。
+- OpenChatX 成功發現並呼叫測試工具 `probe_status`，回傳 `P0_PROBE_TOOL_OK`；但工具呼叫結果中沒有觀察到 PoC 預期送出的 `notifications/message` 固定通知。由於目前 OpenChatX 工具呼叫介面未呈現伺服器主動通知，**尚不能判定 host 收到通知，也不能將 notification path 視為通過**；這個負面結果僅代表本次呼叫流程沒有可見的 notification 證據。
+- 測試完成後已刪除臨時 `obu-mcp-notification-probe` 設定並再次 hot reload；`mcp_server_list` 回讀確認只剩原有 `codebase-memory-mcp`、`open-computer-use`、`open-browser-use-office` 三個設定，無殘留臨時 server。程序盤點亦未見 PoC server process（僅查詢命令自身）。
+- 下一步應查明 OpenChatX MCP host 的 server notification/logging 處理方式與呈現管道，或使用能觀察 server-initiated JSON-RPC frame 的隔離測試 harness；在取得明確的 notification receipt 證據前，不宣稱 OpenChatX 通知已收到或支援。

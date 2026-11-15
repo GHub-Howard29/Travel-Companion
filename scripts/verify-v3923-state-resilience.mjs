@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 
 const app = readFileSync("src/App.tsx", "utf8");
 const expenseScreen = readFileSync("src/components/expense/ExpenseScreen.tsx", "utf8");
+const expenseBookHook = readFileSync("src/hooks/useExpenseBook.ts", "utf8");
 const privateChecklistHook = readFileSync("src/hooks/usePrivateChecklistState.ts", "utf8");
 const tripWorkspace = readFileSync("src/hooks/useTripWorkspace.ts", "utf8");
 
@@ -85,18 +86,23 @@ assert.match(
 );
 assert.match(
   tripWorkspace,
-  /connectivityHealthUrl = `\$\{supabaseUrl\.replace\([\s\S]*auth\/v1\/health`/,
-  "連線探測必須使用目前 Supabase client 對應的同一個 endpoint",
-);
-assert.match(
-  tripWorkspace,
-  /fetch\(\s*connectivityHealthUrl[\s\S]*AbortSignal\.timeout\(5_000\)/,
-  "連線狀態必須透過受限時的 Supabase health probe 恢復，而非只依賴 online 事件",
-);
-assert.match(
-  tripWorkspace,
   /connectivityRecoveryPendingRef = useRef\(startsOffline\)/,
   "離線與雲端同步恢復需求必須獨立於 React state 保存，避免 online 事件造成狀態更新競態",
+);
+assert.doesNotMatch(
+  tripWorkspace,
+  /auth\/v1\/health|connectivityHealthUrl|probeConnectivity|setInterval\(/,
+  "正常在線時不可執行 Auth Health 常態探測或固定輪詢",
+);
+assert.match(
+  tripWorkspace,
+  /const reconcileTripWorkspaceWithResult = useCallback[\s\S]*completed: false[\s\S]*completed: true, selectedTripWasRemoved/,
+  "Trip reconciliation 必須明確區分是否完成與選取的 Trip 是否被移除",
+);
+assert.match(
+  tripWorkspace,
+  /const reconcilePendingRecovery = \(\) => \{[\s\S]*!connectivityRecoveryPendingRef\.current[\s\S]*reconcileTripWorkspaceWithResult\(\)\.then\(\(result\) => \{[\s\S]*if \(!result\.completed \|\| !navigator\.onLine\) return;[\s\S]*connectivityRecoveryPendingRef\.current = false/,
+  "只有存在待恢復工作且 reconciliation 確實完成時，才清除 pending 旗標",
 );
 assert.match(
   tripWorkspace,
@@ -105,28 +111,49 @@ assert.match(
 );
 assert.match(
   tripWorkspace,
-  /const handleOnline = \(\) => \{[\s\S]*connectivityRecoveryPendingRef\.current = true[\s\S]*probeConnectivity\(true\)/,
-  "重新連線事件必須觸發即時健康檢查",
+  /const handleOnline = \(\) => \{[\s\S]*connectivityRecoveryPendingRef\.current = true[\s\S]*reconcilePendingRecovery\(\)/,
+  "重新連線事件必須直接嘗試必要的 Trip reconciliation，而非先呼叫 Health endpoint",
 );
 assert.match(
   tripWorkspace,
-  /await reconcile\(\);[\s\S]*connectivityRecoveryPendingRef\.current = false/,
-  "只有完成 reconciliation 後才可清除待恢復同步旗標",
-);
-assert.match(
-  tripWorkspace,
-  /Trip reconciliation after connectivity recovery failed; will retry/,
-  "恢復同步失敗時必須保留旗標，待下一輪檢查重試",
-);
-assert.match(
-  tripWorkspace,
-  /window\.setInterval\(\(\) => void probeConnectivity\(\), 30_000\)/,
-  "瀏覽器漏掉 online 事件時，前景 App 必須定期重新校正連線狀態",
+  /const handleFocus = \(\) => reconcilePendingRecovery\(\)/,
+  "回到前景時只在存在待恢復工作時執行 Trip reconciliation",
 );
 assert.match(
   tripWorkspace,
   /document\.addEventListener\("visibilitychange", handleVisibility\)/,
-  "App 回到前景時必須重新檢查連線狀態",
+  "App 回到前景時必須有機會完成尚未完成的恢復同步",
+);
+assert.match(
+  tripWorkspace,
+  /await reconcileTripWorkspace\(\)/,
+  "Session Ready 後仍必須保留必要的 Trip 初始雲端載入",
 );
 
-console.log("V3.9.23 狀態保留、私人清單同步、金額輸入與離線啟動回歸驗證通過。");
+assert.match(
+  app,
+  /isExpenseBookPageActive:[\s\S]*resolveTravelToolType\([\s\S]*\) === "expense"/,
+  "共享帳本頁面判斷必須沿用目前的 travel tool type resolver",
+);
+assert.match(
+  expenseBookHook,
+  /isUsingSharedExpenseBook && !isExpenseBookPageActive/,
+  "共享帳本離開帳本頁面時不可執行初始雲端載入",
+);
+assert.match(
+  expenseBookHook,
+  /!isExpenseBookPageActive[\s\S]*!userEmail/,
+  "共享帳本 Realtime 與同步事件監聽只可在帳本頁面啟用",
+);
+assert.doesNotMatch(
+  expenseBookHook,
+  /setInterval\(refreshExpenseBook,\s*30_000\)/,
+  "共享帳本不可再固定每 30 秒刷新",
+);
+assert.match(
+  expenseBookHook,
+  /\.subscribe\(\(status\) => \{[\s\S]*status === "SUBSCRIBED"[\s\S]*hasSubscribed \|\| needsRefreshAfterConnection\)[\s\S]*status === "CHANNEL_ERROR" \|\| status === "TIMED_OUT"/,
+  "Realtime 重新連線成功後必須補讀共享帳本",
+);
+
+console.log("狀態保留、離線啟動、共享帳本頁面同步與無常態 Health 輪詢回歸驗證通過。");

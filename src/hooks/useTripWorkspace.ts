@@ -81,7 +81,11 @@ import {
 
 interface UseTripWorkspaceOptions {
   supabase: SupabaseClient;
-  supabaseUrl: string;
+}
+
+interface TripWorkspaceReconciliationResult {
+  completed: boolean;
+  selectedTripWasRemoved: boolean;
 }
 
 const LAST_AUTHENTICATED_EMAIL_KEY = "travel_companion_last_authenticated_email";
@@ -98,9 +102,8 @@ const rememberAuthenticatedEmail = (email: string | null | undefined) => {
   }
 };
 
-export default function useTripWorkspace({ supabase, supabaseUrl }: UseTripWorkspaceOptions) {
+export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) {
   const startsOffline = !navigator.onLine;
-  const connectivityHealthUrl = `${supabaseUrl.replace(/\/rest\/v1\/?$/, "")}/auth/v1/health`;
   const [userId, setUserId] = useState<string | null>(null);
   const [userEmail, setUserEmail] = useState<string | null>(() =>
     startsOffline ? readLastAuthenticatedEmail() : null,
@@ -126,13 +129,10 @@ export default function useTripWorkspace({ supabase, supabaseUrl }: UseTripWorks
   // 防止重連時較早開始的讀取，在較新的儲存後才回寫舊快照。
   const tripLoadRevisionRef = useRef(0);
   const initialCloudRecordsRef = useRef<Awaited<ReturnType<typeof getCloudTripRecordsStrict>> | null>(null);
-  const reconciliationPromiseRef = useRef<Promise<boolean> | null>(null);
-  const reconcileTripWorkspaceRef = useRef<(() => Promise<boolean>) | null>(null);
+  const reconciliationPromiseRef = useRef<Promise<TripWorkspaceReconciliationResult> | null>(null);
   const itinerarySavePromisesRef = useRef(new Map<string, Promise<boolean>>());
   const selectedTripIdRef = useRef(selectedTripId);
   const userEmailRef = useRef(userEmail);
-  const isOnlineRef = useRef(isOnline);
-  const isSessionReadyRef = useRef(isSessionReady);
   const connectivityRecoveryPendingRef = useRef(startsOffline);
   const activeDayRef = useRef(activeDay);
   const currentTripIdRef = useRef<string | null>(null);
@@ -147,9 +147,7 @@ export default function useTripWorkspace({ supabase, supabaseUrl }: UseTripWorks
   useEffect(() => {
     selectedTripIdRef.current = selectedTripId;
     userEmailRef.current = userEmail;
-    isOnlineRef.current = isOnline;
-    isSessionReadyRef.current = isSessionReady;
-  }, [isOnline, isSessionReady, selectedTripId, userEmail]);
+  }, [selectedTripId, userEmail]);
 
   useEffect(() => {
     activeDayRef.current = activeDay;
@@ -281,74 +279,6 @@ export default function useTripWorkspace({ supabase, supabaseUrl }: UseTripWorks
     return () => subscription.unsubscribe();
   }, [supabase, invalidateWorkspaceAccess]);
 
-  useEffect(() => {
-    let isActive = true;
-    let isProbing = false;
-    let lastProbeAt = 0;
-
-    const probeConnectivity = async (force = false) => {
-      if (!navigator.onLine || isProbing || !isActive) return;
-      const now = Date.now();
-      if (!force && now - lastProbeAt < 15_000) return;
-
-      isProbing = true;
-      lastProbeAt = now;
-      try {
-        const response = await fetch(
-          connectivityHealthUrl,
-          { method: "GET", cache: "no-store", signal: AbortSignal.timeout(5_000) },
-        );
-        if (isActive && response.ok) {
-          setIsOnline(true);
-          if (connectivityRecoveryPendingRef.current && isSessionReadyRef.current) {
-            const reconcile = reconcileTripWorkspaceRef.current;
-            if (!reconcile) return;
-            try {
-              await reconcile();
-              connectivityRecoveryPendingRef.current = false;
-            } catch (error) {
-              console.warn("Trip reconciliation after connectivity recovery failed; will retry", error);
-            }
-          }
-        }
-      } catch {
-        // Do not mark the app offline based on a transient probe failure.
-        // The browser's offline event remains the authoritative hard signal.
-      } finally {
-        isProbing = false;
-      }
-    };
-
-    const handleOnline = () => {
-      connectivityRecoveryPendingRef.current = true;
-      setIsOnline(true);
-      void probeConnectivity(true);
-    };
-    const handleOffline = () => {
-      connectivityRecoveryPendingRef.current = true;
-      setIsOnline(false);
-    };
-    const handleFocus = () => void probeConnectivity();
-    const handleVisibility = () => {
-      if (document.visibilityState === "visible") void probeConnectivity();
-    };
-
-    window.addEventListener("online", handleOnline);
-    window.addEventListener("offline", handleOffline);
-    window.addEventListener("focus", handleFocus);
-    document.addEventListener("visibilitychange", handleVisibility);
-    const probeInterval = window.setInterval(() => void probeConnectivity(), 30_000);
-
-    return () => {
-      isActive = false;
-      window.clearInterval(probeInterval);
-      window.removeEventListener("online", handleOnline);
-      window.removeEventListener("offline", handleOffline);
-      window.removeEventListener("focus", handleFocus);
-      document.removeEventListener("visibilitychange", handleVisibility);
-    };
-  }, [connectivityHealthUrl]);
-
   // A second tab can revoke a Trip and remove its local copy. Do not keep
   // rendering the old in-memory private content after the storage change.
   useEffect(() => {
@@ -372,17 +302,21 @@ export default function useTripWorkspace({ supabase, supabaseUrl }: UseTripWorks
     return () => window.removeEventListener("storage", onTripCacheChanged);
   }, [invalidateWorkspaceAccess, tripOptions]);
 
-  const reconcileTripWorkspace = useCallback(async (): Promise<boolean> => {
-    if (!isSessionReady || !navigator.onLine) return false;
+  const reconcileTripWorkspaceWithResult = useCallback(async (): Promise<TripWorkspaceReconciliationResult> => {
+    if (!isSessionReady || !navigator.onLine) {
+      return { completed: false, selectedTripWasRemoved: false };
+    }
     if (reconciliationPromiseRef.current) return reconciliationPromiseRef.current;
 
     const expectedEpoch = workspaceEpochRef.current;
-    const reconciliation = (async () => {
+    const reconciliation = (async (): Promise<TripWorkspaceReconciliationResult> => {
       const [cloudRecords, tombstones] = await Promise.all([
         getCloudTripRecordsStrict(supabase),
         getTripDeletionTombstones(supabase),
       ]);
-      if (workspaceEpochRef.current !== expectedEpoch) return false;
+      if (workspaceEpochRef.current !== expectedEpoch) {
+        return { completed: false, selectedTripWasRemoved: false };
+      }
       const decision = decideTripReconciliation(
         readStoredTripRecords(),
         cloudRecords,
@@ -390,11 +324,15 @@ export default function useTripWorkspace({ supabase, supabaseUrl }: UseTripWorks
         readTripCacheState(),
       );
 
-      if (workspaceEpochRef.current !== expectedEpoch) return false;
+      if (workspaceEpochRef.current !== expectedEpoch) {
+        return { completed: false, selectedTripWasRemoved: false };
+      }
       replaceStoredTripRecords(decision.storedRecords);
       writeTripCacheState(decision.nextState);
       for (const tripId of decision.cleanupTripIds) {
-        if (workspaceEpochRef.current !== expectedEpoch) return false;
+        if (workspaceEpochRef.current !== expectedEpoch) {
+          return { completed: false, selectedTripWasRemoved: false };
+        }
         await clearSharedTripDataAfterAccessLoss(
           tripId,
           userEmailRef.current ?? "",
@@ -413,7 +351,9 @@ export default function useTripWorkspace({ supabase, supabaseUrl }: UseTripWorks
         cloudRecords,
         tombstoneIds,
       );
-      if (workspaceEpochRef.current !== expectedEpoch) return false;
+      if (workspaceEpochRef.current !== expectedEpoch) {
+        return { completed: false, selectedTripWasRemoved: false };
+      }
       const currentSelectedTripId = selectedTripIdRef.current;
       const selectedTripWasRemoved = Boolean(
         currentSelectedTripId &&
@@ -436,7 +376,7 @@ export default function useTripWorkspace({ supabase, supabaseUrl }: UseTripWorks
         setIsLoading(Boolean(nextTrip));
       }
 
-      return selectedTripWasRemoved;
+      return { completed: true, selectedTripWasRemoved };
     })().finally(() => {
       reconciliationPromiseRef.current = null;
     });
@@ -445,30 +385,57 @@ export default function useTripWorkspace({ supabase, supabaseUrl }: UseTripWorks
     return reconciliation;
   }, [getBasePath, isSessionReady, supabase]);
 
-  useEffect(() => {
-    reconcileTripWorkspaceRef.current = reconcileTripWorkspace;
-  }, [reconcileTripWorkspace]);
+  const reconcileTripWorkspace = useCallback(async (): Promise<boolean> => {
+    const result = await reconcileTripWorkspaceWithResult();
+    return result.selectedTripWasRemoved;
+  }, [reconcileTripWorkspaceWithResult]);
 
   useEffect(() => {
-    if (!isSessionReady) return;
-    void fetch(connectivityHealthUrl, {
-      method: "GET",
-      cache: "no-store",
-      signal: AbortSignal.timeout(5_000),
-    }).then((response) => {
-      if (!response.ok) return;
-      setIsOnline(true);
-      if (connectivityRecoveryPendingRef.current) {
-        void reconcileTripWorkspaceRef.current?.().then(() => {
-          connectivityRecoveryPendingRef.current = false;
-        }).catch((error) => {
-          console.warn("Trip reconciliation after startup connectivity recovery failed; will retry", error);
-        });
+    const reconcilePendingRecovery = () => {
+      if (
+        !connectivityRecoveryPendingRef.current ||
+        !isSessionReady ||
+        !navigator.onLine
+      ) {
+        return;
       }
-    }).catch(() => {
-      // The initial workspace loader handles failures with the local cache fallback.
-    });
-  }, [connectivityHealthUrl, isSessionReady]);
+
+      void reconcileTripWorkspaceWithResult().then((result) => {
+        if (!result.completed || !navigator.onLine) return;
+        connectivityRecoveryPendingRef.current = false;
+        setIsOnline(true);
+      }).catch((error) => {
+        console.warn("Trip reconciliation after connectivity recovery failed; will retry", error);
+      });
+    };
+
+    const handleOnline = () => {
+      connectivityRecoveryPendingRef.current = true;
+      setIsOnline(true);
+      reconcilePendingRecovery();
+    };
+    const handleOffline = () => {
+      connectivityRecoveryPendingRef.current = true;
+      setIsOnline(false);
+    };
+    const handleFocus = () => reconcilePendingRecovery();
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") reconcilePendingRecovery();
+    };
+
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleVisibility);
+    reconcilePendingRecovery();
+
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, [isSessionReady, reconcileTripWorkspaceWithResult]);
 
   useEffect(() => {
     if (!isSessionReady) return;
@@ -521,28 +488,6 @@ export default function useTripWorkspace({ supabase, supabaseUrl }: UseTripWorks
       isActive = false;
     };
   }, [getBasePath, isSessionReady, reconcileTripWorkspace, supabase]);
-
-  useEffect(() => {
-    if (!isSessionReady || !isOnline) return;
-    const reconcile = () => {
-      void reconcileTripWorkspace().catch((error) => {
-        console.warn("Trip reconciliation failed; local data was preserved", error);
-      });
-    };
-    const reconcileWhenVisible = () => {
-      if (document.visibilityState === "visible") reconcile();
-    };
-
-    window.addEventListener("online", reconcile);
-    window.addEventListener("focus", reconcile);
-    document.addEventListener("visibilitychange", reconcileWhenVisible);
-    reconcile();
-    return () => {
-      window.removeEventListener("online", reconcile);
-      window.removeEventListener("focus", reconcile);
-      document.removeEventListener("visibilitychange", reconcileWhenVisible);
-    };
-  }, [isOnline, isSessionReady, reconcileTripWorkspace, userEmail]);
 
   useEffect(() => {
     if (!selectedTripId) return;

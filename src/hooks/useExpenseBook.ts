@@ -43,6 +43,7 @@ interface UseExpenseBookOptions {
   selectedTripId: string;
   expenseBookTripId: string;
   isUsingSharedExpenseBook: boolean;
+  isExpenseBookPageActive: boolean;
   canWriteSharedExpense: boolean;
   canExportAllSharedExpenses: boolean;
   currentCurrencyCode: string;
@@ -158,6 +159,7 @@ export default function useExpenseBook({
   selectedTripId,
   expenseBookTripId,
   isUsingSharedExpenseBook,
+  isExpenseBookPageActive,
   canWriteSharedExpense,
   canExportAllSharedExpenses,
   currentCurrencyCode,
@@ -329,17 +331,34 @@ const loadExpenseBook = useCallback(async (bookId: string) => {
    📦 帳本載入 useEffect（統一入口）
    ========================================= */
 useEffect(() => {
-  if (!expenseBookTripId) return;
+  if (
+    !expenseBookTripId ||
+    (isUsingSharedExpenseBook && !isExpenseBookPageActive)
+  ) {
+    return;
+  }
 
   const timer = window.setTimeout(() => {
     void loadExpenseBook(expenseBookTripId);
   }, 0);
 
   return () => window.clearTimeout(timer);
-}, [expenseBookTripId, loadExpenseBook]);
+}, [
+  expenseBookTripId,
+  isExpenseBookPageActive,
+  isUsingSharedExpenseBook,
+  loadExpenseBook,
+]);
 
 useEffect(() => {
-  if (!expenseBookTripId || !isUsingSharedExpenseBook || !userEmail) return;
+  if (
+    !expenseBookTripId ||
+    !isUsingSharedExpenseBook ||
+    !isExpenseBookPageActive ||
+    !userEmail
+  ) {
+    return;
+  }
 
   const refreshExpenseBook = () => {
     if (!navigator.onLine) return;
@@ -354,6 +373,8 @@ useEffect(() => {
     expenseRefreshTimerRef.current = setTimeout(refreshExpenseBook, 150);
   };
 
+  let hasSubscribed = false;
+  let needsRefreshAfterConnection = false;
   const channel = supabase
     .channel(`travel-companion-expenses-${expenseBookTripId}`)
     .on(
@@ -380,18 +401,23 @@ useEffect(() => {
         scheduleRefresh();
       },
     )
-    .subscribe();
+    .subscribe((status) => {
+      if (status === "SUBSCRIBED") {
+        if (hasSubscribed || needsRefreshAfterConnection) scheduleRefresh();
+        hasSubscribed = true;
+        needsRefreshAfterConnection = false;
+      } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+        needsRefreshAfterConnection = true;
+      }
+    });
 
-  const interval = window.setInterval(refreshExpenseBook, 30_000);
-  const handleFocus = () => refreshExpenseBook();
+  const handleRefresh = () => scheduleRefresh();
   const handleVisibilityChange = () => {
-    if (document.visibilityState === "visible") {
-      refreshExpenseBook();
-    }
+    if (document.visibilityState === "visible") scheduleRefresh();
   };
 
-  window.addEventListener("focus", handleFocus);
-  window.addEventListener("online", handleFocus);
+  window.addEventListener("focus", handleRefresh);
+  window.addEventListener("online", handleRefresh);
   document.addEventListener("visibilitychange", handleVisibilityChange);
 
   return () => {
@@ -400,14 +426,14 @@ useEffect(() => {
       expenseRefreshTimerRef.current = null;
     }
 
-    window.clearInterval(interval);
-    window.removeEventListener("focus", handleFocus);
-    window.removeEventListener("online", handleFocus);
+    window.removeEventListener("focus", handleRefresh);
+    window.removeEventListener("online", handleRefresh);
     document.removeEventListener("visibilitychange", handleVisibilityChange);
     void supabase.removeChannel(channel);
   };
 }, [
   expenseBookTripId,
+  isExpenseBookPageActive,
   isUsingSharedExpenseBook,
   loadExpenseBook,
   supabase,

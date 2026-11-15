@@ -18,7 +18,12 @@ assert.match(expenseHook, /table:\s*"expenses"/);
 assert.doesNotMatch(expenseHook, /filter:\s*`trip_id=eq\.\$\{expenseBookTripId\}`/);
 assert.match(expenseHook, /setTimeout\(refreshExpenseBook, 150\)/);
 assert.match(expenseHook, /changedTripId && changedTripId !== expenseBookTripId/);
-assert.match(expenseHook, /setInterval\(refreshExpenseBook, 30_000\)/);
+assert.doesNotMatch(expenseHook, /setInterval\(refreshExpenseBook, 30_000\)/);
+assert.match(expenseHook, /!isExpenseBookPageActive[\s\S]*!userEmail/);
+assert.match(
+  expenseHook,
+  /\.subscribe\(\(status\) => \{[\s\S]*status === "SUBSCRIBED"[\s\S]*hasSubscribed \|\| needsRefreshAfterConnection\)[\s\S]*status === "CHANNEL_ERROR" \|\| status === "TIMED_OUT"/,
+);
 
 assert.match(
   expenseScreen,
