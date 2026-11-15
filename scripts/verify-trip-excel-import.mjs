@@ -73,6 +73,42 @@ if (!invalidResult.success) {
 const malformedResult = await parseTripExcelWorkbook(new Uint8Array([1, 2, 3]));
 assert.equal(malformedResult.success, false);
 
+const objectCellWorkbook = await createWorkbook();
+const objectCellSheet = objectCellWorkbook.getWorksheet("新增 TRIP");
+assert.ok(objectCellSheet);
+objectCellSheet.getCell("B2").value = "物件儲存格值拒絕測試";
+objectCellSheet.getCell("B3").value = "2027-07-01";
+objectCellSheet.getCell("A7").value = 1;
+objectCellSheet.getCell("B7").value = "0900";
+objectCellSheet.getCell("C7").value = "1000";
+objectCellSheet.getCell("D7").value = { formula: '"不是行程名稱"' };
+objectCellSheet.getCell("E7").value = "景點";
+const objectCellBuffer = await objectCellWorkbook.xlsx.writeBuffer();
+const objectCellResult = await parseTripExcelWorkbook(new Uint8Array(objectCellBuffer));
+assert.equal(objectCellResult.success, false);
+if (!objectCellResult.success) {
+  assert.ok(objectCellResult.issues.some((issue) => issue.field === "行程名稱"));
+}
+
+const richTextWorkbook = await createWorkbook();
+const richTextSheet = richTextWorkbook.getWorksheet("新增 TRIP");
+assert.ok(richTextSheet);
+richTextSheet.getCell("B2").value = "Rich Text 行程名稱測試";
+richTextSheet.getCell("B3").value = "2027-07-01";
+richTextSheet.getCell("A7").value = 4;
+richTextSheet.getCell("B7").value = "0900";
+richTextSheet.getCell("C7").value = 1000;
+richTextSheet.getCell("D7").value = {
+  richText: [{ text: "松山城入口/搭纜車", font: { underline: true } }],
+};
+richTextSheet.getCell("E7").value = "景點";
+const richTextBuffer = await richTextWorkbook.xlsx.writeBuffer();
+const richTextResult = await parseTripExcelWorkbook(new Uint8Array(richTextBuffer));
+assert.equal(richTextResult.success, true);
+if (richTextResult.success) {
+  assert.equal(richTextResult.data.daysData["4"][0].title, "松山城入口/搭纜車");
+}
+
 const invalidTimeWorkbook = await createWorkbook();
 const invalidTimeSheet = invalidTimeWorkbook.getWorksheet("新增 TRIP");
 assert.ok(invalidTimeSheet);
@@ -87,6 +123,48 @@ const invalidTimeResult = await parseTripExcelWorkbook(new Uint8Array(invalidTim
 assert.equal(invalidTimeResult.success, false);
 if (!invalidTimeResult.success) {
   assert.ok(invalidTimeResult.issues.some((issue) => issue.field === "開始時間"));
+}
+
+const numericTimeWorkbook = await createWorkbook();
+const numericTimeSheet = numericTimeWorkbook.getWorksheet("新增 TRIP");
+assert.ok(numericTimeSheet);
+numericTimeSheet.getCell("B2").value = "數值時間格式測試";
+numericTimeSheet.getCell("B3").value = "2027-07-01";
+numericTimeSheet.getCell("A7").value = 1;
+numericTimeSheet.getCell("B7").value = 930;
+numericTimeSheet.getCell("C7").value = 1200;
+numericTimeSheet.getCell("D7").value = "數值時間卡片";
+numericTimeSheet.getCell("E7").value = "景點";
+numericTimeSheet.getCell("A8").value = 1;
+numericTimeSheet.getCell("B8").value = 900;
+numericTimeSheet.getCell("C8").value = null;
+numericTimeSheet.getCell("D8").value = "前導零與空白結束時間";
+numericTimeSheet.getCell("E8").value = "交通";
+const numericTimeBuffer = await numericTimeWorkbook.xlsx.writeBuffer();
+const numericTimeResult = await parseTripExcelWorkbook(new Uint8Array(numericTimeBuffer));
+assert.equal(numericTimeResult.success, true);
+if (numericTimeResult.success) {
+  assert.equal(numericTimeResult.data.daysData["1"][0].time, "09:30");
+  assert.equal(numericTimeResult.data.daysData["1"][0].departureTime, "12:00");
+  assert.equal(numericTimeResult.data.daysData["1"][1].time, "09:00");
+  assert.equal(numericTimeResult.data.daysData["1"][1].departureTime, "09:00");
+}
+
+const invalidNumericTimeWorkbook = await createWorkbook();
+const invalidNumericTimeSheet = invalidNumericTimeWorkbook.getWorksheet("新增 TRIP");
+assert.ok(invalidNumericTimeSheet);
+invalidNumericTimeSheet.getCell("B2").value = "無效數值時間測試";
+invalidNumericTimeSheet.getCell("B3").value = "2027-07-01";
+invalidNumericTimeSheet.getCell("A7").value = 1;
+invalidNumericTimeSheet.getCell("B7").value = "0900";
+invalidNumericTimeSheet.getCell("C7").value = 2460;
+invalidNumericTimeSheet.getCell("D7").value = "無效結束時間";
+invalidNumericTimeSheet.getCell("E7").value = "景點";
+const invalidNumericTimeBuffer = await invalidNumericTimeWorkbook.xlsx.writeBuffer();
+const invalidNumericTimeResult = await parseTripExcelWorkbook(new Uint8Array(invalidNumericTimeBuffer));
+assert.equal(invalidNumericTimeResult.success, false);
+if (!invalidNumericTimeResult.success) {
+  assert.ok(invalidNumericTimeResult.issues.some((issue) => issue.field === "結束時間"));
 }
 
 const invalidMetadataWorkbook = await createWorkbook();

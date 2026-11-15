@@ -64,13 +64,26 @@ const addIssue = (
 
 const cellValue = (value: ExcelJS.CellValue): unknown => {
   if (value instanceof Date) return value;
-  if (value && typeof value === "object" && "text" in value) {
-    return String(value.text);
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    return value;
   }
-  if (value && typeof value === "object" && "richText" in value) {
-    return value.richText.map((part) => part.text).join("");
+  if (!value || typeof value !== "object") return value;
+
+  if ("richText" in value && Array.isArray(value.richText)) {
+    return value.richText
+      .map((part) => (part && typeof part.text === "string" ? part.text : ""))
+      .join("");
   }
-  return value;
+  if ("text" in value && typeof value.text === "string") {
+    return value.text;
+  }
+  if ("hyperlink" in value && "text" in value && typeof value.text === "string") {
+    return value.text;
+  }
+  if ("result" in value) {
+    return cellValue(value.result as ExcelJS.CellValue);
+  }
+  return null;
 };
 
 const readText = (value: unknown): string | null => {
@@ -97,11 +110,19 @@ const formatDate = (value: unknown): string | null => {
 };
 
 const parseStrictTime = (value: unknown): string | null => {
-  if (typeof value !== "string" || !/^\d{4}$/.test(value)) return null;
-  const hour = Number(value.slice(0, 2));
-  const minute = Number(value.slice(2));
+  let digits: string;
+  if (typeof value === "string" && /^\d{4}$/.test(value)) {
+    digits = value;
+  } else if (typeof value === "number" && Number.isInteger(value) && value >= 0 && value <= 2359) {
+    digits = String(value).padStart(4, "0");
+  } else {
+    return null;
+  }
+
+  const hour = Number(digits.slice(0, 2));
+  const minute = Number(digits.slice(2));
   if (hour > 23 || minute > 59) return null;
-  return `${value.slice(0, 2)}:${value.slice(2)}`;
+  return `${digits.slice(0, 2)}:${digits.slice(2)}`;
 };
 
 const isBlank = (value: unknown): boolean =>
