@@ -14,6 +14,16 @@ export type VersionHistoryItem = {
 
 export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
+    version: "3.11.1",
+    date: "2026-11-13",
+    isMandatoryRelease: false,
+    notes: [
+      "修正 Android PWA 更新時 Service Worker 接管判定，避免新版已啟用但頁面仍等待接管。",
+      "確認新版 Worker 已實際控制目前頁面後才自動重新載入，並於新頁面核對目標版本。",
+      "新增 reload 防循環保護；版本確認失敗時停止自動重載，避免反覆更新提示。",
+    ],
+  },
+  {
     version: "3.11.0",
     date: "2026-11-13",
     isMandatoryRelease: false,

@@ -1,11 +1,10 @@
 {
-  "version": "3.11.1",
+  "version": "3.11.2",
   "minimumSupportedVersion": "3.9.27",
-  "releaseDate": "2026-11-13",
+  "releaseDate": "2026-11-15",
   "releaseNotes": [
-    "修正 Android PWA 更新時 Service Worker 接管判定，避免新版已啟用但頁面仍等待接管。",
-    "確認新版 Worker 已實際控制目前頁面後才自動重新載入，並於新頁面核對目標版本。",
-    "新增 reload 防循環保護；版本確認失敗時停止自動重載，避免反覆更新提示。"
+    "共享帳本只在帳本頁面啟用 Realtime，同時移除正常連線下固定 30 秒刷新；離頁即解除訂閱，重連成功時補讀。",
+    "移除常態 Supabase Auth Health 探測與無待處理恢復工作時的額外請求；保留必要 Trip 初始載入及 recovery pending 保護。"
   ],
   "forceUpdate": false
 }
