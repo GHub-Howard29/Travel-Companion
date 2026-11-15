@@ -41,6 +41,7 @@ import {
   updateTripRecord,
 } from "../services/tripRepository";
 import { ROLE, type Role } from "../permissions/roles";
+import { startTripWorkspaceRecoveryLifecycle } from "../utils/tripWorkspaceRecoveryLifecycle";
 import {
   readStoredTripRecords,
   readTripCacheState,
@@ -391,50 +392,20 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
   }, [reconcileTripWorkspaceWithResult]);
 
   useEffect(() => {
-    const reconcilePendingRecovery = () => {
-      if (
-        !connectivityRecoveryPendingRef.current ||
-        !isSessionReady ||
-        !navigator.onLine
-      ) {
-        return;
-      }
+    const recovery = startTripWorkspaceRecoveryLifecycle({
+      windowTarget: window,
+      documentTarget: document,
+      isSessionReady: () => isSessionReady,
+      isOnline: () => navigator.onLine,
+      reconcile: reconcileTripWorkspaceWithResult,
+      setOnline: (online) => setIsOnline(online),
+      initiallyPending: connectivityRecoveryPendingRef.current,
+      onPendingChange: (pending) => {
+        connectivityRecoveryPendingRef.current = pending;
+      },
+    });
 
-      void reconcileTripWorkspaceWithResult().then((result) => {
-        if (!result.completed || !navigator.onLine) return;
-        connectivityRecoveryPendingRef.current = false;
-        setIsOnline(true);
-      }).catch((error) => {
-        console.warn("Trip reconciliation after connectivity recovery failed; will retry", error);
-      });
-    };
-
-    const handleOnline = () => {
-      connectivityRecoveryPendingRef.current = true;
-      setIsOnline(true);
-      reconcilePendingRecovery();
-    };
-    const handleOffline = () => {
-      connectivityRecoveryPendingRef.current = true;
-      setIsOnline(false);
-    };
-    const handleFocus = () => reconcilePendingRecovery();
-    const handleVisibility = () => {
-      if (document.visibilityState === "visible") reconcilePendingRecovery();
-    };
-
-    window.addEventListener("online", handleOnline);
-    window.addEventListener("offline", handleOffline);
-    window.addEventListener("focus", handleFocus);
-    document.addEventListener("visibilitychange", handleVisibility);
-    reconcilePendingRecovery();
-
-    return () => {
-      window.removeEventListener("online", handleOnline);
-      window.removeEventListener("offline", handleOffline);
-      window.removeEventListener("focus", handleFocus);
-      document.removeEventListener("visibilitychange", handleVisibility);
-    };
+    return () => recovery.stop();
   }, [isSessionReady, reconcileTripWorkspaceWithResult]);
 
   useEffect(() => {

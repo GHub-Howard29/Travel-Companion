@@ -72,6 +72,8 @@
     "verify:v3913-commons-batch": "node --experimental-strip-types --no-warnings scripts/verify-v3913-commons-batch.mjs",
     "verify:v3913-commons-contract": "node scripts/verify-v3913-commons-contract.mjs",
     "verify:v3915-expense-mobile": "node scripts/verify-v3915-expense-mobile.mjs",
+    "test:expense-realtime-lifecycle": "node --experimental-strip-types --no-warnings scripts/test-expense-realtime-lifecycle.mjs",
+    "test:trip-workspace-recovery-lifecycle": "node --experimental-strip-types --no-warnings scripts/test-trip-workspace-recovery-lifecycle.mjs",
     "verify:v3916-personal-expense-alias": "node scripts/verify-v3916-personal-expense-alias.mjs",
     "verify:v3916-offline-cover-cache": "node scripts/verify-v3916-offline-cover-cache.mjs",
     "verify:v3916-offline-revision-personal-book": "node scripts/verify-v3916-offline-revision-personal-book.mjs",

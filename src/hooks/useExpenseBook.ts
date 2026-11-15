@@ -35,6 +35,7 @@ import { getExportFileNameXlsx } from "../utils/exportUtils";
 import { getExpenseRecorderAlias } from "../utils/participantUtils";
 import { scheduleStorageDeletion } from "../services/deferredStorageDeletionService";
 import type { EditExpenseDraft, ExpenseItem, LocalAttachmentRecord } from "../types";
+import { startExpenseRealtimeLifecycle } from "../utils/expenseRealtimeLifecycle";
 
 interface UseExpenseBookOptions {
   supabase: SupabaseClient;
@@ -238,7 +239,6 @@ const reloadExpenses = useCallback(async (bookId = expenseBookTripId) => {
   const [activeExpenseDate, setActiveExpenseDate] = useState("");
   const [formCurrency, setFormCurrency] = useState("JPY");
   const deleteConfirmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const expenseRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const canManageExpenseItem = useCallback(
     (item: ExpenseItem) =>
       !isUsingSharedExpenseBook ||
@@ -360,77 +360,14 @@ useEffect(() => {
     return;
   }
 
-  const refreshExpenseBook = () => {
-    if (!navigator.onLine) return;
-    void loadExpenseBook(expenseBookTripId);
-  };
-
-  const scheduleRefresh = () => {
-    if (expenseRefreshTimerRef.current) {
-      clearTimeout(expenseRefreshTimerRef.current);
-    }
-
-    expenseRefreshTimerRef.current = setTimeout(refreshExpenseBook, 150);
-  };
-
-  let hasSubscribed = false;
-  let needsRefreshAfterConnection = false;
-  const channel = supabase
-    .channel(`travel-companion-expenses-${expenseBookTripId}`)
-    .on(
-      "postgres_changes",
-      {
-        event: "*",
-        schema: "public",
-        table: "expenses",
-      },
-      (payload) => {
-        const nextTripId =
-          payload.new && typeof payload.new === "object" && "trip_id" in payload.new
-            ? String(payload.new.trip_id || "")
-            : "";
-        const previousTripId =
-          payload.old && typeof payload.old === "object" && "trip_id" in payload.old
-            ? String(payload.old.trip_id || "")
-            : "";
-        const changedTripId = nextTripId || previousTripId;
-
-        // DELETE payloads can omit non-key columns. In that case refresh safely;
-        // otherwise ignore changes from a different shared book.
-        if (changedTripId && changedTripId !== expenseBookTripId) return;
-        scheduleRefresh();
-      },
-    )
-    .subscribe((status) => {
-      if (status === "SUBSCRIBED") {
-        if (hasSubscribed || needsRefreshAfterConnection) scheduleRefresh();
-        hasSubscribed = true;
-        needsRefreshAfterConnection = false;
-      } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
-        needsRefreshAfterConnection = true;
-      }
-    });
-
-  const handleRefresh = () => scheduleRefresh();
-  const handleVisibilityChange = () => {
-    if (document.visibilityState === "visible") scheduleRefresh();
-  };
-
-  window.addEventListener("focus", handleRefresh);
-  window.addEventListener("online", handleRefresh);
-  document.addEventListener("visibilitychange", handleVisibilityChange);
-
-  return () => {
-    if (expenseRefreshTimerRef.current) {
-      clearTimeout(expenseRefreshTimerRef.current);
-      expenseRefreshTimerRef.current = null;
-    }
-
-    window.removeEventListener("focus", handleRefresh);
-    window.removeEventListener("online", handleRefresh);
-    document.removeEventListener("visibilitychange", handleVisibilityChange);
-    void supabase.removeChannel(channel);
-  };
+  return startExpenseRealtimeLifecycle({
+    tripId: expenseBookTripId,
+    supabase,
+    loadExpenseBook,
+    windowTarget: window,
+    documentTarget: document,
+    isOnline: () => navigator.onLine,
+  });
 }, [
   expenseBookTripId,
   isExpenseBookPageActive,

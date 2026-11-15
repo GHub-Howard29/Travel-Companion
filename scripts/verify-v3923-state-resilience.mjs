@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 const app = readFileSync("src/App.tsx", "utf8");
 const expenseScreen = readFileSync("src/components/expense/ExpenseScreen.tsx", "utf8");
 const expenseBookHook = readFileSync("src/hooks/useExpenseBook.ts", "utf8");
+const expenseRealtime = readFileSync("src/utils/expenseRealtimeLifecycle.ts", "utf8");
 const privateChecklistHook = readFileSync("src/hooks/usePrivateChecklistState.ts", "utf8");
 const tripWorkspace = readFileSync("src/hooks/useTripWorkspace.ts", "utf8");
 
@@ -99,30 +100,31 @@ assert.match(
   /const reconcileTripWorkspaceWithResult = useCallback[\s\S]*completed: false[\s\S]*completed: true, selectedTripWasRemoved/,
   "Trip reconciliation 必須明確區分是否完成與選取的 Trip 是否被移除",
 );
+const tripRecoveryLifecycle = readFileSync("src/utils/tripWorkspaceRecoveryLifecycle.ts", "utf8");
 assert.match(
   tripWorkspace,
-  /const reconcilePendingRecovery = \(\) => \{[\s\S]*!connectivityRecoveryPendingRef\.current[\s\S]*reconcileTripWorkspaceWithResult\(\)\.then\(\(result\) => \{[\s\S]*if \(!result\.completed \|\| !navigator\.onLine\) return;[\s\S]*connectivityRecoveryPendingRef\.current = false/,
-  "只有存在待恢復工作且 reconciliation 確實完成時，才清除 pending 旗標",
+  /startTripWorkspaceRecoveryLifecycle\(\{[\s\S]*isSessionReady: \(\) => isSessionReady[\s\S]*isOnline: \(\) => navigator\.onLine[\s\S]*reconcile: reconcileTripWorkspaceWithResult[\s\S]*initiallyPending: connectivityRecoveryPendingRef\.current[\s\S]*onPendingChange:[\s\S]*connectivityRecoveryPendingRef\.current = pending/,
+  "Trip workspace 必須將 Session Ready、連線狀態、reconciliation 與唯一 pending ref 注入 recovery lifecycle",
 );
 assert.match(
-  tripWorkspace,
-  /const handleOffline = \(\) => \{[\s\S]*connectivityRecoveryPendingRef\.current = true[\s\S]*setIsOnline\(false\)/,
-  "離線事件必須保留待恢復同步旗標",
+  tripRecoveryLifecycle,
+  /!recoveryPending[\s\S]*!isSessionReady\(\)[\s\S]*!isOnline\(\)[\s\S]*inFlight/,
+  "recovery 必須有 pending、Session Ready、online 與 in-flight 四道執行條件",
 );
 assert.match(
-  tripWorkspace,
-  /const handleOnline = \(\) => \{[\s\S]*connectivityRecoveryPendingRef\.current = true[\s\S]*reconcilePendingRecovery\(\)/,
-  "重新連線事件必須直接嘗試必要的 Trip reconciliation，而非先呼叫 Health endpoint",
+  tripRecoveryLifecycle,
+  /!result\.completed \|\| !isOnline\(\)/,
+  "只有 reconciliation 完成且仍在線時才可結束 recovery pending",
 );
 assert.match(
-  tripWorkspace,
-  /const handleFocus = \(\) => reconcilePendingRecovery\(\)/,
-  "回到前景時只在存在待恢復工作時執行 Trip reconciliation",
+  tripRecoveryLifecycle,
+  /windowTarget\.addEventListener\("online",[\s\S]*windowTarget\.addEventListener\("offline",[\s\S]*windowTarget\.addEventListener\("focus",[\s\S]*documentTarget\.addEventListener\("visibilitychange"/,
+  "recovery 必須監聽 online/offline/focus/visibilitychange",
 );
 assert.match(
-  tripWorkspace,
-  /document\.addEventListener\("visibilitychange", handleVisibility\)/,
-  "App 回到前景時必須有機會完成尚未完成的恢復同步",
+  tripRecoveryLifecycle,
+  /removeEventListener\("online",[\s\S]*removeEventListener\("offline",[\s\S]*removeEventListener\("focus",[\s\S]*removeEventListener\("visibilitychange"/,
+  "recovery lifecycle stop 必須移除所有事件監聽",
 );
 assert.match(
   tripWorkspace,
@@ -145,13 +147,18 @@ assert.match(
   /!isExpenseBookPageActive[\s\S]*!userEmail/,
   "共享帳本 Realtime 與同步事件監聽只可在帳本頁面啟用",
 );
-assert.doesNotMatch(
+assert.match(
   expenseBookHook,
-  /setInterval\(refreshExpenseBook,\s*30_000\)/,
+  /startExpenseRealtimeLifecycle\(/,
+  "共享帳本必須使用可測試的 Realtime lifecycle",
+);
+assert.doesNotMatch(
+  expenseRealtime,
+  /setInterval\([^)]*30_000/,
   "共享帳本不可再固定每 30 秒刷新",
 );
 assert.match(
-  expenseBookHook,
+  expenseRealtime,
   /\.subscribe\(\(status\) => \{[\s\S]*status === "SUBSCRIBED"[\s\S]*hasSubscribed \|\| needsRefreshAfterConnection\)[\s\S]*status === "CHANNEL_ERROR" \|\| status === "TIMED_OUT"/,
   "Realtime 重新連線成功後必須補讀共享帳本",
 );

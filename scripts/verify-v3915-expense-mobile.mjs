@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 
 const expenseHook = fs.readFileSync("src/hooks/useExpenseBook.ts", "utf8");
+const expenseRealtime = fs.readFileSync("src/utils/expenseRealtimeLifecycle.ts", "utf8");
 const expenseScreen = fs.readFileSync("src/components/expense/ExpenseScreen.tsx", "utf8");
 const itinerary = fs.readFileSync("src/components/ItineraryPage.tsx", "utf8");
 const cropEditor = fs.readFileSync("src/components/CoverPhotoCropEditor.tsx", "utf8");
@@ -14,14 +15,15 @@ assert.match(migration, /supabase_realtime/);
 assert.match(migration, /tablename = 'expenses'/);
 assert.match(migration, /add table public\.expenses/);
 
-assert.match(expenseHook, /table:\s*"expenses"/);
-assert.doesNotMatch(expenseHook, /filter:\s*`trip_id=eq\.\$\{expenseBookTripId\}`/);
-assert.match(expenseHook, /setTimeout\(refreshExpenseBook, 150\)/);
-assert.match(expenseHook, /changedTripId && changedTripId !== expenseBookTripId/);
-assert.doesNotMatch(expenseHook, /setInterval\(refreshExpenseBook, 30_000\)/);
+assert.match(expenseRealtime, /table:\s*"expenses"/);
+assert.doesNotMatch(expenseRealtime, /filter:\s*`trip_id=eq\.\$\{expenseBookTripId\}`/);
+assert.match(expenseRealtime, /setTimer\(refreshExpenseBook, 150\)/);
+assert.match(expenseRealtime, /changedTripId && changedTripId !== tripId/);
+assert.doesNotMatch(expenseRealtime, /setInterval\([^)]*30_000/);
 assert.match(expenseHook, /!isExpenseBookPageActive[\s\S]*!userEmail/);
+assert.match(expenseHook, /startExpenseRealtimeLifecycle\(/);
 assert.match(
-  expenseHook,
+  expenseRealtime,
   /\.subscribe\(\(status\) => \{[\s\S]*status === "SUBSCRIBED"[\s\S]*hasSubscribed \|\| needsRefreshAfterConnection\)[\s\S]*status === "CHANNEL_ERROR" \|\| status === "TIMED_OUT"/,
 );
 

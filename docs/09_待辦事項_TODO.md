@@ -6,9 +6,11 @@
 
 ## V3.11.2 發布前待驗
 
-- [ ] **Excel 匯入資料上傳後比對（待後續執行）**：D21 匯入錯誤已解決，測試資料庫已成功建立 3 筆四國 TRIP；加上既有 2 筆 SEED，目前共 5 筆。待使用者完成上傳並取得實際雲端資料後，比對 5 筆內容是否一致。
-- [ ] 共享帳本 UI／網路驗收：進入帳本頁可初始讀取並接收 Realtime 更新；斷線重連後可補讀；離開頁面後解除訂閱；自訂側邊欄的帳本頁類型亦須涵蓋。
-- [ ] 回歸確認個人帳本、帳目新增／修改／刪除、附件流程及 Trip 初始雲端載入未受影響；必要時驗證 recovery pending 在離線／重連情境下只於 reconciliation 完成後清除。
+- [ ] **V3.11.2 變更影響範圍的補充驗收（不是重做舊版整套整合測試）**：
+  - **已通過並沿用，不重做**：A/B 共享帳本新增／修改／刪除即時同步實機驗證；V3.9.16 USER 個人帳本代號首次設定、登出再登入沿用、修改代號及個人帳本操作提示實機驗證；V3.9.26 本機隔離環境的個人帳本離線新增／復線同步、附件 PNG 上傳、第二分頁讀取及 Storage／資料列狀態核對；V3.10.12 Trip 線上冷啟動 strict reconciliation、dirty/pending 保護、網路恢復／前景觸發的程式實作與自動化契約。
+  - **V3.11.2 本次已通過**：移除 30 秒輪詢後的 fake-timer／mock Channel lifecycle 行為測試；Trip recovery lifecycle fake-event 行為測試（Session Ready gate、online guard、focus／visible 觸發、in-flight 去重、未完成／拒絕／中途離線保留 pending、成功且仍在線才清除 pending、cleanup）；個人帳本代號／紀錄者、offline revision、cover cache、附件有限重試／離線停止契約；Trip 初始頁唯讀 browser smoke。新 recovery 測試只使用 mock，不連線 Supabase、不寫入瀏覽器資料。App／Node TypeScript、受影響 ESLint 與相關 regression 通過。
+  - **仍有明確證據缺口**：個人帳本完整修改／刪除及離線暫存重開頁後恢復的 UI 驗收未在上述歷史紀錄中找到；附件真實下載／重新讀取位元組未找到明確證據（既有 PNG 上傳與第二分頁「照片已同步」已通過）；V3.11.2 移除常態 Auth Health probe 後，尚未做獨立雙瀏覽器的 Session Ready 初始載入及真實瀏覽器／網路故障恢復整合驗收。新 recovery helper 測試證明事件與 pending 狀態機契約，不等同實際 Supabase 斷線／恢復的端到端驗收。V3.10.12 的 TC01–TC14 雙裝置 UI 人工驗收原已明確保留未執行，不能視為本次通過。
+  - 上述缺口只針對未被歷史證據覆蓋的具體路徑，不要求重做既有 A/B CRUD、個人帳本新增／離線復線或附件 PNG 上傳。現有瀏覽器 localStorage 與本機 Supabase 含有既有資料；未找到可證明獨立可拋棄的資料環境前，不執行寫入、清除或 reset。先以唯讀方式評估隔離測試配置，再決定可安全執行的最小驗收。
 - [ ] 完成 V3.11.2 RC 發布前檢查及必要人工／實機驗收；未完成前不得標記正式發布或部署。詳細範圍見《[113_V3.11.2_RC驗證與發布準備紀錄](113_V3.11.2_RC驗證與發布準備紀錄.md)》。
 
 ## 已確認 BUG 待處理
