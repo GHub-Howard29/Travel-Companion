@@ -41,6 +41,38 @@
         }
       ],
       "content": {
+        "checklistData": [
+          {
+            "category": "必備證件",
+            "id": "shared_copy_mwj9wmka_0",
+            "label": "護照正本（確認效期大於 6 個月）",
+            "updatedAt": "2026-11-16T13:02:20.986Z"
+          },
+          {
+            "category": "必備證件",
+            "id": "shared_copy_mwj9wmka_1",
+            "label": "團體換匯日幣（準備個人自費/購物部分即可）",
+            "updatedAt": "2026-11-16T13:02:20.986Z"
+          },
+          {
+            "category": "跟團專屬",
+            "id": "shared_copy_mwj9wmka_2",
+            "label": "給導遊領隊的每日小費（依旅行社規定準備）",
+            "updatedAt": "2026-11-16T13:02:20.986Z"
+          },
+          {
+            "category": "隨身行李",
+            "id": "shared_copy_mwj9wmka_3",
+            "label": "舒適好走的球鞋（多個神社與峽谷步道需步行）",
+            "updatedAt": "2026-11-16T13:02:20.986Z"
+          },
+          {
+            "category": "隨身行李",
+            "id": "shared_copy_mwj9wmka_4",
+            "label": "薄外套或輕便雨具（秋季阿蘇山區早晚溫差較大）",
+            "updatedAt": "2026-11-16T13:02:20.986Z"
+          }
+        ],
         "custom_tab_1": {
           "mainText": "",
           "subtitle": "旅程備忘錄"
@@ -637,7 +669,7 @@
         "showLunarDate": true
       },
       "created_at": "2026-11-15T14:32:34.151158+00:00",
-      "updated_at": "2026-11-15T14:32:34.151158+00:00",
+      "updated_at": "2026-11-16T13:02:21.206267+00:00",
       "is_public": false
     },
     {
@@ -849,439 +881,85 @@
         "showLunarDate": true
       },
       "created_at": "2026-11-15T12:37:16.257413+00:00",
-      "updated_at": "2026-11-15T12:37:16.257413+00:00",
-      "is_public": false
-    },
-    {
-      "id": "trip-f03f988e-d567-4107-95cd-2d239b7aeaa3",
-      "title": "四國沿海秘境滑雪初體驗",
-      "departure_date": "2027-02-10",
-      "currency_config": {
-        "code": "TWD",
-        "symbol": "NT$"
-      },
-      "sidebar_config": [
-        {
-          "id": "itinerary",
-          "title": "每日詳細行程",
-          "type": "itinerary"
-        },
-        {
-          "id": "checklist",
-          "title": "共同檢查清單",
-          "type": "checklist"
-        },
-        {
-          "id": "trip_special_info",
-          "title": "領隊導遊聯絡資訊",
-          "type": "otherInfo"
-        },
-        {
-          "id": "other_info",
-          "title": "其他資訊",
-          "type": "otherInfo"
-        },
-        {
-          "id": "expense",
-          "title": "旅費記帳本",
-          "type": "expense"
-        },
-        {
-          "id": "exchange_rate",
-          "title": "外幣換算",
-          "type": "exchangeRate"
-        }
-      ],
-      "content": {
-        "custom_tab_1": {
-          "mainText": "",
-          "subtitle": "旅程備忘錄"
-        },
-        "days": [
-          1,
-          2,
-          3,
-          4
-        ],
-        "daysData": {
-          "1": [
-            {
-              "departureTime": "17:55",
-              "desc": "1",
-              "id": "ec81f242-878e-485b-850a-8fb592c18a5c",
-              "location": "",
-              "time": "14:30",
-              "title": "CI 178 台北桃園 T2 ➔ 高松機場",
-              "type": "交通",
-              "typeColor": "bg-emerald-50 text-emerald-700 border-emerald-200"
-            },
-            {
-              "departureTime": "19:00",
-              "desc": "入境手續 ➔ 聯繫 Times 接駁車 ➔ 完成取車",
-              "id": "d87980ca-aaf7-420e-b20b-b94c24b536a6",
-              "location": "",
-              "time": "17:55",
-              "title": "取車",
-              "type": "交通",
-              "typeColor": "bg-emerald-50 text-emerald-700 border-emerald-200"
-            },
-            {
-              "departureTime": "20:30",
-              "desc": "3",
-              "id": "25b0cd5c-3774-44ef-a1cf-5ae3e00c1fa5",
-              "location": "",
-              "time": "19:30",
-              "title": "琴平",
-              "type": "交通",
-              "typeColor": "bg-emerald-50 text-emerald-700 border-emerald-200"
-            },
-            {
-              "departureTime": "22:00",
-              "desc": "入住飯店 & 享用晚餐 (骨付鳥/讚岐烏龍麵)",
-              "id": "f3589624-5f2c-47c4-b7a1-d5b997771022",
-              "location": "",
-              "time": "20:30",
-              "title": "飯店及晚餐",
-              "type": "住宿",
-              "typeColor": "bg-amber-50 text-amber-700 border-amber-200"
-            }
-          ],
-          "2": [
-            {
-              "departureTime": "12:00",
-              "desc": "金刀比羅宮參拜 & 參道午餐",
-              "id": "cdf4e013-b6b1-4581-9ba5-4dda7ac572e1",
-              "location": "",
-              "time": "08:30",
-              "title": "金刀比羅宮參拜 & 參道午餐",
-              "type": "景點",
-              "typeColor": "bg-purple-50 text-purple-700 border-purple-200"
-            },
-            {
-              "departureTime": "14:30",
-              "desc": "丸龜城 如果13:00之前到不了丸龜城，必須取消其中一個景點",
-              "id": "44b94200-56ec-4e6e-bd85-dde1fe2e5848",
-              "location": "",
-              "time": "13:00",
-              "title": "丸龜城",
-              "type": "景點",
-              "typeColor": "bg-purple-50 text-purple-700 border-purple-200"
-            },
-            {
-              "departureTime": "17:00",
-              "desc": "四國水族館 如果13:00之前到不了丸龜城，必須取消其中一個景點",
-              "id": "020d4d36-0dd2-466f-9423-49aa12b9298e",
-              "location": "",
-              "time": "15:00",
-              "title": "四國水族館",
-              "type": "景點",
-              "typeColor": "bg-purple-50 text-purple-700 border-purple-200"
-            },
-            {
-              "departureTime": "18:00",
-              "desc": "天空水族館or海邊看夕陽",
-              "id": "00773041-fc2d-42fe-97e1-1dd364e18503",
-              "location": "",
-              "time": "17:00",
-              "title": "天空水族館or海邊看夕陽",
-              "type": "景點",
-              "typeColor": "bg-purple-50 text-purple-700 border-purple-200"
-            },
-            {
-              "departureTime": "21:00",
-              "desc": "",
-              "id": "55cc4643-68dc-4d49-8cf9-fdf981c4aee3",
-              "location": "",
-              "time": "18:30",
-              "title": "西條市",
-              "type": "住宿",
-              "typeColor": "bg-amber-50 text-amber-700 border-amber-200"
-            }
-          ],
-          "3": [
-            {
-              "departureTime": "08:30",
-              "desc": "行車40分鐘",
-              "id": "076c1692-5482-44ba-aa4b-d2887cf00f40",
-              "location": "",
-              "time": "08:30",
-              "title": "飯店出發",
-              "type": "住宿",
-              "typeColor": "bg-amber-50 text-amber-700 border-amber-200"
-            },
-            {
-              "departureTime": "16:00",
-              "desc": "如果確定請早上10點的教練，建議8點就要出門了",
-              "id": "9f7ec90c-f1e2-4d78-b781-0a6eaf504bc8",
-              "location": "",
-              "time": "09:30",
-              "title": "石鎚登山纜車/滑雪場",
-              "type": "景點",
-              "typeColor": "bg-purple-50 text-purple-700 border-purple-200"
-            },
-            {
-              "departureTime": "18:00",
-              "desc": "行車1.5小時",
-              "id": "dc9849af-cac8-449e-b625-25e80e62be82",
-              "location": "",
-              "time": "17:30",
-              "title": "松山市/飯店",
-              "type": "住宿",
-              "typeColor": "bg-amber-50 text-amber-700 border-amber-200"
-            },
-            {
-              "departureTime": "21:30",
-              "desc": "",
-              "id": "471f30ad-43be-4e23-a0f6-0018e0a8d669",
-              "location": "",
-              "time": "18:30",
-              "title": "道後溫泉/少爺鐘/空之散歩道(足湯)",
-              "type": "景點",
-              "typeColor": "bg-purple-50 text-purple-700 border-purple-200"
-            }
-          ],
-          "4": [
-            {
-              "departureTime": "09:00",
-              "desc": "",
-              "id": "2d1c4972-5d9b-4816-bb77-16df58ca3662",
-              "location": "",
-              "time": "08:30",
-              "title": "伊佐爾波神社",
-              "type": "景點",
-              "typeColor": "bg-purple-50 text-purple-700 border-purple-200"
-            },
-            {
-              "departureTime": "10:00",
-              "desc": "",
-              "id": "279794a7-b176-4c2f-8452-317e7058670c",
-              "location": "",
-              "time": "09:00",
-              "title": "[object Object]",
-              "type": "景點",
-              "typeColor": "bg-purple-50 text-purple-700 border-purple-200"
-            },
-            {
-              "departureTime": "12:00",
-              "desc": "",
-              "id": "b470100d-4081-4fff-b91a-b91881493153",
-              "location": "",
-              "time": "11:30",
-              "title": "松山城/搭吊椅下山",
-              "type": "景點",
-              "typeColor": "bg-purple-50 text-purple-700 border-purple-200"
-            },
-            {
-              "departureTime": "13:00",
-              "desc": "",
-              "id": "8eb14641-7d70-4ed3-b5de-d472cbedba4e",
-              "location": "",
-              "time": "12:00",
-              "title": "午餐/宇和島鯛魚飯",
-              "type": "餐飲",
-              "typeColor": "bg-blue-50 text-blue-700 border-blue-200"
-            },
-            {
-              "departureTime": "14:00",
-              "desc": "",
-              "id": "74a93fb1-30d9-40ac-90b0-2ea8ca1c0df5",
-              "location": "",
-              "time": "13:30",
-              "title": "波妻の夫婦岩",
-              "type": "景點",
-              "typeColor": "bg-purple-50 text-purple-700 border-purple-200"
-            },
-            {
-              "departureTime": "14:30",
-              "desc": "",
-              "id": "3f9aa8bc-da43-401a-8bbb-5a111736afad",
-              "location": "",
-              "time": "14:10",
-              "title": "遍照院(厄除大師)愛媛",
-              "type": "景點",
-              "typeColor": "bg-purple-50 text-purple-700 border-purple-200"
-            },
-            {
-              "departureTime": "15:00",
-              "desc": "時間不夠或太晚不去(視線不良危險度會高)",
-              "id": "50ff1c02-a468-47a8-82e5-dad1debabede",
-              "location": "",
-              "time": "14:50",
-              "title": "龍神社 海中鳥居",
-              "type": "景點",
-              "typeColor": "bg-purple-50 text-purple-700 border-purple-200"
-            },
-            {
-              "departureTime": "15:00",
-              "desc": "時間不夠不去，不順路",
-              "id": "602967f0-b855-40cd-ad87-bce0831b5e56",
-              "location": "",
-              "time": "14:50",
-              "title": "御崎神社の鳥居（宮崎の鳥居）",
-              "type": "景點",
-              "typeColor": "bg-purple-50 text-purple-700 border-purple-200"
-            },
-            {
-              "departureTime": "16:00",
-              "desc": "如果要看夕陽，要等到17:00後",
-              "id": "bc6494f4-579c-4104-b16f-abaa2bb64c44",
-              "location": "",
-              "time": "15:20",
-              "title": "來島海峽展望館",
-              "type": "景點",
-              "typeColor": "bg-purple-50 text-purple-700 border-purple-200"
-            },
-            {
-              "departureTime": "19:30",
-              "desc": "行車1.3小時",
-              "id": "5288025b-ee04-40ce-aaea-7614902ebaad",
-              "location": "",
-              "time": "18:00",
-              "title": "松山市",
-              "type": "住宿",
-              "typeColor": "bg-amber-50 text-amber-700 border-amber-200"
-            }
-          ],
-          "mode": "guided"
-        },
-        "mode": "guided",
-        "otherInfoFolders": [
-          {
-            "createdAt": "2026-11-15T12:59:36.113306+00:00",
-            "id": "other-info-attractions",
-            "isSystem": true,
-            "isVisible": true,
-            "order": 1,
-            "parentId": null,
-            "title": "景點",
-            "tripId": "trip-f03f988e-d567-4107-95cd-2d239b7aeaa3",
-            "updatedAt": "2026-11-15T12:59:36.113306+00:00"
-          },
-          {
-            "createdAt": "2026-11-15T12:59:36.113306+00:00",
-            "id": "other-info-flights",
-            "isSystem": true,
-            "isVisible": true,
-            "order": 2,
-            "parentId": null,
-            "title": "機票",
-            "tripId": "trip-f03f988e-d567-4107-95cd-2d239b7aeaa3",
-            "updatedAt": "2026-11-15T12:59:36.113306+00:00"
-          },
-          {
-            "createdAt": "2026-11-15T12:59:36.113306+00:00",
-            "id": "other-info-hotels",
-            "isSystem": true,
-            "isVisible": true,
-            "order": 3,
-            "parentId": null,
-            "title": "飯店",
-            "tripId": "trip-f03f988e-d567-4107-95cd-2d239b7aeaa3",
-            "updatedAt": "2026-11-15T12:59:36.113306+00:00"
-          },
-          {
-            "createdAt": "2026-11-15T12:59:36.113306+00:00",
-            "id": "other-info-transport",
-            "isSystem": true,
-            "isVisible": true,
-            "order": 4,
-            "parentId": null,
-            "title": "交通",
-            "tripId": "trip-f03f988e-d567-4107-95cd-2d239b7aeaa3",
-            "updatedAt": "2026-11-15T12:59:36.113306+00:00"
-          },
-          {
-            "createdAt": "2026-11-15T12:59:36.113306+00:00",
-            "id": "other-info-tickets",
-            "isSystem": true,
-            "isVisible": true,
-            "order": 5,
-            "parentId": null,
-            "title": "票券",
-            "tripId": "trip-f03f988e-d567-4107-95cd-2d239b7aeaa3",
-            "updatedAt": "2026-11-15T12:59:36.113306+00:00"
-          },
-          {
-            "createdAt": "2026-11-15T12:59:36.113306+00:00",
-            "id": "other-info-insurance",
-            "isSystem": true,
-            "isVisible": true,
-            "order": 6,
-            "parentId": null,
-            "title": "保險",
-            "tripId": "trip-f03f988e-d567-4107-95cd-2d239b7aeaa3",
-            "updatedAt": "2026-11-15T12:59:36.113306+00:00"
-          },
-          {
-            "createdAt": "2026-11-15T12:59:36.113306+00:00",
-            "id": "other-info-visa",
-            "isSystem": true,
-            "isVisible": true,
-            "order": 7,
-            "parentId": null,
-            "title": "簽證",
-            "tripId": "trip-f03f988e-d567-4107-95cd-2d239b7aeaa3",
-            "updatedAt": "2026-11-15T12:59:36.113306+00:00"
-          },
-          {
-            "createdAt": "2026-11-15T12:59:36.113306+00:00",
-            "id": "other-info-food",
-            "isSystem": true,
-            "isVisible": true,
-            "order": 8,
-            "parentId": null,
-            "title": "美食",
-            "tripId": "trip-f03f988e-d567-4107-95cd-2d239b7aeaa3",
-            "updatedAt": "2026-11-15T12:59:36.113306+00:00"
-          },
-          {
-            "createdAt": "2026-11-15T12:59:36.113306+00:00",
-            "id": "other-info-shopping",
-            "isSystem": true,
-            "isVisible": true,
-            "order": 9,
-            "parentId": null,
-            "title": "購物",
-            "tripId": "trip-f03f988e-d567-4107-95cd-2d239b7aeaa3",
-            "updatedAt": "2026-11-15T12:59:36.113306+00:00"
-          },
-          {
-            "createdAt": "2026-11-15T12:59:36.113306+00:00",
-            "id": "other-info-other",
-            "isSystem": true,
-            "isVisible": true,
-            "order": 99,
-            "parentId": null,
-            "title": "其他",
-            "tripId": "trip-f03f988e-d567-4107-95cd-2d239b7aeaa3",
-            "updatedAt": "2026-11-15T12:59:36.113306+00:00"
-          }
-        ],
-        "showLunarDate": true
-      },
-      "created_at": "2026-11-15T12:59:36.109772+00:00",
-      "updated_at": "2026-11-15T12:59:36.109772+00:00",
+      "updated_at": "2026-11-16T12:58:58.64926+00:00",
       "is_public": false
     }
   ],
-  "checklists": [],
-  "checklist_items": [],
+  "checklists": [
+    {
+      "id": "9c5eb795-b50c-437f-9005-7f65354f9e7f",
+      "trip_id": "trip-4f30b5aa-0132-4161-b888-18293c6d2b15",
+      "scope": "shared",
+      "title": "共同檢查清單",
+      "created_at": "2026-11-16T13:02:14.662522+00:00",
+      "updated_at": "2026-11-16T13:02:14.662522+00:00"
+    }
+  ],
+  "checklist_items": [
+    {
+      "id": "06a1ce84-041c-4e06-b487-b486c31fd152",
+      "checklist_id": "9c5eb795-b50c-437f-9005-7f65354f9e7f",
+      "client_item_id": "shared_copy_mwj9wmka_3",
+      "label": "舒適好走的球鞋（多個神社與峽谷步道需步行）",
+      "is_checked": false,
+      "sort_order": 3,
+      "created_at": "2026-11-16T13:02:21.463149+00:00",
+      "updated_at": "2026-11-16T13:02:21.463149+00:00",
+      "deleted_at": null,
+      "category": "隨身行李"
+    },
+    {
+      "id": "3313a517-f4ba-4e33-aef9-cb010c80b8e8",
+      "checklist_id": "9c5eb795-b50c-437f-9005-7f65354f9e7f",
+      "client_item_id": "shared_copy_mwj9wmka_4",
+      "label": "薄外套或輕便雨具（秋季阿蘇山區早晚溫差較大）",
+      "is_checked": false,
+      "sort_order": 4,
+      "created_at": "2026-11-16T13:02:21.463149+00:00",
+      "updated_at": "2026-11-16T13:02:21.463149+00:00",
+      "deleted_at": null,
+      "category": "隨身行李"
+    },
+    {
+      "id": "70c50bfb-4381-4ddb-b325-a71d433abad6",
+      "checklist_id": "9c5eb795-b50c-437f-9005-7f65354f9e7f",
+      "client_item_id": "shared_copy_mwj9wmka_0",
+      "label": "護照正本（確認效期大於 6 個月）",
+      "is_checked": false,
+      "sort_order": 0,
+      "created_at": "2026-11-16T13:02:21.463149+00:00",
+      "updated_at": "2026-11-16T13:02:21.463149+00:00",
+      "deleted_at": null,
+      "category": "必備證件"
+    },
+    {
+      "id": "786bf20e-ed80-4601-beb4-97c4ccb62b37",
+      "checklist_id": "9c5eb795-b50c-437f-9005-7f65354f9e7f",
+      "client_item_id": "shared_copy_mwj9wmka_2",
+      "label": "給導遊領隊的每日小費（依旅行社規定準備）",
+      "is_checked": false,
+      "sort_order": 2,
+      "created_at": "2026-11-16T13:02:21.463149+00:00",
+      "updated_at": "2026-11-16T13:02:21.463149+00:00",
+      "deleted_at": null,
+      "category": "跟團專屬"
+    },
+    {
+      "id": "f476beba-201d-41df-9a1f-eaa7072e8f21",
+      "checklist_id": "9c5eb795-b50c-437f-9005-7f65354f9e7f",
+      "client_item_id": "shared_copy_mwj9wmka_1",
+      "label": "團體換匯日幣（準備個人自費/購物部分即可）",
+      "is_checked": false,
+      "sort_order": 1,
+      "created_at": "2026-11-16T13:02:21.463149+00:00",
+      "updated_at": "2026-11-16T13:02:21.463149+00:00",
+      "deleted_at": null,
+      "category": "必備證件"
+    }
+  ],
   "expenses": [],
   "exchange_purchases": [],
   "other_info_items": [
-    {
-      "id": "11edc92e-68d3-42e7-95d8-a8fedc663c37",
-      "trip_id": "trip-f03f988e-d567-4107-95cd-2d239b7aeaa3",
-      "client_item_id": "trip-f03f988e-d567-4107-95cd-2d239b7aeaa3-guided-special-info",
-      "folder_id": "special-info-guided",
-      "title": "領隊導遊聯絡資訊",
-      "content": "領隊：\n電話：\n導遊：\n電話：\n集合提醒：",
-      "allowed_roles": null,
-      "sort_order": 1,
-      "created_at": "2026-11-15T12:59:36.109772+00:00",
-      "updated_at": "2026-11-15T12:59:36.109772+00:00",
-      "deleted_at": null
-    },
     {
       "id": "7278dd7a-8228-42c2-806f-802e42bfef51",
       "trip_id": "trip-97a3d875-7c0d-45d8-ada1-0bf34af6273c",
@@ -1292,7 +970,7 @@
       "allowed_roles": null,
       "sort_order": 1,
       "created_at": "2026-11-15T12:37:16.257413+00:00",
-      "updated_at": "2026-11-15T12:37:16.257413+00:00",
+      "updated_at": "2026-11-16T12:58:58.65222+00:00",
       "deleted_at": null
     },
     {
@@ -1305,7 +983,7 @@
       "allowed_roles": null,
       "sort_order": 1,
       "created_at": "2026-11-15T14:32:34.151158+00:00",
-      "updated_at": "2026-11-15T14:32:34.151158+00:00",
+      "updated_at": "2026-11-16T12:58:58.652236+00:00",
       "deleted_at": null
     }
   ]
