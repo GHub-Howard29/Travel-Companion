@@ -1,10 +1,10 @@
 {
-  "version": "3.11.2",
+  "version": "3.11.3",
   "minimumSupportedVersion": "3.9.27",
-  "releaseDate": "2026-11-15",
+  "releaseDate": "2026-11-16",
   "releaseNotes": [
-    "改善共享帳本與行程資料同步，提升網路狀態變化時的更新與恢復可靠性。",
-    "改善 Excel 行程匯入的時間格式相容性，並提升整體系統穩定性。"
+    "改善 Android PWA 更新流程，確認 Service Worker 接管後才自動重新載入。",
+    "自動更新失敗時提供安全的手動重新啟動流程，並加入本機診斷資訊複製功能。"
   ],
   "forceUpdate": false
 }
