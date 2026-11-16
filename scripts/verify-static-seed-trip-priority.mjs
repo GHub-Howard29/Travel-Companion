@@ -12,9 +12,38 @@ assert.equal(isStaticSeedTripId("free-travel-2026-01"), true);
 assert.equal(isStaticSeedTripId("group-tour-2026-10"), true);
 assert.equal(isStaticSeedTripId("trip-shikoku-1"), false);
 
+const tombstoneFilter = (tripId, excludedTripIds) =>
+  isStaticSeedTripId(tripId) || !excludedTripIds.has(tripId);
+const deletedIds = new Set(["group-tour-2026-10", "trip-deleted-dynamic"]);
+assert.equal(
+  tombstoneFilter("group-tour-2026-10", deletedIds),
+  true,
+  "Static SEED must remain visible even if a legacy tombstone exists",
+);
+assert.equal(
+  tombstoneFilter("trip-deleted-dynamic", deletedIds),
+  false,
+  "Dynamic trips must remain excluded when a tombstone exists",
+);
+assert.equal(
+  tombstoneFilter("trip-active-dynamic", deletedIds),
+  true,
+  "Dynamic trips without tombstones must remain visible",
+);
+
 const repository = await readFile(
   new URL("../src/services/tripRepository.ts", import.meta.url),
   "utf8",
+);
+assert.match(
+  repository,
+  /\)\)\.filter\(\(trip\) =>\s*isStaticSeedTripId\(trip\.id\) \|\| !excludedTripIds\.has\(trip\.id\),/,
+  "Static SEED manifest records must bypass tombstone filtering",
+);
+assert.match(
+  repository,
+  /\.filter\(\(record\) =>\s*isStaticSeedTripId\(record\.meta\.id\) \|\| !excludedTripIds\.has\(record\.meta\.id\),\s*\);/,
+  "Cloud and cache tombstone filtering must preserve static SEED rows for their authoritative merge handling",
 );
 
 assert.match(

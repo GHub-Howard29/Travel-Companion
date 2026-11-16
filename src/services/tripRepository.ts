@@ -403,11 +403,17 @@ export const getTripMetas = async (
   const seedTrips = (await enrichSeedTripsWithDayCount(
     basePath,
     (await fetchJson<TripMeta[]>(seedUrl)) ?? [],
-  )).filter((trip) => !excludedTripIds.has(trip.id));
+  )).filter((trip) =>
+    isStaticSeedTripId(trip.id) || !excludedTripIds.has(trip.id),
+  );
   const cloudRecords = (initialCloudRecords ?? await getCloudTripRecords(supabase))
-    .filter((record) => !excludedTripIds.has(record.meta.id));
+    .filter((record) =>
+      isStaticSeedTripId(record.meta.id) || !excludedTripIds.has(record.meta.id),
+    );
   const currentStoredRecords = readStoredTripRecords()
-    .filter((record) => !excludedTripIds.has(record.meta.id));
+    .filter((record) =>
+      isStaticSeedTripId(record.meta.id) || !excludedTripIds.has(record.meta.id),
+    );
   const storedRecords = (() => {
     if (cloudRecords.length === 0) {
       return currentStoredRecords.filter((record) => !isStaticSeedTripId(record.meta.id));
