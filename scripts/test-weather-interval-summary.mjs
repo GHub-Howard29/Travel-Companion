@@ -1,44 +1,6 @@
 import assert from "node:assert/strict";
-import { selectRepresentativeWeatherCode } from "../supabase/functions/weather-forecast/weather-code-priority.mjs";
+import { calculateIntervalSummary } from "../supabase/functions/weather-forecast/interval-summary.ts";
 import { destinationDayUtcWindow, localMidnightUtcEpoch } from "../supabase/functions/weather-forecast/timezone-utc.ts";
-
-function calculateIntervalSummary(hourly, timezone, forecastDate, arrival, departure) {
-  const required = ["time", "temperature_2m", "precipitation_probability", "weather_code"];
-  for (const key of required) {
-    if (!Array.isArray(hourly[key])) throw new Error("INVALID_HOURLY_ARRAY");
-    if (hourly[key].length !== hourly.time.length) throw new Error("HOURLY_ARRAY_LENGTH_MISMATCH");
-  }
-  if (!Number.isInteger(arrival) || !Number.isInteger(departure) || arrival < 0 || departure > 23 || departure < arrival) {
-    throw new Error("INVALID_INTERVAL");
-  }
-  const formatter = new Intl.DateTimeFormat("en-CA", {
-    timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit",
-    hour: "2-digit", hourCycle: "h23",
-  });
-  const rows = hourly.time.flatMap((epoch, i) => {
-    if (!Number.isInteger(epoch)) throw new Error("INVALID_UNIX_TIMESTAMP");
-    const parts = Object.fromEntries(formatter.formatToParts(new Date(epoch * 1000)).map(p => [p.type, p.value]));
-    const date = parts.year + "-" + parts.month + "-" + parts.day;
-    const hour = Number(parts.hour);
-    if (date !== forecastDate || hour < arrival || hour > departure) return [];
-    return [{
-      temperature: hourly.temperature_2m[i],
-      precipitation: hourly.precipitation_probability[i],
-      code: hourly.weather_code[i],
-    }];
-  });
-  if (!rows.length) throw new Error("INTERVAL_DATA_MISSING");
-  const temps = rows.map(r => r.temperature).filter(Number.isFinite);
-  const rain = rows.map(r => r.precipitation).filter(Number.isFinite);
-  const representativeCode = selectRepresentativeWeatherCode(rows.map(r => r.code));
-  return {
-    weather_code: representativeCode,
-    temperature_2m_max: temps.length ? Math.max(...temps) : null,
-    temperature_2m_min: temps.length ? Math.min(...temps) : null,
-    precipitation_probability_max: rain.length ? Math.max(...rain) : null,
-    sample_count: rows.length,
-  };
-}
 
 const makeHour = (date, hour, temp, rain, code) => ({
   time: Math.floor(Date.parse(date + "T" + String(hour).padStart(2,"0") + ":00:00Z") / 1000),
@@ -51,6 +13,30 @@ const hourly = {
   precipitation_probability: rows.map(r => r.rain),
   weather_code: rows.map(r => r.code),
 };
+
+function makeCompleteHourlyDay(timezone, date, overrides = {}) {
+  const { startEpoch, endEpoch } = destinationDayUtcWindow(date, timezone);
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", hourCycle: "h23",
+  });
+  const occurrences = new Map();
+  const result = { time: [], temperature_2m: [], precipitation_probability: [], weather_code: [] };
+  for (let epoch = startEpoch; epoch < endEpoch; epoch += 3600) {
+    const parts = Object.fromEntries(formatter.formatToParts(new Date(epoch * 1000)).map(p => [p.type, p.value]));
+    const hour = Number(parts.hour);
+    const occurrence = occurrences.get(hour) ?? 0;
+    occurrences.set(hour, occurrence + 1);
+    const configured = overrides[hour];
+    const values = Array.isArray(configured) ? configured[occurrence] ?? {} : configured ?? {};
+    const pick = (key, fallback) => Object.prototype.hasOwnProperty.call(values, key) ? values[key] : fallback;
+    result.time.push(epoch);
+    result.temperature_2m.push(pick("temperature", 10 + hour));
+    result.precipitation_probability.push(pick("precipitation", hour * 3));
+    result.weather_code.push(pick("code", 1));
+  }
+  return result;
+}
 
 // Both ends included, with minute portions ignored by the caller's hour extraction.
 let summary = calculateIntervalSummary(hourly, "UTC", "2026-11-20", 8, 12);
@@ -67,20 +53,20 @@ assert.equal(summary.temperature_2m_min, 18);
 
 // Severe weather is selected even when it occurs only once.
 const severeHourly = {
-  time: hourly.time.slice(8,13),
-  temperature_2m: [18,19,20,21,22],
-  precipitation_probability: [10,20,30,40,50],
-  weather_code: [1,1,95,1,1],
+  ...hourly,
+  weather_code: hourly.weather_code.map((code, index) => index >= 8 && index <= 12
+    ? [1, 1, 95, 1, 1][index - 8]
+    : code),
 };
 summary = calculateIntervalSummary(severeHourly, "UTC", "2026-11-20", 8, 12);
 assert.equal(summary.weather_code, 95);
 
 // A higher WMO product priority wins regardless of its frequency.
 const priorityHourly = {
-  time: hourly.time.slice(8,13),
-  temperature_2m: [18,19,20,21,22],
-  precipitation_probability: [10,20,30,40,50],
-  weather_code: [95,97,95,1,1],
+  ...hourly,
+  weather_code: hourly.weather_code.map((code, index) => index >= 8 && index <= 12
+    ? [95, 97, 95, 1, 1][index - 8]
+    : code),
 };
 summary = calculateIntervalSummary(priorityHourly, "UTC", "2026-11-20", 8, 12);
 assert.equal(summary.weather_code, 97);
@@ -88,27 +74,27 @@ assert.equal(summary.weather_code, 97);
 // WMO 99 outranks 97 and 95 according to the approved product priority.
 const topPriorityHourly = {
   ...priorityHourly,
-  weather_code: [95,97,99,95,97],
+  weather_code: priorityHourly.weather_code.map((code, index) => index >= 8 && index <= 12
+    ? [95, 97, 99, 95, 97][index - 8]
+    : code),
 };
 summary = calculateIntervalSummary(topPriorityHourly, "UTC", "2026-11-20", 8, 12);
 assert.equal(summary.weather_code, 99);
 
 // Unsupported WMO codes do not displace a supported representative code.
 const unsupportedHourly = {
-  time: hourly.time.slice(8,10),
-  temperature_2m: [18,19],
-  precipitation_probability: [10,20],
-  weather_code: [999,998],
+  ...hourly,
+  weather_code: hourly.weather_code.map((code, index) => index === 8 || index === 9 ? 999 : code),
 };
 summary = calculateIntervalSummary(unsupportedHourly, "UTC", "2026-11-20", 8, 9);
 assert.equal(summary.weather_code, null);
 
 // Null values are never coerced to zero.
 const nullHourly = {
-  time: hourly.time.slice(8,10),
-  temperature_2m: [null, 20],
-  precipitation_probability: [null, 40],
-  weather_code: [null, 3],
+  ...hourly,
+  temperature_2m: hourly.temperature_2m.map((value, index) => index === 8 ? null : index === 9 ? 20 : value),
+  precipitation_probability: hourly.precipitation_probability.map((value, index) => index === 8 ? null : index === 9 ? 40 : value),
+  weather_code: hourly.weather_code.map((value, index) => index === 8 ? null : index === 9 ? 3 : value),
 };
 summary = calculateIntervalSummary(nullHourly, "UTC", "2026-11-20", 8, 9);
 assert.equal(summary.temperature_2m_min, 20);
@@ -117,12 +103,12 @@ assert.equal(summary.precipitation_probability_max, 40);
 assert.equal(summary.weather_code, 3);
 
 // DST fall-back retains both real instants even though they share local 01:00.
-const dstFallHourly = {
-  time: [Date.parse("2026-11-01T08:00:00Z") / 1000, Date.parse("2026-11-01T09:00:00Z") / 1000],
-  temperature_2m: [12, 11],
-  precipitation_probability: [20, 40],
-  weather_code: [1, 61],
-};
+const dstFallHourly = makeCompleteHourlyDay("America/Los_Angeles", "2026-11-01", {
+  1: [
+    { temperature: 12, precipitation: 20, code: 1 },
+    { temperature: 11, precipitation: 40, code: 61 },
+  ],
+});
 summary = calculateIntervalSummary(dstFallHourly, "America/Los_Angeles", "2026-11-01", 1, 1);
 assert.equal(summary.sample_count, 2);
 assert.equal(summary.temperature_2m_max, 12);
@@ -131,24 +117,20 @@ assert.equal(summary.precipitation_probability_max, 40);
 assert.equal(summary.weather_code, 61);
 
 // DST spring-forward has no local 02:00; the interval includes only real timestamps.
-const dstSpringHourly = {
-  time: [Date.parse("2026-03-08T09:00:00Z") / 1000, Date.parse("2026-03-08T10:00:00Z") / 1000],
-  temperature_2m: [8, 10],
-  precipitation_probability: [10, 30],
-  weather_code: [1, 3],
-};
+const dstSpringHourly = makeCompleteHourlyDay("America/Los_Angeles", "2026-03-08", {
+  1: { temperature: 8, precipitation: 10, code: 1 },
+  3: { temperature: 10, precipitation: 30, code: 3 },
+});
 summary = calculateIntervalSummary(dstSpringHourly, "America/Los_Angeles", "2026-03-08", 1, 3);
 assert.equal(summary.sample_count, 2);
 assert.equal(summary.temperature_2m_max, 10);
 assert.equal(summary.temperature_2m_min, 8);
 
-// Filtering by the destination date excludes the adjacent local calendar day.
-const crossDateHourly = {
-  time: [Date.parse("2026-11-20T16:00:00Z") / 1000, Date.parse("2026-11-20T17:00:00Z") / 1000, Date.parse("2026-11-20T18:00:00Z") / 1000],
-  temperature_2m: [5, 6, 7],
-  precipitation_probability: [10, 20, 30],
-  weather_code: [1, 2, 3],
-};
+// Filtering uses the requested destination-local calendar date.
+const crossDateHourly = makeCompleteHourlyDay("America/Los_Angeles", "2026-11-20", {
+  8: { temperature: 5 },
+  9: { temperature: 6 },
+});
 summary = calculateIntervalSummary(crossDateHourly, "America/Los_Angeles", "2026-11-20", 8, 9);
 assert.equal(summary.sample_count, 2);
 assert.equal(summary.temperature_2m_max, 6);
@@ -255,8 +237,24 @@ assert.equal(summary.temperature_2m_min, 10.8);
 assert.equal(summary.precipitation_probability_max, 0);
 assert.equal(summary.weather_code, 0);
 
-// Invalid array lengths and empty intervals fail closed.
+// Invalid array lengths, incomplete day payloads, and invalid intervals fail closed.
 assert.throws(() => calculateIntervalSummary({ ...hourly, weather_code: [] }, "UTC", "2026-11-20", 8, 12), /HOURLY_ARRAY_LENGTH_MISMATCH/);
-assert.throws(() => calculateIntervalSummary(hourly, "UTC", "2026-11-21", 8, 12), /INTERVAL_DATA_MISSING/);
+const incompleteHourly = {
+  ...hourly,
+  time: hourly.time.filter((_, index) => index !== 10),
+  temperature_2m: hourly.temperature_2m.filter((_, index) => index !== 10),
+  precipitation_probability: hourly.precipitation_probability.filter((_, index) => index !== 10),
+  weather_code: hourly.weather_code.filter((_, index) => index !== 10),
+};
+assert.throws(() => calculateIntervalSummary(incompleteHourly, "UTC", "2026-11-20", 8, 12), /HOURLY_DAY_INCOMPLETE/);
+const duplicateHourly = {
+  ...hourly,
+  time: [...hourly.time, hourly.time[10]],
+  temperature_2m: [...hourly.temperature_2m, hourly.temperature_2m[10]],
+  precipitation_probability: [...hourly.precipitation_probability, hourly.precipitation_probability[10]],
+  weather_code: [...hourly.weather_code, hourly.weather_code[10]],
+};
+assert.throws(() => calculateIntervalSummary(duplicateHourly, "UTC", "2026-11-20", 8, 12), /DUPLICATE_HOURLY_TIMESTAMP/);
+assert.throws(() => calculateIntervalSummary(hourly, "UTC", "2026-11-20", 12, 8), /INVALID_INTERVAL/);
 
 console.log("Interval summary fixture tests passed.");

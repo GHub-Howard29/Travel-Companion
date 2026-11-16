@@ -640,7 +640,9 @@ export const ItineraryPage = ({
     const cachedForCurrentDates = Object.fromEntries(enabledCards.flatMap(({ card, forecastDate }) => {
       const item = cached[card.id!];
       return item?.forecast_date === forecastDate && item.place_id === card.place?.placeId &&
-        (!item.refresh_stopped || item.arrival_time === (card.time ?? "")) ? [[card.id!, item]] : [];
+        item.arrival_time === (card.time ?? "") &&
+        (item.departure_time ?? item.arrival_time ?? "") === (card.departureTime ?? card.time ?? "")
+        ? [[card.id!, item]] : [];
     }));
     if (!isOnline) {
       setWeatherByCardId(Object.fromEntries(enabledCards.map(({ card }) => {
@@ -685,7 +687,8 @@ export const ItineraryPage = ({
             if (!card.id || !cardIdsToDisable.has(card.id) || card.showWeather !== true ||
               !card.place?.placeId || !results.some((result) => result.request_id === card.id &&
                 result.place_id === card.place?.placeId && result.forecast_date === getItineraryDayDate(latestTrip.departureDate, Number(dayKey)) &&
-                result.arrival_time === (card.time ?? ""))) {
+                result.arrival_time === (card.time ?? "") &&
+                result.departure_time === (card.departureTime ?? card.time ?? ""))) {
               return card;
             }
             changed = true;

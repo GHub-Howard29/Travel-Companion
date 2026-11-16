@@ -1,5 +1,5 @@
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2.108.2";
-import { preferSharedTargetCandidate, type WeatherCandidate } from "./target-selection.ts";
+import { getStoredWeatherCardTimes, matchesStoredWeatherCardTimeSnapshot, preferSharedTargetCandidate, type WeatherCandidate } from "./target-selection.ts";
 import { getDestinationLocalEligibility } from "./timezone-eligibility.ts";
 
 type WeatherSupabaseClient = SupabaseClient;
@@ -69,8 +69,6 @@ const isValidDate = (value: unknown): value is string => {
   const parsed = new Date(`${value}T00:00:00Z`);
   return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
 };
-const isValidTime = (value: unknown): value is string =>
-  typeof value === "string" && /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(value);
 const dayDate = (departureDate: string, dayNumber: number) => {
   const date = new Date(`${departureDate}T00:00:00Z`);
   date.setUTCDate(date.getUTCDate() + dayNumber - 1);
@@ -121,9 +119,10 @@ const makeCandidate = (tripId: string, departureDate: string, dayNumber: number,
     typeof card.place.placeId !== "string" || !card.place.placeId.trim() ||
     typeof card.id !== "string" || !card.id.trim()) return null;
   const forecastDate = dayDate(departureDate, dayNumber);
+  const { arrivalTime, departureTime } = getStoredWeatherCardTimes(card);
   return {
     tripId, dayNumber, cardId: card.id, placeId: card.place.placeId.trim(), forecastDate,
-    arrivalTime: isValidTime(card.time) ? card.time : "",
+    arrivalTime, departureTime,
   };
 };
 
@@ -681,10 +680,13 @@ const handleRequest = async (request: Request) => {
         typeof item.card_id !== "string" || typeof item.place_id !== "string") continue;
       const candidate: Candidate = {
         tripId: trip.id, dayNumber: item.day_number as number, cardId: item.card_id,
-        placeId: item.place_id, forecastDate: item.forecast_date, arrivalTime: "",
+        placeId: item.place_id, forecastDate: item.forecast_date, arrivalTime: "", departureTime: "",
       };
       const verified = getStoredCandidate(trip as Record<string, unknown>, candidate);
-      if (verified) {
+      const timeSnapshotMatches = Boolean(verified && matchesStoredWeatherCardTimeSnapshot(
+        verified, item.arrival_time, item.departure_time,
+      ));
+      if (verified && timeSnapshotMatches) {
         candidates.push(verified);
       } else {
         // 不回傳 card／place 內容；只回傳安全診斷碼，避免前端將「卡片不存在」誤判成服務逾時。

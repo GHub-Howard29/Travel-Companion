@@ -21,8 +21,10 @@ export interface WeatherForecastItem {
   message?: string;
   /** Prevent further requests after destination-local arrival eligibility has expired. */
   refresh_stopped?: boolean;
-  /** Arrival time associated with a terminal eligibility result, used to invalidate it after edits. */
+  /** Arrival time associated with this card's cached result. */
   arrival_time?: string;
+  /** Departure time snapshot used to invalidate cached summaries after time edits. */
+  departure_time?: string;
   diagnostic_code?: string;
   trace_id?: string;
 }
@@ -159,6 +161,15 @@ const WEATHER_CACHE_KEY = "travel-companion-weather-forecast-v1";
 const WEATHER_REQUEST_RETRY_DELAY_MS = 1_000;
 const weatherRequestsInFlight = new Map<string, Promise<WeatherForecastItem[]>>();
 
+const getWeatherTimeSnapshot = (card: ItineraryItem) => {
+  const arrivalTime = card.time ?? "";
+  const departureTime = card.departureTime ?? card.time ?? "";
+  const forecastType = !arrivalTime && !departureTime
+    ? "daily"
+    : arrivalTime !== departureTime ? "interval" : "arrival_hour";
+  return { arrivalTime, departureTime, forecastType };
+};
+
 /** Destination-local eligibility and remote-cache availability must be checked by the Edge Function. */
 const waitForWeatherRetry = () => new Promise<void>((resolve) => {
   globalThis.setTimeout(resolve, WEATHER_REQUEST_RETRY_DELAY_MS);
@@ -214,6 +225,7 @@ export const storeWeatherForecastResults = (
       ...merged[result.request_id],
       refresh_stopped: true,
       arrival_time: result.arrival_time ?? merged[result.request_id].arrival_time,
+      departure_time: result.departure_time ?? merged[result.request_id].departure_time,
       message: "預報已超過有效期限，目前顯示的是歷史資料",
     };
     else if ((result.status === "unavailable" || result.status === "waiting") &&
@@ -244,7 +256,8 @@ const requestTripWeatherOnce = async (
     return cards.flatMap((card) => card.showWeather === true && card.id && card.place?.placeId
       ? [{
         card_id: card.id, place_id: card.place.placeId, day_number: dayNumber, forecast_date: forecastDate,
-        arrival_time: card.time ?? "",
+        arrival_time: getWeatherTimeSnapshot(card).arrivalTime,
+        departure_time: getWeatherTimeSnapshot(card).departureTime,
       }]
       : []);
   });
@@ -254,7 +267,8 @@ const requestTripWeatherOnce = async (
   const stoppedItems = items.filter((item) => {
     const previous = cached[item.card_id];
     const stopMatches = previous?.refresh_stopped === true && previous.forecast_date === item.forecast_date &&
-      previous.place_id === item.place_id && previous.arrival_time === item.arrival_time;
+      previous.place_id === item.place_id && previous.arrival_time === item.arrival_time &&
+      (previous.departure_time ?? previous.arrival_time ?? "") === item.departure_time;
     // A terminal local cache only suppresses a request while its weather remains displayable.
     // Once local weather expires, ask the Edge Function to re-check destination eligibility and remote cache.
     const cacheAgeMs = previous?.fetched_at ? Date.now() - Date.parse(previous.fetched_at) : Number.POSITIVE_INFINITY;
@@ -290,6 +304,8 @@ const requestTripWeatherOnce = async (
         place_id: item.place_id,
         forecast_date: item.forecast_date,
         status: "unavailable" as const,
+        arrival_time: item.arrival_time,
+        departure_time: item.departure_time,
         message: "天氣服務逾時，請稍後重試",
         diagnostic_code: "WEATHER_FUNCTION_INVOKE_FAILED",
       })));
@@ -304,6 +320,7 @@ const requestTripWeatherOnce = async (
     if (result?.place_id === item.place_id && result.forecast_date === item.forecast_date) return {
       ...result,
       arrival_time: item.arrival_time,
+      departure_time: item.departure_time,
       ...(result.status === "ineligible" ? { refresh_stopped: true } : {}),
     };
     return {
@@ -312,6 +329,7 @@ const requestTripWeatherOnce = async (
       forecast_date: item.forecast_date,
       status: "unavailable" as const,
       arrival_time: item.arrival_time,
+      departure_time: item.departure_time,
       message: "未取得有效天氣回應，請稍後重試",
     };
   })];
@@ -331,7 +349,8 @@ export const requestTripWeather = (
     .sort(([left], [right]) => left.localeCompare(right))
     .flatMap(([dayKey, cards]) => cards.map((card) => {
       const forecastDate = getItineraryDayDate(departureDate, Number(dayKey));
-      return `${dayKey}:${card.id ?? ""}:${card.place?.placeId ?? ""}:${forecastDate ?? ""}:${card.time ?? ""}:${card.showWeather ? "1" : "0"}`;
+      const { arrivalTime, departureTime, forecastType } = getWeatherTimeSnapshot(card);
+      return `${dayKey}:${card.id ?? ""}:${card.place?.placeId ?? ""}:${forecastDate ?? ""}:${arrivalTime}:${departureTime}:${forecastType}:${card.showWeather ? "1" : "0"}`;
     }))
     .sort()
     .join(";");
