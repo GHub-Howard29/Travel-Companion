@@ -10,8 +10,8 @@ export const PREVIOUS_RELEASE_VERSION = "3.11.1";
 export const RELEASE_DATE = "2026-11-15";
 
 export const RELEASE_NOTES = [
-  "共享帳本只在帳本頁面啟用 Realtime，同時移除正常連線下固定 30 秒刷新；離頁即解除訂閱，重連成功時補讀。",
-  "移除常態 Supabase Auth Health 探測與無待處理恢復工作時的額外請求；保留必要 Trip 初始載入及 recovery pending 保護。",
+  "改善共享帳本與行程資料同步，提升網路狀態變化時的更新與恢復可靠性。",
+  "改善 Excel 行程匯入的時間格式相容性，並提升整體系統穩定性。",
 ];
 
 /** 目前版本發布時保存的更新政策；不隨執行中客戶端是否已達最低版本而改變。 */

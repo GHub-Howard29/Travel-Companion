@@ -3,8 +3,8 @@
   "minimumSupportedVersion": "3.9.27",
   "releaseDate": "2026-11-15",
   "releaseNotes": [
-    "共享帳本只在帳本頁面啟用 Realtime，同時移除正常連線下固定 30 秒刷新；離頁即解除訂閱，重連成功時補讀。",
-    "移除常態 Supabase Auth Health 探測與無待處理恢復工作時的額外請求；保留必要 Trip 初始載入及 recovery pending 保護。"
+    "改善共享帳本與行程資料同步，提升網路狀態變化時的更新與恢復可靠性。",
+    "改善 Excel 行程匯入的時間格式相容性，並提升整體系統穩定性。"
   ],
   "forceUpdate": false
 }

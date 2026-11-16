@@ -6,9 +6,10 @@
 
 ## V3.11.2 發布前待辦
 
-- [ ] **唯一剩餘產品驗收阻擋：本版網路生命週期改動的最小真實整合證據（2026-11-16 人工補驗後，改採唯讀自動化覆蓋率審查）。**Expense Realtime 已取得跨分頁更新、離頁 `phx_leave`／`phx_close`、無重複帳本 GET、重新進入後 `phx_join`／`phx_reply status: ok` 的真實瀏覽器證據；Trip 已取得 Session Ready 初始載入、DevTools Offline／Online 真實切換、離線至少 30 秒行程畫面保留、恢復後超過 30 秒無肉眼可見錯誤，以及 Other Info／Data Revision Realtime 重新訂閱成功的證據。以上項目不得再次安排人工測試。仍未直接證明的僅有 Trip recovery pending 保護、必要 reconciliation 成功完成，以及新舊快照衝突時不以舊快照覆寫新資料。下一步先唯讀檢查現有 `scripts/test-trip-workspace-recovery-lifecycle.mjs`、相關測試契約與 `src/hooks/useTripWorkspace.ts`，確認上述三項是否已被既有自動化覆蓋；已覆蓋則沿用既有通過證據，不重跑、不新增測試；僅在明確存在必要缺口時提出一個最小自動化補強建議。唯讀審查期間不修改程式、不操作資料、不連接遠端／正式資料庫。不得重做 A/B CRUD、mock lifecycle、V3.10.12 strict reconciliation／dirty-pending、parser、TypeScript、ESLint 或 build。個人帳本 UI／附件下載位元組驗證不屬本版阻擋。真實觀察及證據界線詳見《[113_V3.11.2_RC驗證與發布準備紀錄](113_V3.11.2_RC驗證與發布準備紀錄.md)》第 6 節。
-- [ ] **發布流程前最終範圍審查（只在啟動發布流程前執行一次）：**比對 `main` 與實際發布候選 commits／diff，確認只包含 V3.11.2 核准範圍，排除未核准天氣 P0 helper、測試資料庫同步程式／fixture 及其他無關變更；一併確認工作樹、stage、metadata 與文件一致。這是最後 release gate，不是日常開發工作，也不需提前反覆整理分支。審查通過才依根目錄 `AGENTS.md` 標準發布流程繼續；發現範圍外或歸屬不明變更即停止合併／tag／部署。
-- [ ] 必要網路安全／穩定性驗收及發布前最終範圍審查均通過後，依 `AGENTS.md` 執行 V3.11.2 標準發布流程。
+- [x] **V3.11.2 網路生命週期驗收範圍已完成判定，不再新增人工情境。**Expense Realtime 跨分頁更新、離頁 `phx_leave`／`phx_close`、離頁無重複帳本 GET、重新進入後 `phx_join`／`phx_reply status: ok` 已有真實瀏覽器證據；Trip Session Ready 初始載入、DevTools Offline／Online、畫面保留及相關 Realtime 重新訂閱已有真實觀察。Recovery pending 保護與成功清除條件由既有 lifecycle 自動化覆蓋，V3.10.12 strict reconciliation／dirty-pending 歷史測試沿用。舊請求 revision guard 不構成本版取消 Expense 30 秒輪詢的實務停止線；依離頁 cleanup、重入初始載入與 Realtime 重訂閱／補讀流程，不追加競態測試。既有通過證據不重測，除非相關程式路徑再次修改或出現具體新故障。詳見《[113_V3.11.2_RC驗證與發布準備紀錄](113_V3.11.2_RC驗證與發布準備紀錄.md)》第 6 節。
+- [x] **天氣 P0 domain helper 已核准納入 V3.11.2 候選。**`weather-code-priority.mjs`、`timezone-utc.ts`、其 regression／fixture 及 Code 97「強雷雨」顯示補齊已完成程式／文件審查；helpers 未接入正式 interval pipeline，不改每日預報、資料庫或正式服務。此核准不包含一般測試資料庫同步程式／fixture，也不包含尚未核准的 interval pipeline／schema／migration／RLS／RPC／Cron 等正式實作。詳細依據見文件 112 §5、文件 79 §2.7 及文件 14。
+- [ ] **V3.11.2 候選組裝與發布前範圍核對：**產品驗收範圍已依 Product Owner 決策定案，不再追加舊請求競態或額外人工整合情境作為停止線。以 `origin/main` 為基底，依文件 113 §6.1 核准白名單組裝；將 RC 程式／測試及版本 metadata 收斂到原專案，對共用文件只納入本版必要段落／hunks。排除一般測試資料庫同步程式／fixture、未核准 interval 正式 pipeline、工具研究、安裝備份、build 產物及其他無關／歸屬不明變更。完成候選後核對 stage／工作樹／候選 diff／metadata，再依根目錄 `AGENTS.md` 標準發布流程進行；此項不是新增產品測試阻擋。
+- [ ] 核准白名單候選組裝、必要驗證與 Git 範圍核對完成後，依使用者明確的「進行發布流程」指示執行 V3.11.2 標準發布流程；不再追加已排除的產品測試情境。
 
 **明確不列為 V3.11.2 發布阻擋：**個人帳本完整修改／刪除 UI、離線暫存重開頁恢復 UI、附件下載位元組重新讀取；這些不是本版程式修改範圍，不另開本版測試計畫。Excel 匯入上傳後資料比對仍由使用者依既定流程另行核對，但不作為本次網路改善發布阻擋，沒有證據前不得宣稱已比對完成。所有已通過項目不得再次安排測試，除非相同程式路徑又被修改、原證據遭推翻或出現具體新故障。
 
