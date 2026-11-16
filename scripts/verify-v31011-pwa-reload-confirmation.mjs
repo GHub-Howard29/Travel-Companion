@@ -91,7 +91,7 @@ assert.match(updateHook, /HANDOFF_TIMEOUT_MS = 15000/);
 assert.match(updateHook, /不會自動重複刷新/);
 
 const waitingFlow = updateBody.match(
-  /const waitingWorker = registration\.waiting;[\s\S]*?setPendingUpdateVersion\(latestMetadata\.version\)[\s\S]*?if \(waitingWorker\) \{\s*await updateServiceWorker!\(false\);\s*\}/,
+  /const waitingWorker = registration\.waiting;[\s\S]*?setPendingUpdateVersion\(latestMetadata\.version\)[\s\S]*?if \(waitingWorker\) \{[\s\S]*?updateServiceWorker!\(false\)[\s\S]*?Promise\.race\(/,
 )?.[0] ?? "";
 assert.ok(waitingFlow, "waiting worker 流程必須在送出單次 SKIP_WAITING 前保存 pending version");
 

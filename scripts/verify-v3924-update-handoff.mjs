@@ -43,13 +43,13 @@ assert.match(
 );
 assert.match(
   updateHook,
-  /if \(waitingWorker\) \{\s*await updateServiceWorker!\(false\);\s*\}/,
-  "只有本次捕捉到 waiting worker 時才送出單次 SKIP_WAITING",
+  /if \(waitingWorker\) \{[\s\S]*recordUpdateDiagnostic\("skip-waiting-requested"[\s\S]*updateServiceWorker!\(false\)[\s\S]*\}/,
+  "只有本次捕捉到 waiting worker 時才送出單次 SKIP_WAITING，並留下診斷紀錄",
 );
 
 assert.match(
   updateHook,
-  /setPendingUpdateVersion\(latestMetadata\.version\)[\s\S]*if \(waitingWorker\) \{\s*await updateServiceWorker!\(false\);\s*\}/,
+  /setPendingUpdateVersion\(latestMetadata\.version\)[\s\S]*if \(waitingWorker\) \{[\s\S]*updateServiceWorker!\(false\)/,
   "發出單次 SKIP_WAITING 前必須保存待套用版本，讓新 document 能核對目標版本",
 );
 
@@ -96,5 +96,17 @@ assert.match(
   /waitForUpdateWorkerReady\([\s\S]*\(\) => Boolean\(registration\.waiting\)/,
   "新版 ready 判斷必須以當次 registration.waiting 為準，不可使用過期全域旗標",
 );
+assert.match(updateHook, /UPDATE_DIAGNOSTICS_KEY[\s\S]*MAX_UPDATE_DIAGNOSTICS = 20[\s\S]*recordWorkerSnapshot/,
+  "更新診斷必須限制本機保存筆數並記錄 Worker 快照");
+assert.match(updateHook, /controllerchange[\s\S]*expected-worker-statechange[\s\S]*handoff-result/,
+  "更新診斷必須保留 controller 與 Worker 生命週期事件及最終結果");
+assert.match(updateHook, /MANUAL_RECOVERY_ATTEMPT_KEY[\s\S]*recoveryCount >= 1[\s\S]*manual-recovery-start/,
+  "手動恢復必須有單次重試上限並留下診斷紀錄");
+
+const updatePrompt = readFileSync("src/components/UpdatePrompt.tsx", "utf8");
+assert.match(updatePrompt, /onRestart[\s\S]*重新啟動 App/,
+  "更新失敗時必須提供獨立的重新啟動 App 恢復按鈕");
+assert.match(updatePrompt, /onCopyDiagnostics[\s\S]*複製診斷資訊/,
+  "更新失敗時必須能複製本機診斷紀錄供後續分析");
 
 console.log("V3.10.7 PWA 主動更新檢查與 active-worker handoff regression 通過.");

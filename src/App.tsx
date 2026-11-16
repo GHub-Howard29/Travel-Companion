@@ -297,6 +297,7 @@ function ConfiguredApp({
     isChecking,
     updatePhase,
     update,
+    copyUpdateDiagnostics,
     dismiss,
   } = useAppUpdate();
   const {
@@ -1321,12 +1322,12 @@ function ConfiguredApp({
     });
   }, [currentTrip, isOnline, supabase]);
 
-  const handleAppUpdate = useCallback(() => {
+  const runAppUpdate = useCallback((recovery = false) => {
     void update(async () => {
       if (!isSessionReady || !isOnline || !hasAnyManagementRole) return;
       await reconcileTripWorkspace();
       await reloadCurrentTrip();
-    });
+    }, recovery);
   }, [
     hasAnyManagementRole,
     isOnline,
@@ -1335,6 +1336,8 @@ function ConfiguredApp({
     reloadCurrentTrip,
     update,
   ]);
+  const handleAppUpdate = useCallback(() => runAppUpdate(false), [runAppUpdate]);
+  const handleAppRestart = useCallback(() => runAppUpdate(true), [runAppUpdate]);
 
   return (
     <AppContext.Provider value={appContextValue}>
@@ -1351,6 +1354,8 @@ function ConfiguredApp({
       isChecking={isChecking}
       updatePhase={updatePhase}
       onUpdate={handleAppUpdate}
+      onRestart={handleAppRestart}
+      onCopyDiagnostics={copyUpdateDiagnostics}
       onDismiss={dismiss}
     />
     <InstallAppPrompt

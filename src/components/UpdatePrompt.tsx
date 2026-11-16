@@ -4,7 +4,7 @@
  * 只負責顯示版本資訊與更新按鈕。
  * Service Worker 更新流程由 useAppUpdate 控制。
  */
-import { RefreshCw, X } from "lucide-react";
+import { Copy, RefreshCw, X } from "lucide-react";
 import type { AppUpdatePhase, AppUpdatePromptMode } from "../hooks/useAppUpdate";
 
 type UpdatePromptProps = {
@@ -19,6 +19,8 @@ type UpdatePromptProps = {
   isChecking: boolean;
   updatePhase: AppUpdatePhase;
   onUpdate: () => void;
+  onRestart: () => void;
+  onCopyDiagnostics: () => void | Promise<void>;
   onDismiss: () => void;
 };
 
@@ -34,6 +36,8 @@ export function UpdatePrompt({
   isChecking,
   updatePhase,
   onUpdate,
+  onRestart,
+  onCopyDiagnostics,
   onDismiss,
 }: UpdatePromptProps) {
   if (!isOpen) return null;
@@ -135,7 +139,26 @@ export function UpdatePrompt({
               role="alert"
               className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold leading-relaxed text-rose-800"
             >
-              {updateError}
+              <p>{updateError}</p>
+              <p className="mt-2 font-normal text-rose-700">若自動更新未完成，可再次嘗試安全接管；若仍失敗，請從 Android 最近使用的 App 關閉 Travel-Companion，再重新開啟。</p>
+              <button
+                type="button"
+                onClick={onRestart}
+                disabled={isChecking}
+                className="mt-3 flex min-h-10 w-full items-center justify-center gap-2 rounded-lg border border-rose-300 bg-white px-3 text-sm font-bold text-rose-800 hover:bg-rose-100 disabled:cursor-wait disabled:opacity-60"
+              >
+                <RefreshCw size={15} />
+                重新啟動 App
+              </button>
+              <p className="mt-1 text-center font-normal text-rose-700">再次檢查新版並嘗試完成接管，成功後自動重新載入</p>
+              <button
+                type="button"
+                onClick={() => void onCopyDiagnostics()}
+                className="mt-2 flex min-h-9 w-full items-center justify-center gap-2 rounded-lg px-3 text-xs font-semibold text-rose-800 hover:bg-rose-100"
+              >
+                <Copy size={14} />
+                複製診斷資訊
+              </button>
             </div>
           )}
         </div>

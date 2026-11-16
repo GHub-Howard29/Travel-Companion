@@ -24,7 +24,7 @@ assert.match(updateHook, /新版尚未下載完成，請確認網路連線後再
 assert.match(updateHook, /waitForServiceWorkerHandoff/);
 assert.match(updateHook, /controller === expectedWorker/);
 assert.match(updateHook, /activeWorker === expectedWorker/);
-assert.match(updateHook, /await updateServiceWorker!\(false\)/);
+assert.match(updateHook, /updateServiceWorker!\(false\)/);
 assert.doesNotMatch(updateHook, /await updateServiceWorker\(true\)/);
 assert.match(
   updateHook,

@@ -31,6 +31,56 @@ const VERSION_POLICY_STORAGE_KEY = "travel_companion_app_version_policy";
 const PENDING_UPDATE_VERSION_KEY = "travel_companion_pending_update_version";
 const UPDATE_RELOAD_ATTEMPT_KEY = "travel_companion_update_reload_attempt";
 const HANDOFF_TIMEOUT_MS = 15000;
+const UPDATE_DIAGNOSTICS_KEY = "travel_companion_update_diagnostics";
+const MANUAL_RECOVERY_ATTEMPT_KEY = "travel_companion_manual_recovery_attempt";
+const MAX_UPDATE_DIAGNOSTICS = 20;
+
+type UpdateDiagnosticEvent = { at: string; event: string; details?: Record<string, unknown> };
+
+const readUpdateDiagnostics = (): UpdateDiagnosticEvent[] => {
+  try {
+    const value = JSON.parse(localStorage.getItem(UPDATE_DIAGNOSTICS_KEY) ?? "[]");
+    return Array.isArray(value) ? value.slice(-MAX_UPDATE_DIAGNOSTICS) : [];
+  } catch {
+    return [];
+  }
+};
+
+const recordUpdateDiagnostic = (event: string, details?: Record<string, unknown>) => {
+  try {
+    const entries = readUpdateDiagnostics();
+    entries.push({ at: new Date().toISOString(), event, details });
+    localStorage.setItem(UPDATE_DIAGNOSTICS_KEY, JSON.stringify(entries.slice(-MAX_UPDATE_DIAGNOSTICS)));
+  } catch (error) {
+    console.warn("Unable to persist PWA update diagnostics.", error);
+  }
+};
+
+const getWorkerSnapshot = (worker: ServiceWorker | null) => worker
+  ? { state: worker.state, scriptURL: worker.scriptURL }
+  : null;
+
+const recordWorkerSnapshot = (
+  stage: string,
+  targetVersion: string,
+  registration: ServiceWorkerRegistration | null,
+  expectedWorker: ServiceWorker | null = null,
+) => {
+  const controller = navigator.serviceWorker?.controller ?? null;
+  recordUpdateDiagnostic(stage, {
+    currentVersion: APP_VERSION,
+    targetVersion,
+    online: navigator.onLine,
+    phase: stage,
+    installing: getWorkerSnapshot(registration?.installing ?? null),
+    waiting: getWorkerSnapshot(registration?.waiting ?? null),
+    active: getWorkerSnapshot(registration?.active ?? null),
+    controller: getWorkerSnapshot(controller),
+    expectedWorker: getWorkerSnapshot(expectedWorker),
+    controllerIsExpected: Boolean(controller && expectedWorker && controller === expectedWorker),
+    activeIsExpected: Boolean(registration?.active && expectedWorker && registration.active === expectedWorker),
+  });
+};
 
 const getRuntimeDisplayMode = () => {
   const standaloneNavigator = navigator as Navigator & { standalone?: boolean };
@@ -77,6 +127,7 @@ const confirmPendingUpdateForCurrentBundle = () => {
   setStoredAppVersion(APP_VERSION);
   clearPendingUpdateVersion();
   clearReloadAttemptVersion();
+  sessionStorage.removeItem(MANUAL_RECOVERY_ATTEMPT_KEY);
   return true;
 };
 const getStoredVersionPolicy = (): AppVersionMetadata | null => {
@@ -154,8 +205,15 @@ const waitForServiceWorkerHandoff = (
       const state = getState();
       if (state) finish(state);
     };
-    const handleControllerChange = () => checkForHandoff();
-    const handleWorkerStateChange = () => checkForHandoff();
+    const handleControllerChange = () => {
+      const controller = navigator.serviceWorker.controller;
+      recordUpdateDiagnostic("controllerchange", { controllerState: controller?.state ?? null, controllerScriptURL: controller?.scriptURL ?? null, isExpected: controller === expectedWorker });
+      checkForHandoff();
+    };
+    const handleWorkerStateChange = () => {
+      recordUpdateDiagnostic("expected-worker-statechange", { state: expectedWorker.state, scriptURL: expectedWorker.scriptURL });
+      checkForHandoff();
+    };
 
     navigator.serviceWorker.addEventListener("controllerchange", handleControllerChange);
     expectedWorker?.addEventListener("statechange", handleWorkerStateChange);
@@ -202,6 +260,7 @@ const waitForUpdateWorkerReady = (
       }
     };
     const handleStateChange = () => {
+      recordUpdateDiagnostic("installing-worker-statechange", { state: installingWorker?.state ?? null, scriptURL: installingWorker?.scriptURL ?? null });
       checkReady();
       if (installingWorker?.state === "redundant") finish(false);
     };
@@ -213,7 +272,10 @@ const waitForUpdateWorkerReady = (
       installingWorker.addEventListener("statechange", handleStateChange);
       checkReady();
     };
-    const handleUpdateFound = () => watchInstallingWorker();
+    const handleUpdateFound = () => {
+      recordUpdateDiagnostic("updatefound", { installingState: registration.installing?.state ?? null });
+      watchInstallingWorker();
+    };
 
     registration.addEventListener("updatefound", handleUpdateFound);
     watchInstallingWorker();
@@ -387,11 +449,22 @@ export const useAppUpdate = () => {
     });
   }, [checkVersionPolicy, requestServiceWorkerUpdate]);
 
-  const update = useCallback(async (beforeUpdate?: () => Promise<void>) => {
+  const update = useCallback(async (beforeUpdate?: () => Promise<void>, recovery = false) => {
     if (updateInProgressRef.current) return;
-    // A deliberate user retry starts a new bounded attempt after a prior reload failed to confirm.
-    clearReloadAttemptVersion();
-    if (!policy.hasUpdate) {
+    if (recovery) {
+      const recoveryCount = Number(sessionStorage.getItem(MANUAL_RECOVERY_ATTEMPT_KEY) ?? "0");
+      if (recoveryCount >= 1) {
+        setUpdateError("本次已完成一次手動恢復嘗試。為避免反覆重新載入，請從 Android 最近使用的 App 關閉 Travel-Companion，再重新開啟。");
+        return;
+      }
+      sessionStorage.setItem(MANUAL_RECOVERY_ATTEMPT_KEY, String(recoveryCount + 1));
+      clearReloadAttemptVersion();
+      recordUpdateDiagnostic("manual-recovery-start", { currentVersion: APP_VERSION, targetVersion: latestMetadata.version });
+    } else {
+      // A deliberate user retry starts a new bounded attempt after a prior reload failed to confirm.
+      clearReloadAttemptVersion();
+    }
+    if (!policy.hasUpdate && !recovery) {
       setStoredAppVersion(APP_VERSION);
       setReleaseNoticeVisible(false);
       return;
@@ -421,7 +494,7 @@ export const useAppUpdate = () => {
 
       setUpdatePhase("checking-metadata");
       const refreshedPolicy = await checkVersionPolicy();
-      if (refreshedPolicy && !refreshedPolicy.hasUpdate) {
+      if (refreshedPolicy && !refreshedPolicy.hasUpdate && !recovery) {
         setUpdatePhase("idle");
         return;
       }
@@ -429,14 +502,20 @@ export const useAppUpdate = () => {
         registrationRef.current ?? (await navigator.serviceWorker.ready);
       registrationRef.current = registration;
       const previousController = navigator.serviceWorker?.controller ?? null;
+      recordWorkerSnapshot("update-start", latestMetadata.version, registration);
+      const startedAt = Date.now();
       setUpdatePhase("downloading");
       await registration.update();
+      recordUpdateDiagnostic("worker-update-check-complete", { elapsedMs: Date.now() - startedAt });
+      const workerReadyStartedAt = Date.now();
       const workerReady = await waitForUpdateWorkerReady(
         registration,
         previousController,
         () => Boolean(registration.waiting),
       );
+      recordUpdateDiagnostic("worker-ready-result", { ready: workerReady, elapsedMs: Date.now() - workerReadyStartedAt });
       if (!workerReady) {
+        recordWorkerSnapshot("worker-ready-timeout", latestMetadata.version, registration);
         setUpdateError("新版尚未下載完成，請確認網路連線後再試；目前版本仍可繼續使用。");
         setUpdatePhase("idle");
         return;
@@ -453,6 +532,7 @@ export const useAppUpdate = () => {
 
       const waitingWorker = registration.waiting;
       const expectedWorker = waitingWorker ?? (activatedReplacement ? registration.active : null);
+      recordWorkerSnapshot("worker-ready", latestMetadata.version, registration, expectedWorker);
       if (!expectedWorker) {
         setUpdateError("新版尚未進入可接管狀態，請稍後再試；目前版本仍可正常使用。");
         setUpdatePhase("idle");
@@ -467,6 +547,8 @@ export const useAppUpdate = () => {
       }
 
       setUpdatePhase("waiting-control");
+      const handoffStartedAt = Date.now();
+      recordWorkerSnapshot("handoff-wait-start", latestMetadata.version, registration, expectedWorker);
       const handoffPromise = waitForServiceWorkerHandoff(
         registration,
         expectedWorker,
@@ -476,10 +558,22 @@ export const useAppUpdate = () => {
       setPendingUpdateVersion(latestMetadata.version);
 
       // waiting worker 才送一次 SKIP_WAITING；已 active 的 replacement 只等待 clientsClaim 接管。
+      let handoffState: ServiceWorkerHandoffState;
       if (waitingWorker) {
-        await updateServiceWorker!(false);
+        recordUpdateDiagnostic("skip-waiting-requested", { targetVersion: latestMetadata.version, workerState: waitingWorker.state });
+        const skipWaitingPromise = updateServiceWorker!(false).then(() => {
+          recordUpdateDiagnostic("skip-waiting-call-resolved", { elapsedMs: Date.now() - handoffStartedAt });
+        });
+        // A stuck Workbox callback must not prevent the handoff timeout from being handled.
+        handoffState = await Promise.race([
+          handoffPromise,
+          skipWaitingPromise.then(() => handoffPromise),
+        ]);
+      } else {
+        handoffState = await handoffPromise;
       }
-      const handoffState = await handoffPromise;
+      recordWorkerSnapshot(handoffState === "controlled" ? "handoff-controlled" : "handoff-timeout", latestMetadata.version, registration, expectedWorker);
+      recordUpdateDiagnostic("handoff-result", { result: handoffState, elapsedMs: Date.now() - handoffStartedAt });
 
       if (handoffState === "controlled") {
         reloadOnce(latestMetadata.version);
@@ -492,6 +586,8 @@ export const useAppUpdate = () => {
       setUpdatePhase("idle");
     } catch (error) {
       console.warn("PWA Service Worker update failed.", error);
+      recordWorkerSnapshot("update-exception", latestMetadata.version, registrationRef.current);
+      recordUpdateDiagnostic("update-error", { message: error instanceof Error ? error.message.slice(0, 240) : "unknown" });
       setUpdateError(
         navigator.onLine
           ? "更新處理發生錯誤，請稍後重新嘗試。"
@@ -508,6 +604,21 @@ export const useAppUpdate = () => {
     policy.hasUpdate,
     reloadOnce,
   ]);
+
+  const copyUpdateDiagnostics = useCallback(async () => {
+    const payload = {
+      currentVersion: APP_VERSION,
+      targetVersion: latestMetadata.version,
+      diagnostics: readUpdateDiagnostics(),
+    };
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error("Clipboard API unavailable");
+      await navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
+    } catch (error) {
+      console.warn("Unable to copy PWA update diagnostics.", error);
+      setUpdateError("無法複製診斷資訊，請確認瀏覽器允許剪貼簿存取後再試。");
+    }
+  }, [latestMetadata.version]);
 
   const dismiss = useCallback(() => {
     if (policy.isMandatoryForCurrentClient) return;
@@ -536,6 +647,7 @@ export const useAppUpdate = () => {
     hasPreparedUpdate,
     isUpdateInProgress: isChecking,
     update,
+    copyUpdateDiagnostics,
     dismiss,
   };
 };
