@@ -151,3 +151,38 @@ Excel RPC 案例集與一般 TRIP fixtures 均可透過 Git 在 A、B 間取得�
 - 更新的測試行程 ID：`trip-a2131af0-2e96-43ee-8ea4-e71a27df63ab`。
 - Git 工作樹：乾淨；本次未執行 Git commit／push，也未執行資料庫上傳。
 - **差異說明：** 本次下載顯示更新 1 組，代表執行前本機案例內容與 Git fixture 不完全一致；已完成匯入。此紀錄僅確認 B → C 下載及本機匯入成功，不代表其他跨機驗收項目已通過。
+
+## 11. 2026-11-16 G → B 下載驗收與反向 B → G → A 驗收規劃
+
+### 11.1 G → B 下載驗收
+
+- **結果：通過。** 使用者確認 G → B 的資料庫下載已完成驗證，且本機下載／匯入流程順利完成。
+- 本次完成後，整體正向流程 **A → G → B** 已順利完成。
+- 本節依使用者確認記錄流程驗收結果；下一階段改測反向同步，不回頭重做正向流程。
+
+### 11.2 反向 B → G → A 驗收規劃
+
+1. **B 端資料清理：** 本次實際清理目標不是動態 TRIP，而是 B 本機 `public.trips` 中的日本 SEED row：`group-tour-2026-10`（原顯示名稱「英鈦日本九州極上五日」）。使用者決定只刪除此 row；保留 `public/trips/group-tour-2026-10.json` 與 `supabase/seed.sql`，不修改程式、不改變其他電腦的處理方式。
+2. **B 端資料準備：** 保留兩筆四國動態 TRIP，其中「四國」（ID：`trip-4f30b5aa-0132-4161-b888-18293c6d2b15`）具有一份 shared checklist 及 5 個 checklist items；另一筆「四國沿海秘境滑雪初體驗」（ID：`trip-97a3d875-7c0d-45d8-ada1-0bf34af6273c`）保留其資料。另有兩筆 other_info_items，分別關聯兩筆四國 TRIP。
+3. **A 端下載：** A 端先自行確認 Git 已取得 B 端最新提交（`git pull --ff-only origin develop`），再明確執行 `/下載資料庫`；下載命令不得自行執行 Git pull。
+4. **A 端驗收目標：** 下載完成後，A 端原有兩筆靜態 SEED 應保持不變，並保留兩筆四國動態 TRIP；其中「四國」帶有共用清單，且共用清單、5 個項目及外鍵關聯完整。兩筆 other_info_items 亦須維持正確關聯。
+5. **日本 row 驗收：** B 本機 `group-tour-2026-10` row 已刪除，B 的上傳資料集不再包含該 row。A 端下載後不得因本次資料集同步而新增／恢復這筆日本 row；A 端原本的靜態 SEED 保護資料仍應保留。JSON 與 Seed SQL 仍在，因此未來若重新執行本機 Seed／回歸測試流程，該 row 仍可能被重新建立；本次不處理此未來情境。
+6. **驗收判定：** 以 TRIP ID／名稱逐筆核對，不只核對總筆數；確認 A 原有兩筆 SEED 不受影響、兩筆四國動態 TRIP 存在、共用清單及 5 個 checklist items 關聯正確、兩筆 other_info_items 關聯正確，且日本 row 未因本次下載重新出現。全部符合才判定反向 B → G → A 流程通過。
+
+- **目前狀態：B 端清理及上傳已完成；A 端下載與驗收待回報。**
+
+### 11.3 2026-11-16 B 端清理與正式上傳執行紀錄
+
+- **執行節點：** B／家用端 OpenChatX Home；專案根目錄 `D:\Project\Travel-Companion`；分支 `develop`；執行 Node `v22.23.2`、npm `10.9.8`；Supabase 僅連線本機 loopback（API `127.0.0.1:54321`、DB `127.0.0.1:54322`），未使用 linked／遠端資料庫。
+- **刪除前檢查：** 目標 row 為 `public.trips.id='group-tour-2026-10'`、title `英鈦日本九州極上五日`。確認該 row 沒有 checklist、expense、exchange_purchase 或 other_info_items 依附資料。
+- **刪除保護處理：** 一般 DELETE 被資料庫觸發器 `trips_reject_protected_seed_delete` 阻擋。依使用者同意，只在單一資料庫匿名區塊內暫時停用這一個指定觸發器、刪除指定 row，隨即重新啟用；操作成功。後續查詢確認目標 row 不存在，觸發器狀態為 enabled（`tgenabled='O'`）。未停用其他觸發器或修改 schema／程式。
+- **檔案保留：** `public/trips/group-tour-2026-10.json` 與 `supabase/seed.sql` 均未修改；沒有刪除 JSON，也沒有修改未來 seed／回歸測試行為。
+- **B 端刪除後資料：** `public.trips` 剩兩筆四國行程：
+  - `trip-4f30b5aa-0132-4161-b888-18293c6d2b15`／「四國」。
+  - `trip-97a3d875-7c0d-45d8-ada1-0bf34af6273c`／「四國沿海秘境滑雪初體驗」。
+  - 共用清單 1 份，scope=`shared`，trip_id 正確關聯「四國」；其 checklist_items 共 5 筆。
+  - 另有 2 筆 other_info_items，分別關聯上述兩筆四國行程。
+- **上傳預覽：** `npm run testdata:upload -- --preview` 成功，判定 `action="upload"`；資料集只包含上述兩筆四國 TRIP。manifest counts：trips=2、checklists=1、checklist_items=5、expenses=0、exchange_purchases=0、other_info_items=2。預覽本身未寫入 fixture、未 commit／push、未更新 last_synced_at。
+- **正式上傳：** `npm run testdata:upload` 成功回報 `uploaded=true`、`committed=true`、`pushed=true`；GitHub `develop` 從 `e2589e5` 推進至 `5be8974`。Commit SHA：`5be8974b9ca7dba4fc14a511002e09c6e22969c0`，訊息「更新本機測試資料庫資料集」。上傳後程式再次 fetch 並驗證遠端一致；local_last_changed_at、git_last_changed_at、last_synced_at 均為 `2026-11-16T13:23:02.564223Z`。
+- **文件保護：** 上傳工具要求乾淨工作樹。當時唯一未提交修改為本文件，因此先以 path-specific stash 暫存此文件；上傳完成後已成功 `git stash pop` 還原。文件修改仍在工作目錄，未納入資料集 commit，亦未另行 commit／push。
+- **尚未完成：** A 端尚未回報 Git fast-forward、`/下載資料庫` 執行結果及下載後資料核對；因此反向 B → G → A 尚不能判定通過。等待 A 端回報後，再依 11.2 驗收項目逐筆核對，不要在 B 端重複上傳或自行變更資料。
