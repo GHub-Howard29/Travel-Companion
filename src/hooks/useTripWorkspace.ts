@@ -58,7 +58,7 @@ import {
 } from "../services/tripCloudService";
 import { decideTripReconciliation } from "../services/tripReconciliation";
 import { clearSharedTripDataAfterAccessLoss } from "../storage/sharedTripDataStorage";
-import { isProtectedSeedTripId } from "../constants/appConstants";
+import { isProtectedSeedTripId, isStaticSeedTripId } from "../constants/appConstants";
 import { getUnusedItineraryCoverPaths } from "../utils/itineraryCoverPhoto";
 import { scheduleItineraryCoverDeletion } from "../services/itineraryCoverPhotoService";
 import { clearItineraryCoverOfflineCache } from "../services/itineraryCoverOfflineCache";
@@ -1277,10 +1277,11 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
     if (!selectedTripId || !navigator.onLine) return;
 
     const loadRevision = ++tripLoadRevisionRef.current;
-    const cloudSnapshot = preferCloud
+    const isStaticSeed = isStaticSeedTripId(selectedTripId);
+    const cloudSnapshot = preferCloud && !isStaticSeed
       ? await getCloudTripRecord(supabase, selectedTripId)
       : null;
-    if (preferCloud && !cloudSnapshot) {
+    if (preferCloud && !isStaticSeed && !cloudSnapshot) {
       throw new Error("目前旅程已不存在，請重新載入旅程清單。");
     }
 
@@ -1290,7 +1291,7 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
       selectedTripId,
       selectedTripMeta ?? undefined,
       cloudSnapshot ? [cloudSnapshot] : undefined,
-      preferCloud,
+      preferCloud && !isStaticSeed,
     );
     if (nextTrip && tripLoadRevisionRef.current === loadRevision) {
       setCurrentTrip(nextTrip);

@@ -33,7 +33,7 @@ import { sortTripsByDateDesc } from "../utils/tripHelpers";
 import { readOtherInfoSyncState } from "../storage/otherInfoSyncStorage";
 import { normalizeOtherInfoItems } from "../utils/otherInfoUtils";
 import { loadInitialWorkspaceSnapshot } from "./tripInitialization";
-import { isProtectedSeedTripId } from "../constants/appConstants";
+import { isProtectedSeedTripId, isStaticSeedTripId } from "../constants/appConstants";
 import { createTripId } from "../utils/tripIdentity";
 import { updateTripWithVersionRecovery } from "../utils/tripVersionRecovery";
 import { createDefaultFoldersForTrip } from "../utils/folderDefaults";
@@ -358,6 +358,11 @@ const mergeTripRecords = (
   }
 
   for (const record of [...cloudRecords, ...storedRecords]) {
+    // The JSON manifest/detail pair is the only authority for static SEED IDs.
+    // Older cloud/local rows may remain during the compatibility period, but
+    // must never replace the static title, participants, currency or day count.
+    if (isStaticSeedTripId(record.meta.id)) continue;
+
     const currentRecord = latestRecordsById.get(record.meta.id);
     if (!currentRecord || isNewerRecord(record, currentRecord)) {
       latestRecordsById.set(record.meta.id, record);
@@ -404,12 +409,17 @@ export const getTripMetas = async (
   const currentStoredRecords = readStoredTripRecords()
     .filter((record) => !excludedTripIds.has(record.meta.id));
   const storedRecords = (() => {
-    if (cloudRecords.length === 0) return currentStoredRecords;
+    if (cloudRecords.length === 0) {
+      return currentStoredRecords.filter((record) => !isStaticSeedTripId(record.meta.id));
+    }
 
     const recordsById = new Map(
-      cloudRecords.map((record) => [record.meta.id, record]),
+      cloudRecords
+        .filter((record) => !isStaticSeedTripId(record.meta.id))
+        .map((record) => [record.meta.id, record]),
     );
     currentStoredRecords.forEach((record) => {
+      if (isStaticSeedTripId(record.meta.id)) return;
       const cloudRecord = recordsById.get(record.meta.id);
       if (
         readOtherInfoSyncState(record.meta.id) ||
@@ -448,6 +458,22 @@ export const getTripDetail = async (
   initialCloudRecords?: StoredTripRecord[],
   preferCloud = false,
 ): Promise<TripDetail | null> => {
+  const detailPath = selectedTripMeta?.detailPath || `/trips/${tripId}.json`;
+  const url = `${basePath}${detailPath.replace(/^\//, "")}`.replace(/\/+/g, "/");
+
+  if (isStaticSeedTripId(tripId)) {
+    const seedDetail = await fetchJson<TripDetail>(url);
+    if (!seedDetail) return null;
+
+    // Keep the JSON detail authoritative while preserving independently stored Other Info items.
+    const cloudOtherInfoItems = await getCloudOtherInfoItems(supabase, tripId);
+    return normalizeTripDetail(
+      seedDetail,
+      selectedTripMeta,
+      cloudOtherInfoItems === null ? undefined : mergeOtherInfoItems(cloudOtherInfoItems),
+    );
+  }
+
   const storedTrip = readStoredTripRecords().find(
     (record) => record.meta.id === tripId,
   );
@@ -476,8 +502,6 @@ export const getTripDetail = async (
     return normalizeTripDetail(latestRecord.detail, latestRecord.meta);
   }
 
-  const detailPath = selectedTripMeta?.detailPath || `/trips/${tripId}.json`;
-  const url = `${basePath}${detailPath.replace(/^\//, "")}`.replace(/\/+/g, "/");
   const seedDetail = await fetchJson<TripDetail>(url);
   const cloudOtherInfoItems = await getCloudOtherInfoItems(supabase, tripId);
 
@@ -767,6 +791,10 @@ export const saveTripRecordWithCloudSync = async (
   expectedUpdatedAt?: string,
   enforceVersion = true,
 ): Promise<boolean> => {
+  if (isStaticSeedTripId(record.meta.id)) {
+    throw new Error("靜態 SEED 行程由 JSON 管理，不可寫入動態 TRIP 資料庫");
+  }
+
   const currentStoredRecord = readStoredTripRecords().find(
     (item) => item.meta.id === record.meta.id,
   );
