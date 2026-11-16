@@ -74,8 +74,18 @@ const workspace = await readFile(
 );
 assert.match(
   workspace,
-  /const isStaticSeed = isStaticSeedTripId\(selectedTripId\);\s*const cloudSnapshot = preferCloud && !isStaticSeed\s*\? await getCloudTripRecord\(supabase, selectedTripId\)/,
-  "Static SEED refresh must bypass the dynamic trips table lookup",
+  /const isStaticSeed = isStaticSeedTripId\(selectedTripId\);\s*const shouldPreferCloud = preferCloud && !isStaticSeed;\s*const cloudSnapshot = shouldPreferCloud\s*\? await getCloudTripRecord\(supabase, selectedTripId\)/,
+  "Static SEED refresh must bypass the dynamic trips table lookup while dynamic Trips prefer cloud",
+);
+assert.match(
+  workspace,
+  /if \(shouldPreferCloud && !cloudSnapshot\)/,
+  "Only dynamic Trips should require a cloud snapshot before editing",
+);
+assert.match(
+  workspace,
+  /cloudSnapshot \? \[cloudSnapshot\] : undefined,\s*shouldPreferCloud,/,
+  "Static SEED must not pass cloud-preferred mode to Trip detail loading",
 );
 assert.match(
   repository,
