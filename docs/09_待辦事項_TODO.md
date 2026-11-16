@@ -6,7 +6,7 @@
 
 ## V3.11.2 發布前待辦
 
-- [ ] **唯一剩餘產品驗收阻擋：本版網路生命週期改動的最小真實整合證據。**只驗共享帳本 Realtime 生命週期及 Trip Workspace Session Ready／Recovery 在真實瀏覽器與安全隔離環境下，資料不遺漏、不被舊資料覆寫、pending 不錯誤清除且網路恢復可完成必要同步。不得重做已通過的 A/B CRUD、mock lifecycle、V3.10.12 strict reconciliation／dirty-pending、parser、TypeScript、ESLint 或 build。個人帳本 UI／附件下載位元組驗證不屬本版阻擋。詳見《[113_V3.11.2_RC驗證與發布準備紀錄](113_V3.11.2_RC驗證與發布準備紀錄.md)》第 6 節。
+- [ ] **唯一剩餘產品驗收阻擋：本版網路生命週期改動的最小真實整合證據（2026-11-16 人工補驗後，改採唯讀自動化覆蓋率審查）。**Expense Realtime 已取得跨分頁更新、離頁 `phx_leave`／`phx_close`、無重複帳本 GET、重新進入後 `phx_join`／`phx_reply status: ok` 的真實瀏覽器證據；Trip 已取得 Session Ready 初始載入、DevTools Offline／Online 真實切換、離線至少 30 秒行程畫面保留、恢復後超過 30 秒無肉眼可見錯誤，以及 Other Info／Data Revision Realtime 重新訂閱成功的證據。以上項目不得再次安排人工測試。仍未直接證明的僅有 Trip recovery pending 保護、必要 reconciliation 成功完成，以及新舊快照衝突時不以舊快照覆寫新資料。下一步先唯讀檢查現有 `scripts/test-trip-workspace-recovery-lifecycle.mjs`、相關測試契約與 `src/hooks/useTripWorkspace.ts`，確認上述三項是否已被既有自動化覆蓋；已覆蓋則沿用既有通過證據，不重跑、不新增測試；僅在明確存在必要缺口時提出一個最小自動化補強建議。唯讀審查期間不修改程式、不操作資料、不連接遠端／正式資料庫。不得重做 A/B CRUD、mock lifecycle、V3.10.12 strict reconciliation／dirty-pending、parser、TypeScript、ESLint 或 build。個人帳本 UI／附件下載位元組驗證不屬本版阻擋。真實觀察及證據界線詳見《[113_V3.11.2_RC驗證與發布準備紀錄](113_V3.11.2_RC驗證與發布準備紀錄.md)》第 6 節。
 - [ ] **發布流程前最終範圍審查（只在啟動發布流程前執行一次）：**比對 `main` 與實際發布候選 commits／diff，確認只包含 V3.11.2 核准範圍，排除未核准天氣 P0 helper、測試資料庫同步程式／fixture 及其他無關變更；一併確認工作樹、stage、metadata 與文件一致。這是最後 release gate，不是日常開發工作，也不需提前反覆整理分支。審查通過才依根目錄 `AGENTS.md` 標準發布流程繼續；發現範圍外或歸屬不明變更即停止合併／tag／部署。
 - [ ] 必要網路安全／穩定性驗收及發布前最終範圍審查均通過後，依 `AGENTS.md` 執行 V3.11.2 標準發布流程。
 
