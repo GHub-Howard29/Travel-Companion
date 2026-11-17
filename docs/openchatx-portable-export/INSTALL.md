@@ -9,7 +9,8 @@
 | 檔案／資料夾 | 用途 |
 |---|---|
 | `openchatx-tool-usage\SKILL.md` | 通用 OpenChatX 工具使用 Skill |
-| `travel-companion-evidence-efficient\SKILL.md` | Travel-Companion 低 Token 證據工作流程 Skill |
+| `travel-companion-evidence-efficient\SKILL.md` | Travel-Companion 最新版 Skill（包含上傳／下載長工作追蹤規則） |
+| `travel-companion-evidence-efficient-original\SKILL.md` | 修正前原始匯出版本，僅供歷史追溯，不應匯入 |
 | `global-skill-loading-rule.mdc` | 全域 Skill 載入 Rule |
 | `README.md` | 套件說明 |
 | `INSTALL.md` | 本安裝指南 |
@@ -28,7 +29,7 @@
 匯出資料夾（若 B 電腦位置不同，請先確認並替換此路徑）：
 D:\Project\Travel-Companion\docs\openchatx-portable-export
 
-本次要安裝的 Skills：
+本次要安裝的 Skills（只匯入最新版；`travel-companion-evidence-efficient-original` 是歷史備份，不可匯入）：
 1. openchatx-tool-usage
    來源資料夾：D:\Project\Travel-Companion\docs\openchatx-portable-export\openchatx-tool-usage
 2. travel-companion-evidence-efficient
@@ -40,12 +41,12 @@ D:\Project\Travel-Companion\docs\openchatx-portable-export
 3. 逐一以 Skill 名稱檢查目標 Skills Toolbox 的現有項目，讀取同名 Skill 的完整內容，並與來源 SKILL.md 比較。每個 Skill 獨立判斷，不可因其中一項同名或失敗而中止其他項目：
    - 目標不存在：列入「新增」。
    - 目標存在且內容完全相同：列入「已是最新」，不做寫入。
-   - 目標存在但內容不同：列入「待更新」，先呈現該項差異摘要。
+   - 目標存在但內容不同：列入「待更新」，直接依本次匯入授權更新既有同名 Skill；不得要求我再次確認。
 4. 對「新增」項目，使用 store_skill 匯入，參數依本機 Schema：action=import、toolbox=本機 Skills Toolbox ID、directory=該 Skill 的來源資料夾、replace=false。一次只處理一個項目；完成後立即讀回驗證，再處理下一個。
-5. 對「待更新」項目，先不要自行覆蓋。請在本次差異報告中列出來源版本與目標版本的差異，並詢問我是否更新這些明確列出的項目。若我已在本次指令明確授權「同名差異直接更新」，才可逐項使用具備覆蓋能力的正式更新方式；不可把 replace=true 套用到整批項目，也不可更新沒有列入差異清單的項目。
+5. 對「待更新」項目，將本次匯入視為更新既有 Skill：優先使用本機 Schema 明確支援的同名覆寫匯入方式（例如單一項目的 replace=true），或使用 Skills Toolbox 提供的正式更新／編輯方式，將來源 SKILL.md 完整內容更新到既有 Skill。只更新本次清單中已確認同名的單一 Skill，保留其原有 Skill 名稱、完整註冊識別名稱及引用關係；不得建立改名副本、加上 -original／-v2 等後綴，也不得要求先刪除舊 Skill。若匯入工具不支援覆寫，先查詢並使用正式更新能力；只有確認本機沒有任何可用的更新方式時，才標記該項「更新受工具限制」並回報實際 Schema／錯誤，不可假稱已更新。
 6. 每個項目的操作互相獨立。某一項匯入／更新失敗時，保留其他已成功項目，繼續處理其餘無衝突項目，最後彙整部分成功狀態；不得宣稱整批全數成功。
 7. 所有可處理項目完成後，分別搜尋兩個 Skill，使用各自搜尋結果回傳的完整 name 執行 load，確認讀回的 Markdown 與本次目標版本一致。
-8. 最後逐項回報「新增成功／更新成功／已是最新／待更新待授權／未處理／失敗」，附上來源路徑、目標完整 name、實際寫入方式及讀回驗證。若有待更新項目，清楚列出差異並等待我決定；不得因等待授權而回滾其他成功項目。
+8. 最後逐項回報「新增成功／更新成功／已是最新／更新受工具限制／未處理／失敗」，附上來源路徑、目標完整 name、實際寫入方式及讀回驗證。只有在本機確實沒有任何正式更新能力時，才可列為「更新受工具限制」；不得把同名差異列為待授權或要求我再次確認。
 9. 本次只處理上述兩個 Skills，不匯入、修改或刪除任何 Rule、AGENTS、Toolbox 定義、Provider、Node、MCP 或 Project 設定。
 ```
 
@@ -117,7 +118,7 @@ D. 專案條件式套用提醒
 - 本套件只包含 Rule／Skill 的文字定義，不包含 Toolbox 註冊資料、安裝狀態、MCP 連線、Provider、Node、Project 或其他主機設定。
 - Rule 與 Skill 必須分別匯入；只複製檔案不代表已註冊、啟用或載入。
 - 安裝工具名稱、Toolbox ID 與參數 Schema 以目標主機實際回傳為準。
-- 本指南使用 `replace=false`，避免安裝時直接覆蓋目標主機的既有同名內容。
-- 若目標主機已有同名項目，先比較並回報，不自行覆蓋。
+- 新增 Skill 使用 `replace=false`；若目標已有同名 Skill 且內容不同，必須將匯入視為更新，僅針對該 Skill 使用本機 Schema 支援的正式覆寫／編輯方式，不得因同名而阻擋或要求先刪除。
+- 同名 Skill 更新須保留既有 Skill 名稱、完整註冊識別名稱及引用關係；若本機沒有正式更新能力，才回報工具限制，不得改名建立副本或宣稱更新成功。
 - Skill 的 load 成功表示內容已讀取；不代表它會在每個新工作階段自動載入。是否自動載入，依 Rule 與專案 AGENTS.md 的實際設定及適用條件判定。
 - 本次安裝指南不要求也不授權修改 Code Reviewer 或其他 OpenChatX 專屬 Agent 設定。

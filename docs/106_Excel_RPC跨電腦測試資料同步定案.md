@@ -169,7 +169,7 @@ Excel RPC 案例集與一般 TRIP fixtures 均可透過 Git 在 A、B 間取得�
 5. **日本 row 驗收：** B 本機 `group-tour-2026-10` row 已刪除，B 的上傳資料集不再包含該 row。A 端下載後不得因本次資料集同步而新增／恢復這筆日本 row；A 端原本的靜態 SEED 保護資料仍應保留。JSON 與 Seed SQL 仍在，因此未來若重新執行本機 Seed／回歸測試流程，該 row 仍可能被重新建立；本次不處理此未來情境。
 6. **驗收判定：** 以 TRIP ID／名稱逐筆核對，不只核對總筆數；確認 A 原有兩筆 SEED 不受影響、兩筆四國動態 TRIP 存在、共用清單及 5 個 checklist items 關聯正確、兩筆 other_info_items 關聯正確，且日本 row 未因本次下載重新出現。全部符合才判定反向 B → G → A 流程通過。
 
-- **目前狀態：B 端清理及上傳已完成；A 端下載與驗收待回報。**
+- **目前狀態：B 端清理及上傳已完成；A 端已於 2026-11-17 完成正常下載，實際工作結果與資料筆數記錄見 11.4。靜態 SEED 狀態及全欄位逐筆比對不包含在本次下載完成判定內。**
 
 ### 11.3 2026-11-16 B 端清理與正式上傳執行紀錄
 
@@ -185,4 +185,17 @@ Excel RPC 案例集與一般 TRIP fixtures 均可透過 Git 在 A、B 間取得�
 - **上傳預覽：** `npm run testdata:upload -- --preview` 成功，判定 `action="upload"`；資料集只包含上述兩筆四國 TRIP。manifest counts：trips=2、checklists=1、checklist_items=5、expenses=0、exchange_purchases=0、other_info_items=2。預覽本身未寫入 fixture、未 commit／push、未更新 last_synced_at。
 - **正式上傳：** `npm run testdata:upload` 成功回報 `uploaded=true`、`committed=true`、`pushed=true`；GitHub `develop` 從 `e2589e5` 推進至 `5be8974`。Commit SHA：`5be8974b9ca7dba4fc14a511002e09c6e22969c0`，訊息「更新本機測試資料庫資料集」。上傳後程式再次 fetch 並驗證遠端一致；local_last_changed_at、git_last_changed_at、last_synced_at 均為 `2026-11-16T13:23:02.564223Z`。
 - **文件保護：** 上傳工具要求乾淨工作樹。當時唯一未提交修改為本文件，因此先以 path-specific stash 暫存此文件；上傳完成後已成功 `git stash pop` 還原。文件修改仍在工作目錄，未納入資料集 commit，亦未另行 commit／push。
-- **尚未完成：** A 端尚未回報 Git fast-forward、`/下載資料庫` 執行結果及下載後資料核對；因此反向 B → G → A 尚不能判定通過。等待 A 端回報後，再依 11.2 驗收項目逐筆核對，不要在 B 端重複上傳或自行變更資料。
+- **後續紀錄：** A 端下載結果已於 2026-11-17 確認，詳見 11.4。靜態 SEED row 的狀態另案處理；不得將其視為本次動態資料下載失敗，也不得據此宣稱 SEED 驗收通過。
+
+### 11.4 2026-11-17 A 端完成 B → Git → A 下載
+
+- **執行節點：** A／公司端 OpenChatX，專案 `D:\\Project\\Travel-Companion`；操作 A 端本機 loopback Supabase。下載前 `develop` 的 HEAD 與 `origin/develop` 一致、工作樹乾淨；下載命令沒有執行 Git pull。
+- **第一次下載：** 2026-11-17（台灣時間）17:13:44 啟動，17:14:42 完成。Durable Job ID：`job-1794906824620-iwemb3`，PID：`12100`，exit code：`0`，最終狀態 completed。前景等待回傳背景工作資訊後，原工作仍持續執行；追蹤該工作取得最終結果：
+  - `downloaded=true`、`applied=true`、`initial=false`。
+  - counts：trips=2、checklists=1、checklist_items=5、expenses=0、exchange_purchases=0、other_info_items=2。
+  - `git_last_changed_at`、`local_last_changed_at`、`last_synced_at` 均為 `2026-11-16T13:23:02.564223Z`。
+- **資料關聯核對：** 兩筆動態 TRIP 為「四國」（`trip-4f30b5aa-0132-4161-b888-18293c6d2b15`）及「四國沿海秘境滑雪初體驗」（`trip-97a3d875-7c0d-45d8-ada1-0bf34af6273c`）；1 份 shared checklist 與 5 個 checklist_items 關聯「四國」；2 筆 other_info_items 分別關聯上述兩筆 TRIP。
+- **第二次下載：** 隨後再次執行，exit code=0，結果 `downloaded=false`／`unchanged`，三個時間戳仍一致；此為同步基準確認，沒有再次匯入資料。
+- **判定：** A 端已完成本次正常下載，B → Git → A 的動態資料接收步驟完成。這不等同靜態 SEED 驗收通過，也不宣稱六表所有欄位均已完成獨立逐欄位全量比對；靜態 SEED 問題依使用者決定暫不處理。
+- **操作流程改善：** 前景等待逾時不可視為同步失敗。原工作必須透過 Durable Jobs 追蹤至終態，取得完整最終輸出與 exit code；上傳與下載均只啟動一次，不得在原工作未確認終態前重跑。共用規則已寫入 OpenChatX Skill `travel-companion-evidence-efficient`，專案現行同步規格 `docs/83_本機測試資料庫同步流程.md` 第 3.3 節亦已補充。
+- **本次沒有執行：** A 端再次上傳、Git commit／push、正式／遠端 Supabase 操作。

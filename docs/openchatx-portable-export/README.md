@@ -6,7 +6,8 @@
 
 - `global-skill-loading-rule.mdc`：Cursor 格式的全域規則匯出，設定為 `mode=always` / `alwaysApply=true`，無專案 globs。
 - `openchatx-tool-usage/SKILL.md`：通用 OpenChatX 工具使用 Skill，包含 Skill 搜尋及以搜尋結果完整 `name` 載入的規範。
-- `travel-companion-evidence-efficient/SKILL.md`：Travel-Companion 專用低 Token 證據工作流程 Skill，供程式搜尋、除錯、跨檔案分析、審查及測試調查時使用。
+- `travel-companion-evidence-efficient/SKILL.md`：本次修正後的最新版 Travel-Companion 專用 Skill，新增本機測試資料庫上傳／下載長時間工作追蹤規則。
+- `travel-companion-evidence-efficient-original/SKILL.md`：本次修正前的原始匯出版本，已改名保留供追溯；不是安裝目標。
 - `INSTALL.md`：在另一台 OpenChatX 主機安裝與驗收的可複製指令。
 
 ## 跨主機注意事項
