@@ -2,7 +2,7 @@
 
 > 本文件只保留未完成、待補驗或待評估工作；不累積 `[x]` 歷史。
 >
-> 目前狀態以《[14_專案現況總覽](14_專案現況總覽.md)》為準。V3.11.2 的版本專屬決策與驗收判準以《[113_V3.11.2_RC驗證與發布準備紀錄](113_V3.11.2_RC驗證與發布準備紀錄.md)》第 6 節為準。最後整理：2026-11-16。
+> 目前狀態以《[14_專案現況總覽](14_專案現況總覽.md)》為準。V3.11.2 的版本專屬決策與驗收判準以《[113_V3.11.2_RC驗證與發布準備紀錄](113_V3.11.2_RC驗證與發布準備紀錄.md)》第 6 節為準。最後整理：2026-11-18。
 
 ## V3.11.2 發布後觀察
 
@@ -73,9 +73,9 @@
 - [x] Personal Book UX（V3.9.16）：個人帳本每筆記帳成功後不再跳出 alert；帳本頁固定顯示「個人帳本僅儲存在此裝置」、備份風險說明與「個人帳本・僅存本機」標籤。
 - [ ] 以目前正式版按風險補驗尚未被近期回歸直接覆蓋的舊功能：角色／歷史唯讀與撤權、路線付費 API／正式 OAuth／Android 外部開圖、單日／多日複製，以及離線／pending／跨裝置組合。iOS 不列入既定待驗清單；若實際使用者回報 iOS 問題，再依回報證據重新立案。
 
-## 區段預報開始實作前必要工作
+## 區段預報 V1 必要收尾與下一步
 
-- [ ] **區段預報實作前必要工程準備**：API／時區 P0 證據已完成並整合：production `/v1/forecast` 已有正式 hourly payload 實測；Historical Forecast API 已完成 IANA→UTC 時窗、DST 23／25 小時及半開區間驗證；Open-Meteo 原有授權初核與 APP 來源署名／授權文字亦已有既存紀錄。API 未變更，不重複呼叫或重做 UTC／授權驗證。已完成：(1) 依已定案 WMO `weather_code` P0～P28 優先級建立 Edge Function domain helper `supabase/functions/weather-forecast/weather-code-priority.mjs`，fixture 測試直接引用同一 helper，並補齊前端 Code 97「強雷雨」顯示對照；(2) IANA midnight→UTC 共用 helper `supabase/functions/weather-forecast/timezone-utc.ts` 與 `destinationDayUtcWindow` 已建立，fixture 直接引用正式 helper，Node 22 regression 與 TypeScript 靜態檢查通過；Deno 2.2.7 runtime regression 已通過 5 項測試，並已通過完整 weather-forecast Edge Function `deno check`。仍待完成：(3) 前端 `departure_time` request／fingerprint 與 Edge 已儲存卡片資料契約；(4) Cron 與使用者請求對同 Place/date 所有有效引用卡片逐一 OR 判斷；(5) interval schema／Migration／RLS／RPC／lease／purge／座標變更交易設計；(6) batch 與實際 Edge CPU／wall time 驗證；(7) 每日預報不變的 golden regression 清單。Hourly API calls/day 壓力情境及 JSONB 原始儲存量初估已完成，詳見《[112_區段預報P0技術驗證與實作前檢查紀錄](112_區段預報P0技術驗證與實作前檢查紀錄.md)》§2.5；正式 DB row／索引／TOAST 儲存量與 Edge CPU 仍待實作後量測。只有實作時遇到具體 production API 參數錯誤，才針對該錯誤做最小驗證。證據及細項見《[112_區段預報P0技術驗證與實作前檢查紀錄](112_區段預報P0技術驗證與實作前檢查紀錄.md)》與《[79_天氣預報功能規格草案](79_天氣預報功能規格草案.md)》第 2.7 節。此項仍未完成前，不進入 production implementation。
+- [ ] **區段預報 V1 必要收尾**：第一版 hourly pipeline、UTC/DST、Interval cache／RLS／RPC／Lease／purge、APP／Cron 逐卡資格與前端 metadata 已接通；實作與測試證據以《[112_區段預報P0技術驗證與實作前檢查紀錄](112_區段預報P0技術驗證與實作前檢查紀錄.md)》§7.3–§7.4 為準。2026-11-18 使用者定案：最多 4 位使用者、平常最多 2 人同時使用；接受偶發少量重複 provider request，必要保護聚焦資料正確性、Lease ownership、失敗恢復與舊成功快取保存。**剩餘必要工作只有**：(A) 最小資料保護驗證：Daily／Interval 失敗釋放、錯誤 token ownership、舊成功 payload／`fetched_at` 保護、placeholder recovery；Interval 12 路 DB claim race 已測，Daily 只驗證必要既有契約，不建立完整 golden matrix。(B) 條件式一次隔離 APP → Edge → 本機 DB refresh smoke：需要 Open-Meteo outbound、本機服務及正常授權都可用，否則保留 BLOCKED，不繞過授權。(C) Android PWA 產品實機驗收：Daily／single arrival hour／range、時間變更、舊資料相容及既有提醒。**不列為 V1 門檻**：跨 Edge Isolate 壓測、zero-duplicate 證明、完整 Daily golden matrix、CPU／wall-time 與正式 DB row／index／TOAST benchmark。日後只有實際出現成本、資料錯誤、延遲或儲存問題才做最小量測。完成 A–C 後再進一般 RC；遠端 migration、Edge deploy、Secrets／Cron、正式 smoke 及發布仍分別授權。
 
 ## 待定案功能
 

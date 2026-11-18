@@ -1,4 +1,4 @@
-import { getStoredWeatherCardTimes, matchesStoredWeatherCardTimeSnapshot, preferSharedTargetCandidate, type WeatherCandidate } from "./target-selection.ts";
+import { getStoredWeatherCardTimes, getWeatherTimeHour, matchesStoredWeatherCardTimeSnapshot, preferSharedTargetCandidate, type WeatherCandidate } from "./target-selection.ts";
 
 const assertSame = (actual: WeatherCandidate, expected: WeatherCandidate) => {
   if (actual !== expected) throw new Error(`Expected candidate ${expected.cardId}, got ${actual.cardId}`);
@@ -12,6 +12,15 @@ const candidate = (cardId: string, arrivalTime: string): WeatherCandidate => ({
   forecastDate: "2026-10-20",
   arrivalTime,
   departureTime: arrivalTime,
+});
+
+Deno.test("weather card time parser accepts valid HH:mm values and rejects invalid values", () => {
+  if (getWeatherTimeHour("10:00") !== 10) throw new Error("Expected 10:00 to parse as hour 10");
+  if (getWeatherTimeHour("23:59") !== 23) throw new Error("Expected 23:59 to parse as hour 23");
+  if (getWeatherTimeHour("00:00") !== 0) throw new Error("Expected 00:00 to parse as hour 0");
+  for (const value of ["24:00", "9:00", "10:60", "", null, undefined]) {
+    if (getWeatherTimeHour(value) !== null) throw new Error(`Expected ${String(value)} to be rejected`);
+  }
 });
 
 Deno.test("shared target uses the candidate without an arrival cutoff", () => {

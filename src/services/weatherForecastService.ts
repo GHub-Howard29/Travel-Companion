@@ -18,6 +18,9 @@ export interface WeatherForecastItem {
     temperature_2m_min: number | null;
     precipitation_probability_max: number | null;
   };
+  forecast_type?: "interval";
+  interval_start_hour?: number;
+  interval_end_hour?: number;
   message?: string;
   /** Prevent further requests after destination-local arrival eligibility has expired. */
   refresh_stopped?: boolean;
