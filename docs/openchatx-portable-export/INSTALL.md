@@ -12,12 +12,14 @@
 | `travel-companion-evidence-efficient\SKILL.md` | Travel-Companion 最新版 Skill（包含上傳／下載長工作追蹤規則） |
 | `travel-companion-evidence-efficient-original\SKILL.md` | 修正前原始匯出版本，僅供歷史追溯，不應匯入 |
 | `global-skill-loading-rule.mdc` | 全域 Skill 載入 Rule |
+| `engineering-decision-guard-trigger.mdc` | Engineering Decision Guard 條件式觸發 Rule（不設 always apply） |
+| `engineering-decision-guard\SKILL.md` | Engineering Decision Guard Skill |
 | `README.md` | 套件說明 |
 | `INSTALL.md` | 本安裝指南 |
 
 ## 步驟 1：複製檔案
 
-將整個 `openchatx-portable-export` 資料夾複製到 B 電腦可存取的位置。確認兩個 Skill 資料夾均包含 `SKILL.md`，且 `global-skill-loading-rule.mdc` 檔案存在。
+將整個 `openchatx-portable-export` 資料夾複製到 B 電腦可存取的位置。確認兩個既有 Skill 資料夾、`engineering-decision-guard\SKILL.md` 皆包含 `SKILL.md`，且兩個 Rule 檔案均存在。
 
 ## 步驟 2：匯入兩個 Skills
 
@@ -48,6 +50,36 @@ D:\Project\Travel-Companion\docs\openchatx-portable-export
 7. 所有可處理項目完成後，分別搜尋兩個 Skill，使用各自搜尋結果回傳的完整 name 執行 load，確認讀回的 Markdown 與本次目標版本一致。
 8. 最後逐項回報「新增成功／更新成功／已是最新／更新受工具限制／未處理／失敗」，附上來源路徑、目標完整 name、實際寫入方式及讀回驗證。只有在本機確實沒有任何正式更新能力時，才可列為「更新受工具限制」；不得把同名差異列為待授權或要求我再次確認。
 9. 本次只處理上述兩個 Skills，不匯入、修改或刪除任何 Rule、AGENTS、Toolbox 定義、Provider、Node、MCP 或 Project 設定。
+```
+
+## 步驟 2B：累加匯入 Engineering Decision Guard（新增項目）
+
+此段是本次新增的兩個項目，不取代步驟 2 已安裝的 Skills，也不取代步驟 3 的既有 Rule。依序單項比對及處理，避免整包重裝。
+
+在 B 電腦 OpenChatX 貼上：
+
+```text
+請依 portable export 的既有「累加式安裝」規範，安裝以下新增的 Engineering Decision Guard Rule 與 Skill。不要重裝或修改其他已安裝項目。
+
+來源資料夾（如位置不同，先確認並替換）：
+D:\Project\Travel-Companion\docs\openchatx-portable-export
+
+本次限定項目：
+1. Rule：engineering-decision-guard-trigger.mdc
+2. Skill：engineering-decision-guard\SKILL.md
+
+處理流程：
+1. 先確認兩個來源檔案存在且可讀，再查詢本機 Rules／Skills Toolbox 與正式匯入、更新工具 Schema。不可猜 Toolbox ID 或工具參數。
+2. Rule 與 Skill 分開比對、分開處理，不得整包匯入：
+   - 同名不存在：新增該項。
+   - 同名且內容相同：標記已是最新，不寫入。
+   - 同名且內容不同：只更新這個已指定項目，使用本機正式支援的單項更新方式，保留原識別名稱與引用；不要刪除後重建或改名副本。
+3. Rule 來源是 Cursor 格式單一 .mdc。匯入後讀回確認內容及設定：mode=agent_requested、alwaysApply=false。
+4. Skill 使用來源資料夾 engineering-decision-guard。完成新增或更新後，搜尋該 Skill，使用搜尋結果回傳的完整 name 載入並讀回驗證 Markdown。若本機正式工具不支援同名更新，回報實際限制，不得假稱完成。
+5. 每項操作完成後即讀回驗證。兩項互相獨立；某項失敗仍處理另一項，並如實報告部分完成。
+6. 本次只處理上述 Rule 與 Skill，不修改其他 Rules、Skills、Toolbox、Provider、Node、MCP、Project 或設定。
+
+最後逐項回報新增成功／更新成功／已是最新／工具限制／未處理／失敗，附目標識別名稱與驗證證據。
 ```
 
 ## 步驟 3：匯入全域 Skill Loading Rule
@@ -109,6 +141,11 @@ C. 工作階段套用
 D. 專案條件式套用提醒
 1. Travel-Companion 的 AGENTS.md 另有條件式載入要求：程式搜尋、除錯、跨檔案分析、程式碼審查、測試調查或子代理證據整理時，應載入 travel-companion-evidence-efficient。
 2. 此條件式指示位於 Travel-Companion 專案文件，不代表本次已自動修改 B 電腦的專案 AGENTS.md。若 B 電腦尚未同步該專案文件，請如實回報，不要自行修改專案檔案。
+
+E. Engineering Decision Guard 累加安裝驗收
+1. 搜尋並載入 Rule `engineering-decision-guard-trigger`，確認內容與來源一致，設定 `mode=agent_requested`、`alwaysApply=false`。
+2. 搜尋 Engineering Decision Guard Skill，將搜尋結果的完整 name 原樣載入，確認內容與來源 SKILL.md 一致。
+3. 確認兩項均已存在且可讀取；此驗收只讀，不修改任何項目。
 
 最後以表格回報每個項目的「通過／未通過／無法確認」、實際識別名稱及證據。任何未通過項目都要附上實際錯誤或缺少的證據，不可推測為成功。
 ```
