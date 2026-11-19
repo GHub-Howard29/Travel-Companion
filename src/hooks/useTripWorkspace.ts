@@ -70,6 +70,7 @@ import {
   saveItineraryResolutionChoice,
   applyItineraryResolutionChoices,
   sameItineraryDaysData,
+  shouldSkipDuplicateItinerarySave,
 } from "../services/itinerarySync";
 import {
   readItinerarySyncState,
@@ -938,6 +939,9 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
         }
 
         const currentState = readItinerarySyncState(tripId);
+        if (shouldSkipDuplicateItinerarySave(currentState, nextTrip.content.daysData, Boolean(existingSave))) {
+          return { localSaved: currentState?.status === "pending", cloudSynced: currentState?.status === "synced" };
+        }
         if (currentState?.status === "conflict") {
           throw new Error("這趟行程仍有尚未處理的卡片衝突；請先完成衝突處理，再繼續修改。");
         }

@@ -437,6 +437,15 @@ export const reconcilePendingItinerarySyncState = (
   };
 };
 
+export const shouldSkipDuplicateItinerarySave = (
+  state: ItinerarySyncState | null,
+  nextDaysData: Record<string, ItineraryItem[]>,
+  hasPriorSaveInFlight: boolean,
+): boolean => {
+  if (!state || !sameItineraryDaysData(state.pendingDaysData, nextDaysData)) return false;
+  return state.status === "synced" || (state.status === "pending" && hasPriorSaveInFlight);
+};
+
 export const createPendingItinerarySyncState = (
   tripId: string,
   baseCloudUpdatedAt: string | null,
