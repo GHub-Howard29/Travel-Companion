@@ -55,6 +55,7 @@ import {
   getCloudTripRecord,
   getCloudTripRecordsStrict,
   getTripDeletionTombstones,
+  TripVersionConflictError,
 } from "../services/tripCloudService";
 import { decideTripReconciliation } from "../services/tripReconciliation";
 import { clearSharedTripDataAfterAccessLoss } from "../storage/sharedTripDataStorage";
@@ -131,7 +132,7 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
   const tripLoadRevisionRef = useRef(0);
   const initialCloudRecordsRef = useRef<Awaited<ReturnType<typeof getCloudTripRecordsStrict>> | null>(null);
   const reconciliationPromiseRef = useRef<Promise<TripWorkspaceReconciliationResult> | null>(null);
-  const itinerarySavePromisesRef = useRef(new Map<string, Promise<boolean>>());
+  const itinerarySavePromisesRef = useRef(new Map<string, Promise<{ localSaved: boolean; cloudSynced: boolean }>>());
   const selectedTripIdRef = useRef(selectedTripId);
   const userEmailRef = useRef(userEmail);
   const connectivityRecoveryPendingRef = useRef(startsOffline);
@@ -916,13 +917,19 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
     : selectedTripId ? readItinerarySyncState(selectedTripId) : null;
 
   const saveItineraryTripDetail = useCallback(
-    (nextTrip: TripDetail, editBaseDaysData?: Record<string, ItineraryItem[]>): Promise<boolean> => {
+    (nextTrip: TripDetail, editBaseDaysData?: Record<string, ItineraryItem[]>): Promise<{ localSaved: boolean; cloudSynced: boolean }> => {
       const existingSave = itinerarySavePromisesRef.current.get(nextTrip.id);
-      const save = (async (): Promise<boolean> => {
+      const save = (async (): Promise<{ localSaved: boolean; cloudSynced: boolean }> => {
         if (existingSave) await existingSave;
-        if (!selectedTripMeta || selectedTripMeta.id !== nextTrip.id) return false;
-        if (!canWriteSelectedTripNow()) return false;
-        if (!currentTrip || currentTrip.id !== nextTrip.id) return false;
+        if (!selectedTripMeta || selectedTripMeta.id !== nextTrip.id) {
+          return { localSaved: false, cloudSynced: false };
+        }
+        if (!canWriteSelectedTripNow()) {
+          return { localSaved: false, cloudSynced: false };
+        }
+        if (!currentTrip || currentTrip.id !== nextTrip.id) {
+          return { localSaved: false, cloudSynced: false };
+        }
 
         const tripId = nextTrip.id;
         const storedRecord = readStoredTripRecords().find((item) => item.meta.id === tripId);
@@ -957,17 +964,30 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
           currentTripEditorEmails,
         );
 
-        if (!navigator.onLine) {
-          writeItinerarySyncState(pendingState);
-          refreshItinerarySyncState(tripId);
+        // 先保存本機正式資料，再寫入待同步狀態；任一步驟失敗都回復原始本機紀錄。
+        let localSaved = false;
+        try {
           saveTripRecord({
             ...localRecord,
             cloudUpdatedAt: storedRecord.cloudUpdatedAt ?? storedRecord.updatedAt,
           });
-          setCurrentTrip(localRecord.detail);
-          setIsLoading(false);
-          tripLoadRevisionRef.current += 1;
-          return false;
+          writeItinerarySyncState(pendingState);
+          localSaved = true;
+        } catch (error) {
+          try {
+            saveTripRecord(storedRecord);
+          } catch {
+            // 保留原始保存錯誤；不得將失敗回報成保存成功。
+          }
+          throw error;
+        }
+        refreshItinerarySyncState(tripId);
+        setCurrentTrip(localRecord.detail);
+        setIsLoading(false);
+        tripLoadRevisionRef.current += 1;
+
+        if (!navigator.onLine) {
+          return { localSaved: true, cloudSynced: false };
         }
 
         try {
@@ -1044,7 +1064,7 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
             setCurrentTrip((current) => current?.id === tripId
               ? { ...current, content: { ...current.content, daysData: cloudRecord.detail.content.daysData } }
               : current);
-            return true;
+            return { localSaved: true, cloudSynced: true };
           }
 
           const latestStored = readStoredTripRecords().find((item) => item.meta.id === tripId);
@@ -1077,8 +1097,9 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
           }
           const savedTrip = syncedRecord?.detail ?? mergedRecord.detail;
           setCurrentTrip((current) => current?.id === tripId ? savedTrip : current);
-          return true;
+          return { localSaved: true, cloudSynced: true };
         } catch (error) {
+          if (!localSaved) throw error;
           const latestState = readItinerarySyncState(tripId);
           if (latestState?.status === "pending") {
             writeItinerarySyncState({
@@ -1087,7 +1108,10 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
             });
             refreshItinerarySyncState(tripId);
           }
-          throw error;
+          if (latestState?.status === "conflict" || error instanceof TripVersionConflictError) {
+            throw error;
+          }
+          return { localSaved: true, cloudSynced: false };
         }
       })();
 

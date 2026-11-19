@@ -139,7 +139,7 @@ interface ItineraryPageProps {
   isHistoricalTripReadOnly: boolean;
   isOnline: boolean;
   onActiveDayChange: (day: number) => void;
-  onSaveTripDetail: (trip: TripDetail) => Promise<void>;
+  onSaveTripDetail: (trip: TripDetail) => Promise<{ localSaved: boolean; cloudSynced: boolean }>;
   otherInfoFolders: Folder[];
   onOpenOtherInfoFolder: (folderId: string) => void;
   onManageModeChange?: (isManaging: boolean) => void;
@@ -267,12 +267,15 @@ export const ItineraryPage = ({
   const [timeAdjustmentArrival, setTimeAdjustmentArrival] = useState("");
   const [timeAdjustmentDeparture, setTimeAdjustmentDeparture] = useState("");
   const [timeAdjustmentResult, setTimeAdjustmentResult] = useState<TimeAdjustmentResult | null>(null);
+  const [timeAdjustmentSourceItems, setTimeAdjustmentSourceItems] = useState<ItineraryItem[]>([]);
+  const timeAdjustmentRequestIdRef = useRef(0);
   const [acceptedTimeAdjustmentIndexes, setAcceptedTimeAdjustmentIndexes] = useState<Set<number>>(new Set());
   const [manualTimeAdjustmentIndex, setManualTimeAdjustmentIndex] = useState<number | null>(null);
   const [manualTimeAdjustmentArrival, setManualTimeAdjustmentArrival] = useState("");
   const [isTimeAdjustmentLoading, setIsTimeAdjustmentLoading] = useState(false);
   const [isTimeAdjustmentSaving, setIsTimeAdjustmentSaving] = useState(false);
   const [timeAdjustmentSaveError, setTimeAdjustmentSaveError] = useState<string | null>(null);
+  const [timeAdjustmentSaveNotice, setTimeAdjustmentSaveNotice] = useState<string | null>(null);
 
   useEffect(() => {
     onManageModeChange?.(isManageMode || isTimeAdjustmentMode || isOrderMode || Boolean(copySource));
@@ -463,6 +466,7 @@ export const ItineraryPage = ({
     departure?: string;
   }>({});
   const [isPlaceSearchOpen, setIsPlaceSearchOpen] = useState(false);
+  const [placeInputDraft, setPlaceInputDraft] = useState("");
   const [placeQuery, setPlaceQuery] = useState("");
   const [placeCandidates, setPlaceCandidates] = useState<PlaceCandidate[]>([]);
   const [placeCandidatePhotos, setPlaceCandidatePhotos] = useState<Record<string, PlaceCandidatePhoto>>({});
@@ -817,6 +821,7 @@ export const ItineraryPage = ({
     setDraft(createEmptyItineraryDraft());
     setTimeErrors({});
     setIsPlaceSearchOpen(false);
+    setPlaceInputDraft("");
     setPlaceCandidates([]);
     setPlaceCandidatePhotos({});
     setPlaceSearchError(null);
@@ -826,6 +831,8 @@ export const ItineraryPage = ({
 
   const resetTimeAdjustment = () => {
     releaseFocusedControl();
+    timeAdjustmentRequestIdRef.current += 1;
+    setTimeAdjustmentSourceItems([]);
     setIsTimeAdjustmentMode(false);
     setTimeAdjustmentEntry("manual");
     setTimeAdjustmentStartIndex(null);
@@ -833,6 +840,7 @@ export const ItineraryPage = ({
     setTimeAdjustmentDeparture("");
     setTimeAdjustmentResult(null);
     setAcceptedTimeAdjustmentIndexes(new Set());
+    setIsTimeAdjustmentLoading(false);
     setManualTimeAdjustmentIndex(null);
     setManualTimeAdjustmentArrival("");
     setTimeAdjustmentSaveError(null);
@@ -937,6 +945,7 @@ export const ItineraryPage = ({
     releaseFocusedControl();
     setEditingIndex(null);
     setDraft(createEmptyItineraryDraft());
+    setPlaceInputDraft("");
     setTimeErrors({});
     setIsFormOpen(true);
     setIsPlaceSearchOpen(false);
@@ -1033,6 +1042,7 @@ export const ItineraryPage = ({
       void editLeaseRefreshRef.current?.();
       setEditingIndex(index);
       setDraft(event);
+      setPlaceInputDraft(event.location || (!isConfirmedPlace(event.place) ? event.title : ""));
       setTimeErrors({});
       setIsFormOpen(true);
       setIsPlaceSearchOpen(false);
@@ -1076,9 +1086,12 @@ export const ItineraryPage = ({
       return;
     }
     resetForm();
+    resetTimeAdjustment();
     resetOrder();
     setShowOrderSaved(false);
     setTimeAdjustmentEntry("manual");
+    setTimeAdjustmentSaveNotice(null);
+    setTimeAdjustmentSourceItems(currentDayEvents.map((item) => ({ ...item })));
     setIsTimeAdjustmentMode(true);
     setTimeAdjustmentStartIndex(null);
     setTimeAdjustmentArrival("");
@@ -1095,9 +1108,11 @@ export const ItineraryPage = ({
       return;
     }
     resetForm();
+    resetTimeAdjustment();
     resetOrder();
     setShowOrderSaved(false);
     const events = trip.content.daysData[String(activeDay)] ?? [];
+    setTimeAdjustmentSourceItems(events.map((item) => ({ ...item })));
     const startIndex = getTravelNodeIndexes(events)[0] ?? null;
     const arrivalTime = startIndex === null ? "" : events[startIndex]?.time || "";
     const departureTime =
@@ -1357,14 +1372,21 @@ export const ItineraryPage = ({
     departureTime = timeAdjustmentDeparture,
   ) => {
     if (startIndex === null || isTimeAdjustmentLoading) return;
-    const remainingEvents = currentDayEvents;
+    const requestId = ++timeAdjustmentRequestIdRef.current;
+    const remainingEvents = timeAdjustmentSourceItems.length
+      ? timeAdjustmentSourceItems
+      : currentDayEvents.map((item) => ({ ...item }));
     const timeRange = validateRequiredItineraryTimeRange(arrivalTime, departureTime);
     if (!timeRange.isValid) {
       const message = timeRange.departureError === "before-arrival"
         ? "新的離開時間不可早於新的到達時間。"
         : timeRange.arrivalError
-          ? "請輸入有效的新到達時間。"
-          : "請輸入有效的新離開時間。";
+          ? timeRange.arrivalError === "invalid-format" || timeRange.arrivalError === "invalid-range"
+            ? "到達時間格式有誤。請輸入 H:MM、HH:MM 或四碼數字，例如 8:00、08:00、0800。"
+            : "請輸入有效的新到達時間。"
+          : timeRange.departureError === "invalid-format" || timeRange.departureError === "invalid-range"
+            ? "離開時間格式有誤。請輸入 H:MM、HH:MM 或四碼數字，例如 8:00、08:00、0800。"
+            : "請輸入有效的新離開時間。";
       setTimeAdjustmentResult(null);
       setTimeAdjustmentSaveError(message);
       requestAnimationFrame(() =>
@@ -1411,6 +1433,7 @@ export const ItineraryPage = ({
           );
         },
       );
+      if (requestId !== timeAdjustmentRequestIdRef.current) return;
       setTimeAdjustmentResult(result);
       const blocker = result.blocker;
       if (blocker) {
@@ -1423,17 +1446,20 @@ export const ItineraryPage = ({
         ));
       }
     } catch (error) {
+      if (requestId !== timeAdjustmentRequestIdRef.current) return;
       setTimeAdjustmentSaveError(error instanceof Error ? error.message : "無法建立時間調整預覽，請稍後重試。");
       requestAnimationFrame(() => focusAndRevealControl("time-adjustment-result"));
     } finally {
-      setIsTimeAdjustmentLoading(false);
+      if (requestId === timeAdjustmentRequestIdRef.current) {
+        setIsTimeAdjustmentLoading(false);
+      }
     }
   };
 
   const confirmManualTimeAdjustment = () => {
     if (manualTimeAdjustmentIndex === null || !timeAdjustmentResult) return;
     const adjusted = adjustTimePreviewArrival(
-      currentDayEvents,
+      timeAdjustmentSourceItems,
       timeAdjustmentResult,
       manualTimeAdjustmentIndex,
       manualTimeAdjustmentArrival,
@@ -1442,9 +1468,16 @@ export const ItineraryPage = ({
       setTimeAdjustmentSaveError(adjusted.blocker.message);
       return;
     }
+    const changedIndexes = new Set(adjusted.items.flatMap((item, index) => {
+      const previous = timeAdjustmentResult.items[index];
+      return previous && (previous.time !== item.time ||
+        (previous.departureTime || previous.time) !== (item.departureTime || item.time))
+        ? [index]
+        : [];
+    }));
     setTimeAdjustmentResult(adjusted);
     setAcceptedTimeAdjustmentIndexes((accepted) =>
-      new Set([...accepted].filter((index) => index < manualTimeAdjustmentIndex)),
+      new Set([...accepted].filter((index) => !changedIndexes.has(index))),
     );
     setManualTimeAdjustmentIndex(null);
     setManualTimeAdjustmentArrival("");
@@ -1457,25 +1490,27 @@ export const ItineraryPage = ({
       setTimeAdjustmentSaveError("目前有卡片正在其他裝置編輯，或無法確認鎖定狀態；請重新確認後再套用時間調整。");
       return;
     }
+    const unacceptedIndexes = timeAdjustmentResult.items.flatMap((item, index) => {
+      const original = timeAdjustmentSourceItems[index];
+      const changed = original && (original.time !== item.time ||
+        (original.departureTime || original.time) !== (item.departureTime || item.time));
+      return changed && isIncludedInTravelCalculation(item) &&
+        !acceptedTimeAdjustmentIndexes.has(index) ? [index] : [];
+    });
+    if (unacceptedIndexes.length > 0) {
+      setTimeAdjustmentSaveError(`還有 ${unacceptedIndexes.length} 個變更站點尚未接受，請逐站確認後再套用。`);
+      requestAnimationFrame(() => focusAndRevealControl("time-adjustment-result"));
+      return;
+    }
     setIsTimeAdjustmentSaving(true);
     setTimeAdjustmentSaveError(null);
     try {
       const stableDaysData = ensureItineraryDaysDataIds(trip.content.daysData);
       const dayKey = String(activeDay);
       const stableActiveDay = stableDaysData[dayKey] ?? [];
-      const committedItems = await materializeTimeAdjustmentEstimates(
-        timeAdjustmentResult,
-        async (_originIndex, origin, destination) => {
-          if (!isOnline) return null;
-          return requestTravelEstimate(
-            origin,
-            destination,
-            getPreferredTravelMode(origin),
-          );
-        },
-      );
+      const committedItems = materializeTimeAdjustmentEstimates(timeAdjustmentResult);
 
-      await onSaveTripDetail({
+      const saveResult = await onSaveTripDetail({
         ...trip,
         content: {
           ...trip.content,
@@ -1488,6 +1523,12 @@ export const ItineraryPage = ({
           },
         },
       });
+      if (!saveResult.localSaved) {
+        throw new Error("本機行程資料未成功保存，預覽仍保留，請重試或取消。");
+      }
+      setTimeAdjustmentSaveNotice(saveResult.cloudSynced
+        ? "時間調整已保存並同步至雲端。"
+        : "時間調整已保存至本機，雲端目前待同步；可稍後依既有同步流程處理。");
       resetTimeAdjustment();
     } catch (error) {
       setTimeAdjustmentSaveError(error instanceof Error ? `無法套用調整：${error.message}` : "無法套用調整，資料尚未變更。");
@@ -1498,7 +1539,7 @@ export const ItineraryPage = ({
   };
 
   const openPlaceSearch = () => {
-    const query = draft.location.trim();
+    const query = placeInputDraft.trim();
     setPlaceQuery(query);
     setPlaceCandidates([]);
     setPlaceSearchError(null);
@@ -1860,11 +1901,13 @@ export const ItineraryPage = ({
     setPlaceSearchError(null);
     try {
       const place = getConfirmedPlace(candidate);
+      const confirmedLocation = placeQuery.trim() || placeInputDraft.trim();
       updateDraft({
-        location: draft.location.trim() || placeQuery.trim(),
+        location: confirmedLocation,
         place,
         travelToNext: undefined,
       });
+      setPlaceInputDraft(confirmedLocation);
       setIsPlaceDecisionPending(false);
       setIsPlaceSearchOpen(false);
       setPlaceCandidates([]);
@@ -2162,8 +2205,7 @@ export const ItineraryPage = ({
         {isInlineEdit && (
           <div className="mb-3 flex items-center justify-between gap-3 border-b border-emerald-100 pb-3">
             <div>
-              <p className="text-xs font-bold text-emerald-700">卡片原地編輯</p>
-              <h3 className="mt-0.5 text-base font-bold text-slate-800">{draft.title || "未命名活動"}</h3>
+              <h3 className="text-base font-bold text-slate-800">{draft.title || "未命名活動"}</h3>
             </div>
             <button
               type="button"
@@ -2320,9 +2362,10 @@ export const ItineraryPage = ({
 
         <div className="flex items-stretch gap-2">
           <input
-            value={draft.location}
+            value={placeInputDraft}
             onChange={(event) => {
               const location = event.target.value;
+              setPlaceInputDraft(location);
               updateDraft({
                 location,
                 place: undefined,
@@ -2339,7 +2382,7 @@ export const ItineraryPage = ({
           <button
             type="button"
             onClick={openPlaceSearch}
-            disabled={!isOnline || isPlaceSearching || draft.location.trim().length < 2}
+            disabled={!isOnline || isPlaceSearching || placeInputDraft.trim().length < 2}
             className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg bg-emerald-700 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-800 disabled:opacity-50"
           >
             {isPlaceSearching ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
@@ -2691,6 +2734,9 @@ export const ItineraryPage = ({
           {copySuccess && (
             <p className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-800" role="status">{copySuccess}</p>
           )}
+          {timeAdjustmentSaveNotice && (
+            <p className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-800" role="status">{timeAdjustmentSaveNotice}</p>
+          )}
 
           {isTimeAdjustmentMode && (
             <section className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50/60 p-3" aria-label="時間調整模式">
@@ -2733,8 +2779,11 @@ export const ItineraryPage = ({
                         if (nextValue !== event.target.value) restoreTimeCaret(event.currentTarget, nextValue);
                       }}
                       placeholder="例如 09:50 或 0950"
-                      className="w-full rounded-lg border border-emerald-200 bg-white px-3 py-2 text-base focus:outline-none focus:ring-2 focus:ring-emerald-500 sm:text-sm"
+                      aria-invalid={Boolean(timeAdjustmentSaveError?.includes("到達時間格式有誤"))}
+                      aria-describedby={timeAdjustmentSaveError?.includes("到達時間格式有誤") ? "time-adjustment-time-format-error" : undefined}
+                      className={`w-full rounded-lg border bg-white px-3 py-2 text-base focus:outline-none focus:ring-2 sm:text-sm ${timeAdjustmentSaveError?.includes("到達時間格式有誤") ? "border-rose-400 focus:ring-rose-400" : "border-emerald-200 focus:ring-emerald-500"}`}
                     />
+                    {timeAdjustmentSaveError?.includes("到達時間格式有誤") && <span id="time-adjustment-time-format-error" className="block text-xs leading-relaxed text-rose-700" role="alert">{timeAdjustmentSaveError}</span>}
                   </label>
                   <label className="space-y-1">
                     <span className="text-xs font-bold text-slate-700">新的離開時間</span>
@@ -2760,8 +2809,11 @@ export const ItineraryPage = ({
                         if (nextValue !== event.target.value) restoreTimeCaret(event.currentTarget, nextValue);
                       }}
                       placeholder="例如 10:30 或 1030"
-                      className="w-full rounded-lg border border-emerald-200 bg-white px-3 py-2 text-base focus:outline-none focus:ring-2 focus:ring-emerald-500 sm:text-sm"
+                      aria-invalid={Boolean(timeAdjustmentSaveError?.includes("離開時間格式有誤"))}
+                      aria-describedby={timeAdjustmentSaveError?.includes("離開時間格式有誤") ? "time-adjustment-departure-format-error" : undefined}
+                      className={`w-full rounded-lg border bg-white px-3 py-2 text-base focus:outline-none focus:ring-2 sm:text-sm ${timeAdjustmentSaveError?.includes("離開時間格式有誤") ? "border-rose-400 focus:ring-rose-400" : "border-emerald-200 focus:ring-emerald-500"}`}
                     />
+                    {timeAdjustmentSaveError?.includes("離開時間格式有誤") && <span id="time-adjustment-departure-format-error" className="block text-xs leading-relaxed text-rose-700" role="alert">{timeAdjustmentSaveError}</span>}
                   </label>
                   <button type="button" onClick={() => void prepareTimeAdjustment()} disabled={isTimeAdjustmentLoading} className="self-end rounded-lg bg-emerald-700 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-800 disabled:opacity-60">
                     {isTimeAdjustmentLoading ? "正在計算…" : "預覽調整"}
@@ -2779,7 +2831,7 @@ export const ItineraryPage = ({
                     <div className="space-y-3 text-sm text-slate-700">
                       {timeAdjustmentResult.items.slice(timeAdjustmentStartIndex ?? 0).map((event, index) => {
                         const absoluteIndex = (timeAdjustmentStartIndex ?? 0) + index;
-                        const originalEvent = currentDayEvents[absoluteIndex];
+                        const originalEvent = timeAdjustmentSourceItems[absoluteIndex];
                         const segment = timeAdjustmentResult.segments.find((entry) => entry.destinationIndex === absoluteIndex);
                         const isIncluded = isIncludedInTravelCalculation(event);
                         const changed = Boolean(
@@ -2788,7 +2840,7 @@ export const ItineraryPage = ({
                             (originalEvent.departureTime || originalEvent.time) !==
                               (event.departureTime || event.time)),
                         );
-                        return <Fragment key={`time-adjustment-preview-${absoluteIndex}-${event.title}`}>
+                        return <Fragment key={event.id ?? `legacy-${activeDay}-${absoluteIndex}`}>
                           {segment && <div className="border-y border-slate-100 py-2 text-xs text-slate-600"><span className="inline-flex items-center gap-1 font-bold"><MaterialTravelModeIcon mode={segment.estimate.mode} />{getTravelModeLabel(segment.estimate.mode)}</span>｜約 {formatTravelDuration(segment.estimate.durationSeconds)}｜{formatTravelDistance(segment.estimate.distanceMeters)}</div>}
                           <div className="rounded-lg border border-slate-100 p-3">
                             <div className="flex flex-wrap items-start justify-between gap-2">

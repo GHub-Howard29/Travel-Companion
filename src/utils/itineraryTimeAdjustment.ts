@@ -5,8 +5,9 @@ import {
   validateRequiredItineraryTimeRange,
 } from "./itineraryTime.ts";
 import {
+  getPlaceKey,
+  hasDistinctConfirmedPlaces,
   getPreferredTravelMode,
-  getSavedTravelEstimate,
   getTravelModeLabel,
   getTravelNodeIndexes,
   isFlightConnection,
@@ -37,36 +38,33 @@ export type TimeAdjustmentEstimateResolver = (
   destination: ItineraryItem,
 ) => Promise<SavedTravelEstimate | null>;
 
-export const materializeTimeAdjustmentEstimates = async (
+export const materializeTimeAdjustmentEstimates = (
   result: TimeAdjustmentResult,
-  refreshEstimate: TimeAdjustmentEstimateResolver,
-): Promise<ItineraryItem[]> => {
+): ItineraryItem[] => {
   const items = result.items.map((item) => ({ ...item }));
 
   for (const segment of result.segments) {
     const origin = items[segment.originIndex];
     const destination = items[segment.destinationIndex];
-    if (!origin || !destination) {
+    if (
+      !origin ||
+      !destination ||
+      segment.originIndex >= segment.destinationIndex ||
+      !origin.place ||
+      !destination.place ||
+      segment.estimate.originKey !== getPlaceKey(origin.place) ||
+      segment.estimate.destinationKey !== getPlaceKey(destination.place) ||
+      !Number.isFinite(segment.estimate.durationSeconds) ||
+      segment.estimate.durationSeconds < 0
+    ) {
       throw new Error("時間預覽的交通區段已失效，請重新建立預覽。");
     }
 
-    let estimate = segment.estimate;
-    if (!getSavedTravelEstimate({ ...origin, travelToNext: estimate }, destination)) {
-      const refreshed = await refreshEstimate(
-        segment.originIndex,
-        origin,
-        destination,
-      );
-      if (!refreshed) {
-        throw new Error("交通資料已過期，需要連線後重新建立路線。");
-      }
-      estimate = refreshed;
-    }
-
+    // 本次預覽已使用的估算固定沿用；一般快取 TTL 到期不代表預覽估算失效。
     items[segment.originIndex] = {
       ...origin,
-      travelModeToNext: estimate.mode,
-      travelToNext: estimate,
+      travelModeToNext: segment.estimate.mode,
+      travelToNext: segment.estimate,
     };
   }
 
@@ -87,29 +85,61 @@ export const adjustTimePreviewArrival = (
   requestedArrivalTime: string,
 ): TimeAdjustmentResult => {
   const requestedArrival = getItineraryTimeValue(normalizeItineraryTime(requestedArrivalTime));
-  const suggestedArrival = getItineraryTimeValue(result.items[targetIndex]?.time);
   const originalArrival = getItineraryTimeValue(sourceItems[targetIndex]?.time);
   const originalDeparture = getItineraryTimeValue(
     sourceItems[targetIndex]?.departureTime || sourceItems[targetIndex]?.time,
   );
+  const travelNodeIndexesForTarget = getTravelNodeIndexes(sourceItems);
+  const targetNodePosition = travelNodeIndexesForTarget.indexOf(targetIndex);
+  const incomingOriginIndex = targetNodePosition > 0
+    ? travelNodeIndexesForTarget[targetNodePosition - 1]
+    : undefined;
+  const incomingOrigin = incomingOriginIndex !== undefined
+    ? result.items[incomingOriginIndex]
+    : null;
+  const incomingDeparture = incomingOrigin
+    ? getItineraryTimeValue(incomingOrigin.departureTime || incomingOrigin.time)
+    : null;
+  const incomingSegment = incomingOriginIndex !== undefined
+    ? result.segments.find(
+        (segment) => segment.originIndex === incomingOriginIndex && segment.destinationIndex === targetIndex,
+      )
+    : undefined;
+  const originalIncomingOriginDeparture = incomingOriginIndex !== undefined
+    ? getItineraryTimeValue(
+        sourceItems[incomingOriginIndex].departureTime || sourceItems[incomingOriginIndex].time,
+      )
+    : null;
+  const originalReservedGap = originalIncomingOriginDeparture !== null && originalArrival !== null
+    ? originalArrival - originalIncomingOriginDeparture
+    : null;
+  const earliestFeasibleArrival = incomingDeparture !== null
+    ? incomingSegment
+      ? incomingDeparture + incomingSegment.estimate.durationSeconds / 60
+      : originalReservedGap !== null && originalReservedGap >= 0
+        ? incomingDeparture + originalReservedGap
+        : null
+    : null;
   if (
     requestedArrival === null ||
-    suggestedArrival === null ||
     originalArrival === null ||
     originalDeparture === null ||
-    requestedArrival < suggestedArrival
+    (incomingOriginIndex !== undefined && originalArrival === null) ||
+    (incomingOriginIndex !== undefined &&
+      (earliestFeasibleArrival === null || requestedArrival < earliestFeasibleArrival))
   ) {
     return {
       ...result,
       blocker: {
         index: targetIndex,
-        message: "調整後的到達時間不得早於系統建議時間。",
+        message: "到達時間不得早於上一站離開時間加上本區段交通時間。",
         focusTarget: "arrival",
       },
     };
   }
 
-  const items = result.items.map((item) => ({ ...item }));
+  // 每次手動調整都從批次開始時的原始複本重算，避免沿用前次預覽造成停留時間累積誤差。
+  const items = sourceItems.map((item) => ({ ...item }));
   const stayMinutes = originalDeparture - originalArrival;
   const targetDeparture = requestedArrival + stayMinutes;
   if (targetDeparture >= 24 * 60) {
@@ -128,50 +158,76 @@ export const adjustTimePreviewArrival = (
     departureTime: toClockTime(targetDeparture),
   };
 
-  const downstreamSegments = result.segments
-    .filter((segment) => segment.originIndex >= targetIndex)
-    .sort((left, right) => left.originIndex - right.originIndex);
+  const allTravelNodeIndexes = getTravelNodeIndexes(sourceItems);
+  const travelNodeIndexes = allTravelNodeIndexes.filter((index) => index > targetIndex);
 
-  for (const segment of downstreamSegments) {
-    const origin = items[segment.originIndex];
-    const destination = items[segment.destinationIndex];
+  for (const destinationIndex of travelNodeIndexes) {
+    const destinationPosition = allTravelNodeIndexes.indexOf(destinationIndex);
+    const originIndex = destinationPosition > 0
+      ? allTravelNodeIndexes[destinationPosition - 1]
+      : undefined;
+    if (originIndex === undefined || originIndex < targetIndex) continue;
+
+    const origin = items[originIndex];
+    const destination = items[destinationIndex];
     const originDeparture = getItineraryTimeValue(origin.departureTime || origin.time);
-    const destinationOriginalArrival = getItineraryTimeValue(sourceItems[segment.destinationIndex]?.time);
+    const destinationOriginalArrival = getItineraryTimeValue(sourceItems[destinationIndex]?.time);
     const destinationOriginalDeparture = getItineraryTimeValue(
-      sourceItems[segment.destinationIndex]?.departureTime ||
-        sourceItems[segment.destinationIndex]?.time,
+      sourceItems[destinationIndex]?.departureTime || sourceItems[destinationIndex]?.time,
+    );
+    const originalOriginDeparture = getItineraryTimeValue(
+      sourceItems[originIndex].departureTime || sourceItems[originIndex].time,
     );
     if (
       originDeparture === null ||
       destinationOriginalArrival === null ||
-      destinationOriginalDeparture === null
+      destinationOriginalDeparture === null ||
+      originalOriginDeparture === null
     ) {
       return {
         ...result,
         blocker: {
-          index: segment.destinationIndex,
-          message: "後續活動缺少有效時間，無法完成預覽調整。",
+          index: destinationIndex,
+          message: "後續活動缺少有效的原始時間，無法完成預覽調整。",
           focusTarget: "arrival",
         },
       };
     }
 
-    const arrivalMinutes = roundUpToHalfHour(
-      originDeparture + segment.estimate.durationSeconds / 60,
+    let arrivalMinutes: number;
+    const segment = result.segments.find(
+      (entry) => entry.originIndex === originIndex && entry.destinationIndex === destinationIndex,
     );
-    const departureMinutes =
-      arrivalMinutes + (destinationOriginalDeparture - destinationOriginalArrival);
+    if (segment) {
+      arrivalMinutes = roundUpToHalfHour(
+        originDeparture + segment.estimate.durationSeconds / 60,
+      );
+    } else {
+      const reservedGapMinutes = destinationOriginalArrival - originalOriginDeparture;
+      if (reservedGapMinutes < 0) {
+        return {
+          ...result,
+          blocker: {
+            index: destinationIndex,
+            message: "原始站間時間不足，無法安全推斷後續時間。",
+            focusTarget: "arrival",
+          },
+        };
+      }
+      arrivalMinutes = originDeparture + reservedGapMinutes;
+    }
+    const departureMinutes = arrivalMinutes + (destinationOriginalDeparture - destinationOriginalArrival);
     if (arrivalMinutes >= 24 * 60 || departureMinutes >= 24 * 60) {
       return {
         ...result,
         blocker: {
-          index: segment.destinationIndex,
+          index: destinationIndex,
           message: "調整後將跨越午夜，系統不會自動移動到隔日。",
           focusTarget: "arrival",
         },
       };
     }
-    items[segment.destinationIndex] = {
+    items[destinationIndex] = {
       ...destination,
       time: toClockTime(arrivalMinutes),
       departureTime: toClockTime(departureMinutes),
@@ -275,20 +331,56 @@ export const calculateTimeAdjustment = async (
       return { items: sourceItems, segments, blocker: { index: destinationIndex, message: `「${destination.title || "此站"}」缺少有效的離開時間，無法保留停留時間。`, focusTarget: "departure" } };
     }
 
-    const estimate = await resolveEstimate(originIndex, origin, destination);
-    if (!estimate || !Number.isFinite(estimate.durationSeconds) || estimate.durationSeconds < 0) {
+    const hasRoutePlaces = hasDistinctConfirmedPlaces(origin, destination);
+    const originalOriginDeparture = getItineraryTimeValue(
+      sourceItems[originIndex].departureTime || sourceItems[originIndex].time,
+    );
+    const originalDestinationArrival = getItineraryTimeValue(sourceItems[destinationIndex].time);
+    if (originalOriginDeparture === null || originalDestinationArrival === null) {
       return {
         items: sourceItems,
         segments,
         blocker: {
-          index: originIndex,
-          message: `${getTravelModeLabel(getPreferredTravelMode(origin))}路線資料待更新，無法繼續計算。`,
-          focusTarget: "route",
+          index: destinationIndex,
+          message: `「${destination.title || "此站"}」缺少有效的原始站間時間，無法推斷新時間。`,
+          focusTarget: "arrival",
         },
       };
     }
 
-    const arrivalMinutes = roundUpToHalfHour(originDeparture + estimate.durationSeconds / 60);
+    let arrivalMinutes: number;
+    if (!hasRoutePlaces) {
+      // 無有效地點時不查路線，沿用批次開始快照的站間預留時間推斷。
+      const reservedGapMinutes = originalDestinationArrival - originalOriginDeparture;
+      if (reservedGapMinutes < 0) {
+        return {
+          items: sourceItems,
+          segments,
+          blocker: {
+            index: destinationIndex,
+            message: `「${destination.title || "此站"}」原始到達時間早於前站離開時間，無法安全推斷。`,
+            focusTarget: "arrival",
+          },
+        };
+      }
+      arrivalMinutes = originDeparture + reservedGapMinutes;
+    } else {
+      const estimate = await resolveEstimate(originIndex, origin, destination);
+      if (!estimate || !Number.isFinite(estimate.durationSeconds) || estimate.durationSeconds < 0) {
+        return {
+          items: sourceItems,
+          segments,
+          blocker: {
+            index: originIndex,
+            message: `${getTravelModeLabel(getPreferredTravelMode(origin))}路線資料待更新，無法繼續計算。`,
+            focusTarget: "route",
+          },
+        };
+      }
+      arrivalMinutes = roundUpToHalfHour(originDeparture + estimate.durationSeconds / 60);
+      segments.push({ originIndex, destinationIndex, estimate });
+    }
+
     const nextDepartureMinutes = arrivalMinutes + (originalDeparture - originalArrival);
     if (arrivalMinutes >= 24 * 60 || nextDepartureMinutes >= 24 * 60) {
       return {
@@ -303,7 +395,6 @@ export const calculateTimeAdjustment = async (
       time: toClockTime(arrivalMinutes),
       departureTime: toClockTime(nextDepartureMinutes),
     };
-    segments.push({ originIndex, destinationIndex, estimate });
   }
 
   return { items, segments, blocker: null };
