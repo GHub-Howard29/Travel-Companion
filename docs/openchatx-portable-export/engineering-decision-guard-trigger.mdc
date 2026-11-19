@@ -1,12 +1,20 @@
 ---
-description: Trigger Engineering Decision Guard for substantial engineering work, architectural decisions, and cross-session handoffs.
+description: Load Engineering Decision Guard for Travel-Companion implementation, debugging, tests, reviews, continuing decision discussions, and immediate approval capture/retirement.
 alwaysApply: false
 ---
 
 # Engineering Decision Guard activation
 
-For implementation, architecture changes, technical planning/review, or cross-session/agent handoffs with continuing engineering impact, search for and load the exact Skill `engineering-decision-guard.engineering-decision-guard` before modifying project state.
+For Travel-Companion design discussions, debugging, implementation, testing, reviews, or cross-session/agent handoffs with continuing engineering impact, search for and load the exact Skill `skills.engineering-decision-guard` before project work.
 
-Do not load it for ordinary conversation, simple explanations, translations, or trivial changes with no durable engineering impact.
+For every such task, read `docs/decisions/README.md` first, then the relevant active decisions and linked authoritative specifications. The repository is the source of truth; chat, memory, and handoff summaries are not substitutes.
 
-Loading the Skill does not replace project-specific specifications, AGENTS.md, Git verification, or authorization boundaries.
+**Immediate approval capture:** When the user explicitly says "定案／確定／核准／就照這個做" or clearly approves a continuing decision, that statement authorizes recording. In the same work session, create/update an Accepted record under `docs/decisions/active/`, update the index, read both back, and report the decision ID/path. Do not ask whether to record. If approved content or scope is unclear, ask only the minimum necessary question; leave it Proposed until clarified. Never claim a record exists without verified readback.
+
+**History transition:** Never retire a decision merely because implementation/release is complete, it is old, or the AI considers it unnecessary. Move it to `docs/decisions/history/` only with explicit user approval, an explicitly approved replacement, or a verifiable objective expiry condition defined in the original decision. If uncertain, keep it Accepted and ask. Preserve the original, status, date, reason, evidence, and replacement link; update and read back the index.
+
+A question or exploratory discussion is not implementation authority or approval to change a decision. Conflicts with Accepted decisions or scope boundaries require stopping the affected change and obtaining approval. Do not silently expand work.
+
+Do not load for ordinary conversation, simple explanations, translations, or trivial changes with no durable engineering impact.
+
+Loading this Skill does not replace domain specifications, AGENTS.md, Git verification, or authorization boundaries.

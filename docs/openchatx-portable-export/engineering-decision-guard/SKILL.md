@@ -1,94 +1,92 @@
 ---
 name: engineering-decision-guard
-description: Prevent engineering decision drift across long AI development sessions, context compression, and agent handoffs. Use for implementation, architecture changes, technical planning, reviews, and cross-session handoffs.
+description: Keep engineering work aligned with project-recorded approvals, decision lifecycle, scope boundaries, and verified repository state.
 ---
 
 # Engineering Decision Guard
 
-## Purpose
-Keep AI engineering work aligned with verifiable project state rather than conversational memory alone. Prevent silent changes to accepted decisions, approved scope, architecture boundaries, and data contracts.
+## Canonical records
 
-## Before changing a project
-1. Identify the task, scope, and acceptance criteria.
-2. Read relevant project instructions and specification documents.
-3. Identify applicable accepted ADRs and their status.
-4. Verify the current branch, HEAD, working tree, and relevant remote state under project rules.
-5. Check for overlapping agents or concurrent work when that information is available.
-6. Distinguish facts, hypotheses, proposals, and approved decisions.
+For Travel-Companion, the Git repository is the source of truth:
 
-Do not treat chat history or a handoff summary as proof of the current repository state.
+- Index: `docs/decisions/README.md`
+- Current accepted decisions: `docs/decisions/active/`
+- Retired/superseded decisions: `docs/decisions/history/`
 
-## ADR policy
-Create or update an ADR only for decisions with continuing impact, such as architecture, persistent data contracts, security boundaries, shared interfaces, major technology choices, or constraints affecting future work. Do not create ADRs for routine bug fixes, temporary debugging, or implementation details that do not establish a continuing decision.
+Chat, memory, and handoff notes are never substitutes for these files.
 
-An ADR should record:
-- Title and status (Proposed, Accepted, Superseded, or Rejected)
-- Context and problem
-- Decision
-- Alternatives considered
-- Rationale
-- Consequences and constraints
-- Conditions that justify reconsideration
+## Before work
 
-An Accepted ADR is authoritative within its stated scope until superseded by an explicitly approved change.
+Before every Travel-Companion design discussion, debugging, implementation, test, or review:
 
-## Protecting confirmed decisions
-Before calling any tool that would change a confirmed decision or its governing configuration, compare the proposed change with the current confirmed decision. A new preference, alternative idea, or repeated reconsideration is not new evidence. If no new evidence, changed requirement, or verified error justifies the change, do not call the modifying tool; keep the existing decision. If a genuine conflict or reason to reconsider exists, stop and present the evidence and proposed change for user approval first.
+1. Read `docs/decisions/README.md`.
+2. Read relevant active decisions and their linked authoritative specifications.
+3. Confirm the actual repository state and requested scope.
+4. If required records cannot be read or conflict, stop the affected decision/change and report. Never guess from summaries.
 
-## Decision conflict / Hard Break
-Stop the affected modification immediately when:
-- A proposed change conflicts with an approved specification or Accepted ADR.
-- The agent is about to alter an approved architecture, interface, or data contract without authorization.
-- The actual project state conflicts materially with the handoff or assumptions.
-- The working tree, branch, ownership, or modification scope cannot be established safely.
-- Concurrent agent changes may be overwritten or invalidated.
+A request to discuss or assess is not authorization to implement or alter a decision.
 
-After stopping:
-1. Preserve the current state; do not discard or overwrite work.
-2. State the exact conflicting requirement or evidence.
-3. Describe impact and viable alternatives.
-4. Request the minimum decision or authorization required.
-5. Resume only after the conflict is resolved and any affected ADR/specification is updated.
+## Immediate decision capture (mandatory)
 
-A Hard Break applies to the affected action; safe read-only investigation and unrelated work may continue.
+When the user explicitly says a continuing decision is "定案", "確定", "核准", "就照這個做", or gives equivalent clear approval:
 
-## Proposing a decision change
-Never silently rewrite or bypass an Accepted ADR. Provide evidence, explain why the current decision is insufficient, compare alternatives, identify migration/compatibility and rollback risks, and seek approval before implementation. Record the approved change and mark the old ADR as superseded where applicable.
+- Treat that statement as authorization to record; do not ask whether it should be recorded.
+- In the same work session, create/update the Accepted decision file in `docs/decisions/active/` and update the index.
+- Read both back and verify the record and index link before telling the user it is recorded.
+- Report the decision ID and exact path.
+- If the approved content or scope is ambiguous, ask only the minimum necessary question. Until clarified, keep it Proposed and do not claim it is recorded or implement it as settled.
 
-## Context reset and handoff
-A reset is appropriate when context reliability has materially declined, the task crosses conversations or agents, the scope changes, or a significant milestone needs a clean handoff. Do not use a fixed conversation-turn count as the sole trigger.
+Record at least: ID, title, status, approval date, decision text, applicability/scope, constraints and exclusions, rationale/evidence, acceptance or expiry conditions, and authoritative specification link.
 
-Before reset, record:
-- Objective and scope
-- Applicable specification and Accepted ADRs
-- Completed work
-- Pending work
-- Files changed and their ownership
-- Branch, HEAD, and working-tree state
-- Tests run and exact outcomes
-- Blockers, unresolved decisions, and risks
-- Next safe action
+Create decision records only for durable matters: architecture, data contracts, security, shared interfaces, persistent behavior, or lasting scope boundaries. Do not create one for ordinary bug fixes or temporary debugging details.
 
-## New-session re-entry
-Before modifying anything in a new session:
-1. Re-read the relevant specifications and ADRs.
-2. Inspect the actual Git/worktree state.
-3. Compare reality with the handoff.
-4. Reconfirm task scope, ownership, pending work, and acceptance criteria.
-5. Resolve discrepancies before writing.
+## Status
 
-Never resume from a summary alone when repository state can be inspected.
+- Proposed: not approved; no implementation authority.
+- Accepted: explicitly approved and binding within scope.
+- Superseded: replaced by a later approved decision.
+- Retired: explicitly released or invalidated under its pre-defined objective condition.
+- Rejected: explicitly declined; not an implementation basis.
 
-## Context reliability signals
-Consider a reset or revalidation when the agent:
-- Repeatedly loses or contradicts a previously confirmed decision.
-- Cannot distinguish accepted decisions from proposed alternatives.
-- Confuses tasks, branches, environments, data sets, or agent ownership.
-- Cannot reliably state what has changed and what remains.
-- Relies on inferred state where direct verification is available.
+## Protect decisions and scope
 
-## Exceptions and proportionality
-Do not over-process small, reversible changes. Keep the mechanism proportional to risk and scope. This Skill does not prohibit sound engineering improvements; it requires explicit review and approval for changes to durable decisions and approved boundaries.
+- Do not reopen an Accepted decision merely because another option exists.
+- Do not expand work beyond the approved purpose, affected behavior, or acceptance criteria.
+- Do not silently add refactors, features, cleanup, files, or workflows.
+- If a proposed change conflicts with an Accepted decision or exceeds scope, stop only the affected action, show the exact conflict and impact, and get approval.
+- A new question, alternative, or exploratory discussion is not approval to change an existing decision.
+
+## When a decision may move to history
+
+Never move a decision merely because implementation is complete, a release shipped, it is old, or the AI believes it is no longer needed.
+
+Move an Accepted record to history only when:
+1. The user explicitly approves its retirement; or
+2. The user approves a replacement decision; or
+3. The original decision explicitly defined an objective expiry/exit condition and verifiable evidence proves that condition is met.
+
+If applicability or expiry is uncertain, keep it Accepted and ask the user.
+
+## Retirement / supersession procedure
+
+1. Record date, reason, supporting evidence, and replacement decision ID (if any).
+2. Preserve the complete original record and mark it Retired or Superseded.
+3. Move the record from `active/` to `history/`.
+4. Update the index.
+5. Read back the moved file and index to verify location and links.
+
+Never delete historical decisions or merely overwrite their content.
+
+## Re-entry and debugging
+
+For a new conversation/handoff, re-read the index and relevant decisions from the repository, then inspect actual Git/worktree and affected code/specs. Handoff notes are navigation only.
+
+For debugging, consult history where it can explain prior constraints or behavior. Historical decisions are not automatically active.
+
+## Proportionality
+
+Keep records brief and focused. One decision has one authoritative record. Existing detailed domain specs remain authoritative for their contracts; the index links to them rather than duplicating them. Small reversible changes stay lightweight.
 
 ## Completion report
-Report what was verified, what changed, tests and evidence, remaining uncertainty, and the next safe step. Never describe an untested or simulated behavior as implemented or proven.
+
+Report changed files, created/updated/retired decision IDs, readback verification, checks actually run, remaining blockers, and Git state. Never claim completion without evidence.
