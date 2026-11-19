@@ -1,0 +1,12 @@
+---
+description: Trigger Engineering Decision Guard for substantial engineering work, architectural decisions, and cross-session handoffs.
+alwaysApply: false
+---
+
+# Engineering Decision Guard activation
+
+For implementation, architecture changes, technical planning/review, or cross-session/agent handoffs with continuing engineering impact, search for and load the exact Skill `engineering-decision-guard.engineering-decision-guard` before modifying project state.
+
+Do not load it for ordinary conversation, simple explanations, translations, or trivial changes with no durable engineering impact.
+
+Loading the Skill does not replace project-specific specifications, AGENTS.md, Git verification, or authorization boundaries.
