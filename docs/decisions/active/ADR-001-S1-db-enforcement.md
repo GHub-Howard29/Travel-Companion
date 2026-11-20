@@ -197,3 +197,30 @@ Trigger 相容性結論及解決方案：Save RPC 必須以資料庫當下 conte
 - 不接觸正式 Supabase、正式使用者資料、正式部署或 Secrets。
 - 不因本輪文件治理修正改動 migration、程式、S2／S3／S4 範圍。
 - 不執行 commit／push；保留原有工作樹內容。
+
+## 執行修復紀錄（2026-11-20）
+
+目前實作基準為 `develop` 已存在的三筆 migrations，不採用 backup branch 的 16:00 prototype migration：
+- `20261120120000_adr001_stage1_trip_itinerary_edit_enforcement.sql`
+- `20261120130000_adr001_initialize_itinerary_version_on_trip_insert.sql`
+- `20261120140000_adr001_trip_lease_list_rpc_volatility.sql`
+
+backup branch 的 `20261120160000_adr001_stage1_trip_itinerary_edit_enforcement.sql` 使用不同 schema／命名與授權標記設計（例如 `itinerary_trip_edit_leases`、`itinerary_trip_versions`），與現行 migrations 不一致。其 prototype smoke／rollback／SR-05 結果不能視為現行 migrations 的驗證證據，也不得將 16:00 migration 合併至 develop。
+
+相關 runner／SQL／JSON results 保留於 Git backup ref `backup/adr001-stage1-local-commit` 供追溯，但目前不移植成現行 Stage 1 PASS evidence。現行版本的驗證須重新對照實際 migration schema、RPC、trigger、baseline 與權限。
+
+**後續：** 現行 local DB 的 smoke／rollback／SR-05 已重跑並持久化。接續補完整 SR-01～SR-12、真實雙 Auth API session、SR-09 unknown outcome recovery及SR-12 Pending recovery；Stage 1 Exit 維持 BLOCKED，未完成前不推進 Stage 2。不得連線／寫入正式DB或部署。
+
+
+## 本次修正後重新驗證（2026-11-20）
+
+- `supabase migration list --local` 確認 local 已登記現行 12:00／13:00／14:00 三筆 migrations；`supabase status` 確認只使用 loopback local Supabase。
+- Local schema inspection 確認 `trip_itinerary_edit_leases`、`trip_itinerary_versions`、current RPC/trigger存在；baseline version min/max=0；test lease清理基準=0。
+- Smoke test：PASS，使用本地 DB，交易 rollback。Claim、Save RPC、version 0→1、Read version、拒絕另一 context claim/renew/release/save、direct daysData update denial、stale version denial、metadata update allowed、history capture、authorization marker清理均確認。
+- 強制 AFTER-trigger rollback：PASS；version=0、daysData未變、history=0、authorization marker=0，fixture rollback。
+- SR-05 current RPC interleaving：PASS；A Save成功／version=1，B於延遲期間Claim被拒，最終資料及Lease owner/client仍為A，無deadlock，fixture cleanup成功。
+- 測試結果 JSON 與 SQL／runner 已持久化至 `docs/test-results/`、`scripts/`。上述測試僅限 local DB；Smoke 使用單一 session sequential JWT contexts，不等同真正雙 Auth API驗證。
+- Cleanup baseline：trips=3、versions=3、Lease rows=0、authorization markers=0；history rows=1為原有 Trip `trip-91f222b6-64ef-489a-9367-ce2606840080`，非本次fixture。
+
+**限制：** 本輪只重新驗證現行三筆 migration下的 DB smoke／rollback／SR-05。完整 SR-01～SR-12、真實雙 Auth API session、SR-09 unknown outcome recovery及SR-12 Pending recovery仍未完成；S1 Exit維持 BLOCKED。
+

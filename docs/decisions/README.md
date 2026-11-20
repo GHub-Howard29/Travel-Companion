@@ -6,7 +6,7 @@
 
 | ID | 決策／工作 | 狀態 | 目前階段 | 下一步／阻塞 | 權威主檔 |
 |---|---|---|---|---|---|
-| [ADR-001](active/ADR-001-trip-daily-card-edit-lock-scope.md) | 每日詳細行程統一編輯權、保存協調與更新提示簡化 | Accepted／進行中 | S1 DB enforcement 與 Save RPC | SR-11 雙 Auth 隔離測試 PASS；SR-05／09／10／12 部分驗證／阻塞，詳見 S1 階段紀錄；下一步補足併發、unknown outcome 與輸入契約證據，不得將局部 PASS 當作階段完成 | [ADR-001](active/ADR-001-trip-daily-card-edit-lock-scope.md) |
+| [ADR-001](active/ADR-001-trip-daily-card-edit-lock-scope.md) | 每日詳細行程統一編輯權、保存協調與更新提示簡化 | Accepted／進行中 | S1 DB enforcement 與 Save RPC | 現行三筆 migration為基準；local smoke／rollback／SR-05 current RPC interleaving已重新驗證PASS，完整SR矩陣、雙Auth API及Pending recovery仍待驗，S1維持BLOCKED | [ADR-001](active/ADR-001-trip-daily-card-edit-lock-scope.md) |
 
 ## ADR-001 階段入口
 
@@ -48,3 +48,4 @@
 ## 單一權威來源
 
 本目錄不取代既有領域規格、API／資料契約、資料庫設計及驗收文件。每個決策只指定一份完整權威內容；其他文件僅連結，不複製另一份可能漂移的規格。
+
