@@ -1,92 +1,43 @@
 ---
 name: engineering-decision-guard
-description: Keep engineering work aligned with project-recorded approvals, decision lifecycle, scope boundaries, and verified repository state.
+description: Govern Travel-Companion accepted engineering decisions with a compact work index, decision masters, and on-demand stage details.
 ---
 
 # Engineering Decision Guard
 
 ## Canonical records
 
-For Travel-Companion, the Git repository is the source of truth:
+- Work index: `docs/decisions/README.md`. Always read it first. It contains status, current stage, next step, blockers, and links only.
+- Decision master: the relevant `docs/decisions/active/ADR-*.md`. Read the full relevant master to obtain the Accepted decision and immutable scope.
+- Stage detail: `docs/decisions/active/ADR-*-S*.md`. Load only the file required by the current task; never preload every stage.
+- Evidence: linked domain investigation, specification, or test record. Read only when evidence or execution status is needed.
+- History: `docs/decisions/history/`. Preserve retired, superseded, or rejected decisions for traceability.
 
-- Index: `docs/decisions/README.md`
-- Current accepted decisions: `docs/decisions/active/`
-- Retired/superseded decisions: `docs/decisions/history/`
+## Loading workflow
 
-Chat, memory, and handoff notes are never substitutes for these files.
+1. Read `docs/decisions/README.md` first. Locate the relevant decision ID, status, current stage, next step, blocker, loading conditions, and links.
+2. Read the relevant ADR master to verify the Accepted decision and immutable scope.
+3. Load only the stage attachment needed for the current task. Additional stages are justified only by cross-stage dependencies, comparisons, or required validation; never preload all stages.
+4. Read linked investigation/specification/test evidence only when its details or verification are needed.
+5. Update progress, next step, blocker, or evidence links in the relevant stage detail and the README index. The index remains compact and must not copy technical details or long test output.
+6. If the index, master, or required stage file is unavailable or inconsistent, stop the affected work and repair/verify the canonical record rather than infer from chat or handoff.
+7. After changes, read back all affected canonical records and index/instruction entries and verify links.
 
-## Before work
+## Decision governance
 
-Before every Travel-Companion design discussion, debugging, implementation, test, or review:
+- Explicit user approval such as “定案”, “確定”, “核准”, or “就照這個做” authorizes recording the decision in the same work session.
+- Update the corresponding ADR master and `docs/decisions/README.md` together. When stage details or loading guidance are affected, update the relevant stage files and every affected index or instruction entry in the same change.
+- Stage files contain execution detail only. They cannot independently create, alter, broaden, or retire an Accepted decision.
+- If the decision wording, scope, or approving target is ambiguous, mark it Proposed and ask only the necessary clarification. Proposed is not implementation authorization.
+- After writing, read back the master, affected stage documents, and all changed indexes to verify content and links. Report the decision ID and paths only after verification succeeds.
 
-1. Read `docs/decisions/README.md`.
-2. Read relevant active decisions and their linked authoritative specifications.
-3. Confirm the actual repository state and requested scope.
-4. If required records cannot be read or conflict, stop the affected decision/change and report. Never guess from summaries.
+## History governance
 
-A request to discuss or assess is not authorization to implement or alter a decision.
+- Never retire an Accepted decision merely because implementation is complete, a release occurred, a document is old, or an agent believes it is no longer needed.
+- Move a decision to history only after explicit user approval to retire or supersede it, or when an objective retirement condition written in the original decision is demonstrably met.
+- Preserve the original text and record date, reason, evidence, and replacement decision ID where applicable. Update the index and verify the moved file and links.
 
-## Immediate decision capture (mandatory)
+## Conflict handling
 
-When the user explicitly says a continuing decision is "定案", "確定", "核准", "就照這個做", or gives equivalent clear approval:
-
-- Treat that statement as authorization to record; do not ask whether it should be recorded.
-- In the same work session, create/update the Accepted decision file in `docs/decisions/active/` and update the index.
-- Read both back and verify the record and index link before telling the user it is recorded.
-- Report the decision ID and exact path.
-- If the approved content or scope is ambiguous, ask only the minimum necessary question. Until clarified, keep it Proposed and do not claim it is recorded or implement it as settled.
-
-Record at least: ID, title, status, approval date, decision text, applicability/scope, constraints and exclusions, rationale/evidence, acceptance or expiry conditions, and authoritative specification link.
-
-Create decision records only for durable matters: architecture, data contracts, security, shared interfaces, persistent behavior, or lasting scope boundaries. Do not create one for ordinary bug fixes or temporary debugging details.
-
-## Status
-
-- Proposed: not approved; no implementation authority.
-- Accepted: explicitly approved and binding within scope.
-- Superseded: replaced by a later approved decision.
-- Retired: explicitly released or invalidated under its pre-defined objective condition.
-- Rejected: explicitly declined; not an implementation basis.
-
-## Protect decisions and scope
-
-- Do not reopen an Accepted decision merely because another option exists.
-- Do not expand work beyond the approved purpose, affected behavior, or acceptance criteria.
-- Do not silently add refactors, features, cleanup, files, or workflows.
-- If a proposed change conflicts with an Accepted decision or exceeds scope, stop only the affected action, show the exact conflict and impact, and get approval.
-- A new question, alternative, or exploratory discussion is not approval to change an existing decision.
-
-## When a decision may move to history
-
-Never move a decision merely because implementation is complete, a release shipped, it is old, or the AI believes it is no longer needed.
-
-Move an Accepted record to history only when:
-1. The user explicitly approves its retirement; or
-2. The user approves a replacement decision; or
-3. The original decision explicitly defined an objective expiry/exit condition and verifiable evidence proves that condition is met.
-
-If applicability or expiry is uncertain, keep it Accepted and ask the user.
-
-## Retirement / supersession procedure
-
-1. Record date, reason, supporting evidence, and replacement decision ID (if any).
-2. Preserve the complete original record and mark it Retired or Superseded.
-3. Move the record from `active/` to `history/`.
-4. Update the index.
-5. Read back the moved file and index to verify location and links.
-
-Never delete historical decisions or merely overwrite their content.
-
-## Re-entry and debugging
-
-For a new conversation/handoff, re-read the index and relevant decisions from the repository, then inspect actual Git/worktree and affected code/specs. Handoff notes are navigation only.
-
-For debugging, consult history where it can explain prior constraints or behavior. Historical decisions are not automatically active.
-
-## Proportionality
-
-Keep records brief and focused. One decision has one authoritative record. Existing detailed domain specs remain authoritative for their contracts; the index links to them rather than duplicating them. Small reversible changes stay lightweight.
-
-## Completion report
-
-Report changed files, created/updated/retired decision IDs, readback verification, checks actually run, remaining blockers, and Git state. Never claim completion without evidence.
+- If a task conflicts with an Accepted decision or exceeds its approved scope, stop the affected action and report the conflict. Obtain approval before changing the decision or implementation scope.
+- Distinguish prototype PASS, stage exit PASS, integrated implementation PASS, migration application, and production acceptance. Never report one as another.

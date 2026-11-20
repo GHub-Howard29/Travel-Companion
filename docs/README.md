@@ -1,4 +1,4 @@
-# Travel Companion 文件入口
+﻿# Travel Companion 文件入口
 
 Travel Companion 是以 Trip 為核心的 Offline First 旅行管理 PWA，使用 React、TypeScript、Vite 與 Supabase。
 
@@ -10,7 +10,7 @@ Travel Companion 是以 Trip 為核心的 Offline First 旅行管理 PWA，使�
 2. [產品開發路線圖](02_產品開發路線圖.md)：未來版本編號、順序與範圍。
 3. [待辦事項](09_待辦事項_TODO.md)：未完成與待補驗工作。
 4. [開發規範](08_開發規範.md)：實作、驗證、Git 與文件維護流程。
-5. [決策索引](decisions/README.md)：所有持續有效的核准決策之唯一索引；開始相關工作前必讀。
+5. [決策總索引](decisions/README.md)：持續有效工程決策與階段進度唯一總入口；先讀索引，再按目前工作載入相關 ADR 主檔、必要階段附件及 evidence，不得全量載入。載入與文件維護細則以 [08 開發規範](08_開發規範.md) 為準。
 
 ## 核心參考
 
