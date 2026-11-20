@@ -6,7 +6,7 @@
 
 | ID | 決策／工作 | 狀態 | 目前階段 | 下一步／阻塞 | 權威主檔 |
 |---|---|---|---|---|---|
-| [ADR-001](active/ADR-001-trip-daily-card-edit-lock-scope.md) | 每日詳細行程統一編輯權、保存協調與更新提示簡化 | Accepted／進行中 | S1 DB enforcement 與 Save RPC | 現行三筆 migration為基準；local smoke／rollback／SR-05 current RPC interleaving已重新驗證PASS，完整SR矩陣、雙Auth API及Pending recovery仍待驗，S1維持BLOCKED | [ADR-001](active/ADR-001-trip-daily-card-edit-lock-scope.md) |
+| [ADR-001](active/ADR-001-trip-daily-card-edit-lock-scope.md) | 每日詳細行程統一編輯權、保存協調與更新提示簡化 | Accepted／進行中 | **S2 Cloud Save 接線** | **S1 DB Exit PASS（2026-11-21）。** 下一步按S2文件接線Cloud Save、Repository及daysData callers至唯一Save RPC。 | [ADR-001](active/ADR-001-trip-daily-card-edit-lock-scope.md) |
 
 ## ADR-001 階段入口
 

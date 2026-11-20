@@ -1,0 +1,23 @@
+{
+  "test": "ADR001 SR-09 commit-then-response-loss; no retry; independent readback",
+  "startedAt": "2026-11-20",
+  "localOnly": true,
+  "pass": true,
+  "simulatedLostResponse": true,
+  "saveReturnedError": true,
+  "operationId": "0f3d9fc4-545e-49ab-bdf7-f449ef35c1d8",
+  "readback": {
+    "daysData": {
+      "1": [
+        {
+          "id": "sr09-commit-once",
+          "title": "backend committed but response lost"
+        }
+      ]
+    },
+    "version": 2
+  },
+  "decision": "resolved as committed by readback; no duplicate Save request",
+  "cleanup": true,
+  "scope": "local loopback Supabase only; no production access"
+}

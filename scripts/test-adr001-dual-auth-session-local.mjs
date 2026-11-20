@@ -219,8 +219,16 @@ try {
   const tripAfterB = countRows(`select content from public.trips where id = '${tripId}'`)[0];
   assert.deepEqual(tripAfterB.content.daysData, { "1": [] }, "Denied B save changed daysData.");
 
+  const omittedDaysData = await sessionA.client.rpc("tc_save_itinerary_days", {
+    p_trip_id: tripId, p_client_id: clientIdA, p_expected_version: 1,
+    p_operation_id: randomUUID(),
+  });
+  assert(omittedDaysData.error, "Save RPC unexpectedly resolved when p_days_data was omitted.");
+  assert.match(omittedDaysData.error.message, /function|parameter|schema cache|Could not find/i,
+    "Omitted p_days_data should be rejected at RPC parameter resolution.");
+
   const invalidInputs = [
-    { name: "NULL daysData", value: null },
+    { name: "SQL NULL daysData", value: null },
     { name: "array daysData", value: [{ id: "invalid-array-shape" }] },
     { name: "scalar string daysData", value: "invalid-scalar" },
     { name: "scalar number daysData", value: 42 },

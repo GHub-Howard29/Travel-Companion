@@ -48,7 +48,7 @@
 
 | 階段文件 | 內容 | 狀態 | 讀取時機 |
 |---|---|---|---|
-| [ADR-001-S1](ADR-001-S1-db-enforcement.md) | DB schema、Lease、version、Trigger、Save RPC、安全及資料庫驗證基準 | 原型驗證有條件 PASS；正式整合尚待驗 | DB／RPC／migration 工作時 |
+| [ADR-001-S1](ADR-001-S1-db-enforcement.md) | DB schema、Lease、version、Trigger、Save RPC、安全及資料庫驗證基準與詳細測試紀錄 | **S1 DB Exit PASS（2026-11-21）；SR-01～SR-11 DB slice已核對。** S3應用層Pending／Recovery不阻塞S1 DB Exit。 | DB／RPC／migration 工作時 |
 | [ADR-001-S2](ADR-001-S2-cloud-save-integration.md) | Cloud service、Repository、所有 daysData 寫入 caller 與唯一 Save RPC 接線 | 未完成整合 | Cloud／Repository 工作時 |
 | [ADR-001-S3](ADR-001-S3-client-lock-pending.md) | Hook／UI、Lease client、Pending、Version reconciliation、Recovery | 未完成整合 | 前端／Pending／Recovery 工作時 |
 | [ADR-001-S4](ADR-001-S4-acceptance.md) | 整合後測試、跨瀏覽器／跨裝置、離線恢復及退出條件 | 待整合後執行 | 驗收工作時 |
@@ -62,12 +62,8 @@
 4. 新的持續性架構決策或對 Accepted 內容的修改，仍須依決策治理規則取得核准並同步更新 ADR 主檔與 README；階段檔不能單方面改變決策。
 5. 原型 PASS、Stage exit PASS、程式完成、DB migration 套用與正式環境驗收是不同狀態，必須分開標示。
 
-## Stage 1 隔離測試摘要
+## Stage 1 驗證狀態
 
-目前僅有原型層級證據；需與目前工作目錄的 migration／雙 Auth 測試結果一併核對，不得直接視為正式整合通過。詳見 [S1 DB Enforcement](ADR-001-S1-db-enforcement.md) 及 [文件 116](../../116_卡片編輯故障根因與旅程級編輯契約調查紀錄.md)。
-
-## 權威證據來源
-
-- [文件 116：卡片編輯故障根因與旅程級編輯契約調查紀錄](../../116_卡片編輯故障根因與旅程級編輯契約調查紀錄.md)：根因、現況呼叫鏈、SR-01 至 SR-12、測試執行證據及實際工作進度的權威來源。
+**S1 DB Exit PASS（2026-11-21），目前進入 S2 Cloud Save 接線。** S1的DB enforcement／Lease／version／Save RPC必要驗證（SR-01～SR-11 DB slice）已完成追溯核對。SR-09／SR-12的App Pending／Recovery屬S3跨層工作，不阻塞S1 DB Exit；整體ADR-001仍須依S2、S3及S4完成整合與驗收。進度／下一步以 [決策總索引](../../decisions/README.md) 為準，詳細S1證據以 [S1階段文件](ADR-001-S1-db-enforcement.md)為準。文件116僅保留根因分析與原始調查證據。
 - [文件 112：區段預報 P0 技術驗證與實作前檢查紀錄](../../112_區段預報P0技術驗證與實作前檢查紀錄.md)：僅在涉及該領域時讀取；非 ADR-001 的替代決策來源。
 - 本 ADR 不授權正式程式實作、正式 DB 操作、commit、push 或 deployment；各步驟仍依使用者明確授權及專案操作規範執行。

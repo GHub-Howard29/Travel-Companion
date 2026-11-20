@@ -2,6 +2,17 @@
 
 > **階段工作紀錄治理：** 本文件是 S1 持續執行與測試進度的唯一維護位置。每輪記錄執行範圍、環境、測試證據摘要、PASS／FAIL／BLOCKED、未完成項及下一步；長篇原始輸出與根因調查可連結文件 116，但不得把文件 116 當作本階段進度日誌。更新本文件後，同步更新 `docs/decisions/README.md` 的精簡狀態與下一步。
 
+## 目前狀態摘要（2026-11-21；以下為最新判定）
+
+- **S1 Exit：PASS（DB階段範圍）。** SR-01～SR-11的DB enforcement／Save RPC必要驗證已完成追溯核對，原始SR-12與SR-09／SR-01應用層Pending／Recovery責任歸S3，不阻塞S1 DB Exit。正式進入S2 Cloud Save接線。
+- **本次新增 PASS：** Historical Trip `trip_editor` enforcement（真實 Local Auth API session；metadata UPDATE零筆、Save RPC拒絕、readback不變）；Cross-backend marker isolation限定 probe（獨立 backend PID；B直接 daysData UPDATE被Trigger拒絕；readback不變）。此 probe 不等同驗證合法 Save RPC跨backend完整流程。
+- **Cleanup：** fixture已清理，readback基線 Auth users=4、Trips=3、versions=3、leases=0、markers=0、history=1。
+- **Git／Schema：** 現行三筆 migration已存在於 develop／origin develop並已套用 local；本輪未新增migration。實際schema與現行migration核對一致。
+- **限制：** local loopback only；未連正式Supabase、未部署、未修改程式、未commit／push。工作樹原有其他修改均保留。
+- **下一步：** S1 DB Exit已達成；進入S2 Cloud Save接線，按S2階段文件核對Repository／Cloud service／daysData caller及唯一Save RPC路徑。
+
+---
+
 
 ### 已定案：daysData 寫入隔離及獨立 CAS／Version
 
@@ -179,16 +190,16 @@ Trigger 相容性結論及解決方案：Save RPC 必須以資料庫當下 conte
 
 - **SR-11：PASS。** 使用既有 `scripts/test-adr001-dual-auth-session-local.mjs` 重新執行雙 Auth Session 隔離測試。兩個獨立使用者／JWT context 可驗證各自身份；B 在 A 持有 Lease 時，Claim／Save／Renew／Release 受拒絕。清理後 Auth users、Trips、Lease 數量回到基線。Durable Job：`job-1795166256389-y77ep3`，狀態 completed，exit code 0。
 - **SR-04 及其他既有 runner 案例：** 既有雙 Auth runner 涵蓋 Save CAS、stale CAS、直接 daysData 寫入拒絕、private authz marker 權限拒絕、偽造 Lease 拒絕、private version 讀取、metadata-only update、save history before-state、強制 Trigger rollback／cleanup、expired Lease Claim 競爭。這些是本機整合 runner 所覆蓋的具體案例，不代表整個 S1 exit criteria 已全部完成。
-- **SR-05：BLOCKED／部分驗證。** 已驗證兩個獨立 Auth context 對 expired Lease 同時 Claim 時僅一方勝出，且舊 holder Save 受拒絕；仍缺「有效 holder Save 與 B Claim 真正同時競爭」的交錯測試，以及 lock wait／deadlock 證據。維持 ADR 要求的 Lease row → Trip row 固定鎖定順序，不能以 expired-lease 案例替代。
-- **SR-09：BLOCKED／部分驗證。** Trigger error injection 已驗證交易 rollback，daysData／version／history／Lease 不變，臨時 trigger/function 已移除。仍缺 RPC 已 commit 但 HTTP response 遺失的 unknown-outcome 測試，以及 app readback/reconcile/Pending 的端到端驗證。候選測法為本機 fault-injection proxy：只轉送一次 Save RPC，確認 backend commit 後丟棄回應，不重送；再以獨立 authenticated read 判定 Cloud 是已保存或仍 pending/conflict。
-- **SR-10：BLOCKED／部分驗證。** SQL NULL、JSON array、string、number、boolean 的 daysData 會回傳 `ADR001_INVALID_SAVE_INPUT`；`{}` 可接受並只推進一次 version，正常 object 可接受。仍缺 RPC 參數缺漏、PostgREST absent parameter 與 SQL NULL／JSON null 的區別，以及 dayCount/schema normalization caller contract 測試。dayCount 改變需確認 daysData、version、history 一致，不能造成資料截斷。
+- **SR-05：PASS（現行 RPC interleaving，local）。** `docs/test-results/adr001-stage1-sr05-rpc-latest.json` 證明 A Save與B Claim真正交錯，Save成功、B claim被拒、Lease owner/client及daysData/version維持一致、無deadlock並完成清理。
+- **SR-09：DB unknown-outcome simulation PASS（尚非應用層 recovery PASS）。** 以單次 Save RPC fault-injection，在 backend response已收到後模擬客戶端 response loss；client收到錯誤，未重送，獨立 readback確認daysData已commit且version僅推進一次（1→2）。fixture cleanup PASS。結果：`docs/test-results/adr001-stage1-sr09-unknown-outcome-latest.json`；runner：`scripts/test-adr001-sr09-unknown-outcome-local.mjs`。S3 Pending/reconcile端到端仍未驗證。
+- **SR-10：PASS（限目前已驗證契約）。** 既有 omitted `p_days_data`、SQL NULL、array/string/number/boolean rejection及空 object／正常 object測試；另以 PostgreSQL DO probe將 JSONB literal `null`送入 Save RPC，於 isolated request.jwt.claim context下捕捉 `ADR001_INVALID_SAVE_INPUT`（probe未切換 DB role至 authenticated；拒絕發生於輸入 guard）。新增隔離 Trip Save整合測試：daysData由 2 day keys grow至3 keys，version 1→2、獨立 readback精確一致；再 shrink至1 key，version 2→3、readback一致，history共3筆。`createDays(dayCount)`、`createEmptyDaysData(days)`、`createTripRecord` caller contract仍為靜態核對，未實測 content.days本身的天數變動。Runner／證據：`scripts/test-adr001-sr10-local.mjs`、`docs/test-results/adr001-stage1-sr10-latest.json`。Fixture cleanup後 trips／leases／versions／history／Auth users／admin_users均回零。
 - **SR-12：BLOCKED（屬後續 S3 整合責任）。** 目前 `ItinerarySyncState` 僅有 `baseCloudUpdatedAt`，尚無 `baseCloudVersion`；`reconcilePendingItinerarySyncState` 仍以 `cloudUpdatedAt`／timestamp 作基準。不得為了讓 S1 顯示 PASS 而提前修改 S3 client／Pending 程式；S1 記錄介面缺口與明確交接即可。
 
 ### 尚未完成及下一步
 
-1. **SR-05：** 補上有效 Lease 持有者 Save 與另一 Auth context Claim 的真正併發交錯案例；觀察等待、最終持有權、保存結果、lock timeout／deadlock，並核對固定鎖定順序。
-2. **SR-09：** 在本機隔離環境完成「後端已 commit、客戶端未收到回應」測試；不重送 RPC，使用另一獨立讀取確認 Cloud 狀態與 Pending 分類。若應用層流程無法在 S1 範圍內驗收，明確留給 S3。
-3. **SR-10：** 完成 absent／NULL／JSON null 參數邊界與 dayCount/schema caller contract 測試。
+1. **SR-05：已 PASS。** 現行 RPC Save／Claim交錯測試已完成並記錄；不需重跑。
+2. **SR-09：DB層模擬已 PASS。** 後端commit後response loss及獨立readback已完成；下一步僅為S3應用層Pending/reconcile整合驗收，S1不提前修改 client/Pending程式。
+3. **SR-10：已 PASS（限定已驗證契約）。** JSONB literal null拒絕、day-keyed daysData grow/shrink Save、version與history一致性及cleanup已記錄；未實測 content.days本身天數更新，見 `docs/test-results/adr001-stage1-sr10-latest.json`。
 4. **SR-12：** 保留為 S3 前置整合／驗收項目：加入 version baseline，舊 timestamp 不得推定為 itinerary version；驗證已同步、可單向 merge、衝突保留 Pending、舊紀錄缺 snapshot、Lease 遺失／離線／事件遺失／CAS loser 等 recovery 情境。
 5. S1 只有在本階段退出條件與所有必要資料庫整合測試完成後才能標示 Stage exit PASS；原型 PASS、單項 runner PASS、migration 存在或已套用均不能替代階段驗收。
 
@@ -222,5 +233,60 @@ backup branch 的 `20261120160000_adr001_stage1_trip_itinerary_edit_enforcement.
 - 測試結果 JSON 與 SQL／runner 已持久化至 `docs/test-results/`、`scripts/`。上述測試僅限 local DB；Smoke 使用單一 session sequential JWT contexts，不等同真正雙 Auth API驗證。
 - Cleanup baseline：trips=3、versions=3、Lease rows=0、authorization markers=0；history rows=1為原有 Trip `trip-91f222b6-64ef-489a-9367-ce2606840080`，非本次fixture。
 
-**限制：** 本輪只重新驗證現行三筆 migration下的 DB smoke／rollback／SR-05。完整 SR-01～SR-12、真實雙 Auth API session、SR-09 unknown outcome recovery及SR-12 Pending recovery仍未完成；S1 Exit維持 BLOCKED。
+**限制：** 本輪重新驗證現行三筆 migration下的 DB smoke／rollback／SR-05。S1 Exit維持 BLOCKED。
 
+### SR-09 unknown-outcome追加驗證（2026-11-20）
+
+- local loopback Supabase，建立唯一臨時 Trip/Auth fixture及有效 Lease。
+- Save RPC只送出一次；fault-injection fetch在backend response已返回後模擬response loss，client收到錯誤，不重送。
+- 透過獨立 readback確認 daysData payload已寫入，itinerary version由1推進至2，結果判定為已commit，不重複Save。
+- fixture及Auth user cleanup：PASS。
+- Runner：`scripts/test-adr001-sr09-unknown-outcome-local.mjs`；結果：`docs/test-results/adr001-stage1-sr09-unknown-outcome-latest.json`。
+- **狀態：** DB unknown-outcome simulation PASS；S3應用層 Pending/reconcile處理未驗證，不納入此PASS。
+- SR-10與其餘S1矩陣仍待完成，S1 Exit維持 BLOCKED。
+
+### 本輪續測（2026-11-20）
+
+- **SR-10：PASS（限定已驗證契約）。** omitted RPC parameter、SQL NULL及 JSONB literal null拒絕；day-keyed daysData grow/shrink Save後version 1→2→3、readback及history驗證PASS。詳細結果見 `docs/test-results/adr001-stage1-sr10-latest.json`。
+- **SR-11：PASS（重驗）。** `scripts/test-adr001-dual-auth-session-local.mjs` 再次執行成功：兩個獨立Auth users／JWT sessions，B的Claim／Save／Renew／Release均受拒，A保存成功；cleanup回到基線。runner exit code 0。
+- 雙 Auth runner的SR-10既有案例涵蓋SQL NULL／非object拒絕、empty object接受與版本推進；SR-10專用 runner另驗JSONB literal null與grow/shrink整合。content.days天數更新本身仍僅有caller靜態核對。
+- 本輪未連正式Supabase、未部署、未commit／push。
+
+### 文件整理及續測（2026-11-20，接續）
+
+- **SR-11：再次 PASS。** 透過真實 loopback Supabase Auth API 的雙獨立使用者 runner 驗證；兩個身份及 Token 獨立，B 對 A Lease 的 Claim／Save／Renew／Release 均拒絕，A 正常保存。runner exit code 0，finally cleanup 完成。
+- Cleanup/readback：Auth users=4、Trips=3、versions=3（回到測試前 baseline）；Lease=0、authorization marker=0。History=1 為 baseline，未新增測試殘留。
+- **先前探針狀態（已被2026-11-21實測取代）：** rollback probe無法提供有效驗收證據，當時暫列未PASS；最新結果見下方2026-11-21續測。
+- **先前歷史Trip探針（已被2026-11-21實測取代）：** 早期transaction／role claims probe證據不足；最新真實Auth API測試結果見下方續測。
+- 本輪確認 local baseline：Trips=3、itinerary versions=3、Lease rows=0、authorization markers=0、history=1。此 readback僅確認數量，未證明 historical trip enforcement。
+- S1 Exit 維持 **BLOCKED**；不推進 S2/S3，不修改 migration／程式，不連正式 Supabase、不部署、不 commit／push。
+- **2026-11-21 續測結果：兩項剩餘驗證均 PASS（local loopback）。**
+
+- **Historical Trip `trip_editor` enforcement：PASS。** 透過 Supabase Local Auth API建立隔離使用者、實際 sign-in／`auth.getUser()`確認 JWT身份，對 2026-11-01 的歷史 Trip fixture 嘗試 metadata UPDATE及 `tc_save_itinerary_days`。metadata UPDATE回傳零筆更新（RLS拒絕，無 error），Save RPC回傳 `ADR001_TRIP_WRITE_WINDOW_CLOSED`。獨立 readback確認 title及daysData未變。
+- **Cross-backend authorization marker isolation：PASS（backend／transaction binding probe）。** 兩個獨立 PostgreSQL backend PID（41048、41069）不同。A backend marker（txid、pid、Trip、user、operation）建立後，B backend在同一 user context嘗試直接 daysData UPDATE，Trigger拒絕 `ADR001_DAYS_DATA_SAVE_RPC_REQUIRED`；readback確認daysData未變。此probe證明跨backend不能重用A marker；未模擬合法Save RPC跨backend，因該marker設計應只由RPC同交易產生。
+- 初次 historical metadata probe看到無error且零rows；調整驗收判定為「error或零rows」，重測成功，未將無error的RLS拒絕誤判為失敗。
+- Cleanup readback：Auth users=4、Trips=3、versions=3、leases=0、markers=0、history=1，回到baseline；臨時測試腳本已刪除。
+- 測試使用local loopback，未連正式Supabase、未部署、未新增migration、未修改程式、未commit／push。
+
+**S1 DB Exit：PASS（2026-11-21）。** 本階段目標是資料庫 enforcement／Lease／version／Save RPC DB契約驗證；SR-01～SR-11的DB slice已完成核對。SR-12及SR-09／SR-01應用層Pending／Recovery為S3責任，不再阻塞S1 DB Exit。
+
+## 2026-11-21 S1 exit matrix 證據追溯核對
+
+以文件 116 的 SR-01～SR-12 原始定義及既有 runner／結果檔核對；不為補獨立 JSON 樣板而重跑已具證據案例。
+
+| 原始 SR | S1 DB 範圍判定 | 現有證據／來源 | 限制 |
+|---|---|---|---|
+| SR-01 | PASS（DB Save slice） | dual-auth runner：A Claim及有效Save，version推進、history capture；另SR-10 grow/shrink Save readback | Pending清理是應用層；不以此DB證據宣稱App確認／清理已驗 |
+| SR-02 | PASS（DB拒絕 slice） | runner：B Save拒絕、Lease owner/data/version不變；expired舊holder Save拒絕 | pending保留屬S3，不在此驗 |
+| SR-03 | PASS | runner：stale expected-version CAS拒絕，readback勝方資料不變 | App merge／Pending保留未驗 |
+| SR-04 | PASS | runner：兩個獨立worker、同client／expected version併發Save，恰一成功、一CAS loser，version只+1 | runner屬真實多程序但同Auth token；不同Auth身份併發由其他案例分別驗 |
+| SR-05 | PASS | `docs/test-results/adr001-stage1-sr05-rpc-latest.json`：Save／Claim interleaving，無deadlock，結果及Lease一致 | 限該交錯案例，非所有Claim/Renew/Release排列 |
+| SR-06 | PASS（已測DB範圍） | dual-auth runner：history前snapshot及強制Trigger rollback，daysData/version/history/Lease回復；歷史Trip限制另測 | visibility/email-map完整所有情境未獨立覆蓋 |
+| SR-07 | PASS（已測DB範圍） | runner：direct daysData write、marker寫入、偽造Lease、private version read拒絕；跨backend marker isolation另有probe | 不宣稱所有私有helper／所有入口皆已窮盡測試 |
+| SR-08 | PASS | runner：無Lease metadata-only update成功，history/version不變 | 代表該metadata案例及既有trigger範圍 |
+| SR-09 | PASS（DB unknown outcome及transaction rollback slice） | rollback runner案例；`docs/test-results/adr001-stage1-sr09-unknown-outcome-latest.json`：單次Save、模擬response loss、readback已commit、未重送、cleanup | App Pending/reconcile及成功回覆前Pending清理條件仍未驗，屬S3 |
+| SR-10 | PASS（已測輸入契約） | dual-auth runner omitted/SQL NULL/非object拒絕與empty object；專用runner驗JSONB literal null及day-keyed grow/shrink，version/history/readback/cleanup | literal-null probe未切authenticated DB role；`content.days` caller天數欄位本身變動仍為靜態核對 |
+| SR-11 | PASS | 真實Local Auth API雙Session runner；B對A Lease的Claim/Save/Renew/Release拒絕，A Save有效，cleanup基線 | 符合所列獨立Session案例，非所有跨user／所有操作排列 |
+| SR-12 | BLOCKED／S3 | 文件116原始定義：真實Pending state、baseline/local/cloud merge、CAS保存及清理；snapshot/baseline不可重建時保留Pending | 明確不屬S1 DB exit測試，須於S3驗收 |
+
+**階段界線：** S1 DB Exit不等於ADR-001整體Stage 1／S4驗收完成。SR-09未知結果的DB單次提交/readback證據已PASS；客戶端Pending／reconcile及SR-12的三方merge、Recovery、保留Pending等屬S3。這些跨層項目不應被反向列為S1 DB Exit阻塞。S1已解除，下一階段為S2 Cloud Save接線。
