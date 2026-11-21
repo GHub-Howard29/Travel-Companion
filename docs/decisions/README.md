@@ -8,7 +8,7 @@
 
 | ID | 決策／工作 | 狀態 | 目前階段 | 下一步／阻塞 | 權威主檔 |
 |---|---|---|---|---|---|
-| [ADR-001](active/ADR-001-trip-daily-card-edit-lock-scope.md) | 每日詳細行程統一編輯權、保存協調與更新提示簡化 | Accepted／進行中 | **S3 App整合／Lock／Pending／Recovery（Exit PASS，2026-11-21）** | **2026-11-21：S2 Exit PASS；S3已完成可信version／Trip-level Lease／App接線／Pending recovery protection／UI caller regression。離線只讀、失網即關閉編輯表單及離線管理入口阻擋已有UI證據PASS；不再驗收Offline Pending→Autosync。線上Conflict Panel選擇→Apply→Cloud readback以合成fixture UI實測PASS。雙登入端競爭保存產生Conflict不屬原定S3 Exit必要條件；依原S3 Exit項目核對證據，S3 Exit PASS。** | [ADR-001](active/ADR-001-trip-daily-card-edit-lock-scope.md) |
+| [ADR-001](active/ADR-001-trip-daily-card-edit-lock-scope.md) | 每日詳細行程統一編輯權、保存協調與更新提示簡化 | Accepted／已結案 | **ADR-001 Exit PASS（2026-11-22）** | **ADR-001整體結案／S1／S2／S3／S4 Exit PASS（2026-11-22）。核心 regression／SR-09／SR-10／SR-11、S3 UI evidence、build及docs-links均有PASS證據。雙瀏覽器競爭UI已取消；暫存 synthetic Trip cleanup由使用者自行處理，不列入阻塞／Exit條件。** | [ADR-001](active/ADR-001-trip-daily-card-edit-lock-scope.md) |
 
 ## ADR-001 階段入口
 
@@ -17,7 +17,7 @@
 | S1 DB enforcement／Lease／version／Save RPC | [ADR-001-S1](active/ADR-001-S1-db-enforcement.md) | DB schema、migration、Trigger、RPC、權限及 DB 測試 |
 | S2 Cloud Save contract／Repository 基礎 | [ADR-001-S2](active/ADR-001-S2-cloud-save-integration.md) | Cloud／Repository contract、非 itinerary 保存隔離及 RPC／DB contract 基礎驗證 |
 | S3 App 整合／Lock／Pending／Recovery（Exit PASS，2026-11-21） | [ADR-001-S3](active/ADR-001-S3-client-lock-pending.md) | S3 Exit已完成；後續依S4整合驗收 |
-| S4 整合後驗收 | [ADR-001-S4](active/ADR-001-S4-acceptance.md) | 整合後 regression、跨瀏覽器／裝置、離線恢復及結案 |
+| S4 整合後驗收 | [ADR-001-S4](active/ADR-001-S4-acceptance.md) | 整合後 regression、文件／工作樹核對及結案（雙瀏覽器競爭 UI已取消） |
 | 根因調查與原始證據 | [文件 116](../116_卡片編輯故障根因與旅程級編輯契約調查紀錄.md) | 需要根因、呼叫鏈、原始調查及補充測試證據時；不作為階段進度／下一步的維護位置 |
 
 ## 載入規則
@@ -52,4 +52,6 @@
 本目錄不取代既有領域規格、API／資料契約、資料庫設計及驗收文件。每個決策只指定一份完整權威內容；其他文件僅連結，不複製另一份可能漂移的規格。
 
 
-- ADR-001 S3續測（2026-11-21）：synthetic TEST-1離線管理入口阻擋已取得UI證據PASS（button disabled、點擊無作用、無dialog）；network已恢復。Conflict UI選擇→Apply→Cloud readback仍未完成，S3未Exit。
+
+
+- ADR-001 S4驗收規則修訂／交接摘要：`active/ADR-001-S4-tool-handoff.md`（2026-11-22；雙瀏覽器UI測試已取消）。

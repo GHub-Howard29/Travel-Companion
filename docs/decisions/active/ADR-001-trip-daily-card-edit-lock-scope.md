@@ -50,8 +50,8 @@
 |---|---|---|---|
 | [ADR-001-S1](ADR-001-S1-db-enforcement.md) | DB schema、Lease、version、Trigger、Save RPC、安全及資料庫驗證基準與詳細測試紀錄 | **S1 DB Exit PASS（2026-11-21）；SR-01～SR-11 DB slice已核對。** S3應用層Pending／Recovery不阻塞S1 DB Exit。 | DB／RPC／migration 工作時 |
 | [ADR-001-S2](ADR-001-S2-cloud-save-integration.md) | Cloud Save service／Repository 基礎契約、非 itinerary 保存隔離、RPC adapter／DB contract 基礎驗證 | **S2 Exit PASS（2026-11-21；依核准重新界定範圍核對）** | Cloud／Repository contract 工作時 |
-| [ADR-001-S3](ADR-001-S3-client-lock-pending.md) | App callers／Trip metadata-dayCount 分離、Trip-level Lease／可信 version client、Pending／Recovery／Conflict Save RPC 整合、旁路 closure | **進行中；UI card save／dayCount grow PASS；shrink final confirmation及Pending／Conflict UI integration未完成** | 前端／Lease／Pending／Recovery／完整 caller integration 工作時 |
-| [ADR-001-S4](ADR-001-S4-acceptance.md) | 整合後測試、跨瀏覽器／跨裝置、離線恢復及退出條件 | 待整合後執行 | 驗收工作時 |
+| [ADR-001-S3](ADR-001-S3-client-lock-pending.md) | App callers／Trip metadata-dayCount 分離、Trip-level Lease／可信 version client、Pending／Recovery／Conflict Save RPC 整合、旁路 closure | **S3 Exit PASS（2026-11-21）；既有 UI evidence與完整階段核對已完成。** | S4整合驗收 |
+| [ADR-001-S4](ADR-001-S4-acceptance.md) | 整合後驗收及退出條件（雙瀏覽器競爭UI已取消） | **S4 Exit PASS／ADR-001結案（2026-11-22）** | 已結案 |
 | [文件 116](../../116_卡片編輯故障根因與旅程級編輯契約調查紀錄.md) | 根因證據、呼叫鏈調查、工程審查及原始／補充測試證據 | 調查證據來源；不維護階段進度 | 根因調查或需核對原始證據時 |
 
 ### 階段治理
