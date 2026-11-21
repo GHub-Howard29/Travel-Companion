@@ -124,4 +124,12 @@ S3完成後仍須依 S4整合驗收，不得把 S3完成等同 ADR-001結案.
 - OpenChatX office Browser CDP 在 synthetic TEST-1（tab 278049732）切離線後，頁面顯示「目前沒有網路連線／離線使用中」；管理 button disabled=true。
 - 以 DOM button.click() 嘗試入口，disabled button無作用；DOM未變、無dialog，確認管理入口離線拒絕。PASS（UI入口阻擋證據）。
 - 已恢復 Browser network online；未改動測試卡或旅程資料。
-- Conflict UI選擇→Apply→Cloud readback尚未完成，S3不得Exit。
+- Conflict UI選擇→Apply→Cloud readback已於後續續測以synthetic fixture UI實測PASS；此紀錄為先前狀態。雙登入端競爭Save產生Conflict不屬原定Exit必要條件。
+
+### 2026-11-21：S3 Exit checklist核對—PASS
+
+- 原定 S3工作範圍 1–6項逐項核對：trusted version／Trip Lease、metadata-dayCount與daysData分離、Save RPC及resolution caller、Pending／Conflict／unknown outcome recovery、generic daysData bypass closure、caller closure regression及local Auth／DB保存讀回與build均已有實作及測試證據。
+- DayCount grow／shrink UI（含最後不可逆確認及Cloud讀回）、失網立即關閉編輯、offline入口阻擋、復網後重新編輯／Lease恢復、Conflict UI選擇→Apply→Cloud readback已完成。
+- Conflict UI採synthetic fixture，驗證實際App UI與Apply／Save RPC／Cloud readback流程；並未宣稱由兩個真實登入端競爭Save觸發，該項不屬原定Exit必要條件。
+- 回歸與建置於本輪再次PASS：verify:adr001-s3-app-integration、verify:v31012-itinerary-sync、test:adr001-cloud-save-service、test:p0-pending-autosync-idempotency、test:trip-workspace-recovery-lifecycle、npm run build。
+- 依原定S3 Exit範圍及既有證據核對，S3 Exit PASS。S4整合驗收仍待後續，不代表ADR-001整體結案。

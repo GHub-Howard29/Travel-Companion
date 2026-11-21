@@ -8,7 +8,7 @@
 
 | ID | 決策／工作 | 狀態 | 目前階段 | 下一步／阻塞 | 權威主檔 |
 |---|---|---|---|---|---|
-| [ADR-001](active/ADR-001-trip-daily-card-edit-lock-scope.md) | 每日詳細行程統一編輯權、保存協調與更新提示簡化 | Accepted／進行中 | **S3 App整合／Lock／Pending／Recovery（進行中）** | **2026-11-21 核准調整階段邊界及離線政策：S2聚焦Cloud Save service／Repository契約與基礎驗證；App接線移至S3。S2 Exit PASS。S3已完成可信version read、Trip-level Lease client、App save caller／dayCount grow及shrink UI、generic daysData bypass封閉、Pending recovery protection與UI caller integration。離線只讀、禁止卡片編輯；取消Offline Pending→Autosync驗收。S3真實UI已證實表單開啟中失網即關閉且卡片未變；下一步驗證復網後重新Lease恢復編輯及Conflict Apply→Cloud readback，並補驗離線編輯入口拒絕，完成後核對S3 Exit。** | [ADR-001](active/ADR-001-trip-daily-card-edit-lock-scope.md) |
+| [ADR-001](active/ADR-001-trip-daily-card-edit-lock-scope.md) | 每日詳細行程統一編輯權、保存協調與更新提示簡化 | Accepted／進行中 | **S3 App整合／Lock／Pending／Recovery（Exit PASS，2026-11-21）** | **2026-11-21：S2 Exit PASS；S3已完成可信version／Trip-level Lease／App接線／Pending recovery protection／UI caller regression。離線只讀、失網即關閉編輯表單及離線管理入口阻擋已有UI證據PASS；不再驗收Offline Pending→Autosync。線上Conflict Panel選擇→Apply→Cloud readback以合成fixture UI實測PASS。雙登入端競爭保存產生Conflict不屬原定S3 Exit必要條件；依原S3 Exit項目核對證據，S3 Exit PASS。** | [ADR-001](active/ADR-001-trip-daily-card-edit-lock-scope.md) |
 
 ## ADR-001 階段入口
 
@@ -16,7 +16,7 @@
 |---|---|---|
 | S1 DB enforcement／Lease／version／Save RPC | [ADR-001-S1](active/ADR-001-S1-db-enforcement.md) | DB schema、migration、Trigger、RPC、權限及 DB 測試 |
 | S2 Cloud Save contract／Repository 基礎 | [ADR-001-S2](active/ADR-001-S2-cloud-save-integration.md) | Cloud／Repository contract、非 itinerary 保存隔離及 RPC／DB contract 基礎驗證 |
-| S3 App 整合／Lock／Pending／Recovery（進行中） | [ADR-001-S3](active/ADR-001-S3-client-lock-pending.md) | 離線只讀、禁編；驗證失去網路時立即停止編輯、復網後重新Lease，以及線上Conflict Apply／Cloud readback UI實測，再核對S3 Exit |
+| S3 App 整合／Lock／Pending／Recovery（Exit PASS，2026-11-21） | [ADR-001-S3](active/ADR-001-S3-client-lock-pending.md) | S3 Exit已完成；後續依S4整合驗收 |
 | S4 整合後驗收 | [ADR-001-S4](active/ADR-001-S4-acceptance.md) | 整合後 regression、跨瀏覽器／裝置、離線恢復及結案 |
 | 根因調查與原始證據 | [文件 116](../116_卡片編輯故障根因與旅程級編輯契約調查紀錄.md) | 需要根因、呼叫鏈、原始調查及補充測試證據時；不作為階段進度／下一步的維護位置 |
 
