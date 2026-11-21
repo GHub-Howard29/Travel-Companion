@@ -1,0 +1,24 @@
+﻿{
+  "test": "ADR-001 Stage 1 local DB smoke against current develop migrations",
+  "startedAt": "2026-11-20T11:29:00Z",
+  "localOnly": true,
+  "transactionRolledBack": true,
+  "tests": {
+    "tripLeaseClaimA": true,
+    "saveRpc": true,
+    "versionIncrementFrom0To1": true,
+    "readVersionRpc": true,
+    "claimBDenied": true,
+    "renewByBDenied": true,
+    "releaseByBDenied": true,
+    "saveByBDenied": true,
+    "directDaysDataUpdateDenied": true,
+    "staleVersionDenied": true,
+    "metadataUpdateAllowed": true,
+    "historyTriggerCapturedBeforeSnapshot": true,
+    "authorizationMarkerCleaned": true
+  },
+  "pass": true,
+  "scopeLimit": "Single local PostgreSQL session using sequential JWT claim contexts; not dual-session/Auth API or client integration.",
+  "cleanup": "transaction rolled back; test trip and related rows removed"
+}

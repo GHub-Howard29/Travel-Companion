@@ -67,20 +67,13 @@ assert.match(
 
 assert.match(
   timeAdjustment,
-  /export const materializeTimeAdjustmentEstimates = async/,
+  /export const materializeTimeAdjustmentEstimates = \(/,
 );
 assert.match(
   timeAdjustment,
-  /getSavedTravelEstimate\(\{ \.\.\.origin, travelToNext: estimate \}, destination\)/,
+  /items\[segment\.originIndex\] = \{[\s\S]*travelModeToNext: segment\.estimate\.mode,[\s\S]*travelToNext: segment\.estimate/,
 );
-assert.match(
-  timeAdjustment,
-  /items\[segment\.originIndex\] = \{[\s\S]*travelModeToNext: estimate\.mode,[\s\S]*travelToNext: estimate/,
-);
-assert.match(itineraryPage, /await materializeTimeAdjustmentEstimates\(/);
-assert.match(
-  itineraryPage,
-  /materializeTimeAdjustmentEstimates\([\s\S]*requestTravelEstimate\([\s\S]*getPreferredTravelMode\(origin\)/,
-);
+assert.match(itineraryPage, /materializeTimeAdjustmentEstimates\(timeAdjustmentResult\)/);
+assert.doesNotMatch(itineraryPage, /await materializeTimeAdjustmentEstimates\(/);
 
 console.log("V3.9.22 RC3 Trip snapshot、刪除 idempotency 與交通 estimate commit 契約驗證通過。");

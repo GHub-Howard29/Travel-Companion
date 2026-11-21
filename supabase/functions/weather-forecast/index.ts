@@ -1,5 +1,8 @@
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2.108.2";
-import { preferSharedTargetCandidate, type WeatherCandidate } from "./target-selection.ts";
+import { getStoredWeatherCardTimes, getWeatherTimeHour, matchesStoredWeatherCardTimeSnapshot, preferSharedTargetCandidate, type WeatherCandidate } from "./target-selection.ts";
+import { calculateIntervalSummary } from "./interval-summary.ts";
+import { fetchOpenMeteoHourly } from "./open-meteo-hourly.ts";
+import { createTargetPromiseCache } from "./target-promise-cache.ts";
 import { getDestinationLocalEligibility } from "./timezone-eligibility.ts";
 
 type WeatherSupabaseClient = SupabaseClient;
@@ -51,7 +54,7 @@ const safeErrorCode = (error: unknown) => {
     "COORDINATE_CACHE_READ_FAILED", "COORDINATE_CACHE_WRITE_FAILED", "PLACE_DETAILS_FAILED",
     "PLACE_DETAILS_RATE_LIMITED", "PLACE_DETAILS_TIMEOUT", "PLACE_DETAILS_NETWORK_ERROR",
     "PLACE_DETAILS_RESPONSE_ERROR", "PLACE_DETAILS_INVALID_COORDINATES", "PLACE_DETAILS_RETRY_COOLDOWN",
-    "WEATHER_SERVICE_NOT_CONFIGURED", "WEATHER_LEASE_FAILED", "WEATHER_CACHE_WRITE_FAILED",
+    "WEATHER_SERVICE_NOT_CONFIGURED", "WEATHER_LEASE_FAILED", "WEATHER_CACHE_WRITE_FAILED", "WEATHER_CACHE_READ_FAILED",
     "OPEN_METEO_FAILED", "OPEN_METEO_RATE_LIMITED", "OPEN_METEO_TIMEOUT", "OPEN_METEO_INVALID_RESPONSE",
     "ARRIVAL_TIME_PASSED", "WEATHER_SERVICE_FAILED", "WEATHER_REQUEST_TIMEOUT",
   ]);
@@ -69,8 +72,6 @@ const isValidDate = (value: unknown): value is string => {
   const parsed = new Date(`${value}T00:00:00Z`);
   return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
 };
-const isValidTime = (value: unknown): value is string =>
-  typeof value === "string" && /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(value);
 const dayDate = (departureDate: string, dayNumber: number) => {
   const date = new Date(`${departureDate}T00:00:00Z`);
   date.setUTCDate(date.getUTCDate() + dayNumber - 1);
@@ -99,6 +100,9 @@ interface WeatherResult {
     temperature_2m_min: number | null;
     precipitation_probability_max: number | null;
   };
+  forecast_type?: "interval";
+  interval_start_hour?: number;
+  interval_end_hour?: number;
   message?: string;
   refresh_stopped?: boolean;
   diagnostic_code?: string;
@@ -121,9 +125,10 @@ const makeCandidate = (tripId: string, departureDate: string, dayNumber: number,
     typeof card.place.placeId !== "string" || !card.place.placeId.trim() ||
     typeof card.id !== "string" || !card.id.trim()) return null;
   const forecastDate = dayDate(departureDate, dayNumber);
+  const { arrivalTime, departureTime } = getStoredWeatherCardTimes(card);
   return {
     tripId, dayNumber, cardId: card.id, placeId: card.place.placeId.trim(), forecastDate,
-    arrivalTime: isValidTime(card.time) ? card.time : "",
+    arrivalTime, departureTime,
   };
 };
 
@@ -594,6 +599,294 @@ const getForecastForCandidate = async (
   };
 };
 
+interface IntervalTargetData {
+  row: Record<string, unknown> | null;
+  leaseBusy: boolean;
+  diagnosticCode?: string;
+}
+
+const withSharedIntervalTarget = createTargetPromiseCache<IntervalTargetData>();
+
+const getIntervalTargetData = (
+  admin: WeatherSupabaseClient,
+  placeId: string,
+  forecastDate: string,
+  destinationTimezone: string,
+  traceId: string,
+  allowRefresh: boolean,
+): Promise<IntervalTargetData> => {
+  const key = `${placeId}|${forecastDate}`;
+  return withSharedIntervalTarget(key, async (): Promise<IntervalTargetData> => {
+    let diagnosticCode: string | undefined;
+    let leaseBusy = false;
+    try {
+      const coords = await getCoordinates(admin, placeId, traceId);
+      const { data: previous, error: readError } = await admin.from("weather_interval_forecasts")
+        .select("*").eq("place_id", placeId).eq("forecast_date", forecastDate).maybeSingle();
+      if (readError) throw new Error("WEATHER_CACHE_READ_FAILED");
+      const now = Date.now();
+      const coordinatesMatch = previous?.latitude === coords.latitude &&
+        previous?.longitude === coords.longitude;
+      const ageSinceSuccess = previous?.fetched_at
+        ? now - Date.parse(previous.fetched_at)
+        : Number.POSITIVE_INFINITY;
+      const ageSinceAttempt = previous?.last_refresh_attempt_at
+        ? now - Date.parse(previous.last_refresh_attempt_at)
+        : Number.POSITIVE_INFINITY;
+      const failedRecently = Boolean(previous?.last_refresh_failed_at &&
+        Date.parse(previous.last_refresh_failed_at) > now - 3600000);
+      const usable = Boolean(coordinatesMatch && previous?.fetched_at &&
+        ageSinceSuccess < 48 * 3600000 &&
+        typeof previous.timezone === "string" && previous.timezone.length > 0);
+      const shouldRefresh = allowRefresh && !failedRecently &&
+        (!usable || (Boolean(previous?.last_refresh_failed_at) && !failedRecently) ||
+          (!previous?.last_refresh_failed_at && ageSinceSuccess >= 6 * 3600000 &&
+            (ageSinceSuccess >= 24 * 3600000 || ageSinceAttempt >= 6 * 3600000)));
+
+      if (shouldRefresh) {
+        const { data: token, error: leaseError } = await admin.rpc("tc_weather_interval_claim_lease", {
+          p_place_id: placeId,
+          p_forecast_date: forecastDate,
+        });
+        if (leaseError) throw new Error("WEATHER_LEASE_FAILED");
+        if (typeof token === "string" && token) {
+          const { data: afterClaim, error: afterClaimError } = await admin.from("weather_interval_forecasts")
+            .select("latitude, longitude, fetched_at, last_refresh_failed_at")
+            .eq("place_id", placeId).eq("forecast_date", forecastDate).maybeSingle();
+          if (afterClaimError) throw new Error("WEATHER_CACHE_READ_FAILED");
+          const refreshedAfterInitialRead = Boolean(
+            afterClaim?.latitude === coords.latitude &&
+            afterClaim?.longitude === coords.longitude &&
+            afterClaim?.fetched_at &&
+            Date.now() - Date.parse(afterClaim.fetched_at) < 6 * 3600000 &&
+            !afterClaim.last_refresh_failed_at
+          );
+          // Another Edge isolate may have completed its refresh between our first read and lease claim.
+          // In that race, skip the duplicate HTTP call; the short lease expires naturally.
+          if (!refreshedAfterInitialRead) {
+            try {
+              const forecast = await fetchOpenMeteoHourly(
+                coords.latitude, coords.longitude, forecastDate, destinationTimezone,
+              );
+              const { data: released, error: releaseError } = await admin.rpc(
+                "tc_weather_interval_release_lease",
+                {
+                  p_place_id: placeId,
+                  p_forecast_date: forecastDate,
+                  p_token: token,
+                  p_success: true,
+                  p_forecast: {
+                    latitude: forecast.latitude,
+                    longitude: forecast.longitude,
+                    timezone: forecast.timezone,
+                    source_url: forecast.source_url,
+                    hourly_data: forecast.hourly_data,
+                  },
+                },
+              );
+              if (releaseError || released !== true) throw new Error("WEATHER_CACHE_WRITE_FAILED");
+            } catch (error) {
+              const errorCode = safeErrorCode(error);
+              diagnosticCode = errorCode;
+              const { data: released, error: releaseError } = await admin.rpc(
+                "tc_weather_interval_release_lease",
+                {
+                  p_place_id: placeId,
+                  p_forecast_date: forecastDate,
+                  p_token: token,
+                  p_success: false,
+                  p_error: errorCode,
+                },
+              );
+              if (releaseError || released !== true) {
+                logWeatherDiagnostic("interval_lease_release_failed", traceId, "interval_lease_release", {
+                  error_code: "WEATHER_LEASE_RELEASE_FAILED",
+                  database_code: releaseError?.code ?? null,
+                  rpc_returned_true: released === true,
+                });
+              }
+            }
+          }
+        } else {
+          leaseBusy = true;
+        }
+      }
+      const { data: latest, error: latestError } = await admin.from("weather_interval_forecasts")
+        .select("*").eq("place_id", placeId).eq("forecast_date", forecastDate).maybeSingle();
+      if (latestError) throw new Error("WEATHER_CACHE_READ_FAILED");
+      return { row: latest as Record<string, unknown> | null, leaseBusy, diagnosticCode };
+    } catch (error) {
+      diagnosticCode = safeErrorCode(error);
+      logWeatherDiagnostic("interval_forecast_failed", traceId, "interval_cache_or_fetch", {
+        error_code: diagnosticCode,
+      });
+      const { data: latest } = await admin.from("weather_interval_forecasts")
+        .select("*").eq("place_id", placeId).eq("forecast_date", forecastDate).maybeSingle();
+      return { row: latest as Record<string, unknown> | null, leaseBusy, diagnosticCode };
+    }
+  });
+};
+
+const getIntervalForecastForCandidate = async (
+  admin: WeatherSupabaseClient,
+  candidate: Candidate,
+  traceId = crypto.randomUUID(),
+  scheduled = false,
+): Promise<WeatherResult> => {
+  const requestId = candidate.cardId;
+  const arrivalHour = getWeatherTimeHour(candidate.arrivalTime);
+  const departureHour = getWeatherTimeHour(candidate.departureTime || candidate.arrivalTime);
+  if (arrivalHour === null || departureHour === null || departureHour < arrivalHour) {
+    return {
+      request_id: requestId, place_id: candidate.placeId, forecast_date: candidate.forecastDate,
+      status: "unavailable", message: "卡片時間格式無效",
+      diagnostic_code: "INVALID_INTERVAL",
+    };
+  }
+
+  const { data: cached, error: cacheError } = await admin.from("weather_interval_forecasts")
+    .select("*").eq("place_id", candidate.placeId).eq("forecast_date", candidate.forecastDate).maybeSingle();
+  if (cacheError) {
+    return {
+      request_id: requestId, place_id: candidate.placeId, forecast_date: candidate.forecastDate,
+      status: "unavailable", message: "暫時無法取得天氣",
+      diagnostic_code: "WEATHER_CACHE_READ_FAILED",
+    };
+  }
+
+  let currentCoordinates: { latitude: number; longitude: number };
+  try {
+    currentCoordinates = await getCoordinates(admin, candidate.placeId, traceId);
+  } catch (error) {
+    return {
+      request_id: requestId, place_id: candidate.placeId, forecast_date: candidate.forecastDate,
+      status: "unavailable", message: "暫時無法取得天氣",
+      diagnostic_code: safeErrorCode(error),
+    };
+  }
+  const cachedCoordinatesMatch = cached?.latitude === currentCoordinates.latitude &&
+    cached?.longitude === currentCoordinates.longitude;
+  let eligibilityTimezone = cachedCoordinatesMatch && typeof cached?.fetched_at === "string" &&
+      typeof cached?.timezone === "string" && cached.timezone.length > 0
+    ? cached.timezone
+    : null;
+  if (!eligibilityTimezone) {
+    try {
+      eligibilityTimezone = await getDestinationTimezone(
+        currentCoordinates.latitude, currentCoordinates.longitude,
+      );
+    } catch (error) {
+      return {
+        request_id: requestId, place_id: candidate.placeId, forecast_date: candidate.forecastDate,
+        status: "unavailable", message: "暫時無法取得天氣",
+        diagnostic_code: safeErrorCode(error),
+      };
+    }
+  }
+
+  const eligibility = getDestinationLocalEligibility(
+    new Date(), candidate.forecastDate, candidate.arrivalTime, eligibilityTimezone,
+  );
+  const eligibilityBlocksRefresh = eligibility !== "eligible";
+  const cachedUsable = Boolean(cachedCoordinatesMatch && cached?.fetched_at &&
+    Date.parse(cached.fetched_at) > Date.now() - 48 * 3600000 &&
+    typeof cached.timezone === "string" && cached.timezone.length > 0 &&
+    isRecord(cached.hourly_data));
+  if (eligibilityBlocksRefresh && !cachedUsable) {
+    const expired = eligibility === "date_passed" || eligibility === "arrival_passed";
+    return {
+      request_id: requestId, place_id: candidate.placeId, forecast_date: candidate.forecastDate,
+      status: expired ? "ineligible" : "long_range",
+      ...(expired ? { refresh_stopped: true } : {}),
+      message: expired ? "預報已超過有效期限，系統已停止更新天氣資料" : "尚未開放天氣預報",
+    };
+  }
+
+  const target: IntervalTargetData = eligibilityBlocksRefresh
+    ? { row: cached as Record<string, unknown> | null, leaseBusy: false }
+    : await getIntervalTargetData(
+      admin, candidate.placeId, candidate.forecastDate, eligibilityTimezone, traceId, true,
+    );
+  const row = target.row;
+  const stillUsable = Boolean(row?.fetched_at &&
+    Date.parse(String(row.fetched_at)) > Date.now() - 48 * 3600000 &&
+    row.latitude === currentCoordinates.latitude &&
+    row.longitude === currentCoordinates.longitude &&
+    typeof row.timezone === "string" && row.timezone.length > 0 &&
+    isRecord(row.hourly_data));
+  if (!row?.fetched_at || !stillUsable || !isRecord(row.hourly_data) ||
+    typeof row.timezone !== "string" || !row.timezone) {
+    if (target.leaseBusy) return {
+      request_id: requestId, place_id: candidate.placeId, forecast_date: candidate.forecastDate,
+      status: "waiting", message: "天氣資料正在更新，請稍候",
+      diagnostic_code: WEATHER_REFRESH_IN_PROGRESS,
+    };
+    return {
+      request_id: requestId, place_id: candidate.placeId, forecast_date: candidate.forecastDate,
+      status: "unavailable", message: "暫時無法取得天氣",
+      diagnostic_code: target.diagnosticCode ?? WEATHER_CACHE_UNAVAILABLE,
+    };
+  }
+
+  const finalEligibility = getDestinationLocalEligibility(
+    new Date(), candidate.forecastDate, candidate.arrivalTime, row.timezone,
+  );
+  const finalEligibilityBlocksRefresh = finalEligibility !== "eligible";
+  if (finalEligibilityBlocksRefresh && Date.parse(String(row.fetched_at)) <= Date.now() - 48 * 3600000) {
+    return {
+      request_id: requestId, place_id: candidate.placeId, forecast_date: candidate.forecastDate,
+      status: finalEligibility === "long_range" ? "long_range" : "ineligible",
+      ...(finalEligibility === "long_range" ? {} : { refresh_stopped: true }),
+      message: finalEligibility === "long_range" ? "尚未開放天氣預報" : "預報已超過有效期限，系統已停止更新天氣資料",
+    };
+  }
+
+  try {
+    const summary = calculateIntervalSummary(
+      row.hourly_data as unknown as Parameters<typeof calculateIntervalSummary>[0],
+      row.timezone,
+      candidate.forecastDate,
+      arrivalHour,
+      departureHour,
+    );
+    if (scheduled) {
+      await admin.rpc("tc_weather_interval_mark_scheduled_refresh", {
+        p_place_id: candidate.placeId,
+        p_forecast_date: candidate.forecastDate,
+      });
+    }
+    const stale = Date.parse(String(row.fetched_at)) <= Date.now() - 24 * 3600000;
+    return {
+      request_id: requestId,
+      place_id: candidate.placeId,
+      forecast_date: candidate.forecastDate,
+      status: stale ? "stale" : "fresh",
+      fetched_at: String(row.fetched_at),
+      timezone: row.timezone,
+      latitude: Number(row.latitude),
+      longitude: Number(row.longitude),
+      source_url: typeof row.source_url === "string" ? row.source_url : undefined,
+      weather: {
+        weather_code: summary.weather_code,
+        temperature_2m_max: summary.temperature_2m_max,
+        temperature_2m_min: summary.temperature_2m_min,
+        precipitation_probability_max: summary.precipitation_probability_max,
+      },
+      forecast_type: "interval",
+      interval_start_hour: arrivalHour,
+      interval_end_hour: departureHour,
+      ...(finalEligibilityBlocksRefresh ? { refresh_stopped: true } : {}),
+      ...(target.diagnosticCode && stale ? { message: "更新失敗，顯示上次資料" } : {}),
+    };
+  } catch (error) {
+    return {
+      request_id: requestId, place_id: candidate.placeId, forecast_date: candidate.forecastDate,
+      status: "unavailable", message: "區段天氣資料不完整，請稍後重試",
+      diagnostic_code: error instanceof Error ? error.message : "INTERVAL_SUMMARY_FAILED",
+    };
+  }
+};
+
 const handleRequest = async (request: Request) => {
   if (request.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (request.method !== "POST") return json({ error: "METHOD_NOT_ALLOWED" }, 405);
@@ -631,8 +924,10 @@ const handleRequest = async (request: Request) => {
         }
       }
       const results: WeatherResult[] = [];
+      const dailyCandidates = candidates.filter((candidate) => !candidate.arrivalTime);
+      const intervalCandidates = candidates.filter((candidate) => Boolean(candidate.arrivalTime));
       const unique = new Map<string, Candidate>();
-      for (const candidate of candidates) {
+      for (const candidate of dailyCandidates) {
         const key = `${candidate.placeId}|${candidate.forecastDate}`;
         unique.set(key, preferSharedTargetCandidate(unique.get(key), candidate));
       }
@@ -653,6 +948,27 @@ const handleRequest = async (request: Request) => {
           }));
           results.push(...groupResults.filter((result): result is WeatherResult => result !== null));
         }
+      }
+      for (let offset = 0; offset < intervalCandidates.length; offset += 10) {
+        const group = intervalCandidates.slice(offset, offset + 10);
+        const groupResults = await Promise.all(group.map(async (candidate) => {
+          const { data: trip } = await admin.from("trips").select("id, departure_date, content")
+            .eq("id", candidate.tripId).maybeSingle();
+          if (!trip || !getStoredCandidate(trip as Record<string, unknown>, candidate)) return null;
+          return withTimeout(
+            getIntervalForecastForCandidate(admin, candidate, crypto.randomUUID(), true),
+            WEATHER_CANDIDATE_TIMEOUT_MS,
+            "WEATHER_REQUEST_TIMEOUT",
+          ).catch((error) => ({
+            request_id: candidate.cardId,
+            place_id: candidate.placeId,
+            forecast_date: candidate.forecastDate,
+            status: "unavailable" as const,
+            message: "暫時無法取得天氣",
+            diagnostic_code: safeErrorCode(error),
+          }));
+        }));
+        results.push(...groupResults.filter((result): result is WeatherResult => result !== null));
       }
       return json({ results });
     }
@@ -681,10 +997,13 @@ const handleRequest = async (request: Request) => {
         typeof item.card_id !== "string" || typeof item.place_id !== "string") continue;
       const candidate: Candidate = {
         tripId: trip.id, dayNumber: item.day_number as number, cardId: item.card_id,
-        placeId: item.place_id, forecastDate: item.forecast_date, arrivalTime: "",
+        placeId: item.place_id, forecastDate: item.forecast_date, arrivalTime: "", departureTime: "",
       };
       const verified = getStoredCandidate(trip as Record<string, unknown>, candidate);
-      if (verified) {
+      const timeSnapshotMatches = Boolean(verified && matchesStoredWeatherCardTimeSnapshot(
+        verified, item.arrival_time, item.departure_time,
+      ));
+      if (verified && timeSnapshotMatches) {
         candidates.push(verified);
       } else {
         // 不回傳 card／place 內容；只回傳安全診斷碼，避免前端將「卡片不存在」誤判成服務逾時。
@@ -698,13 +1017,24 @@ const handleRequest = async (request: Request) => {
         });
       }
     }
-    const unique = new Map<string, Candidate>();
+    const dailyCandidates = candidates.filter((candidate) => !candidate.arrivalTime);
+    const intervalCandidates = candidates.filter((candidate) => Boolean(candidate.arrivalTime));
+    const allowedTargets = new Set<string>();
     for (const candidate of candidates) {
+      const mode = candidate.arrivalTime ? "interval" : "daily";
+      const key = `${mode}|${candidate.placeId}|${candidate.forecastDate}`;
+      if (allowedTargets.has(key)) continue;
+      if (allowedTargets.size < 10) allowedTargets.add(key);
+    }
+    const unique = new Map<string, Candidate>();
+    for (const candidate of dailyCandidates) {
       const key = `${candidate.placeId}|${candidate.forecastDate}`;
-      unique.set(key, preferSharedTargetCandidate(unique.get(key), candidate));
+      if (allowedTargets.has(`daily|${key}`)) {
+        unique.set(key, preferSharedTargetCandidate(unique.get(key), candidate));
+      }
     }
     const uniqueResults = new Map<string, WeatherResult>();
-    const targets = [...unique.entries()].slice(0, 10);
+    const targets = [...unique.entries()];
     for (let offset = 0; offset < targets.length; offset += 5) {
       const group = targets.slice(offset, offset + 5);
       const groupResults = await Promise.all(group.map(async ([key, candidate]) => {
@@ -733,14 +1063,60 @@ const handleRequest = async (request: Request) => {
       }));
       for (const [key, result] of groupResults) uniqueResults.set(key, result);
     }
-    const results = [...rejectedItems, ...candidates.map((candidate) => {
+    const dailyResults = dailyCandidates.map((candidate) => {
       const result = uniqueResults.get(`${candidate.placeId}|${candidate.forecastDate}`);
       return result ? { ...result, request_id: candidate.cardId } : {
         request_id: candidate.cardId, place_id: candidate.placeId, forecast_date: candidate.forecastDate,
         status: "unavailable" as const, message: "未取得有效天氣回應，請稍後重試",
       };
-    })];
-    return json({ results });
+    });
+    const intervalTargetKeys = new Set(
+      [...allowedTargets]
+        .filter((key) => key.startsWith("interval|"))
+        .map((key) => key.slice("interval|".length)),
+    );
+    const intervalTargets = intervalCandidates.filter((candidate) =>
+      intervalTargetKeys.has(`${candidate.placeId}|${candidate.forecastDate}`)
+    );
+    const intervalResults: WeatherResult[] = intervalCandidates
+      .filter((candidate) => !intervalTargetKeys.has(`${candidate.placeId}|${candidate.forecastDate}`))
+      .map((candidate) => ({
+        request_id: candidate.cardId,
+        place_id: candidate.placeId,
+        forecast_date: candidate.forecastDate,
+        status: "unavailable" as const,
+        message: "本次預報目標數量過多，請稍後重試",
+        diagnostic_code: "WEATHER_BATCH_LIMIT",
+      }));
+    for (let offset = 0; offset < intervalTargets.length; offset += 5) {
+      const group = intervalTargets.slice(offset, offset + 5);
+      const groupResults = await Promise.all(group.map(async (candidate) => {
+        const traceId = crypto.randomUUID();
+        try {
+          return await withTimeout(
+            getIntervalForecastForCandidate(admin, candidate, traceId),
+            WEATHER_CANDIDATE_TIMEOUT_MS,
+            "WEATHER_REQUEST_TIMEOUT",
+          );
+        } catch (error) {
+          const errorCode = safeErrorCode(error);
+          logWeatherDiagnostic("interval_forecast_request_failed", traceId, "interval_candidate_timeout", {
+            error_code: errorCode,
+          });
+          return {
+            request_id: candidate.cardId,
+            place_id: candidate.placeId,
+            forecast_date: candidate.forecastDate,
+            status: "unavailable" as const,
+            message: "暫時無法取得天氣",
+            diagnostic_code: errorCode,
+            trace_id: traceId,
+          };
+        }
+      }));
+      intervalResults.push(...groupResults);
+    }
+    return json({ results: [...rejectedItems, ...dailyResults, ...intervalResults] });
   } catch (error) {
     const message = error instanceof Error ? error.message : "WEATHER_SERVICE_FAILED";
     const missingVariable = /^Missing ([A-Z0-9_]+)$/.exec(message)?.[1];

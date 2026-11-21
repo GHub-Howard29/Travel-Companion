@@ -88,3 +88,14 @@ Startup-only 禁止：
 - 遵守 AGENTS、適用 Rules、Node Runtime Rule、專案安全要求及使用者明確指示。
 - 本 Skill 不自行授權修改設定、程式碼、資料庫或部署。
 - 不得將特定主機 Node 路徑套用至其他主機。
+
+## 9. 本機測試資料庫上傳／下載的長時間工作追蹤（強制）
+適用於 `npm run testdata:upload`、`npm run testdata:download` 及其 `--initialize` 變體。
+
+1. 每次同步命令只啟動一次。若 Bash 回傳 `running=true`、`job_id`、背景工作 ID 或僅回傳 PID／前景等待逾時，代表命令可能仍在執行；不得把等待逾時當成失敗，也不得再次啟動同一同步命令。
+2. 若有 `job_id`，使用 Durable Jobs 的 `job_manage action=wait` 以約 30 秒為一段持續等待，直到狀態為 completed／failed／cancelled；再用 `job_manage action=read` 取得完整最終輸出與 exit code。若只得到 PID 或未直接提供 job_id，先用 `job_manage action=list` 找出相同 Project、命令及 PID 對應的工作，再 read／wait。不可用 `bash_process` 代替 Durable Jobs 管理。
+3. 在原工作尚未確認終態前，不得重新執行上傳或下載，不得另開第二個同步工作，也不得以第二次執行結果代替第一次結果。
+4. 只有工作終態、exit code 與程式最終 JSON 一併取得後，才可回報成功或失敗。上傳須按實際輸出分別確認 `uploaded`、`committed`、`pushed`；下載須區分 `downloaded=true / applied=true`（已匯入）與 `downloaded=false / unchanged`（未匯入）。不可只看 exit code 或前景 Bash 回應。
+5. 若工作 failed／非零退出，先讀取完整日誌並檢查 Git、資料庫及 metadata 的實際狀態，判斷是否已有部分或完整副作用；未釐清前不得盲目重跑。
+6. 同步工作完成後，依操作類型做最小唯讀驗證：上傳確認 Git manifest／提交及遠端分支；下載確認本機同步資料與三個時間戳。不得為驗證而再執行一次上傳／下載。
+7. 對使用者回報時，分清「前景等待逾時」「背景工作仍執行」「工作已完成」「資料實際已匯入／已發布」；記錄開始與完成時間、最終狀態、exit code、關鍵 JSON 結果。

@@ -7,6 +7,10 @@ import { isExpenseAttachmentPathForTrip } from "../utils/attachmentUtils";
 import { removeExpiredTravelEstimates } from "../utils/itineraryTravel";
 import { sanitizeItineraryCoverPhotos } from "../utils/itineraryCoverPhoto";
 import { scheduleStorageDeletion } from "./deferredStorageDeletionService";
+import {
+  saveNonItineraryTripCloudFields,
+  type NonItineraryTripContentPatch,
+} from "./nonItineraryTripCloudSave";
 
 interface CloudTripRow {
   id: string;
@@ -376,9 +380,21 @@ export const updateCloudTripRecord = async (
   record: StoredTripRecord,
   expectedUpdatedAt: string,
 ): Promise<StoredTripRecord> => {
+  // Generic Trip metadata updates must never change daysData. Preserve the latest
+  // Cloud snapshot explicitly; itinerary changes are saved only by the RPC.
+  const latest = await getCloudTripRecord(supabase, record.meta.id);
+  if (!latest) throw new Error("無法取得最新雲端旅程資料，非行程更新已停止。");
+  const payload = toCloudTripInsert(record);
+  const safePayload = {
+    ...payload,
+    content: {
+      ...payload.content,
+      daysData: latest.detail.content.daysData,
+    },
+  };
   const { data, error } = await supabase
     .from("trips")
-    .update(toCloudTripInsert(record))
+    .update(safePayload)
     .eq("id", record.meta.id)
     .eq("updated_at", expectedUpdatedAt)
     .select(
@@ -394,6 +410,28 @@ export const updateCloudTripRecord = async (
     throw new Error("雲端回傳的旅程資料格式不正確");
   }
   return updatedRecord;
+};
+
+/**
+ * Update only non-itinerary content while preserving the latest Cloud daysData.
+ * The caller must pass a narrow, explicitly allowed content patch. A row CAS
+ * protects the read/merge/write window: an itinerary save between the read and
+ * update causes a conflict instead of allowing a stale snapshot to overwrite it.
+ */
+export const updateCloudTripNonItineraryFields = async (
+  supabase: SupabaseClient,
+  tripId: string,
+  contentPatch: NonItineraryTripContentPatch,
+): Promise<StoredTripRecord> => {
+  if (!navigator.onLine) {
+    throw new Error("非行程卡片雲端更新需要網路連線");
+  }
+
+  return saveNonItineraryTripCloudFields(tripId, contentPatch, {
+    readLatest: (targetTripId) => getCloudTripRecord(supabase, targetTripId),
+    compareAndSwap: (record, expectedUpdatedAt) =>
+      updateCloudTripRecord(supabase, record, expectedUpdatedAt),
+  });
 };
 
 export const cloudTripExists = async (

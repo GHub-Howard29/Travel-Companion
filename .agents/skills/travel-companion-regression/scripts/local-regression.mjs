@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import process from "node:process";
+import { randomUUID } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 
 const mode = process.argv[2] ?? "status";
@@ -169,8 +170,10 @@ const prepareMode = async () => {
   }
 
   const fixture = JSON.parse(readFileSync(resolve(root, "public/trips/group-tour-2026-10.json"), "utf8"));
+  // Local browser fixture uses a fresh synthetic ID; static seed IDs may be protected by permanent tombstones.
+  const fixtureId = `v391-local-browser-${randomUUID()}`;
   const tripRow = {
-    id: fixture.id,
+    id: fixtureId,
     title: fixture.title,
     departure_date: fixture.departureDate,
     participants: fixture.participants ?? [],
@@ -203,16 +206,17 @@ const prepareMode = async () => {
   console.log(JSON.stringify({
     prepared: true,
     user: email,
-    tripId: fixture.id,
+    tripId: fixtureId,
     envCreated,
     functionEnvCreated,
     functionEnvUpdated,
     scope: "loopback-only",
   }, null, 2));
+  return fixtureId;
 };
 
 const browserBootstrapMode = async () => {
-  await prepareMode();
+  const fixtureId = await prepareMode();
   const { apiUrl, anonKey } = getLocalConfig();
   const [appStatus, edgeStatus] = await Promise.all([
     probe("http://127.0.0.1:5173/Travel-Companion/"),
@@ -238,14 +242,15 @@ const browserBootstrapMode = async () => {
       url: apiUrl,
       publishableKey: anonKey,
     },
-    expectedTripId: "group-tour-2026-10",
+    expectedTripId: fixtureId,
     sessionPolicy: "若 App 沒有 email/password 登入介面，以瀏覽器內的 Supabase client 執行 signInWithPassword；不得直接寫入、輸出或複製 access token。",
     scope: "loopback-only synthetic fixture",
   }, null, 2));
+  return fixtureId;
 };
 
 const verifyCommonsV3913LoopbackBoundary = async ({ url }) => {
-  await browserBootstrapMode();
+  const fixtureId = await browserBootstrapMode();
   const { apiUrl, anonKey } = getLocalConfig();
   const user = createClient(apiUrl, anonKey, { auth: { autoRefreshToken: false, persistSession: false } });
   const { data: authData, error: authError } = await user.auth.signInWithPassword({
@@ -271,7 +276,7 @@ const verifyCommonsV3913LoopbackBoundary = async ({ url }) => {
   const bogusToken = "00000000-0000-0000-0000-000000000000";
   const broad = await callEdge({
     action: "commonsPhotoSearch",
-    tripId: "group-tour-2026-10",
+    tripId: fixtureId,
     query: "中山站",
     batchContractVersion: 2,
     batchToken: bogusToken,
@@ -282,7 +287,7 @@ const verifyCommonsV3913LoopbackBoundary = async ({ url }) => {
 
   const category = await callEdge({
     action: "commonsCategoryPhotos",
-    tripId: "group-tour-2026-10",
+    tripId: fixtureId,
     category: "Taiwan",
     batchContractVersion: 2,
     batchToken: bogusToken,
@@ -293,7 +298,7 @@ const verifyCommonsV3913LoopbackBoundary = async ({ url }) => {
 
   const categories = await callEdge({
     action: "commonsPhotoCategories",
-    tripId: "group-tour-2026-10",
+    tripId: fixtureId,
     fileTitle: "not-a-file-title",
   });
   if (categories.response.status !== 400) {
@@ -302,7 +307,7 @@ const verifyCommonsV3913LoopbackBoundary = async ({ url }) => {
 
   const legacy = await callEdge({
     action: "commonsPrecisionSearch",
-    tripId: "group-tour-2026-10",
+    tripId: fixtureId,
     query: "中山站",
   });
   if (legacy.response.status !== 410) {
@@ -335,9 +340,14 @@ const verifyMode = async () => {
   const admin = createClient(apiUrl, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } });
   const guest = createClient(apiUrl, anonKey, { auth: { autoRefreshToken: false, persistSession: false } });
   const user = createClient(apiUrl, anonKey, { auth: { autoRefreshToken: false, persistSession: false } });
+  const fixture = JSON.parse(readFileSync(resolve(root, "public/trips/group-tour-2026-10.json"), "utf8"));
+  const fixtureId = `v391-local-verify-${randomUUID()}`;
+  const fixtureRow = { id: fixtureId, title: fixture.title, departure_date: fixture.departureDate, participants: fixture.participants ?? [], currency_config: fixture.currencyConfig ?? { code: "JPY", symbol: "￥" }, sidebar_config: fixture.sidebarConfig ?? [], content: fixture.content ?? {} };
+  const { error: fixtureError } = await admin.from("trips").upsert(fixtureRow, { onConflict: "id" });
+  if (fixtureError) throw fixtureError;
 
   console.log("[verify] checking service Trip");
-  const { error: serviceTripError } = await admin.from("trips").select("id").eq("id", "group-tour-2026-10").single();
+  const { error: serviceTripError } = await admin.from("trips").select("id").eq("id", fixtureId).single();
   if (serviceTripError) throw new Error(`service_role Trip grant 失敗：${serviceTripError.message}`);
   const { error: guestOtherInfoError } = await guest.from("other_info_items").select("id").limit(1);
   if (guestOtherInfoError) throw new Error(`anon Data API grant 失敗：${guestOtherInfoError.message}`);
@@ -347,7 +357,7 @@ const verifyMode = async () => {
     password: "V391-local-test!",
   });
   if (authError || !authData.session) throw new Error(`本機管理者登入失敗：${authError?.message ?? "沒有 session"}`);
-  const { data: trips, error: tripError } = await user.from("trips").select("id").eq("id", "group-tour-2026-10");
+  const { data: trips, error: tripError } = await user.from("trips").select("id").eq("id", fixtureId);
   if (tripError || trips.length !== 1) throw new Error(`管理者 Trip 載入失敗：${tripError?.message ?? "找不到 fixture"}`);
 
   const callEdge = async (body) => {
@@ -368,7 +378,7 @@ const verifyMode = async () => {
 
   const broadBoundary = await callEdge({
     action: "commonsPhotoSearch",
-    tripId: "group-tour-2026-10",
+    tripId: fixtureId,
     query: "中山站",
     batchContractVersion: 2,
     batchToken: bogusToken,
@@ -379,7 +389,7 @@ const verifyMode = async () => {
 
   const categoryBoundary = await callEdge({
     action: "commonsCategoryPhotos",
-    tripId: "group-tour-2026-10",
+    tripId: fixtureId,
     category: "Taiwan",
     batchContractVersion: 2,
     batchToken: bogusToken,
@@ -390,7 +400,7 @@ const verifyMode = async () => {
 
   const categoryInputBoundary = await callEdge({
     action: "commonsPhotoCategories",
-    tripId: "group-tour-2026-10",
+    tripId: fixtureId,
     fileTitle: "not-a-file-title",
   });
   if (categoryInputBoundary.response.status !== 400) {
@@ -399,7 +409,7 @@ const verifyMode = async () => {
 
   const legacyBoundary = await callEdge({
     action: "commonsPrecisionSearch",
-    tripId: "group-tour-2026-10",
+    tripId: fixtureId,
     query: "中山站",
   });
   if (legacyBoundary.response.status !== 410) {

@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 const ITINERARY_EDIT_CLIENT_STORAGE_KEY = "travel_companion_itinerary_edit_client_id";
 
 const getItineraryEditClientId = (): string => {
+  if (typeof sessionStorage === "undefined") return crypto.randomUUID();
   const existing = sessionStorage.getItem(ITINERARY_EDIT_CLIENT_STORAGE_KEY);
   if (existing && /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(existing)) {
     return existing;
@@ -29,37 +30,38 @@ export interface ItineraryCardEditLeaseClaim {
   expiresAt: string | null;
 }
 
+const readLeaseRow = (data: unknown): ItineraryCardEditLeaseClaim => {
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!row || typeof row !== "object") throw new Error("無法確認旅程編輯租約回應。");
+  const value = row as Record<string, unknown>;
+  return {
+    acquired: value.acquired === true,
+    ownerUserId: typeof value.owner_user_id === "string" ? value.owner_user_id : null,
+    ownerClientId: typeof value.owner_client_id === "string" ? value.owner_client_id : null,
+    expiresAt: typeof value.expires_at === "string" ? value.expires_at : null,
+  };
+};
+
 export const claimItineraryCardEditLease = async (
   supabase: SupabaseClient,
   tripId: string,
-  cardId: string,
+  _cardId: string,
 ): Promise<ItineraryCardEditLeaseClaim> => {
-  const { data, error } = await supabase.rpc("tc_claim_itinerary_card_edit_lease", {
+  const { data, error } = await supabase.rpc("tc_claim_itinerary_trip_edit_lease", {
     p_trip_id: tripId,
-    p_card_id: cardId,
     p_client_id: ITINERARY_EDIT_CLIENT_ID,
   });
   if (error) throw error;
-  const row = Array.isArray(data) ? data[0] : data;
-  if (!row || typeof row.acquired !== "boolean") {
-    throw new Error("無法確認卡片編輯權，請稍後重試。");
-  }
-  return {
-    acquired: row.acquired,
-    ownerUserId: typeof row.owner_user_id === "string" ? row.owner_user_id : null,
-    ownerClientId: typeof row.owner_client_id === "string" ? row.owner_client_id : null,
-    expiresAt: typeof row.expires_at === "string" ? row.expires_at : null,
-  };
+  return readLeaseRow(data);
 };
 
 export const renewItineraryCardEditLease = async (
   supabase: SupabaseClient,
   tripId: string,
-  cardId: string,
+  _cardId: string,
 ): Promise<boolean> => {
-  const { data, error } = await supabase.rpc("tc_renew_itinerary_card_edit_lease", {
+  const { data, error } = await supabase.rpc("tc_renew_itinerary_trip_edit_lease", {
     p_trip_id: tripId,
-    p_card_id: cardId,
     p_client_id: ITINERARY_EDIT_CLIENT_ID,
   });
   if (error) throw error;
@@ -69,11 +71,10 @@ export const renewItineraryCardEditLease = async (
 export const releaseItineraryCardEditLease = async (
   supabase: SupabaseClient,
   tripId: string,
-  cardId: string,
+  _cardId: string,
 ): Promise<void> => {
-  const { error } = await supabase.rpc("tc_release_itinerary_card_edit_lease", {
+  const { error } = await supabase.rpc("tc_release_itinerary_trip_edit_lease", {
     p_trip_id: tripId,
-    p_card_id: cardId,
     p_client_id: ITINERARY_EDIT_CLIENT_ID,
   });
   if (error) throw error;
@@ -83,26 +84,18 @@ export const listItineraryCardEditLeases = async (
   supabase: SupabaseClient,
   tripId: string,
 ): Promise<ItineraryCardEditLease[]> => {
-  const { data, error } = await supabase.rpc("tc_list_itinerary_card_edit_leases", {
+  const { data, error } = await supabase.rpc("tc_list_itinerary_trip_edit_leases", {
     p_trip_id: tripId,
   });
   if (error) throw error;
   if (data == null) return [];
-  if (!Array.isArray(data)) {
-    throw new Error("卡片編輯租約清單回應格式錯誤。");
-  }
+  if (!Array.isArray(data)) throw new Error("旅程編輯租約清單回應格式錯誤。");
   return data.flatMap((value): ItineraryCardEditLease[] => {
     if (!value || typeof value !== "object") return [];
     const row = value as Record<string, unknown>;
-    if (
-      typeof row.card_id !== "string" ||
-      typeof row.owner_user_id !== "string" ||
-      typeof row.expires_at !== "string"
-    ) {
-      return [];
-    }
+    if (typeof row.owner_user_id !== "string" || typeof row.expires_at !== "string") return [];
     return [{
-      cardId: row.card_id,
+      cardId: "__trip__",
       ownerUserId: row.owner_user_id,
       ownerClientId: typeof row.owner_client_id === "string" ? row.owner_client_id : "",
       expiresAt: row.expires_at,

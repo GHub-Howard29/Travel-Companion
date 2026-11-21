@@ -34,6 +34,7 @@ import {
 } from "lucide-react";
 
 import type { Folder, ItineraryItem, SavedTravelEstimate, TravelMode, TripDetail } from "../types";
+import type { ItineraryResolutionChoice, ItinerarySyncState } from "../storage/itinerarySyncStorage";
 import {
   getGoogleMapsPlaceUrl,
   handlePlaceBrowse,
@@ -131,6 +132,10 @@ interface UserCoverSelection {
 }
 
 interface ItineraryPageProps {
+  recoveryError?: string | null;
+  itinerarySyncState?: ItinerarySyncState | null;
+  onItineraryResolutionChoice?: (choice: ItineraryResolutionChoice) => void;
+  onApplyItineraryResolution?: () => Promise<boolean>;
   supabase: SupabaseClient;
   trip: TripDetail;
   activeDay: number;
@@ -139,11 +144,55 @@ interface ItineraryPageProps {
   isHistoricalTripReadOnly: boolean;
   isOnline: boolean;
   onActiveDayChange: (day: number) => void;
-  onSaveTripDetail: (trip: TripDetail) => Promise<void>;
+  onSaveTripDetail: (trip: TripDetail) => Promise<{ localSaved: boolean; cloudSynced: boolean }>;
   otherInfoFolders: Folder[];
   onOpenOtherInfoFolder: (folderId: string) => void;
   onManageModeChange?: (isManaging: boolean) => void;
 }
+
+const ITINERARY_CONFLICT_FIELD_LABELS: Record<string, string> = {
+  time: "到達／離開時間",
+  title: "行程名稱",
+  type: "類型",
+  desc: "說明",
+  location: "地點文字",
+  place: "地圖地點",
+  weather: "天氣顯示",
+  travelKind: "交通類型",
+  travelMode: "交通模式／計算設定",
+  otherInfoFolder: "其他資訊分類",
+  coverPhoto: "封面照片",
+  travelEstimate: "交通估算",
+  "duplicate-create": "同一張卡片在兩端同時建立",
+  deletion: "刪除與修改",
+  dayKey: "跨日搬移",
+  order: "當日排序",
+  id: "卡片識別碼",
+};
+
+const getConflictKindLabel = (kind: string): string => ({
+  field: "欄位衝突",
+  "delete-edit": "刪除／修改衝突",
+  move: "跨日搬移衝突",
+  order: "排序衝突",
+  "legacy-id": "缺少卡片識別碼",
+  "duplicate-id": "卡片識別碼重複",
+}[kind] ?? "資料衝突");
+
+const ITINERARY_CONFLICT_FIELD_GROUPS = [
+  { key: "time", label: "到達／離開時間" },
+  { key: "title", label: "行程名稱" },
+  { key: "type", label: "類型" },
+  { key: "desc", label: "說明" },
+  { key: "location", label: "地點文字" },
+  { key: "place", label: "地圖地點" },
+  { key: "weather", label: "天氣顯示" },
+  { key: "travelKind", label: "交通類型" },
+  { key: "travelMode", label: "交通模式／計算設定" },
+  { key: "otherInfoFolder", label: "其他資訊分類" },
+  { key: "coverPhoto", label: "封面照片" },
+  { key: "travelEstimate", label: "交通估算" },
+] as const;
 
 const ITINERARY_TYPE_OPTIONS = [
   { type: "交通", typeColor: "bg-emerald-50 text-emerald-700 border-emerald-200" },
@@ -153,6 +202,158 @@ const ITINERARY_TYPE_OPTIONS = [
   { type: "自駕", typeColor: "bg-orange-50 text-orange-700 border-orange-200" },
   { type: "其他", typeColor: "bg-slate-50 text-slate-700 border-slate-200" },
 ];
+
+const renderConflictCardValue = (card: ItineraryItem | null | undefined): ReactNode => {
+  if (!card) return <span className="text-slate-400">此版本已刪除此卡片</span>;
+  return (
+    <div className="space-y-1 text-xs text-slate-700">
+      <p className="font-bold">{card.title || "未命名活動"}</p>
+      <p>時間：{card.time || "—"}{card.departureTime ? ` – ${card.departureTime}` : ""}</p>
+      <p>類型：{card.type || "—"}</p>
+      <p>地點：{card.location || "—"}</p>
+      {card.desc && <p className="whitespace-pre-wrap break-words">{card.desc}</p>}
+    </div>
+  );
+};
+
+const ItineraryConflictPanel = ({
+  state,
+  isOnline,
+  canResolve,
+  onChoice,
+  onApply,
+}: {
+  state: ItinerarySyncState;
+  isOnline: boolean;
+  canResolve: boolean;
+  onChoice?: (choice: ItineraryResolutionChoice) => void;
+  onApply?: () => Promise<boolean>;
+}) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [isApplying, setIsApplying] = useState(false);
+  const [applyError, setApplyError] = useState<string | null>(null);
+  const choices = state.resolutionChoices ?? [];
+  const conflicts = state.conflicts ?? [];
+  const unresolvedCount = conflicts.filter((conflict) =>
+    conflict.kind === "legacy-id" || conflict.kind === "duplicate-id" ||
+    !choices.some((choice) => choice.conflictId === conflict.id),
+  ).length;
+  const choiceFor = (conflictId: string) => choices.find((choice) => choice.conflictId === conflictId);
+  const updateChoice = (choice: ItineraryResolutionChoice) => {
+    setApplyError(null);
+    onChoice?.(choice);
+  };
+  const apply = async () => {
+    if (!onApply || isApplying || unresolvedCount > 0 || !isOnline || !canResolve) return;
+    setIsApplying(true);
+    setApplyError(null);
+    try {
+      const applied = await onApply();
+      if (!applied) setApplyError("尚未確認雲端保存；所有衝突選擇仍保留，請重新連線後再試。");
+    } catch (error) {
+      setApplyError(error instanceof Error ? error.message : "衝突處理尚未完成；選擇與本機資料仍保留。");
+    } finally {
+      setIsApplying(false);
+    }
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <p className="font-bold">有 {conflicts.length} 筆行程衝突需要確認</p>
+          <p className="mt-0.5 text-xs">尚有 {unresolvedCount} 筆未選擇處理方式；未完成前會保留本機資料。</p>
+        </div>
+        <button type="button" onClick={() => setIsExpanded((value) => !value)} aria-expanded={isExpanded} className="rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-bold text-amber-900 hover:bg-amber-100">
+          {isExpanded ? "收合衝突" : "檢視衝突"}
+        </button>
+      </div>
+      {!isOnline && <p className="text-xs font-semibold text-amber-900" role="status">離線中；選擇只會保存在本機，標記為「待上線套用」，不會顯示已同步。</p>}
+      {state.lastError && <p className="text-xs text-rose-800" role="alert">{state.lastError}</p>}
+      {isExpanded && (
+        <div className="space-y-3 border-t border-amber-200 pt-3">
+          {conflicts.map((conflict) => {
+            const selected = choiceFor(conflict.id);
+            const cardTitle = conflict.localCard?.title ?? conflict.cloudCard?.title ?? conflict.baseCard?.title;
+            const fieldGroups = conflict.kind === "field"
+              ? ITINERARY_CONFLICT_FIELD_GROUPS.filter((field) => conflict.fields.includes(field.key))
+              : [];
+            const selectedFields = selected?.kind === "fields" ? selected.fields : {};
+            const isStructural = conflict.kind === "legacy-id" || conflict.kind === "duplicate-id";
+            const selectedForConflict = isStructural
+              ? false
+              : selected?.kind === "fields"
+                ? fieldGroups.length > 0 && fieldGroups.every((field) => selected.fields[field.key] === "local" || selected.fields[field.key] === "cloud")
+                : conflict.kind === "order"
+                  ? selected?.kind === "order"
+                  : Boolean(selected && (selected.kind === "local" || selected.kind === "cloud"));
+            return (
+              <article key={conflict.id} className="rounded-lg border border-amber-200 bg-white p-3">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div>
+                    <p className="text-sm font-bold text-slate-900">{cardTitle || (conflict.kind === "order" ? `第 ${conflict.dayKey ?? "?"} 天` : "無法識別的行程卡片")}</p>
+                    <p className="mt-0.5 text-xs text-slate-600">{conflict.dayKey ? `第 ${conflict.dayKey} 天 · ` : ""}{getConflictKindLabel(conflict.kind)} · {conflict.fields.map((field) => ITINERARY_CONFLICT_FIELD_LABELS[field] ?? field).join("、")}</p>
+                  </div>
+                  <span className="text-xs font-semibold text-amber-800">{selectedForConflict ? (!isOnline ? "待上線套用" : "已選擇，待套用") : "待處理"}</span>
+                </div>
+                {conflict.kind === "order" ? (
+                  <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                    <button type="button" disabled={!canResolve || !onChoice} onClick={() => updateChoice({ conflictId: conflict.id, kind: "order", order: "local" })} className={`rounded-lg border px-3 py-2 text-xs font-bold ${selected?.kind === "order" && selected.order === "local" ? "border-emerald-600 bg-emerald-50 text-emerald-800" : "border-slate-200 bg-white text-slate-700"}`}>採用本機排序</button>
+                    <button type="button" disabled={!canResolve || !onChoice} onClick={() => updateChoice({ conflictId: conflict.id, kind: "order", order: "cloud" })} className={`rounded-lg border px-3 py-2 text-xs font-bold ${selected?.kind === "order" && selected.order === "cloud" ? "border-emerald-600 bg-emerald-50 text-emerald-800" : "border-slate-200 bg-white text-slate-700"}`}>採用雲端排序</button>
+                  </div>
+                ) : isStructural ? (
+                  <p className="mt-3 text-xs text-rose-800">此資料缺少可靠的卡片識別碼，系統不會猜測配對或自動覆寫。需先修復識別資料，才能安全處理。</p>
+                ) : conflict.kind === "delete-edit" ? (
+                  <>
+                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                      <div className="rounded-lg border border-emerald-100 bg-emerald-50/50 p-2"><p className="mb-1 text-xs font-bold text-emerald-900">本機版本（第 {conflict.localDayKey ?? "—"} 天）</p>{renderConflictCardValue(conflict.localCard)}</div>
+                      <div className="rounded-lg border border-sky-100 bg-sky-50/50 p-2"><p className="mb-1 text-xs font-bold text-sky-900">雲端版本（第 {conflict.cloudDayKey ?? "—"} 天）</p>{renderConflictCardValue(conflict.cloudCard)}</div>
+                    </div>
+                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                      <button type="button" disabled={!canResolve || !onChoice} onClick={() => updateChoice({ conflictId: conflict.id, kind: "local" })} className={`rounded-lg border px-3 py-2 text-xs font-bold ${selected?.kind === "local" ? "border-emerald-600 bg-emerald-50 text-emerald-800" : "border-slate-200 bg-white text-slate-700"}`}>{conflict.localCard ? "保留本機修改版本" : "保留本機刪除"}</button>
+                      <button type="button" disabled={!canResolve || !onChoice} onClick={() => updateChoice({ conflictId: conflict.id, kind: "cloud" })} className={`rounded-lg border px-3 py-2 text-xs font-bold ${selected?.kind === "cloud" ? "border-emerald-600 bg-emerald-50 text-emerald-800" : "border-slate-200 bg-white text-slate-700"}`}>{conflict.cloudCard ? "採用雲端修改版本" : "採用雲端刪除"}</button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                      <div className="rounded-lg border border-emerald-100 bg-emerald-50/50 p-2"><p className="mb-1 text-xs font-bold text-emerald-900">本機版本（第 {conflict.localDayKey ?? "—"} 天）</p>{renderConflictCardValue(conflict.localCard)}</div>
+                      <div className="rounded-lg border border-sky-100 bg-sky-50/50 p-2"><p className="mb-1 text-xs font-bold text-sky-900">雲端版本（第 {conflict.cloudDayKey ?? "—"} 天）</p>{renderConflictCardValue(conflict.cloudCard)}</div>
+                    </div>
+                    {conflict.fields.includes("duplicate-create") && <p className="mt-2 text-xs text-amber-800">同一識別碼在本機與雲端各自建立；請選擇要保留的完整版本，不會自動合併。</p>}
+                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                      <button type="button" disabled={!canResolve || !onChoice} onClick={() => updateChoice({ conflictId: conflict.id, kind: "local" })} className={`rounded-lg border px-3 py-2 text-xs font-bold ${selected?.kind === "local" ? "border-emerald-600 bg-emerald-50 text-emerald-800" : "border-slate-200 bg-white text-slate-700"}`}>保留本機版本</button>
+                      <button type="button" disabled={!canResolve || !onChoice} onClick={() => updateChoice({ conflictId: conflict.id, kind: "cloud" })} className={`rounded-lg border px-3 py-2 text-xs font-bold ${selected?.kind === "cloud" ? "border-emerald-600 bg-emerald-50 text-emerald-800" : "border-slate-200 bg-white text-slate-700"}`}>採用雲端版本</button>
+                    </div>
+                    {fieldGroups.length > 0 && conflict.localCard && conflict.cloudCard && (
+                      <div className="mt-3 rounded-lg bg-slate-50 p-2">
+                        <p className="mb-2 text-xs font-bold text-slate-700">逐欄選擇</p>
+                        {fieldGroups.map((field) => (
+                          <div key={field.key} className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 py-2 first:border-0">
+                            <span className="text-xs font-semibold text-slate-700">{field.label}</span>
+                            <div className="flex gap-3 text-xs">
+                              <label className="inline-flex items-center gap-1"><input type="radio" name={`resolution-${conflict.id}-${field.key}`} checked={selectedFields[field.key] === "local"} disabled={!canResolve || !onChoice} onChange={() => updateChoice({ conflictId: conflict.id, kind: "fields", fields: { ...selectedFields, [field.key]: "local" } })} />本機</label>
+                              <label className="inline-flex items-center gap-1"><input type="radio" name={`resolution-${conflict.id}-${field.key}`} checked={selectedFields[field.key] === "cloud"} disabled={!canResolve || !onChoice} onChange={() => updateChoice({ conflictId: conflict.id, kind: "fields", fields: { ...selectedFields, [field.key]: "cloud" } })} />雲端</label>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )}
+              </article>
+            );
+          })}
+          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-amber-200 pt-3">
+            <span className="text-xs text-slate-600">{unresolvedCount === 0 ? (!isOnline ? "全部已選擇；上線後仍須重新核對雲端版本" : "全部已選擇；套用前會再次確認最新雲端版本") : `尚有 ${unresolvedCount} 筆衝突未選擇`}</span>
+            <button type="button" onClick={() => void apply()} disabled={!canResolve || !isOnline || isApplying || unresolvedCount > 0 || !onApply} className="rounded-lg bg-emerald-700 px-4 py-2 text-xs font-bold text-white disabled:opacity-50">{isApplying ? "正在確認並套用…" : "確認並套用選擇"}</button>
+          </div>
+          {applyError && <p className="text-xs text-rose-800" role="alert">{applyError}</p>}
+        </div>
+      )}
+    </div>
+  );
+};
 
 const createEmptyItineraryDraft = (): ItineraryItem => ({
   time: "",
@@ -233,6 +434,10 @@ const CollapsibleItineraryDescription = ({
 };
 
 export const ItineraryPage = ({
+  recoveryError,
+  itinerarySyncState,
+  onItineraryResolutionChoice,
+  onApplyItineraryResolution,
   supabase,
   trip,
   activeDay,
@@ -267,12 +472,15 @@ export const ItineraryPage = ({
   const [timeAdjustmentArrival, setTimeAdjustmentArrival] = useState("");
   const [timeAdjustmentDeparture, setTimeAdjustmentDeparture] = useState("");
   const [timeAdjustmentResult, setTimeAdjustmentResult] = useState<TimeAdjustmentResult | null>(null);
+  const [timeAdjustmentSourceItems, setTimeAdjustmentSourceItems] = useState<ItineraryItem[]>([]);
+  const timeAdjustmentRequestIdRef = useRef(0);
   const [acceptedTimeAdjustmentIndexes, setAcceptedTimeAdjustmentIndexes] = useState<Set<number>>(new Set());
   const [manualTimeAdjustmentIndex, setManualTimeAdjustmentIndex] = useState<number | null>(null);
   const [manualTimeAdjustmentArrival, setManualTimeAdjustmentArrival] = useState("");
   const [isTimeAdjustmentLoading, setIsTimeAdjustmentLoading] = useState(false);
   const [isTimeAdjustmentSaving, setIsTimeAdjustmentSaving] = useState(false);
   const [timeAdjustmentSaveError, setTimeAdjustmentSaveError] = useState<string | null>(null);
+  const [timeAdjustmentSaveNotice, setTimeAdjustmentSaveNotice] = useState<string | null>(null);
 
   useEffect(() => {
     onManageModeChange?.(isManageMode || isTimeAdjustmentMode || isOrderMode || Boolean(copySource));
@@ -318,12 +526,11 @@ export const ItineraryPage = ({
   const [isRemoteLeaseNoticeDismissed, setIsRemoteLeaseNoticeDismissed] = useState(false);
   const previousLeaseListRef = useRef<typeof editLeases>({});
   const waitingCardIdsRef = useRef<Set<string>>(new Set());
-  const isCardLockedByOther = (cardId?: string) => Boolean(
-    cardId && hasCurrentEditLeaseList && currentEditLeases[cardId] &&
-    currentEditLeases[cardId].ownerClientId !== editLeaseClientId,
+  const isCardLockedByOther = (_cardId?: string) => Boolean(
+    hasCurrentEditLeaseList && currentEditLeases.__trip__ &&
+    currentEditLeases.__trip__.ownerClientId !== editLeaseClientId,
   );
-  const hasRemoteLeaseOnActiveDay = hasCurrentEditLeaseList &&
-    (trip.content.daysData[String(activeDay)] ?? []).some((card) => isCardLockedByOther(card.id));
+  const hasRemoteLeaseOnActiveDay = hasCurrentEditLeaseList && isCardLockedByOther();
   const canModifyCard = (cardId?: string) => canManageItinerary && hasCurrentEditLeaseList &&
     Boolean(cardId) && !isCardLockedByOther(cardId) && !isClaimingEdit;
 
@@ -358,17 +565,14 @@ export const ItineraryPage = ({
             expiresAt: lease.expiresAt,
           }]));
           const previous = previousLeaseListRef.current;
-          for (const waitingCardId of waitingCardIdsRef.current) {
-            if (previous[waitingCardId] && !next[waitingCardId]) {
+          if (previous.__trip__ && !next.__trip__) {
+            for (const waitingCardId of waitingCardIdsRef.current) {
               setReleasedWaitingCardIds((current) => current.includes(waitingCardId) ? current : [...current, waitingCardId]);
               waitingCardIdsRef.current.delete(waitingCardId);
             }
           }
-          const activeDayCardIds = new Set(
-            (trip.content.daysData[String(activeDay)] ?? []).map((card) => card.id).filter(Boolean),
-          );
-          const hasRemoteLeaseForActiveDay = Object.entries(next).some(
-            ([cardId, lease]) => activeDayCardIds.has(cardId) && lease.ownerClientId !== editLeaseClientRef.current,
+          const hasRemoteLeaseForActiveDay = Boolean(
+            next.__trip__ && next.__trip__.ownerClientId !== editLeaseClientRef.current,
           );
           if (!hasRemoteLeaseForActiveDay) {
             setIsRemoteLeaseNoticeDismissed(false);
@@ -416,22 +620,9 @@ export const ItineraryPage = ({
         .on("postgres_changes", {
           event: "*",
           schema: "public",
-          table: "itinerary_card_edit_leases",
+          table: "itinerary_trip_edit_leases",
           filter: `trip_id=eq.${trip.id}`,
-        }, (payload) => {
-          const changedCardId = String(
-            payload.eventType === "DELETE"
-              ? (payload.old as { card_id?: string }).card_id ?? ""
-              : (payload.new as { card_id?: string }).card_id ?? "",
-          );
-          if (
-            payload.eventType === "DELETE" &&
-            changedCardId &&
-            waitingCardIdsRef.current.has(changedCardId)
-          ) {
-            setReleasedWaitingCardIds((current) => current.includes(changedCardId) ? current : [...current, changedCardId]);
-            waitingCardIdsRef.current.delete(changedCardId);
-          }
+        }, () => {
           void refresh();
         })
         .subscribe((status) => {
@@ -463,6 +654,7 @@ export const ItineraryPage = ({
     departure?: string;
   }>({});
   const [isPlaceSearchOpen, setIsPlaceSearchOpen] = useState(false);
+  const [placeInputDraft, setPlaceInputDraft] = useState("");
   const [placeQuery, setPlaceQuery] = useState("");
   const [placeCandidates, setPlaceCandidates] = useState<PlaceCandidate[]>([]);
   const [placeCandidatePhotos, setPlaceCandidatePhotos] = useState<Record<string, PlaceCandidatePhoto>>({});
@@ -640,7 +832,9 @@ export const ItineraryPage = ({
     const cachedForCurrentDates = Object.fromEntries(enabledCards.flatMap(({ card, forecastDate }) => {
       const item = cached[card.id!];
       return item?.forecast_date === forecastDate && item.place_id === card.place?.placeId &&
-        (!item.refresh_stopped || item.arrival_time === (card.time ?? "")) ? [[card.id!, item]] : [];
+        item.arrival_time === (card.time ?? "") &&
+        (item.departure_time ?? item.arrival_time ?? "") === (card.departureTime ?? card.time ?? "")
+        ? [[card.id!, item]] : [];
     }));
     if (!isOnline) {
       setWeatherByCardId(Object.fromEntries(enabledCards.map(({ card }) => {
@@ -685,7 +879,8 @@ export const ItineraryPage = ({
             if (!card.id || !cardIdsToDisable.has(card.id) || card.showWeather !== true ||
               !card.place?.placeId || !results.some((result) => result.request_id === card.id &&
                 result.place_id === card.place?.placeId && result.forecast_date === getItineraryDayDate(latestTrip.departureDate, Number(dayKey)) &&
-                result.arrival_time === (card.time ?? ""))) {
+                result.arrival_time === (card.time ?? "") &&
+                result.departure_time === (card.departureTime ?? card.time ?? ""))) {
               return card;
             }
             changed = true;
@@ -814,6 +1009,7 @@ export const ItineraryPage = ({
     setDraft(createEmptyItineraryDraft());
     setTimeErrors({});
     setIsPlaceSearchOpen(false);
+    setPlaceInputDraft("");
     setPlaceCandidates([]);
     setPlaceCandidatePhotos({});
     setPlaceSearchError(null);
@@ -823,6 +1019,8 @@ export const ItineraryPage = ({
 
   const resetTimeAdjustment = () => {
     releaseFocusedControl();
+    timeAdjustmentRequestIdRef.current += 1;
+    setTimeAdjustmentSourceItems([]);
     setIsTimeAdjustmentMode(false);
     setTimeAdjustmentEntry("manual");
     setTimeAdjustmentStartIndex(null);
@@ -830,6 +1028,7 @@ export const ItineraryPage = ({
     setTimeAdjustmentDeparture("");
     setTimeAdjustmentResult(null);
     setAcceptedTimeAdjustmentIndexes(new Set());
+    setIsTimeAdjustmentLoading(false);
     setManualTimeAdjustmentIndex(null);
     setManualTimeAdjustmentArrival("");
     setTimeAdjustmentSaveError(null);
@@ -930,10 +1129,30 @@ export const ItineraryPage = ({
     }
   }, [canUseEditLeases, isHistoricalTripReadOnly]);
 
+  useEffect(() => {
+    if (isOnline) return;
+    if (!editingLeaseCardIdRef.current && !isFormOpen && !isManageMode) return;
+    if (editLeaseHeartbeatRef.current !== null) {
+      window.clearInterval(editLeaseHeartbeatRef.current);
+      editLeaseHeartbeatRef.current = null;
+    }
+    editLeaseVisibilityCleanupRef.current?.();
+    editLeaseVisibilityCleanupRef.current = null;
+    editingLeaseCardIdRef.current = null;
+    setHasValidEditingLease(false);
+    setIsFormOpen(false);
+    setEditingIndex(null);
+    setIsManageMode(false);
+    setIsTimeAdjustmentMode(false);
+    setIsOrderMode(false);
+    setEditClaimError("網路已中斷，卡片編輯已停止；重新連線並確認編輯權後才能修改。");
+  }, [isOnline, isFormOpen, isManageMode]);
+
   const startCreateItem = () => {
     releaseFocusedControl();
     setEditingIndex(null);
     setDraft(createEmptyItineraryDraft());
+    setPlaceInputDraft("");
     setTimeErrors({});
     setIsFormOpen(true);
     setIsPlaceSearchOpen(false);
@@ -1030,6 +1249,7 @@ export const ItineraryPage = ({
       void editLeaseRefreshRef.current?.();
       setEditingIndex(index);
       setDraft(event);
+      setPlaceInputDraft(event.location || (!isConfirmedPlace(event.place) ? event.title : ""));
       setTimeErrors({});
       setIsFormOpen(true);
       setIsPlaceSearchOpen(false);
@@ -1073,9 +1293,12 @@ export const ItineraryPage = ({
       return;
     }
     resetForm();
+    resetTimeAdjustment();
     resetOrder();
     setShowOrderSaved(false);
     setTimeAdjustmentEntry("manual");
+    setTimeAdjustmentSaveNotice(null);
+    setTimeAdjustmentSourceItems(currentDayEvents.map((item) => ({ ...item })));
     setIsTimeAdjustmentMode(true);
     setTimeAdjustmentStartIndex(null);
     setTimeAdjustmentArrival("");
@@ -1092,9 +1315,11 @@ export const ItineraryPage = ({
       return;
     }
     resetForm();
+    resetTimeAdjustment();
     resetOrder();
     setShowOrderSaved(false);
     const events = trip.content.daysData[String(activeDay)] ?? [];
+    setTimeAdjustmentSourceItems(events.map((item) => ({ ...item })));
     const startIndex = getTravelNodeIndexes(events)[0] ?? null;
     const arrivalTime = startIndex === null ? "" : events[startIndex]?.time || "";
     const departureTime =
@@ -1354,14 +1579,21 @@ export const ItineraryPage = ({
     departureTime = timeAdjustmentDeparture,
   ) => {
     if (startIndex === null || isTimeAdjustmentLoading) return;
-    const remainingEvents = currentDayEvents;
+    const requestId = ++timeAdjustmentRequestIdRef.current;
+    const remainingEvents = timeAdjustmentSourceItems.length
+      ? timeAdjustmentSourceItems
+      : currentDayEvents.map((item) => ({ ...item }));
     const timeRange = validateRequiredItineraryTimeRange(arrivalTime, departureTime);
     if (!timeRange.isValid) {
       const message = timeRange.departureError === "before-arrival"
         ? "新的離開時間不可早於新的到達時間。"
         : timeRange.arrivalError
-          ? "請輸入有效的新到達時間。"
-          : "請輸入有效的新離開時間。";
+          ? timeRange.arrivalError === "invalid-format" || timeRange.arrivalError === "invalid-range"
+            ? "到達時間格式有誤。請輸入 H:MM、HH:MM 或四碼數字，例如 8:00、08:00、0800。"
+            : "請輸入有效的新到達時間。"
+          : timeRange.departureError === "invalid-format" || timeRange.departureError === "invalid-range"
+            ? "離開時間格式有誤。請輸入 H:MM、HH:MM 或四碼數字，例如 8:00、08:00、0800。"
+            : "請輸入有效的新離開時間。";
       setTimeAdjustmentResult(null);
       setTimeAdjustmentSaveError(message);
       requestAnimationFrame(() =>
@@ -1408,6 +1640,7 @@ export const ItineraryPage = ({
           );
         },
       );
+      if (requestId !== timeAdjustmentRequestIdRef.current) return;
       setTimeAdjustmentResult(result);
       const blocker = result.blocker;
       if (blocker) {
@@ -1420,17 +1653,20 @@ export const ItineraryPage = ({
         ));
       }
     } catch (error) {
+      if (requestId !== timeAdjustmentRequestIdRef.current) return;
       setTimeAdjustmentSaveError(error instanceof Error ? error.message : "無法建立時間調整預覽，請稍後重試。");
       requestAnimationFrame(() => focusAndRevealControl("time-adjustment-result"));
     } finally {
-      setIsTimeAdjustmentLoading(false);
+      if (requestId === timeAdjustmentRequestIdRef.current) {
+        setIsTimeAdjustmentLoading(false);
+      }
     }
   };
 
   const confirmManualTimeAdjustment = () => {
     if (manualTimeAdjustmentIndex === null || !timeAdjustmentResult) return;
     const adjusted = adjustTimePreviewArrival(
-      currentDayEvents,
+      timeAdjustmentSourceItems,
       timeAdjustmentResult,
       manualTimeAdjustmentIndex,
       manualTimeAdjustmentArrival,
@@ -1439,9 +1675,16 @@ export const ItineraryPage = ({
       setTimeAdjustmentSaveError(adjusted.blocker.message);
       return;
     }
+    const changedIndexes = new Set(adjusted.items.flatMap((item, index) => {
+      const previous = timeAdjustmentResult.items[index];
+      return previous && (previous.time !== item.time ||
+        (previous.departureTime || previous.time) !== (item.departureTime || item.time))
+        ? [index]
+        : [];
+    }));
     setTimeAdjustmentResult(adjusted);
     setAcceptedTimeAdjustmentIndexes((accepted) =>
-      new Set([...accepted].filter((index) => index < manualTimeAdjustmentIndex)),
+      new Set([...accepted].filter((index) => !changedIndexes.has(index))),
     );
     setManualTimeAdjustmentIndex(null);
     setManualTimeAdjustmentArrival("");
@@ -1454,25 +1697,27 @@ export const ItineraryPage = ({
       setTimeAdjustmentSaveError("目前有卡片正在其他裝置編輯，或無法確認鎖定狀態；請重新確認後再套用時間調整。");
       return;
     }
+    const unacceptedIndexes = timeAdjustmentResult.items.flatMap((item, index) => {
+      const original = timeAdjustmentSourceItems[index];
+      const changed = original && (original.time !== item.time ||
+        (original.departureTime || original.time) !== (item.departureTime || item.time));
+      return changed && isIncludedInTravelCalculation(item) &&
+        !acceptedTimeAdjustmentIndexes.has(index) ? [index] : [];
+    });
+    if (unacceptedIndexes.length > 0) {
+      setTimeAdjustmentSaveError(`還有 ${unacceptedIndexes.length} 個變更站點尚未接受，請逐站確認後再套用。`);
+      requestAnimationFrame(() => focusAndRevealControl("time-adjustment-result"));
+      return;
+    }
     setIsTimeAdjustmentSaving(true);
     setTimeAdjustmentSaveError(null);
     try {
       const stableDaysData = ensureItineraryDaysDataIds(trip.content.daysData);
       const dayKey = String(activeDay);
       const stableActiveDay = stableDaysData[dayKey] ?? [];
-      const committedItems = await materializeTimeAdjustmentEstimates(
-        timeAdjustmentResult,
-        async (_originIndex, origin, destination) => {
-          if (!isOnline) return null;
-          return requestTravelEstimate(
-            origin,
-            destination,
-            getPreferredTravelMode(origin),
-          );
-        },
-      );
+      const committedItems = materializeTimeAdjustmentEstimates(timeAdjustmentResult);
 
-      await onSaveTripDetail({
+      const saveResult = await onSaveTripDetail({
         ...trip,
         content: {
           ...trip.content,
@@ -1485,6 +1730,12 @@ export const ItineraryPage = ({
           },
         },
       });
+      if (!saveResult.localSaved) {
+        throw new Error("本機行程資料未成功保存，預覽仍保留，請重試或取消。");
+      }
+      setTimeAdjustmentSaveNotice(saveResult.cloudSynced
+        ? "時間調整已保存並同步至雲端。"
+        : "時間調整已保存至本機，雲端目前待同步；可稍後依既有同步流程處理。");
       resetTimeAdjustment();
     } catch (error) {
       setTimeAdjustmentSaveError(error instanceof Error ? `無法套用調整：${error.message}` : "無法套用調整，資料尚未變更。");
@@ -1495,7 +1746,7 @@ export const ItineraryPage = ({
   };
 
   const openPlaceSearch = () => {
-    const query = draft.location.trim();
+    const query = placeInputDraft.trim();
     setPlaceQuery(query);
     setPlaceCandidates([]);
     setPlaceSearchError(null);
@@ -1857,11 +2108,13 @@ export const ItineraryPage = ({
     setPlaceSearchError(null);
     try {
       const place = getConfirmedPlace(candidate);
+      const confirmedLocation = placeQuery.trim() || placeInputDraft.trim();
       updateDraft({
-        location: draft.location.trim() || placeQuery.trim(),
+        location: confirmedLocation,
         place,
         travelToNext: undefined,
       });
+      setPlaceInputDraft(confirmedLocation);
       setIsPlaceDecisionPending(false);
       setIsPlaceSearchOpen(false);
       setPlaceCandidates([]);
@@ -2159,8 +2412,7 @@ export const ItineraryPage = ({
         {isInlineEdit && (
           <div className="mb-3 flex items-center justify-between gap-3 border-b border-emerald-100 pb-3">
             <div>
-              <p className="text-xs font-bold text-emerald-700">卡片原地編輯</p>
-              <h3 className="mt-0.5 text-base font-bold text-slate-800">{draft.title || "未命名活動"}</h3>
+              <h3 className="text-base font-bold text-slate-800">{draft.title || "未命名活動"}</h3>
             </div>
             <button
               type="button"
@@ -2317,9 +2569,10 @@ export const ItineraryPage = ({
 
         <div className="flex items-stretch gap-2">
           <input
-            value={draft.location}
+            value={placeInputDraft}
             onChange={(event) => {
               const location = event.target.value;
+              setPlaceInputDraft(location);
               updateDraft({
                 location,
                 place: undefined,
@@ -2336,7 +2589,7 @@ export const ItineraryPage = ({
           <button
             type="button"
             onClick={openPlaceSearch}
-            disabled={!isOnline || isPlaceSearching || draft.location.trim().length < 2}
+            disabled={!isOnline || isPlaceSearching || placeInputDraft.trim().length < 2}
             className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg bg-emerald-700 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-800 disabled:opacity-50"
           >
             {isPlaceSearching ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
@@ -2488,6 +2741,35 @@ export const ItineraryPage = ({
 
   return (
     <>
+      {recoveryError && (
+        <div role="alert" className="mb-4 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+          <div className="flex items-center gap-2 font-bold"><TriangleAlert size={18} />行程 Pending Recovery 阻擋</div>
+          <p className="mt-1 whitespace-pre-wrap">{recoveryError}</p>
+          <p className="mt-1">原始資料已保留；本行程卡片保存與衝突套用已停止，避免覆寫 recovery 資料。</p>
+        </div>
+      )}
+      {itinerarySyncState && !itinerarySyncState.recoveryError && (
+        <>
+          {itinerarySyncState.status === "pending" && (!isOnline || Boolean(itinerarySyncState.lastError)) && (
+            <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50/70 p-3 text-sm text-amber-950" role={itinerarySyncState.lastError ? "alert" : "status"} aria-label="行程同步狀態">
+              <p className="font-semibold">每日行程修改仍保留於本機，尚未完成雲端確認</p>
+              <p className="mt-1 text-xs">{isOnline ? "背景同步未完成；系統不會清除本機待同步資料" : "目前離線；待上線後由系統自動同步"}</p>
+              {itinerarySyncState.lastError && <p className="mt-1 whitespace-pre-wrap text-xs">{itinerarySyncState.lastError}</p>}
+            </div>
+          )}
+          {itinerarySyncState.status === "conflict" && (
+            <section className="mb-4 rounded-lg border border-amber-200 bg-amber-50/70 p-3 text-sm text-amber-950" aria-label="行程同步狀態">
+              <ItineraryConflictPanel
+                state={itinerarySyncState}
+                isOnline={isOnline}
+                canResolve={hasEditPermission && !isHistoricalTripReadOnly}
+                onChoice={onItineraryResolutionChoice}
+                onApply={onApplyItineraryResolution}
+              />
+            </section>
+          )}
+        </>
+      )}
       <div className="grid grid-cols-5 gap-1.5 mb-6">
         {trip.content.days.map((day, index) => {
           const isActive = activeDay === day;
@@ -2688,6 +2970,9 @@ export const ItineraryPage = ({
           {copySuccess && (
             <p className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-800" role="status">{copySuccess}</p>
           )}
+          {timeAdjustmentSaveNotice && (
+            <p className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-800" role="status">{timeAdjustmentSaveNotice}</p>
+          )}
 
           {isTimeAdjustmentMode && (
             <section className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50/60 p-3" aria-label="時間調整模式">
@@ -2730,8 +3015,11 @@ export const ItineraryPage = ({
                         if (nextValue !== event.target.value) restoreTimeCaret(event.currentTarget, nextValue);
                       }}
                       placeholder="例如 09:50 或 0950"
-                      className="w-full rounded-lg border border-emerald-200 bg-white px-3 py-2 text-base focus:outline-none focus:ring-2 focus:ring-emerald-500 sm:text-sm"
+                      aria-invalid={Boolean(timeAdjustmentSaveError?.includes("到達時間格式有誤"))}
+                      aria-describedby={timeAdjustmentSaveError?.includes("到達時間格式有誤") ? "time-adjustment-time-format-error" : undefined}
+                      className={`w-full rounded-lg border bg-white px-3 py-2 text-base focus:outline-none focus:ring-2 sm:text-sm ${timeAdjustmentSaveError?.includes("到達時間格式有誤") ? "border-rose-400 focus:ring-rose-400" : "border-emerald-200 focus:ring-emerald-500"}`}
                     />
+                    {timeAdjustmentSaveError?.includes("到達時間格式有誤") && <span id="time-adjustment-time-format-error" className="block text-xs leading-relaxed text-rose-700" role="alert">{timeAdjustmentSaveError}</span>}
                   </label>
                   <label className="space-y-1">
                     <span className="text-xs font-bold text-slate-700">新的離開時間</span>
@@ -2757,8 +3045,11 @@ export const ItineraryPage = ({
                         if (nextValue !== event.target.value) restoreTimeCaret(event.currentTarget, nextValue);
                       }}
                       placeholder="例如 10:30 或 1030"
-                      className="w-full rounded-lg border border-emerald-200 bg-white px-3 py-2 text-base focus:outline-none focus:ring-2 focus:ring-emerald-500 sm:text-sm"
+                      aria-invalid={Boolean(timeAdjustmentSaveError?.includes("離開時間格式有誤"))}
+                      aria-describedby={timeAdjustmentSaveError?.includes("離開時間格式有誤") ? "time-adjustment-departure-format-error" : undefined}
+                      className={`w-full rounded-lg border bg-white px-3 py-2 text-base focus:outline-none focus:ring-2 sm:text-sm ${timeAdjustmentSaveError?.includes("離開時間格式有誤") ? "border-rose-400 focus:ring-rose-400" : "border-emerald-200 focus:ring-emerald-500"}`}
                     />
+                    {timeAdjustmentSaveError?.includes("離開時間格式有誤") && <span id="time-adjustment-departure-format-error" className="block text-xs leading-relaxed text-rose-700" role="alert">{timeAdjustmentSaveError}</span>}
                   </label>
                   <button type="button" onClick={() => void prepareTimeAdjustment()} disabled={isTimeAdjustmentLoading} className="self-end rounded-lg bg-emerald-700 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-800 disabled:opacity-60">
                     {isTimeAdjustmentLoading ? "正在計算…" : "預覽調整"}
@@ -2776,7 +3067,7 @@ export const ItineraryPage = ({
                     <div className="space-y-3 text-sm text-slate-700">
                       {timeAdjustmentResult.items.slice(timeAdjustmentStartIndex ?? 0).map((event, index) => {
                         const absoluteIndex = (timeAdjustmentStartIndex ?? 0) + index;
-                        const originalEvent = currentDayEvents[absoluteIndex];
+                        const originalEvent = timeAdjustmentSourceItems[absoluteIndex];
                         const segment = timeAdjustmentResult.segments.find((entry) => entry.destinationIndex === absoluteIndex);
                         const isIncluded = isIncludedInTravelCalculation(event);
                         const changed = Boolean(
@@ -2785,7 +3076,7 @@ export const ItineraryPage = ({
                             (originalEvent.departureTime || originalEvent.time) !==
                               (event.departureTime || event.time)),
                         );
-                        return <Fragment key={`time-adjustment-preview-${absoluteIndex}-${event.title}`}>
+                        return <Fragment key={event.id ?? `legacy-${activeDay}-${absoluteIndex}`}>
                           {segment && <div className="border-y border-slate-100 py-2 text-xs text-slate-600"><span className="inline-flex items-center gap-1 font-bold"><MaterialTravelModeIcon mode={segment.estimate.mode} />{getTravelModeLabel(segment.estimate.mode)}</span>｜約 {formatTravelDuration(segment.estimate.durationSeconds)}｜{formatTravelDistance(segment.estimate.distanceMeters)}</div>}
                           <div className="rounded-lg border border-slate-100 p-3">
                             <div className="flex flex-wrap items-start justify-between gap-2">

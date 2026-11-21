@@ -15,4 +15,11 @@ assert.equal(getDestinationLocalEligibility(losAngelesMorning, "2026-10-20", "08
 assert.equal(getDestinationLocalEligibility(taipeiLateEvening, "2026-10-18", "23:00", "Asia/Taipei"), "date_passed");
 assert.equal(getDestinationLocalEligibility(taipeiLateEvening, "2026-10-30", "08:00", "Asia/Taipei"), "long_range");
 
+// Cards sharing one place/date still qualify independently; one card cannot make the other eligible.
+const sameTargetNow = new Date("2026-11-20T02:00:00.000Z"); // 10:00 in Taipei
+const sameTargetCardA = getDestinationLocalEligibility(sameTargetNow, "2026-11-20", "09:00", "Asia/Taipei");
+const sameTargetCardB = getDestinationLocalEligibility(sameTargetNow, "2026-11-20", "12:00", "Asia/Taipei");
+assert.equal(sameTargetCardA, "arrival_passed");
+assert.equal(sameTargetCardB, "eligible");
+
 console.log("Weather destination-timezone eligibility regression tests passed.");

@@ -1,0 +1,14 @@
+﻿{
+  "test": "ADR001 SR-05 true concurrent Save RPC vs Claim RPC against current develop migrations",
+  "startedAt": "2026-11-20T11:30:35.994Z",
+  "localOnly": true,
+  "pass": true,
+  "saveCompleted": true,
+  "claimBStartedAt": "2026-11-20T11:30:37.303Z",
+  "saveOut": "saved=true,new_version=1",
+  "claimOut": "acquired=false; owner remained A",
+  "finalState": "version=1; daysData savedBy A; lease owner/client remained A",
+  "noDeadlock": true,
+  "cleanedUp": true,
+  "finishedAt": "2026-11-20T11:30:42.671Z"
+}

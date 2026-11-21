@@ -2,14 +2,14 @@
 
 > 本文件只保留未完成、待補驗或待評估工作；不累積 `[x]` 歷史。
 >
-> 目前狀態以《[14_專案現況總覽](14_專案現況總覽.md)》為準。V3.11.2 的版本專屬決策與驗收判準以《[113_V3.11.2_RC驗證與發布準備紀錄](113_V3.11.2_RC驗證與發布準備紀錄.md)》第 6 節為準。最後整理：2026-11-16。
+> 目前狀態以《[14_專案現況總覽](14_專案現況總覽.md)》為準；未完成工作不代表已通過驗收，須依各專項文件列出的證據確認。V3.11.4 批次時間調整依《[115_V3.11.4_批次調整時間修正規格與實作驗收基準](115_V3.11.4_批次調整時間修正規格與實作驗收基準.md)》；每日詳細行程統一編輯／保存架構（ADR-001，原 P0＋P1＋P3）依《[116_卡片編輯故障根因與旅程級編輯契約調查紀錄](116_卡片編輯故障根因與旅程級編輯契約調查紀錄.md)》。最後核對：2026-11-19。
 
-## V3.11.2 發布後觀察
+## 低優先級發布後觀察
 
-- Excel 匯入資料上傳後的雲端資料比對，仍由使用者依既定流程另行核對；此項不屬於 V3.11.2 發布阻擋，尚未取得證據前不得宣稱比對完成。
-- 其他產品驗收與發布狀態以《[14_專案現況總覽](14_專案現況總覽.md)》及《[113_V3.11.2_RC驗證與發布準備紀錄](113_V3.11.2_RC驗證與發布準備紀錄.md)》為準。V3.11.2 已完成完整 Repository merge、tag、GitHub Pages 部署及公開資產 smoke；舊候選白名單不再作為 Git 同步限制。
-
-
+- V3.11.0 Excel 建立功能：真人 PWA Recovery／IM09／IM10 仍屬發布後觀察，不阻擋目前開發；適用情境出現時再安排故障注入、Recovery、地點／天氣／路線／照片副作用隔離及其他裝置 refresh 驗收。詳見文件 81 §12.11。
+- V3.10.12：TC01–TC14 真實雙裝置／UI 驗收仍依文件 104 追蹤；不因本次 V3.11.4 工作擴大測試範圍。
+- Excel 建立資料上傳後雲端資料比對：尚未取得使用者核對證據前不得宣稱完成。
+- V3.11.3 Android 更新故障恢復分支：正常更新路徑已通過，只保留手動重啟、接管逾時／失敗及診斷複製分支；無故障案例時不阻擋目前版本工作。
 
 ## 已確認 BUG 待處理
 - [x] **BUG034：V3.10.8 發布紀錄混入 V3.10.9 內容。** 已將 V3.10.9 發布證據分離至《[102_V3.10.9_正式發布紀錄](102_V3.10.9_正式發布紀錄.md)》，V3.10.8 留在《[101_V3.10.8_正式發布紀錄](101_V3.10.8_正式發布紀錄.md)》，並更新文件入口。`npm run verify:docs-links` 通過（120 份 Markdown、241 個本地目標）；完整建置結果記錄於本次最終驗證。原始 commit、workflow、公開 smoke 與未部署 Edge Function 的證據均保留，不改寫歷史事實。詳細見《[03_Bug修正紀錄](03_Bug修正紀錄.md)》。
@@ -19,7 +19,7 @@
 
 ## 發布後待修與待驗
 
-- [ ] **V3.10.11 PWA 更新接管修正（發布後由下一版驗證）：** V3.10.10 是目前有問題的舊版，無法使用它本身驗證 V3.10.11 新寫入的更新流程；因此本版發布前以專項狀態測試、TypeScript、ESLint、production build 作程式層驗證，Android 真實跨版本更新驗收不列為 V3.10.11 發布前阻擋。V3.10.11 部署後，需在下一個版本（暫定 V3.10.12）加入／保留可觀測版本，讓目前已更新至 V3.10.11 的 Android PWA 實際執行 V3.10.11 → V3.10.12 更新，再驗證單次 SKIP_WAITING、active／controller handoff、自動 reload、新 document 顯示 3.10.12、pending marker 清除，且不出現接管逾時、白畫面或需手動重啟。此驗收結果用來判定 V3.10.11 更新機制修正是否真正有效。詳見《[103_V3.10.10_Android_PWA更新後自動重新載入異常診斷](103_V3.10.10_Android_PWA更新後自動重新載入異常診斷紀錄.md)》。
+- [ ] **V3.11.3 Android 更新故障恢復分支待驗（低優先級）**：正常 V3.11.2 → V3.11.3 更新路徑已由使用者於 2026-11-16 實機確認通過；只保留手動「重新啟動 App」安全重試、逾時／接管失敗處理及「複製診斷資訊」分支，無故障案例時不阻擋 V3.11.4。測試時保留診斷 JSON。狀態以《[14_專案現況總覽](14_專案現況總覽.md)》為準。
 
 ## 後續候選版本
 
@@ -58,6 +58,10 @@
 
 ## 目前待修與待驗
 
+- [ ] **異常旅程資料修復：V3.11.4 後執行（OpenChatX Goal：`travel-companion-trip-data-repair`）**：本項不是只有調查紀錄，必須追蹤到正式資料轉換及實際使用驗收。**硬性前置條件：** V3.11.4 卡片新增／修改／刪除故障修正已完成實作，隔離測試及驗收證據確認，且使用者再次核准正式資料變更；此前只允許唯讀檢查及離線候選驗證，不得修改程式、正式 DB、正式 JSON、manifest 或 Storage。**第一階段—日本九州 Static Seed：** 以 `tmp/seed-repair-candidates/group-tour-2026-10.json` 為候選，正式替換前先備份；替換後必須由 App 實際載入驗證 5 天／31 張卡片／31 個唯一 UUID／25 個 Place ID／17 張封面照片／21 筆 Checklist／12 個 Other Info 資料夾，且 `isPublic=false`，並確認照片、卡片內容及其他資訊可正常顯示。**第二階段—沖繩 Static→Dynamic Trip：** 以 `tmp/seed-repair-candidates/free-travel-2026-01.json` 的 35 個固定 UUID 為準，不得重新產生；正式操作前備份 DB row、manifest、participants 與關聯資料。轉換後必須保留 6 天／35 張卡片／9 筆 Checklist、原四位參與者及 10 筆 active `other_info_items`；完成 Static Seed manifest／程式路由轉換後，以 App 實際驗證 Dynamic 讀取、卡片新增／修改／刪除、儲存後重新載入、雲端同步及 Other Info 正常。**完成證據要求：** 每階段記錄變更前後資料筆數與關鍵欄位比對、備份／回復方式、實際 UI／跨裝置測試結果及未通過項目；只完成 JSON 格式檢查或文件整理不得標記完成。九州驗收通過後才進沖繩正式轉換；兩階段均通過才完成 Goal。台中開刀依既定決策不屬本項範圍，不處理、不重複列管。
+
+- [ ] **V3.11.4 批次時間調整＋每日詳細行程統一編輯／保存架構（ADR-001；原 P0＋P1＋P3 整合）**：批次時間調整仍依文件 115 的 T01–T08 獨立驗收。每日詳細行程部分依 ADR-001 與文件 116 統一審查及實作，不再把卡片保存修正與 Trip-level Edit Lock 分成彼此獨立的架構。既有基礎證據保留：`itinerarySaveGate.ts` 已分離全域 revision 通知與保存許可，保留 `TripVersionConflictError`；save-gate 測試、原 7 項 revision／preview／version recovery／workspace recovery／merge／lease 契約測試、完整 build 及 local Supabase 雙 Auth/JWT/HTTP context 整合測試均有通過紀錄。仍待真實雙瀏覽器 UI 及 offline pending→online lifecycle 驗收；此外使用者曾實測新增保存時出現約 2～3 次 DB 確認／回讀及畫面跳動，此項仍未通過，須納入統一保存入口審查。**統一整合修正完成後，既有 P0 全部已通過的自動化／契約／local Supabase 整合測試與完整 build 必須重新執行；卡片新增、修改、刪除、儲存後 reload/readback、雙瀏覽器／跨裝置一致性及 offline pending→online recovery 必須重新實際瀏覽器操作驗證，整合前 PASS 不得抵用。重新驗證至少包含 `test-itinerary-save-gate.mjs`、七項既有 revision／preview／version recovery／workspace recovery／merge／lease 契約測試、`test-p0-trip-save-local-integration.mjs`、受影響的 release regression 及完整 `npm run build`。若 P3 使舊 preview UI 測試失效，須改用新提示／讀取契約測試取代，不可因此漏測底層 revision、source client、CAS、pending、merge 與 recovery。瀏覽器端須以兩個獨立 profile 重新驗證新增／修改／刪除、刷新後資料不復現、跨端一致、遠端事件只提示、主動更新取最新資料、離線 Pending 保留及重新取得鎖後同步；並重新量測新增保存 DB request 與畫面穩定性。**P1 Trip-level Edit Lock 與 P3 提示簡化已納入同一目標架構但尚未實作**：鎖定以 trip_id 為單位、伺服器端 atomic claim／write enforcement；Realtime 只作通知，保留 Revision、CAS／Version、Local Pending 職責；取消每日詳細行程預覽／變更計數，只保留鎖定與更新提示，進入管理／主動更新時才讀取必要最新狀態。不得改動其他功能的同步與提示機制。批次時間調整：第 1 項提示實機通過；第 2 項分鐘輸入與雙向調整通過，最新推斷／警告修改須重跑專項測試與完整 build 及瀏覽器驗收；第 3、4 項未知記錄依 2026-11-22 發布指示排除（不推定 PASS）；T05（焦點／游標／捲動／DOM）及 T07（本機保存／雲端 pending）已依 2026-11-22 決定列為發布後回歸，不再列為 V3.11.4 發布前阻塞。保留天氣及其他未提交工作；不操作正式 DB，不 commit／push／RC／deploy，除非另獲明確核准。
+
 - [x] V3.10.6／V3.10.7 天氣跨日與多日快取異常：已由 V3.10.7 的 lease 回寫精度修正及目的地當地時間判斷修正處理；三個新座標地點 D1–D5 共 15 個日期，以及台灣、日本正式網站驗收均通過。若未來再次發生，依新 trace 與最新資料重新診斷，不沿用舊 dump 推定。歷史線索見《[90_DEV安全阻擋與天氣來源問題診斷](90_DEV安全阻擋與天氣來源問題診斷.md)》與 V3.10.7 結案文件。
 - [x] Open-Meteo `source_url` migration `20261018100000_v3101_weather_source_url.sql`：已完成正式部署與版本一致性檢查；既有舊快取不自動補寫 `source_url`，需在線上重新成功取得天氣後驗證新來源網址。
 - [ ] 正式天氣端到端驗收：使用真實行程完成單卡與跨日／複製情境，確認成功更新後 `source_url` 含正確座標與日期，舊快取缺欄位時不會連到錯誤首頁；若再次 unavailable，保存 `diagnostic_code`、`trace_id` 與 Edge Logs 證據。對應診斷紀錄：《[90_DEV安全阻擋與天氣來源問題診斷](90_DEV安全阻擋與天氣來源問題診斷.md)》。
@@ -71,17 +75,17 @@
 - [x] BUG032（V3.9.16）：已完成 RC 實作與正式站 cache smoke。Trip 在線載入後只預載目前行程卡片已選用照片；正式 Trip 16 張照片已預載 16/16，未先開啟的 D4 兩張照片在 CDP 離線網路下皆 Cache hit 200 且 WebP 640×640 解碼正常；實體飛航模式亦確認切換其他日期仍可看到照片。Service Worker 遠端檔案確認為 CacheFirst、總上限 250 張；照片更換與 Trip 刪除／撤權清理契約已納入 regression。
 - [x] Offline Revision Notice（V3.9.16）：已修正離線或 revision/access 檢查失敗時將「無法確認遠端」誤設為 `available` 的問題；離線不再新增「行程資料已有更新」通知，既有已確認通知維持，恢復連線後再重新檢查。
 - [x] Personal Book UX（V3.9.16）：個人帳本每筆記帳成功後不再跳出 alert；帳本頁固定顯示「個人帳本僅儲存在此裝置」、備份風險說明與「個人帳本・僅存本機」標籤。
-- [ ] 以目前正式版按風險補驗尚未被近期回歸直接覆蓋的舊功能：角色／歷史唯讀與撤權、路線付費 API／正式 OAuth／Android 外部開圖、單日／多日複製，以及離線／pending／跨裝置組合。iOS 不列入既定待驗清單；若實際使用者回報 iOS 問題，再依回報證據重新立案。
+- [ ] **舊功能風險導向回歸（V3.11.4 完成後另排）**：補驗近期回歸未直接覆蓋的角色／歷史唯讀與撤權、路線付費 API／正式 OAuth／Android 外部開圖、單日／多日複製，以及離線／pending／跨裝置組合。此為跨版本回歸，不阻擋目前 V3.11.4 P0；iOS 不列入既定清單，除非有實際使用者回報再重新立案。
 
-## 區段預報開始實作前必要工作
+## 區段預報 V1 必要收尾與下一步
 
-- [ ] **區段預報實作前必要工程準備**：API／時區 P0 證據已完成並整合：production `/v1/forecast` 已有正式 hourly payload 實測；Historical Forecast API 已完成 IANA→UTC 時窗、DST 23／25 小時及半開區間驗證；Open-Meteo 原有授權初核與 APP 來源署名／授權文字亦已有既存紀錄。API 未變更，不重複呼叫或重做 UTC／授權驗證。已完成：(1) 依已定案 WMO `weather_code` P0～P28 優先級建立 Edge Function domain helper `supabase/functions/weather-forecast/weather-code-priority.mjs`，fixture 測試直接引用同一 helper，並補齊前端 Code 97「強雷雨」顯示對照；(2) IANA midnight→UTC 共用 helper `supabase/functions/weather-forecast/timezone-utc.ts` 與 `destinationDayUtcWindow` 已建立，fixture 直接引用正式 helper，Node 22 regression 與 TypeScript 靜態檢查通過；Deno 2.2.7 runtime regression 已通過 5 項測試，並已通過完整 weather-forecast Edge Function `deno check`。仍待完成：(3) 前端 `departure_time` request／fingerprint 與 Edge 已儲存卡片資料契約；(4) Cron 與使用者請求對同 Place/date 所有有效引用卡片逐一 OR 判斷；(5) interval schema／Migration／RLS／RPC／lease／purge／座標變更交易設計；(6) batch 與實際 Edge CPU／wall time 驗證；(7) 每日預報不變的 golden regression 清單。Hourly API calls/day 壓力情境及 JSONB 原始儲存量初估已完成，詳見《[112_區段預報P0技術驗證與實作前檢查紀錄](112_區段預報P0技術驗證與實作前檢查紀錄.md)》§2.5；正式 DB row／索引／TOAST 儲存量與 Edge CPU 仍待實作後量測。只有實作時遇到具體 production API 參數錯誤，才針對該錯誤做最小驗證。證據及細項見《[112_區段預報P0技術驗證與實作前檢查紀錄](112_區段預報P0技術驗證與實作前檢查紀錄.md)》與《[79_天氣預報功能規格草案](79_天氣預報功能規格草案.md)》第 2.7 節。此項仍未完成前，不進入 production implementation。
+- [ ] **區段預報 V1 必要收尾**：第一版 hourly pipeline、UTC/DST、Interval cache／RLS／RPC／Lease／purge、APP／Cron 逐卡資格與前端 metadata 已接通；實作與測試證據以《[112_區段預報P0技術驗證與實作前檢查紀錄](112_區段預報P0技術驗證與實作前檢查紀錄.md)》§7.3–§7.4 為準。2026-11-18 使用者定案：最多 4 位使用者、平常最多 2 人同時使用；接受偶發少量重複 provider request，必要保護聚焦資料正確性、Lease ownership、失敗恢復與舊成功快取保存。**剩餘必要工作只有**：(A) 最小資料保護驗證：Daily／Interval 失敗釋放、錯誤 token ownership、舊成功 payload／`fetched_at` 保護、placeholder recovery；Interval 12 路 DB claim race 已測，Daily 只驗證必要既有契約，不建立完整 golden matrix。(B) 條件式一次隔離 APP → Edge → 本機 DB refresh smoke：需要 Open-Meteo outbound、本機服務及正常授權都可用，否則保留 BLOCKED，不繞過授權。(C) Android PWA 產品實機驗收：Daily／single arrival hour／range、時間變更、舊資料相容及既有提醒。**不列為 V1 門檻**：跨 Edge Isolate 壓測、zero-duplicate 證明、完整 Daily golden matrix、CPU／wall-time 與正式 DB row／index／TOAST benchmark。日後只有實際出現成本、資料錯誤、延遲或儲存問題才做最小量測。完成 A–C 後再進一般 RC；遠端 migration、Edge deploy、Secrets／Cron、正式 smoke 及發布仍分別授權。
 
 ## 待定案功能
 
 - [x] **V3.11.0：新增 TRIP Excel 建立功能（2026-11-13 正式發布完成；正式 Supabase Migration、GitHub Pages 與公開 smoke 均通過；真人 Recovery／IM09／IM10 為發布後觀察）**：屬使用者可感知的 MINOR 主要功能。2026-11-03 最新定案採 A 流程：新增 TRIP 時選擇「Excel 建立」或「手動新增」，Excel 直接建立新 TRIP，不支援既有 TRIP 卡片匯入／覆蓋。V1 固定兩張工作表：可見「新增 TRIP」是唯一使用者填寫頁面；隱藏「系統設定」專供系統保存範本 metadata，不增加使用者需填寫的業務欄位。TRIP 基本資料僅「TRIP 名稱」「出發日期」兩個必填欄位，位於卡片資料表上方。卡片欄位為「第幾天」「開始時間」「行程名稱」「類別」必填，「結束時間」「描述」選填；類別維持必填，使用 Excel 下拉選單，固定選項為交通、住宿、景點、餐飲、自駕、其他，匯入端仍須重新驗證。旅程天數不輸入，依有效卡片最大「第幾天」推導 1–30 天，中間無卡片的日子仍建立空白日。參與者使用資料庫權威預設名單；不額外指派編輯者；公開、農曆、旅程型態等其他設定全部沿用目前新增 TRIP 系統預設。幣別沿用系統當下新增 TRIP 表單預設代碼與符號，不固定 TWD；預覽顯示共用 `DEFAULT_TRIP_CURRENCY` 代碼與符號，並以提醒文案告知此值非由 Excel 讀取、應依旅程目的地留意；不要求手動勾選或確認。Excel 不提供地點／地址欄位，不觸發地圖搜尋、天氣或路線；建立後如需地點由使用者在 App 內自行設定。只有 Super Admin 可匯入，採三層保護：第一層 UI 僅顯示 Super Admin 入口；第二層確認提交時自動檢查當下 Supabase Session／登入帳號／線上狀態（必要時正常更新 Session，不再次啟動 Google OAuth）；第三層 Excel 專用 RPC 依 JWT、`auth.uid()` 與資料庫權威角色最終核對 Super Admin。前端 Session 或角色快取不得取代 RPC。僅線上整批雲端建立成功後更新本機快取／UI，結果不明須核對，不得本機單獨建立或誤報成功。同步沿用既有 Trip workspace reconciliation，不增加 `trips` Realtime 訂閱或新同步子系統。範本版本、欄位嚴格驗證、整批建立完整性、離線／逾時處理及系統欄位排除納入驗收。固定版型草案為「新增 TRIP」TRIP 區 A1:B3、卡片標題 A6:F6、資料自 A7:F 起；「系統設定」A1 為識別標題、A2:B2 保存 `template_version=1`，且必須維持隱藏。ExcelJS 4.4.0 可原生讀寫工作表及 hidden 狀態；`docProps/custom.xml` 缺少原生 API，不採用，`contentStatus` 語意不適合作為專用範本版本欄位，也不採用。正式 V1 範本與欄位契約檔已建立：`docs/templates/AI新增TRIP標準範本_V1.xlsx` 及 `docs/templates/AI新增TRIP標準範本_V1_欄位契約.md`。範本固定兩張工作表；「新增 TRIP」A1:B3 為 TRIP 基本資料、A6:F6 為卡片標題、A7:F1006 提供 1,000 列資料驗證；類別清單位於同表隱藏 I1:N1，E7:E1006 引用該範圍；「系統設定」hidden，A1/A2/B2 metadata 精確且 B2 為字串。正式範本本身已在 ExcelJS 4.4.0、LibreOffice 25.2.7.2 headless 獨立 UserInstallation profile、Microsoft Excel 2010（14.0.7015.1000）獨立 COM instance 開啟另存後，由 ExcelJS 重新讀回，確認工作表、metadata、隱藏輔助欄及下拉清單引用保留。測試檔均在 `%TEMP%`，未操作使用者既有活頁簿；此結果僅涵蓋上述版本組合，不代表其他 Office 版本或線上版相容性。V1 不新增每次匯入快照，也不承諾成功後一鍵復原。**歷史進度（2026-11-05 追加唯讀盤點與本機檢查）**：階段 0 的兩工作表 metadata 架構、ExcelJS／LibreOffice／Microsoft Excel 2010 隔離 round-trip、正式範本與欄位契約文件均已完成；階段 1 的資料映射／權限邊界核對已完成，Excel 專用 RPC migration 已套用公司端 local V5，部分成功建立、冪等與 rollback 真實 PostgreSQL 案例已通過。Parser 專項、RPC 靜態檢查及 portable Excel RPC dataset 驗證本次均通過；local migration list 確認 `20261103150000` 已套用。管理員與非管理員 RPC 權限拒絕測試均已由使用者確認先前通過，不再列為待測或要求重跑。併發同 request 測試尚未執行；既有寫入型 RPC runner 已移除 Git 工作樹必須乾淨的限制，後續可在保留其他未提交變更的情況下執行，但仍須維持 loopback-only、本機 Super Admin JWT 與測試資料隔離規則。此處為 2026-11-05 歷史進度，已由後續實作與 2026-11-13 發布策略更新；目前版本狀態、觀察項目及發布前剩餘工作以 `docs/02_產品開發路線圖.md` 的 V3.11.0 更新與 `docs/81_AI每日行程卡片Excel匯入規格草案.md` §12.1／§12.11 為準。僅公司端 local V5 有既有 migration／測試資料，今天沒有新增／刪除資料，也未操作遠端正式 DB；commit/push、合併及發布不在目前授權內。** 規格與實際進度見《[81_AI每日行程卡片Excel匯入規格草案](81_AI每日行程卡片Excel匯入規格草案.md)》。
 
-- [ ] **V3.11.0 發布後觀察：真人 PWA Recovery／IM09／IM10**。依 2026-11-13 Product Owner 決策，這些項目不阻擋 V3.11.0 發布；仍須在實際使用／適用測試情境出現時補做真人瀏覽器或 PWA 故障注入、Recovery 狀態確認、地點／天氣／路線／照片副作用隔離與其他裝置 refresh 驗收。未取得證據前不得標示通過。觀察矩陣見《[81_AI每日行程卡片Excel匯入規格草案](81_AI每日行程卡片Excel匯入規格草案.md)》§12.11。
+
 
 ## 跨版本品質改善計畫（未排程）
 

@@ -386,6 +386,7 @@ export const reconcilePendingItinerarySyncState = (
   state: ItinerarySyncState,
   cloudDaysData: Record<string, ItineraryItem[]>,
   cloudUpdatedAt: string,
+  cloudVersion: number | null = null,
 ): PendingItineraryReconciliationResult => {
   const merge = mergeItineraryDaysData(
     state.baseDaysData,
@@ -402,6 +403,7 @@ export const reconcilePendingItinerarySyncState = (
         updatedAt: new Date().toISOString(),
         pendingDaysData: merge.daysData,
         conflictCloudUpdatedAt: cloudUpdatedAt,
+        conflictCloudVersion: cloudVersion,
         conflictCloudDaysData: cloudDaysData,
         conflicts: merge.conflicts,
         resolutionChoices: [],
@@ -414,7 +416,7 @@ export const reconcilePendingItinerarySyncState = (
   if (sameItineraryDaysData(merge.daysData, cloudDaysData)) {
     return {
       status: "already-synced",
-      state: createSyncedItineraryState(state.tripId, cloudUpdatedAt, cloudDaysData),
+      state: createSyncedItineraryState(state.tripId, cloudUpdatedAt, cloudDaysData, cloudVersion),
     };
   }
 
@@ -426,9 +428,11 @@ export const reconcilePendingItinerarySyncState = (
       status: "pending",
       updatedAt: now,
       baseCloudUpdatedAt: cloudUpdatedAt,
+      baseCloudVersion: cloudVersion,
       baseDaysData: cloudDaysData,
       pendingDaysData: merge.daysData,
       conflictCloudUpdatedAt: undefined,
+      conflictCloudVersion: undefined,
       conflictCloudDaysData: undefined,
       conflicts: [],
       resolutionChoices: [],
@@ -437,18 +441,29 @@ export const reconcilePendingItinerarySyncState = (
   };
 };
 
+export const shouldSkipDuplicateItinerarySave = (
+  state: ItinerarySyncState | null,
+  nextDaysData: Record<string, ItineraryItem[]>,
+  hasPriorSaveInFlight: boolean,
+): boolean => {
+  if (!state || !sameItineraryDaysData(state.pendingDaysData, nextDaysData)) return false;
+  return state.status === "synced" || (state.status === "pending" && hasPriorSaveInFlight);
+};
+
 export const createPendingItinerarySyncState = (
   tripId: string,
   baseCloudUpdatedAt: string | null,
   baseDaysData: Record<string, ItineraryItem[]>,
   pendingDaysData: Record<string, ItineraryItem[]>,
   current?: ItinerarySyncState | null,
+  baseCloudVersion: number | null = current?.baseCloudVersion ?? null,
 ): ItinerarySyncState => ({
   tripId,
   revision: crypto.randomUUID(),
   status: "pending",
   updatedAt: new Date().toISOString(),
   baseCloudUpdatedAt: current?.status === "pending" || current?.status === "conflict" ? current.baseCloudUpdatedAt : baseCloudUpdatedAt,
+  baseCloudVersion: current?.status === "pending" || current?.status === "conflict" ? current.baseCloudVersion : baseCloudVersion,
   baseDaysData: current?.status === "pending" || current?.status === "conflict" ? current.baseDaysData : baseDaysData,
   pendingDaysData,
   conflicts: [],
@@ -459,12 +474,14 @@ export const createSyncedItineraryState = (
   tripId: string,
   cloudUpdatedAt: string,
   daysData: Record<string, ItineraryItem[]>,
+  cloudVersion: number | null = null,
 ): ItinerarySyncState => ({
   tripId,
   revision: crypto.randomUUID(),
   status: "synced",
   updatedAt: new Date().toISOString(),
   baseCloudUpdatedAt: cloudUpdatedAt,
+  baseCloudVersion: cloudVersion,
   baseDaysData: daysData,
   pendingDaysData: daysData,
   conflicts: [],

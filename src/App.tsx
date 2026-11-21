@@ -94,6 +94,7 @@ import {
   APP_SOURCE_CLIENT_ID,
 } from "./services/tripDataRevisionService";
 import { syncItineraryCoverOfflineCache } from "./services/itineraryCoverOfflineCache";
+import { saveItineraryWithRevisionNotice } from "./utils/itinerarySaveGate";
 import {
   createTripFromExcel,
   TripExcelCreateError,
@@ -344,6 +345,7 @@ function ConfiguredApp({
     deleteTrip,
     refreshTripOptionsAndSelect,
     saveCurrentTripDetail,
+    saveItineraryTripDetail,
     saveCurrentTripDetailLocally,
     reloadCurrentTrip,
     reconcileTripWorkspace,
@@ -352,6 +354,9 @@ function ConfiguredApp({
     defaultParticipantProfiles,
     refreshDefaultParticipantProfiles,
     invalidateWorkspaceAccess,
+    itinerarySyncState,
+    recordItineraryResolutionChoice,
+    applyItineraryResolution,
   } = useTripWorkspace({ supabase });
   const {
     isSystemDeveloper,
@@ -952,7 +957,7 @@ function ConfiguredApp({
           checklistData: mergedItems,
         },
       },
-      false,
+      "checklist",
     );
     if (!didSaveTrip) {
       throw new Error("共同清單旅程資料尚未成功寫入雲端");
@@ -1132,7 +1137,7 @@ function ConfiguredApp({
         otherInfoFolders: folders,
       },
     };
-    const didSave = await saveCurrentTripDetail(nextTrip);
+    const didSave = await saveCurrentTripDetail(nextTrip, "other-info-folders");
     if (!didSave && navigator.onLine) {
       throw new Error("其他資訊分類尚未成功寫入雲端");
     }
@@ -1563,6 +1568,10 @@ function ConfiguredApp({
             {/* 1. 行程規劃模組 */}
             {currentScreenType === "itinerary" && currentTrip && (
               <ItineraryPage
+                recoveryError={itinerarySyncState?.recoveryError ? itinerarySyncState.lastError ?? "原始 Pending 已保留，需進行 recovery。" : null}
+                itinerarySyncState={itinerarySyncState}
+                onItineraryResolutionChoice={recordItineraryResolutionChoice}
+                onApplyItineraryResolution={applyItineraryResolution}
                 key={`${selectedTripId}-${userEmail ?? "guest"}`}
                 supabase={supabase}
                 trip={currentTrip}
@@ -1588,21 +1597,15 @@ function ConfiguredApp({
                   setRequestedOtherInfoFolderId(folderId);
                   setCurrentScreen(screen.id);
                 }}
-                onSaveTripDetail={async (trip) => {
-                  if (!canEditTripMaster) return;
-                  if (await checkForRemoteTripChange()) {
-                    throw new Error("偵測到其他裝置的資料變更，請重新載入後再試。 ");
-                  }
-                  try {
-                    await saveCurrentTripDetail(trip);
-                  } catch (error) {
-                    if (error instanceof TripVersionConflictError) {
-                      showTripVersionConflict();
-                      throw error;
-                    }
-                    throw error;
-                  }
-                }}
+                onSaveTripDetail={(trip) =>
+                  saveItineraryWithRevisionNotice(trip, {
+                    canEdit: canEditTripMaster,
+                    checkForRemoteTripChange,
+                    save: saveItineraryTripDetail,
+                    showVersionConflict: showTripVersionConflict,
+                    isVersionConflict: (error) => error instanceof TripVersionConflictError,
+                  })
+                }
                 onManageModeChange={handleSharedDataManageModeChange}
               />
             )}

@@ -1,10 +1,10 @@
 {
-  "version": "3.11.3",
+  "version": "3.11.4",
   "minimumSupportedVersion": "3.9.27",
-  "releaseDate": "2026-11-16",
+  "releaseDate": "2026-11-22",
   "releaseNotes": [
-    "改善 Android PWA 更新流程，確認 Service Worker 接管後才自動重新載入。",
-    "自動更新失敗時提供安全的手動重新啟動流程，並加入本機診斷資訊複製功能。"
+    "修正批次時間調整的無地點區段推斷與時間格式警告。",
+    "改善行程卡片保存可靠性及編輯／保存整合。"
   ],
   "forceUpdate": false
 }

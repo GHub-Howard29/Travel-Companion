@@ -1,0 +1,13 @@
+﻿{
+  "test": "ADR001 Stage 1 forced AFTER-trigger rollback against current develop migrations",
+  "startedAt": "2026-11-20T11:30:00Z",
+  "localOnly": true,
+  "pass": true,
+  "saveRejected": true,
+  "versionStayedZero": true,
+  "daysDataUnchanged": true,
+  "historyRollback": true,
+  "authorizationMarkerRollback": true,
+  "fixtureRolledBack": true,
+  "scopeLimit": "Single local transaction; synthetic trigger forces failure after history trigger. Does not test client response-loss recovery."
+}

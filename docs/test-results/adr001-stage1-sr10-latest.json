@@ -1,0 +1,44 @@
+{
+  "status": "PASS",
+  "date": "2026-11-20",
+  "environment": "loopback Supabase only; local test fixture; no production access",
+  "tests": [
+    {
+      "case": "omitted p_days_data",
+      "result": "PASS",
+      "evidence": "PostgREST function resolution rejected missing parameter; existing dual-auth runner assertions"
+    },
+    {
+      "case": "SQL NULL",
+      "result": "PASS",
+      "evidence": "Existing API RPC runner rejected JS null as SQL NULL with ADR001_INVALID_SAVE_INPUT"
+    },
+    {
+      "case": "JSONB literal null",
+      "result": "PASS",
+      "evidence": "Single-statement PostgreSQL DO probe invoked Save RPC with 'null'::jsonb and isolated request.jwt.claim settings; caught ADR001_INVALID_SAVE_INPUT. DB role itself was not switched to authenticated."
+    },
+    {
+      "case": "day-keyed object grow",
+      "result": "PASS",
+      "evidence": "2-day fixture daysData Save to 3 keyed arrays; version 1->2; independent readback matched exact payload"
+    },
+    {
+      "case": "day-keyed object shrink",
+      "result": "PASS",
+      "evidence": "3-key payload Save to 1 keyed array; version 2->3; independent readback matched exact payload"
+    },
+    {
+      "case": "history",
+      "result": "PASS",
+      "evidence": "3 itinerary history rows observed across grow/shrink saves"
+    }
+  ],
+  "runner": "scripts/test-adr001-sr10-local.mjs",
+  "fixture": "adr001-sr10-575e8e5e-447a-420a-a100-31a5d49fe853",
+  "cleanup": "PASS; post-test counts for trips, leases, versions, history, auth users and admin_users matching adr001-sr10 fixture prefix all zero",
+  "limits": [
+    "No test that changes content.days itself; normalization contract createDays/createEmptyDaysData/createTripRecord remains static caller evidence.",
+    "JSONB literal-null probe set JWT claim settings but did not SET ROLE authenticated; input rejection occurs before permission checks."
+  ]
+}

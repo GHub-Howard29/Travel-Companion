@@ -16,6 +16,7 @@ import {
   upsertStoredTripRecord,
   type StoredTripRecord,
 } from "../storage/tripStorage";
+import { saveItineraryDaysToCloud } from "./itineraryCloudSaveService";
 import {
   cloudTripExists,
   cloudTripTombstoneExists,
@@ -25,7 +26,7 @@ import {
   insertCloudTripRecord,
   TripVersionConflictError,
   updateCloudTripRecord,
-  upsertCloudTripRecord,
+  updateCloudTripNonItineraryFields,
 } from "./tripCloudService";
 export { TripVersionConflictError } from "./tripCloudService";
 import { getCloudOtherInfoItems } from "./otherInfoCloudService";
@@ -786,9 +787,59 @@ export const createTripRecordFromExisting = (
   };
 };
 
+export const saveItineraryDaysWithCloudSync = (
+  supabase: SupabaseClient,
+  input: {
+    tripId: string;
+    clientId: string;
+    expectedVersion: number;
+    daysData: Record<string, unknown[]>;
+    operationId: string;
+  },
+) => saveItineraryDaysToCloud(supabase, input);
+
 export const saveTripRecord = (record: StoredTripRecord): TripMeta[] => {
   const storedRecords = upsertStoredTripRecord(record);
   return sortTripsByDateDesc(storedRecords.map((item) => item.meta));
+};
+
+type NonItineraryTripContentPatch = Partial<
+  Pick<TripDetail["content"], "checklistData" | "otherInfoFolders">
+>;
+
+export const saveTripNonItineraryFieldsWithCloudSync = async (
+  supabase: SupabaseClient,
+  record: StoredTripRecord,
+  contentPatch: NonItineraryTripContentPatch,
+): Promise<boolean> => {
+  if (isStaticSeedTripId(record.meta.id)) {
+    throw new Error("靜態 SEED 行程由 JSON 管理，不可寫入動態 TRIP 資料庫");
+  }
+
+  const currentStoredRecord = readStoredTripRecords().find(
+    (item) => item.meta.id === record.meta.id,
+  );
+  if (!navigator.onLine) {
+    saveTripRecord({
+      ...record,
+      cloudUpdatedAt:
+        currentStoredRecord?.cloudUpdatedAt ?? currentStoredRecord?.updatedAt,
+    });
+    return false;
+  }
+
+  const syncedRecord = await updateCloudTripNonItineraryFields(
+    supabase,
+    record.meta.id,
+    contentPatch,
+  );
+  const nextRecord = {
+    ...syncedRecord,
+    editorEmails: record.editorEmails,
+    cloudUpdatedAt: syncedRecord.updatedAt,
+  };
+  upsertStoredTripRecord(nextRecord);
+  return true;
 };
 
 export const saveTripRecordWithCloudSync = async (
@@ -814,15 +865,9 @@ export const saveTripRecordWithCloudSync = async (
   }
 
   if (!enforceVersion) {
-    saveTripRecord(record);
-    const syncedRecord = await upsertCloudTripRecord(supabase, record);
-    if (!syncedRecord) return false;
-    upsertStoredTripRecord({
-      ...syncedRecord,
-      editorEmails: record.editorEmails,
-      cloudUpdatedAt: syncedRecord.updatedAt,
-    });
-    return true;
+    throw new Error(
+      "既有 Trip 不可透過非版本 upsert 保存；請使用專用欄位更新或 itinerary Save RPC",
+    );
   }
 
   const currentUpdatedAt = expectedUpdatedAt ??
