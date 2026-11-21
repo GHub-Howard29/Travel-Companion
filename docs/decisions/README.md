@@ -8,15 +8,15 @@
 
 | ID | 決策／工作 | 狀態 | 目前階段 | 下一步／阻塞 | 權威主檔 |
 |---|---|---|---|---|---|
-| [ADR-001](active/ADR-001-trip-daily-card-edit-lock-scope.md) | 每日詳細行程統一編輯權、保存協調與更新提示簡化 | Accepted／進行中 | **S2 Cloud Save 接線** | **S1 DB Exit PASS（2026-11-21）。S2 切片 1、2 PASS：Save RPC adapter 建立；Checklist／Other Info folders 已分流至 non-itinerary 更新，保留最新 daysData 並以 CAS 防止覆寫；既有 Trip 非版本 upsert 已封鎖，新 Trip 保留獨立 insert。** 尚有 Trip editor/dayCount、Pending 自動同步、衝突解決三個 itinerary callers 待接 Save RPC；須由 S3 提供可信 version read／Trip-level Lease client，並完成 local Supabase 整合驗收。 | [ADR-001](active/ADR-001-trip-daily-card-edit-lock-scope.md) |
+| [ADR-001](active/ADR-001-trip-daily-card-edit-lock-scope.md) | 每日詳細行程統一編輯權、保存協調與更新提示簡化 | Accepted／進行中 | **S3 App整合／Lock／Pending／Recovery（進行中）** | **2026-11-21 核准調整階段邊界及離線政策：S2聚焦Cloud Save service／Repository契約與基礎驗證；App接線移至S3。S2 Exit PASS。S3已完成可信version read、Trip-level Lease client、App save caller／dayCount grow及shrink UI、generic daysData bypass封閉、Pending recovery protection與UI caller integration。離線只讀、禁止卡片編輯；取消Offline Pending→Autosync驗收。S3真實UI已證實表單開啟中失網即關閉且卡片未變；下一步驗證復網後重新Lease恢復編輯及Conflict Apply→Cloud readback，並補驗離線編輯入口拒絕，完成後核對S3 Exit。** | [ADR-001](active/ADR-001-trip-daily-card-edit-lock-scope.md) |
 
 ## ADR-001 階段入口
 
 | 階段 | 文件 | 按需載入條件 |
 |---|---|---|
 | S1 DB enforcement／Lease／version／Save RPC | [ADR-001-S1](active/ADR-001-S1-db-enforcement.md) | DB schema、migration、Trigger、RPC、權限及 DB 測試 |
-| S2 Cloud Save 接線 | [ADR-001-S2](active/ADR-001-S2-cloud-save-integration.md) | Repository、Cloud service、所有 daysData 寫入 caller |
-| S3 Client／Lock／Pending／Recovery | [ADR-001-S3](active/ADR-001-S3-client-lock-pending.md) | Hook、UI、Lease client、Pending、merge、Recovery |
+| S2 Cloud Save contract／Repository 基礎 | [ADR-001-S2](active/ADR-001-S2-cloud-save-integration.md) | Cloud／Repository contract、非 itinerary 保存隔離及 RPC／DB contract 基礎驗證 |
+| S3 App 整合／Lock／Pending／Recovery（進行中） | [ADR-001-S3](active/ADR-001-S3-client-lock-pending.md) | 離線只讀、禁編；驗證失去網路時立即停止編輯、復網後重新Lease，以及線上Conflict Apply／Cloud readback UI實測，再核對S3 Exit |
 | S4 整合後驗收 | [ADR-001-S4](active/ADR-001-S4-acceptance.md) | 整合後 regression、跨瀏覽器／裝置、離線恢復及結案 |
 | 根因調查與原始證據 | [文件 116](../116_卡片編輯故障根因與旅程級編輯契約調查紀錄.md) | 需要根因、呼叫鏈、原始調查及補充測試證據時；不作為階段進度／下一步的維護位置 |
 
@@ -51,3 +51,5 @@
 
 本目錄不取代既有領域規格、API／資料契約、資料庫設計及驗收文件。每個決策只指定一份完整權威內容；其他文件僅連結，不複製另一份可能漂移的規格。
 
+
+- ADR-001 S3續測（2026-11-21）：synthetic TEST-1離線管理入口阻擋已取得UI證據PASS（button disabled、點擊無作用、無dialog）；network已恢復。Conflict UI選擇→Apply→Cloud readback仍未完成，S3未Exit。

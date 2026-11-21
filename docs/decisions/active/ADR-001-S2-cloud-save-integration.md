@@ -62,13 +62,60 @@
 - callers 盤點後尚有三個版本化舊保存 caller：Trip editor（包含 dayCount grow/shrink）、Pending 自動同步、衝突解決。均為既有 itinerary `daysData` 寫入，不可轉成 metadata 更新；尚待接上 Save RPC。
 - 目前測試使用純 service contract／mock adapter，未連 local Supabase 驗證實際 RLS／Trigger／Auth／CAS；亦未做真實 App 多裝置競態驗收。
 
-### 目前 S2 未完成項
+### 2026-11-21 核准的 S2／S3 階段責任修訂
 
-1. 一般 Trip metadata／Trip editor 的保存必須從既有 itinerary payload 分離；其中 dayCount grow/shrink 一旦改動 `daysData`，必須走唯一 Save RPC，且不能以 `updated_at` 偽裝 itinerary version。
-2. `saveItineraryTripDetail()` 接上 `tc_save_itinerary_days`；現有 S1 migrations 未提供 authenticated client 讀取 `itinerary_trip_versions` 的 RPC，而該表撤銷 authenticated 權限；需依 S3 client 整合提供可信 version 來源及 Trip-level Lease client。
-3. `applyItineraryResolution()` 接到唯一 Save RPC，Pending／Conflict 的刪除或改寫必須等到 Save 明確成功；CAS loser／未知結果保留原 Pending 與衝突資料。
-4. 盤點並關閉通用 Cloud upsert／update 對既有 Trip `daysData` 的全部寫入旁路；保留新 Trip create／seed 初始資料插入流程。
-5. 使用 local Supabase／獨立 Auth context 驗證實際 Save RPC、metadata-only update、Trigger/history 互動與 CAS 競態，補齊應用程式 caller closure 回歸測試。
-6. 完成全部受影響 callers、非 itinerary 功能回歸及上述整合驗收後，才能判定 S2 Exit；S3 Pending／unknown-outcome lifecycle 不提前宣告為 S2 PASS。
+**修訂理由：** 原 S2 Exit 將完整 App caller closure、Trip-level Lease／可信 version client、Pending／Conflict／Recovery整合納入門檻；但這些工作本質上屬於 S3 client integration，造成階段順序倒置，要求 S2先完成 S3基礎能力才能 Exit。經使用者核准，重新界定階段責任，不改變 ADR-001核心安全／資料契約。
 
-**當前 S2 狀態：進行中；切片 1、切片 2 PASS，尚未達到 S2 Exit。**
+**S2 保留並以此判定 Exit：**
+1. Save RPC service／Repository adapter contract 已建立且 contract test PASS。
+2. 非 itinerary Checklist／Other Info save path 已分流、allow-list／read-latest／CAS保護 contract測試 PASS。
+3. 舊有既有 Trip 非版本 upsert bypass 已封鎖，專用新 Trip create insert保留，並有 contract regression證據。
+4. S2所需既有 sync／recovery／非 itinerary regression、local DB SR-10 grow/shrink、SR-11 dual Auth DB驗證證據完成核對，且不得將 DB基礎證據誤稱為 App integration PASS。
+5. S2 Exit不要求 App caller已全部接線、Trip-level Lease／可信 version client、Pending／Conflict Save RPC整合、Recovery／UI或跨瀏覽器整合驗收；這些移至 S3，仍不得繞過唯一 daysData Save RPC／Lease／version核心契約。
+
+**移交 S3 的未完成項（仍是 ADR-001 必須完成的工作，不是取消）：**
+- Trip editor metadata／dayCount與 daysData拆分；dayCount grow/shrink走唯一 Save RPC。
+- `saveItineraryTripDetail()`／Pending auto-sync與 `applyItineraryResolution()` 接線到 Save RPC，並以可信 version及Trip-level Lease client協調。
+- Pending／Conflict／unknown-outcome lifecycle：Save明確成功才清除／改寫Pending；CAS loser或未知結果保留資料並reconcile。
+- 封閉既有 Trip `updateCloudTripRecord()`／generic update daysData寫入旁路，保留 create／seed insert。
+- caller closure regression、實際 App／local Supabase整合測試及相關 build／回歸。
+
+S2 Exit僅依以上 S2保留範圍逐項核對，不因 S3移交項未完成而阻塞或預先宣告 S3 PASS。
+
+### 2026-11-21 S2 未完成驗證續跑紀錄
+
+**執行環境**
+- 主機 `TPEPC-TM7503-01 / NICE-GREEN`；Node.js `22.23.2`（`C:\\nvm\\v22.23.2`）、npm `10.9.8`。
+- Local Supabase loopback `http://127.0.0.1:54321` 正常；migration list 顯示至 `20261120140000` 的現行 migrations 已套用。未連正式 Supabase、未執行 migration、未部署。
+- 開始時 Git `develop...origin/develop`，HEAD `93f7d56`，工作樹乾淨；本輪沒有程式碼修改、沒有 commit／push。
+
+**本輪重新執行結果**
+- **S2 service／Repository contract：PASS。** `node --experimental-strip-types --no-warnings scripts/test-adr001-cloud-save-service.mjs` exit 0；覆蓋 Save RPC adapter 參數與回應、CAS loser、錯誤格式、非 itinerary patch allow-list、read-latest 保留最新 daysData 及 CAS 競態傳遞。
+- **Pending auto-sync idempotency：PASS。** `scripts/test-p0-pending-autosync-idempotency.mjs` exit 0。
+- **Workspace recovery lifecycle：PASS。** `scripts/test-trip-workspace-recovery-lifecycle.mjs` exit 0；Session Ready、offline guard、event trigger、in-flight 去重、failure pending retention、success clearing、cleanup 通過。這是既有生命週期契約測試，不等於 S3 應用層 Pending→Save RPC 已接線。
+- **Itinerary sync contract：PASS。** `scripts/verify-v31012-itinerary-sync.mjs` exit 0；merge、pending baseline、conflict、Lease RPC response 契約通過。
+- **Trip version recovery：PASS。** `scripts/verify-v398-trip-version-recovery.mjs` exit 0。
+- **非 itinerary regression：PASS。** `scripts/verify-v3917-rc2-sync-boundaries.mjs` 及 `scripts/verify-v3917-rc3-sync-authority.mjs` 均 exit 0。
+- **SR-10 local Supabase grow/shrink：PASS。** `scripts/test-adr001-sr10-local.mjs` exit 0；isolated fixture 的 daysData grow 使 itinerary version `1→2`、shrink `2→3`，讀回內容一致，history 共 3 筆；JSONB literal null 被拒絕。這證明現有 DB Save RPC 支援 grow/shrink 的 daysData payload，不代表 App Trip editor caller 已接線。
+- **SR-11 dual Auth local integration：PASS。** `scripts/test-adr001-dual-auth-session-local.mjs` exit 0；本輪實際建立兩個獨立 Auth user/JWT context，A 取得 Trip Lease、B 無法 Claim／Save／Renew／Release，A 合法 Save 成功；結果 `result=PASS`、`SR-11 cleanup PASS`。先前一次 30 秒前景等待轉 durable job 後未取得 stdout，隨後在確認 fixture 已不存在及基線回復後，重新以 120 秒前景預算成功完成。本次最終 DB 基線：Auth users 4、Trips 3、Leases 0、itinerary versions 3、authorization markers 0；既有 history 1，沒有本輪殘留 fixture。
+
+**Caller／旁路 closure 核對結果（尚未通過）**
+- `src/hooks/useTripWorkspace.ts` 的 `updateTrip()`（Trip editor，包含 dayCount grow/shrink）仍呼叫 `saveTripRecordWithCloudSync()`。
+- `saveItineraryTripDetail()` 的線上 reconcile/save 路徑仍呼叫舊 `saveTripRecordWithCloudSync()`；pending auto-sync effect 仍呼叫此入口，因此舊 timestamp row CAS 還在實際 itinerary pending 路徑。
+- `applyItineraryResolution()` 仍呼叫 `saveTripRecordWithCloudSync()`，沒有連到 `tc_save_itinerary_days`。
+- `src/services/tripCloudService.ts` 的 `updateCloudTripRecord()` 仍把整個 Trip payload（包含 daysData）經 `trips.update()` 寫回；目前 `src/services/tripRepository.ts` 的舊 versioned path 仍能呼叫它。`upsertCloudTripRecord()` 本體仍存在，雖目前只保留專用新建流程／非版本既有 Trip 分支已拒絕，但通用寫入 API 的既有 Trip daysData 旁路尚未完全收斂。
+- `src/services/itineraryCardEditLeaseService.ts` 仍是 card-level lease client；尚未找到 Trip-level Lease client。`itinerary_trip_versions` 已 REVOKE authenticated 讀取權限，也未找到可信 itinerary version read adapter。不能使用 `updated_at` 作替代版本。
+- 因以上證據，三個 itinerary caller、dayCount metadata/data 分離、通用 daysData 旁路封閉及 caller closure regression test 均仍未完成。S3 必要的 trusted version／Trip-level Lease client 是明確相依，不得於本輪以 mock／時間戳代替實作或宣稱通過。
+
+**S2 Exit 判定**
+- **原始紀錄（修訂前）：S2 尚未達 Exit。** 此判定由 2026-11-21 核准的階段責任修訂取代；原始證據不刪除。
+- 未執行完整 `npm run build`：本輪沒有程式修改；先前切片 2 build PASS 證據仍有效，但不代替日後 caller 接線後的整合 build。
+- 未進行真實兩個瀏覽器 UI profile 操作；未驗證整合後 App 的新增／修改／刪除、Pending 自動恢復及 conflict resolution。
+
+**原始 Next Move（階段修訂前，已取代）**
+1. 先完成 S3 提供的可信 itinerary version read 與 Trip-level Lease client，另行驗證讀取權限、身份綁定及 lease lifecycle。
+2. 回到 S2 完成 Trip editor metadata/dayCount 與 daysData 拆分，將 `saveItineraryTripDetail()`／Pending save 及 `applyItineraryResolution()` 接到唯一 Save RPC。
+3. 關閉既有 Trip 的 `updateCloudTripRecord()`／generic update daysData 寫入旁路，同時保留新 Trip insert；建立 caller closure 測試，證明舊路徑無法寫 daysData。
+4. 對上述修改執行完整 build、S2／非 itinerary regression，並以 local Supabase／獨立 Auth contexts 實測 metadata-only update、Save RPC、Trigger/history、CAS 及保存後讀回；完成後才判定 S2 Exit。
+
+**S2 Exit：PASS（2026-11-21，依使用者核准重新界定的 S2 範圍）。** S2 service／Repository contract、非 itinerary save隔離、既有 Trip 非版本 upsert bypass封鎖及create insert保留已具備測試證據；既有 sync／recovery／非 itinerary regression、SR-10 grow/shrink、SR-11 dual Auth local DB證據核對完成。未完成 App callers／Trip-level Lease／可信 version／Pending／Conflict／Recovery整合及 daysData旁路closure明確移交 S3，不表示已實作或PASS。

@@ -312,7 +312,13 @@ try {
   assert.equal(clearItinerarySyncState("trip-a", pending.revision), true);
   assert.equal(readItinerarySyncState("trip-a"), null);
   storage.set("travel_companion_itinerary_sync_bad", "{");
-  assert.equal(readItinerarySyncState("bad"), null);
+  const corruptPending = readItinerarySyncState("bad");
+  assert.equal(corruptPending?.recoveryError, true);
+  assert.match(corruptPending?.lastError ?? "", /原始 Pending 資料已保留/);
+  assert.equal(storage.get("travel_companion_itinerary_sync_bad"), "{", "Corrupt raw Pending must remain untouched.");
+  assert.throws(() => writeItinerarySyncState({ ...pending, tripId: "bad" }), /原始 Pending 資料已保留/);
+  assert.equal(storage.get("travel_companion_itinerary_sync_bad"), "{", "Recovery guard must prevent overwriting corrupt Pending.");
+  assert.equal(clearItinerarySyncState("bad", "wrong-revision"), false);
   writeConfirmedItinerarySnapshot("trip-a", {
     revision: 10,
     updatedAt: "2026-11-01T00:00:00.000Z",
@@ -339,8 +345,14 @@ const existingOtherInfoStorage = readFileSync(new URL("../src/storage/otherInfoS
 assert.match(app, /onSaveTripDetail=/);
 assert.match(workspace, /saveCurrentTripDetail/);
 assert.match(itinerary, /onSaveTripDetail/);
-// 三方合併／pending 契約由上方純函式測試覆蓋；卡片 UI 不引用舊版 itinerarySyncState 名稱。
-assert.doesNotMatch(itinerary, /itinerarySyncState/);
+// 三方合併／pending 契約由上方純函式測試覆蓋；新版 Conflict UI 僅消費既有 state 與 choices，
+// 其實際 App caller 接線由 verify:adr001-s3-app-integration 專項守門。
+assert.match(app, /itinerarySyncState=\{itinerarySyncState\}/);
+assert.match(app, /onItineraryResolutionChoice=\{recordItineraryResolutionChoice\}/);
+assert.match(app, /onApplyItineraryResolution=\{applyItineraryResolution\}/);
+assert.match(itinerary, /<ItineraryConflictPanel/);
+assert.match(itinerary, /onChoice=\{onItineraryResolutionChoice\}/);
+assert.match(itinerary, /onApply=\{onApplyItineraryResolution\}/);
 // 跨裝置 revision 通知必須保留；正常通知是資訊提示而非編輯鎖或自動 reload。
 assert.match(revisionHook, /setNoticeKind\(\(current\) => current \?\? "available"\)/);
 assert.match(revisionHook, /if \(suppressNoticeRef\.current \|\| isChangePreviewOpen\) return/);
@@ -370,10 +382,9 @@ assert.match(itinerary, /const hasRemoteLeaseOnActiveDay = hasCurrentEditLeaseLi
 assert.match(itinerary, /hasRemoteLeaseOnActiveDay\) \{/);
 assert.match(itinerary, /新增活動仍可使用/);
 assert.match(itinerary, /setIsOrderMode\(false\)/);
-// 等待中的多張卡片各自追蹤 lease DELETE，不依賴行程資料 revision／廣播。
+// Trip-level Lease release broadcasts are read back from the Lease list; card ids are only waiter UI references.
 assert.match(itinerary, /waitingCardIdsRef\.current\.add\(event\.id\)/);
-assert.match(itinerary, /payload\.eventType === "DELETE"/);
-assert.match(itinerary, /waitingCardIdsRef\.current\.has\(changedCardId\)/);
+assert.match(itinerary, /if \(previous\.__trip__ && !next\.__trip__\)/);
 assert.match(itinerary, /releasedWaitingCardIds\.length > 0/);
 assert.match(itinerary, /refreshQueued = true/);
 // 無變更儲存走 release RPC，不送出整筆 Trip 更新；取消等待 release 結果。
@@ -404,7 +415,7 @@ assert.match(itinerary, /hasRemoteLeaseOnActiveDay && !isRemoteLeaseNoticeDismis
 assert.match(manageToggle, /setIsRemoteLeaseNoticeDismissed\(false\)/);
 assert.match(manageToggle, /void editLeaseRefreshRef\.current\?\.\(\)/);
 assert.match(itinerary, /releasedWaitingCardIds\.length > 0/);
-assert.match(itinerary, /previous\[waitingCardId\] && !next\[waitingCardId\]/);
+assert.match(itinerary, /if \(previous\.__trip__ && !next\.__trip__\)/);
 assert.match(itinerary, /setReleasedWaitingCardIds\(\(current\)/);
 assert.match(app, /key=\{`\$\{selectedTripId\}-\$\{userEmail \?\? "guest"\}`\}/);
 assert.doesNotMatch(app, /key=\{`\$\{selectedTripId\}-\$\{userEmail \?\? "guest"\}-\$\{isOnline/);
@@ -486,7 +497,7 @@ assert.doesNotMatch(
 // Lease list RPC 必須嚴格驗證回應型態：正常空陣列可用，非陣列不可靜默當成空清單。
 const createLeaseRpcClient = (data, error = null) => ({
   rpc: async (name, args) => {
-    assert.equal(name, "tc_list_itinerary_card_edit_leases");
+    assert.equal(name, "tc_list_itinerary_trip_edit_leases");
     assert.deepEqual(args, { p_trip_id: "trip-a" });
     return { data, error };
   },
@@ -495,13 +506,12 @@ assert.deepEqual(await listItineraryCardEditLeases(createLeaseRpcClient([]), "tr
 assert.deepEqual(await listItineraryCardEditLeases(createLeaseRpcClient(null), "trip-a"), []);
 assert.deepEqual(
   await listItineraryCardEditLeases(createLeaseRpcClient([{
-    card_id: "card-a",
     owner_user_id: "user-a",
     owner_client_id: "client-a",
     expires_at: "2026-11-01T00:00:00.000Z",
   }]), "trip-a"),
   [{
-    cardId: "card-a",
+    cardId: "__trip__",
     ownerUserId: "user-a",
     ownerClientId: "client-a",
     expiresAt: "2026-11-01T00:00:00.000Z",
@@ -509,7 +519,7 @@ assert.deepEqual(
 );
 await assert.rejects(
   listItineraryCardEditLeases(createLeaseRpcClient({ rows: [] }), "trip-a"),
-  /卡片編輯租約清單回應格式錯誤/,
+  /旅程編輯租約清單回應格式錯誤/,
 );
 await assert.rejects(
   listItineraryCardEditLeases(createLeaseRpcClient(null, new Error("rpc permission denied")), "trip-a"),

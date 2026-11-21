@@ -178,6 +178,11 @@ try {
   assert.equal(verifiedA.data.user?.role, "authenticated");
   assert.equal(verifiedB.data.user?.role, "authenticated");
 
+  const trustedVersionA = unwrap(await sessionA.client.rpc("tc_read_itinerary_version", { p_trip_id: tripId }), "A trusted version read");
+  assert.equal(Number(trustedVersionA[0]?.version), 1, "Authenticated version RPC should read baseline version.");
+  const anonymousVersionRead = await createClient(baseUrl, status.ANON_KEY, options).rpc("tc_read_itinerary_version", { p_trip_id: tripId });
+  assert(anonymousVersionRead.error, "Anonymous client unexpectedly read private itinerary version.");
+
   const claimA = unwrap(await sessionA.client.rpc("tc_claim_itinerary_trip_edit_lease", {
     p_trip_id: tripId, p_client_id: clientIdA,
   }), "A claim Lease");

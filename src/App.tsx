@@ -354,6 +354,9 @@ function ConfiguredApp({
     defaultParticipantProfiles,
     refreshDefaultParticipantProfiles,
     invalidateWorkspaceAccess,
+    itinerarySyncState,
+    recordItineraryResolutionChoice,
+    applyItineraryResolution,
   } = useTripWorkspace({ supabase });
   const {
     isSystemDeveloper,
@@ -1565,6 +1568,10 @@ function ConfiguredApp({
             {/* 1. 行程規劃模組 */}
             {currentScreenType === "itinerary" && currentTrip && (
               <ItineraryPage
+                recoveryError={itinerarySyncState?.recoveryError ? itinerarySyncState.lastError ?? "原始 Pending 已保留，需進行 recovery。" : null}
+                itinerarySyncState={itinerarySyncState}
+                onItineraryResolutionChoice={recordItineraryResolutionChoice}
+                onApplyItineraryResolution={applyItineraryResolution}
                 key={`${selectedTripId}-${userEmail ?? "guest"}`}
                 supabase={supabase}
                 trip={currentTrip}

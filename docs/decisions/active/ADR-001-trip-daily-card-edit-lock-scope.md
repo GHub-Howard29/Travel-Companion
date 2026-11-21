@@ -18,7 +18,7 @@
 - **Realtime：** 僅作鎖定狀態及資料更新通知，不是編輯權授權來源，不因事件自動讀取整份 Trip 或執行摘要統計。
 - **Revision：** 保留必要資料更新／異常訊號及事件遺失後操作時補查；全域 revision 通知本身不得拒絕合法保存，也不得取代鎖驗證。
 - **CAS／Version：** 保留最後一道資料一致性保護，防止舊版本覆蓋新版本；不取代 Trip Edit Lock。
-- **Local Pending Sync：** 保留本機持久化、離線資料保護及恢復；鎖失效／離線時不得以上傳過期權限同步，Pending 不得因失鎖而遺失。
+- **Offline policy（2026-11-21核准修訂）：** 每日詳細行程離線只讀，離線時禁止開啟編輯、新增、修改、刪除及排序等變更；無法確認有效Trip Lease即禁止編輯。重新連線後須重新確認／取得有效Lease才恢復編輯。離線卡片編輯與Offline Pending→Autosync不再是產品需求或驗收項目。既有Pending／Recovery仍僅處理線上保存未知結果、版本衝突或既有保護狀態，不得用來接受離線編輯。
 - **保存協調入口：** 每日詳細行程新增、修改、刪除及自動／恢復同步收斂至一致的鎖、版本與 Pending 協調流程，不另建平行卡片遠端驗證流程。
 
 ### 已定案的資料庫邊界與版本責任
@@ -28,7 +28,7 @@
 - Save RPC 在單一原子交易內驗證 Trip-level Lease 與 itinerary version CAS，只更新 `daysData` 並原子推進專屬版本；不得回寫前端舊的整筆 `content`。
 - 授權必須由資料庫權限模型保護且不可由 authenticated 使用者偽造；Trigger 必須拒絕未經受控通道的 `daysData` 寫入。
 - Claim、Renew、Release、Save 遵守一致 Lease row locking／交易序列化契約；失效持有者不得保存成功。
-- Pending 保留現有三方合併及本機資料保護；版本基準改用 itinerary version。舊 timestamp 不得直接轉成 version；Recovery 必須取得可信 Cloud snapshot/version，安全重建基準，無法安全重建時保留 Pending 並停止自動覆寫。
+- Pending／Recovery限於線上Save RPC未知結果、CAS衝突或已存在的安全保護狀態；不得新增離線卡片修改Pending。版本基準使用 itinerary version，舊 timestamp不得直接轉成version；Recovery取得可信Cloud snapshot/version，無法安全重建時保留Pending並停止自動覆寫。
 - 受控授權、Trigger／RPC 權限及直接 UPDATE 封鎖須以資料庫整合測試證明；未驗證前不可宣稱完成。
 
 ### 適用範圍與禁止事項
@@ -49,8 +49,8 @@
 | 階段文件 | 內容 | 狀態 | 讀取時機 |
 |---|---|---|---|
 | [ADR-001-S1](ADR-001-S1-db-enforcement.md) | DB schema、Lease、version、Trigger、Save RPC、安全及資料庫驗證基準與詳細測試紀錄 | **S1 DB Exit PASS（2026-11-21）；SR-01～SR-11 DB slice已核對。** S3應用層Pending／Recovery不阻塞S1 DB Exit。 | DB／RPC／migration 工作時 |
-| [ADR-001-S2](ADR-001-S2-cloud-save-integration.md) | Cloud service、Repository、所有 daysData 寫入 caller 與唯一 Save RPC 接線 | 未完成整合 | Cloud／Repository 工作時 |
-| [ADR-001-S3](ADR-001-S3-client-lock-pending.md) | Hook／UI、Lease client、Pending、Version reconciliation、Recovery | 未完成整合 | 前端／Pending／Recovery 工作時 |
+| [ADR-001-S2](ADR-001-S2-cloud-save-integration.md) | Cloud Save service／Repository 基礎契約、非 itinerary 保存隔離、RPC adapter／DB contract 基礎驗證 | **S2 Exit PASS（2026-11-21；依核准重新界定範圍核對）** | Cloud／Repository contract 工作時 |
+| [ADR-001-S3](ADR-001-S3-client-lock-pending.md) | App callers／Trip metadata-dayCount 分離、Trip-level Lease／可信 version client、Pending／Recovery／Conflict Save RPC 整合、旁路 closure | **進行中；UI card save／dayCount grow PASS；shrink final confirmation及Pending／Conflict UI integration未完成** | 前端／Lease／Pending／Recovery／完整 caller integration 工作時 |
 | [ADR-001-S4](ADR-001-S4-acceptance.md) | 整合後測試、跨瀏覽器／跨裝置、離線恢復及退出條件 | 待整合後執行 | 驗收工作時 |
 | [文件 116](../../116_卡片編輯故障根因與旅程級編輯契約調查紀錄.md) | 根因證據、呼叫鏈調查、工程審查及原始／補充測試證據 | 調查證據來源；不維護階段進度 | 根因調查或需核對原始證據時 |
 

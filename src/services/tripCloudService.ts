@@ -380,9 +380,21 @@ export const updateCloudTripRecord = async (
   record: StoredTripRecord,
   expectedUpdatedAt: string,
 ): Promise<StoredTripRecord> => {
+  // Generic Trip metadata updates must never change daysData. Preserve the latest
+  // Cloud snapshot explicitly; itinerary changes are saved only by the RPC.
+  const latest = await getCloudTripRecord(supabase, record.meta.id);
+  if (!latest) throw new Error("無法取得最新雲端旅程資料，非行程更新已停止。");
+  const payload = toCloudTripInsert(record);
+  const safePayload = {
+    ...payload,
+    content: {
+      ...payload.content,
+      daysData: latest.detail.content.daysData,
+    },
+  };
   const { data, error } = await supabase
     .from("trips")
-    .update(toCloudTripInsert(record))
+    .update(safePayload)
     .eq("id", record.meta.id)
     .eq("updated_at", expectedUpdatedAt)
     .select(

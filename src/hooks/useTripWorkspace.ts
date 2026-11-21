@@ -59,6 +59,8 @@ import {
   TripVersionConflictError,
 } from "../services/tripCloudService";
 import { decideTripReconciliation } from "../services/tripReconciliation";
+import { readItineraryCloudVersion, saveItineraryDaysDataCloud, ItineraryCasConflictError } from "../services/itineraryCloudSaveService";
+import { ITINERARY_EDIT_CLIENT_ID, claimItineraryCardEditLease, releaseItineraryCardEditLease } from "../services/itineraryCardEditLeaseService";
 import { clearSharedTripDataAfterAccessLoss } from "../storage/sharedTripDataStorage";
 import { isProtectedSeedTripId, isStaticSeedTripId } from "../constants/appConstants";
 import { getUnusedItineraryCoverPaths } from "../utils/itineraryCoverPhoto";
@@ -728,51 +730,75 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
       if (!selectedTripId || !selectedTripMeta || !currentTrip) return;
       if (!canWriteSelectedTripNow()) throw new HistoricalTripLockedError();
 
-      const cloudSnapshot = navigator.onLine
-        ? await getCloudTripRecord(supabase, selectedTripId)
-        : null;
-      const record =
-        updateTripRecord(
-          selectedTripId,
-          input,
-          cloudSnapshot ?? undefined,
-        ) ??
+      const cloudSnapshot = navigator.onLine ? await getCloudTripRecord(supabase, selectedTripId) : null;
+      const record = updateTripRecord(selectedTripId, input, cloudSnapshot ?? undefined) ??
         createTripRecordFromExisting(selectedTripMeta, currentTrip, input);
-      const expectedUpdatedAt =
-        cloudSnapshot?.cloudUpdatedAt ?? cloudSnapshot?.updatedAt;
+      const desiredDaysData = record.detail.content.daysData;
+      const cloudDaysData = cloudSnapshot?.detail.content.daysData ?? currentTrip.content.daysData;
+      const daysDataChanged = !sameItineraryDaysData(desiredDaysData, cloudDaysData);
+      const expectedUpdatedAt = cloudSnapshot?.cloudUpdatedAt ?? cloudSnapshot?.updatedAt;
+      let finalRecord = record;
 
-      await saveTripRecordWithCloudSync(
-        supabase,
-        record,
-        expectedUpdatedAt,
-      );
-      try {
-        await scheduleItineraryCoverDeletion(
-          supabase,
-          getUnusedItineraryCoverPaths(currentTrip, record.detail),
+      if (daysDataChanged) {
+        const currentPending = readItinerarySyncState(selectedTripId);
+        if (currentPending?.recoveryError) throw new Error(currentPending.lastError ?? "Pending recovery error；原始資料已保護。");
+        const pending = createPendingItinerarySyncState(
+          selectedTripId, cloudSnapshot?.updatedAt ?? record.cloudUpdatedAt ?? null,
+          cloudDaysData, desiredDaysData, currentPending, currentPending?.baseCloudVersion ?? null,
         );
-      } catch (error) {
-        console.warn("Failed to remove unused itinerary covers", error);
+        saveTripRecord({ ...record, cloudUpdatedAt: cloudSnapshot?.updatedAt ?? record.cloudUpdatedAt });
+        writeItinerarySyncState(pending);
+        refreshItinerarySyncState(selectedTripId);
+        setCurrentTrip(record.detail);
+        if (navigator.onLine && cloudSnapshot) {
+          const lease = await claimItineraryCardEditLease(supabase, selectedTripId, "__trip__");
+          if (!lease.acquired || lease.ownerClientId !== ITINERARY_EDIT_CLIENT_ID) throw new Error("另一個裝置持有旅程編輯權；本機天數及卡片修改已保留待同步。");
+          try {
+            const baseVersion = await readItineraryCloudVersion(supabase, selectedTripId);
+            const metadataRecord = {
+              ...record,
+              detail: { ...record.detail, content: { ...record.detail.content, daysData: cloudDaysData } },
+            };
+            await saveTripRecordWithCloudSync(supabase, metadataRecord, expectedUpdatedAt, true);
+            const saveVersion = await readItineraryCloudVersion(supabase, selectedTripId);
+            if (saveVersion.version !== baseVersion.version) throw new Error("非行程 metadata update 意外改變 itinerary version，已停止 Save。");
+            let savedVersion;
+            try {
+              savedVersion = await saveItineraryDaysDataCloud(supabase, selectedTripId, baseVersion.version, desiredDaysData);
+            } catch (saveError) {
+              const readbackVersion = await readItineraryCloudVersion(supabase, selectedTripId);
+              const readback = await getCloudTripRecord(supabase, selectedTripId);
+              if (readback && readbackVersion.version > baseVersion.version && sameItineraryDaysData(readback.detail.content.daysData, desiredDaysData)) savedVersion = readbackVersion;
+              else throw saveError;
+            }
+            finalRecord = { ...record, cloudUpdatedAt: savedVersion.updatedAt, updatedAt: savedVersion.updatedAt };
+            saveTripRecord(finalRecord);
+            const latestPending = readItinerarySyncState(selectedTripId);
+            if (latestPending?.revision === pending.revision) {
+              writeItinerarySyncState(createSyncedItineraryState(selectedTripId, savedVersion.updatedAt, desiredDaysData, savedVersion.version));
+            }
+            refreshItinerarySyncState(selectedTripId);
+          } finally {
+            try { await releaseItineraryCardEditLease(supabase, selectedTripId, "__trip__"); }
+            catch (releaseError) { console.warn("Trip editor Lease release failed", releaseError); }
+          }
+        }
+      } else {
+        await saveTripRecordWithCloudSync(supabase, record, expectedUpdatedAt);
+        finalRecord = readStoredTripRecords().find((item) => item.meta.id === selectedTripId)?.detail ? record : record;
       }
-      if (syncEditors) {
-        await syncTripEditorEmails(supabase, record.meta.id, record.editorEmails);
-      }
-
+      try {
+        await scheduleItineraryCoverDeletion(supabase, getUnusedItineraryCoverPaths(currentTrip, finalRecord.detail));
+      } catch (error) { console.warn("Failed to remove unused itinerary covers", error); }
+      if (syncEditors) await syncTripEditorEmails(supabase, finalRecord.meta.id, finalRecord.editorEmails);
       const nextTrips = await getTripMetas(supabase, getBasePath());
       setTripOptions(nextTrips);
-      setCurrentTrip(record.detail);
+      setCurrentTrip(finalRecord.detail);
       setCurrentScreen("itinerary");
-      setActiveDay(getDefaultActiveDay(record.detail.departureDate, record.detail.content.days));
+      setActiveDay(getDefaultActiveDay(finalRecord.detail.departureDate, finalRecord.detail.content.days));
       setIsLoading(false);
     },
-    [
-      canWriteSelectedTripNow,
-      currentTrip,
-      getBasePath,
-      selectedTripId,
-      selectedTripMeta,
-      supabase,
-    ],
+    [canWriteSelectedTripNow, currentTrip, getBasePath, selectedTripId, selectedTripMeta, supabase],
   );
 
   const refreshTripOptionsAndSelect = useCallback(
@@ -945,6 +971,7 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
         }
 
         const currentState = readItinerarySyncState(tripId);
+        if (currentState?.recoveryError) throw new Error(currentState.lastError ?? "Pending recovery error；原始資料已保護。");
         if (shouldSkipDuplicateItinerarySave(currentState, nextTrip.content.daysData, Boolean(existingSave))) {
           return { localSaved: currentState?.status === "pending", cloudSynced: currentState?.status === "synced" };
         }
@@ -1000,7 +1027,12 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
           return { localSaved: true, cloudSynced: false };
         }
 
+        let leaseAcquired = false;
         try {
+          const lease = await claimItineraryCardEditLease(supabase, tripId, "__trip__");
+          leaseAcquired = lease.acquired && lease.ownerClientId === ITINERARY_EDIT_CLIENT_ID;
+          if (!leaseAcquired) throw new Error("目前另一個裝置持有旅程編輯權；本機修改已保留待同步。");
+          const cloudVersion = await readItineraryCloudVersion(supabase, tripId);
           const cloudRecord = await getCloudTripRecord(supabase, tripId);
           if (!cloudRecord) {
             throw new Error("無法確認雲端旅程是否存在；本機卡片修改已保留。");
@@ -1017,6 +1049,7 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
             },
             cloudRecord.detail.content.daysData,
             cloudRecord.updatedAt,
+            cloudVersion.version,
           );
           const reconciledState = reconciliation.state;
           const latestBeforeReconcileWrite = readItinerarySyncState(tripId);
@@ -1093,19 +1126,36 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
             updatedAt: new Date().toISOString(),
             cloudUpdatedAt: cloudRecord.updatedAt,
           };
-          await saveTripRecordWithCloudSync(supabase, mergedRecord, cloudRecord.updatedAt, true);
-
-          const syncedRecord = readStoredTripRecords().find((item) => item.meta.id === tripId);
-          const latestState = readItinerarySyncState(tripId);
-          if (latestState?.revision === reconciledState.revision) {
-            writeItinerarySyncState(createSyncedItineraryState(
-              tripId,
-              syncedRecord?.cloudUpdatedAt ?? mergedRecord.cloudUpdatedAt,
-              reconciledState.pendingDaysData,
-            ));
-            refreshItinerarySyncState(tripId);
+          if (reconciledState.baseCloudVersion === null) throw new Error("缺少可信 itinerary version baseline；待同步資料已保留。");
+          let savedVersion;
+          try {
+            savedVersion = await saveItineraryDaysDataCloud(supabase, tripId, reconciledState.baseCloudVersion, reconciledState.pendingDaysData);
+          } catch (saveError) {
+            // A lost response is resolved by readback, never by replaying the same RPC.
+            const readbackVersion = await readItineraryCloudVersion(supabase, tripId);
+            const readbackTrip = await getCloudTripRecord(supabase, tripId);
+            if (readbackTrip && readbackVersion.version > reconciledState.baseCloudVersion &&
+              sameItineraryDaysData(readbackTrip.detail.content.daysData, reconciledState.pendingDaysData)) {
+              savedVersion = readbackVersion;
+            } else if (saveError instanceof ItineraryCasConflictError && readbackTrip) {
+              const freshReconciliation = reconcilePendingItinerarySyncState(
+                reconciledState, readbackTrip.detail.content.daysData, readbackTrip.updatedAt, readbackVersion.version,
+              );
+              writeItinerarySyncState(freshReconciliation.state);
+              refreshItinerarySyncState(tripId);
+              setCurrentTrip((current) => current?.id === tripId ? { ...current, content: { ...current.content, daysData: freshReconciliation.state.pendingDaysData } } : current);
+              throw new Error("CAS競爭：已重新校正並保留最新待同步資料，請再次確認後保存。");
+            } else {
+              throw saveError;
+            }
           }
-          const savedTrip = syncedRecord?.detail ?? mergedRecord.detail;
+          const latestState = readItinerarySyncState(tripId);
+          if (latestState?.revision !== reconciledState.revision) throw new Error("保存期間本機 Pending 已變更，確認結果不會清除新資料。");
+          writeItinerarySyncState(createSyncedItineraryState(tripId, savedVersion.updatedAt || cloudRecord.updatedAt, reconciledState.pendingDaysData, savedVersion.version));
+          const syncedRecord = readStoredTripRecords().find((item) => item.meta.id === tripId);
+          if (syncedRecord) saveTripRecord({ ...syncedRecord, cloudUpdatedAt: savedVersion.updatedAt || syncedRecord.cloudUpdatedAt });
+          refreshItinerarySyncState(tripId);
+          const savedTrip = readStoredTripRecords().find((item) => item.meta.id === tripId)?.detail ?? mergedRecord.detail;
           setCurrentTrip((current) => current?.id === tripId ? savedTrip : current);
           return { localSaved: true, cloudSynced: true };
         } catch (error) {
@@ -1122,6 +1172,11 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
             throw error;
           }
           return { localSaved: true, cloudSynced: false };
+        } finally {
+          if (leaseAcquired) {
+            try { await releaseItineraryCardEditLease(supabase, tripId, "__trip__"); }
+            catch (releaseError) { console.warn("Trip edit lease release failed; lease will expire", releaseError); }
+          }
         }
       })();
 
@@ -1151,6 +1206,7 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
       throw new Error("目前沒有每日行程修改權限。");
     }
     const currentState = readItinerarySyncState(selectedTripId);
+    if (currentState?.recoveryError) throw new Error(currentState.lastError ?? "Pending recovery error；原始資料已保護。");
     if (currentState?.status !== "conflict") {
       throw new Error("目前沒有待處理的行程衝突。");
     }
@@ -1165,6 +1221,7 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
     if (!selectedTripId || !selectedTripMeta || !canWriteSelectedTripNow()) return false;
     const tripId = selectedTripId;
     const state = readItinerarySyncState(tripId);
+    if (state?.recoveryError) throw new Error(state.lastError ?? "Pending recovery error；原始資料已保護。");
     if (state?.status !== "conflict") throw new Error("目前沒有待處理的行程衝突。");
 
     const prepared = applyItineraryResolutionChoices(state);
@@ -1173,7 +1230,10 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
     }
     // 決策已先持久化；離線可完成預選，但不得宣告同步成功。
     if (!navigator.onLine) return false;
-
+    const lease = await claimItineraryCardEditLease(supabase, tripId, "__trip__");
+    if (!lease.acquired || lease.ownerClientId !== ITINERARY_EDIT_CLIENT_ID) throw new Error("目前另一個裝置持有旅程編輯權；原衝突資料保留。");
+    try {
+    const cloudVersion = await readItineraryCloudVersion(supabase, tripId);
     const cloudRecord = await getCloudTripRecord(supabase, tripId);
     if (!cloudRecord) throw new Error("無法確認雲端旅程狀態；原衝突資料仍保留。");
     const latestState = readItinerarySyncState(tripId);
@@ -1182,7 +1242,7 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
     }
 
     const cloudSnapshotChanged =
-      latestState.conflictCloudUpdatedAt !== cloudRecord.updatedAt ||
+      latestState.conflictCloudVersion !== cloudVersion.version ||
       !sameItineraryDaysData(
         latestState.conflictCloudDaysData ?? {},
         cloudRecord.detail.content.daysData,
@@ -1192,6 +1252,7 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
         latestState,
         cloudRecord.detail.content.daysData,
         cloudRecord.updatedAt,
+        cloudVersion.version,
       );
       writeItinerarySyncState({
         ...refreshedReconciliation.state,
@@ -1210,6 +1271,7 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
       latestState,
       cloudRecord.detail.content.daysData,
       cloudRecord.updatedAt,
+      cloudVersion.version,
     );
     if (latestMerge.status !== "conflict") {
       writeItinerarySyncState({
@@ -1229,28 +1291,22 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
 
     const latestStored = readStoredTripRecords().find((item) => item.meta.id === tripId);
     if (!latestStored) throw new Error("找不到本機旅程快取；衝突資料仍保留。");
-    const mergedRecord = {
-      ...latestStored,
-      meta: cloudRecord.meta,
-      detail: {
-        ...latestStored.detail,
-        content: {
-          ...latestStored.detail.content,
-          daysData: resolved.daysData,
-        },
-      },
-      updatedAt: new Date().toISOString(),
-      cloudUpdatedAt: cloudRecord.updatedAt,
-    };
-    // 既有 repository 透過 updated_at optimistic-lock，真正競態由 TripVersionConflictError 阻擋。
-    await saveTripRecordWithCloudSync(supabase, mergedRecord, cloudRecord.updatedAt, true);
-    const syncedStored = readStoredTripRecords().find((item) => item.meta.id === tripId);
-    const persistedCloudVersion = syncedStored?.cloudUpdatedAt ?? mergedRecord.cloudUpdatedAt;
-    const savedDaysData = syncedStored?.detail.content.daysData ?? resolved.daysData;
-
-    // 保存成功後再次回讀雲端，確認成功版本；不以本機 optimistic state 直接清除衝突快照。
+    // Resolution uses the sole Save RPC and trusted version CAS.
+    let resolvedSaved;
+    try {
+      resolvedSaved = await saveItineraryDaysDataCloud(supabase, tripId, cloudVersion.version, resolved.daysData);
+    } catch (saveError) {
+      const outcomeCloud = await getCloudTripRecord(supabase, tripId);
+      const outcomeVersion = await readItineraryCloudVersion(supabase, tripId);
+      if (!outcomeCloud || outcomeVersion.version <= cloudVersion.version || !sameItineraryDaysData(outcomeCloud.detail.content.daysData, resolved.daysData)) {
+        throw saveError;
+      }
+      resolvedSaved = outcomeVersion;
+    }
+    const savedDaysData = resolved.daysData;
     const confirmedCloud = await getCloudTripRecord(supabase, tripId);
-    if (!confirmedCloud || !sameItineraryDaysData(confirmedCloud.detail.content.daysData, savedDaysData)) {
+    const confirmedVersion = await readItineraryCloudVersion(supabase, tripId);
+    if (!confirmedCloud || confirmedVersion.version !== resolvedSaved.version || !sameItineraryDaysData(confirmedCloud.detail.content.daysData, savedDaysData)) {
       const latestAfterRead = readItinerarySyncState(tripId);
       if (latestAfterRead?.status === "conflict") {
         writeItinerarySyncState({
@@ -1267,12 +1323,23 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
       throw new Error("衝突處理期間本機選擇已變更，雲端結果不會清除新的本機狀態；請重新確認。");
     }
 
-    writeItinerarySyncState(createSyncedItineraryState(tripId, confirmedCloud.updatedAt || persistedCloudVersion || cloudRecord.updatedAt, savedDaysData));
+    saveTripRecord({
+      ...latestStored,
+      meta: confirmedCloud.meta,
+      detail: { ...latestStored.detail, content: { ...latestStored.detail.content, daysData: savedDaysData } },
+      updatedAt: confirmedCloud.updatedAt,
+      cloudUpdatedAt: confirmedCloud.updatedAt,
+    });
+    writeItinerarySyncState(createSyncedItineraryState(tripId, confirmedCloud.updatedAt, savedDaysData, confirmedVersion.version));
     refreshItinerarySyncState(tripId);
     setCurrentTrip((current) => current?.id === tripId
       ? { ...current, content: { ...current.content, daysData: savedDaysData } }
       : current);
     return true;
+    } finally {
+      try { await releaseItineraryCardEditLease(supabase, tripId, "__trip__"); }
+      catch (releaseError) { console.warn("Trip edit lease release failed after conflict resolution", releaseError); }
+    }
   }, [canWriteSelectedTripNow, refreshItinerarySyncState, selectedTripId, selectedTripMeta, supabase]);
 
   useEffect(() => {
