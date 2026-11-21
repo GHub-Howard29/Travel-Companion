@@ -22,6 +22,7 @@
     "test:expense-realtime-lifecycle": "node --experimental-strip-types --no-warnings scripts/test-expense-realtime-lifecycle.mjs",
     "test:trip-workspace-recovery-lifecycle": "node --experimental-strip-types --no-warnings scripts/test-trip-workspace-recovery-lifecycle.mjs",
     "test:p0-pending-autosync-idempotency": "node --experimental-strip-types --no-warnings scripts/test-p0-pending-autosync-idempotency.mjs",
+    "test:adr001-cloud-save-service": "node --experimental-strip-types --no-warnings scripts/test-adr001-cloud-save-service.mjs",
     "verify:v3925-expense-attachment-retry": "node scripts/verify-v3925-expense-attachment-retry.mjs",
     "verify:v3926-checklist-exit-sync": "node scripts/verify-v3926-checklist-exit-sync.mjs",
     "verify:v3928-day-button-colors": "node --experimental-strip-types --no-warnings scripts/verify-v3928-day-button-colors.mjs",

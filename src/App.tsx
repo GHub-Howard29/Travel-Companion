@@ -954,7 +954,7 @@ function ConfiguredApp({
           checklistData: mergedItems,
         },
       },
-      false,
+      "checklist",
     );
     if (!didSaveTrip) {
       throw new Error("共同清單旅程資料尚未成功寫入雲端");
@@ -1134,7 +1134,7 @@ function ConfiguredApp({
         otherInfoFolders: folders,
       },
     };
-    const didSave = await saveCurrentTripDetail(nextTrip);
+    const didSave = await saveCurrentTripDetail(nextTrip, "other-info-folders");
     if (!didSave && navigator.onLine) {
       throw new Error("其他資訊分類尚未成功寫入雲端");
     }

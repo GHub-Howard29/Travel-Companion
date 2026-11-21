@@ -2,11 +2,13 @@
 
 本文件是持續有效工程決策與工作進度的唯一總入口。開始相關工作時先讀本索引，再讀本次相關 ADR 主檔及依目前階段／工作需求選出的附屬文件；不得全量載入所有 ADR／階段附件。索引只維護狀態、階段、下一步、阻塞、載入條件及連結，詳細內容與證據留在各權威文件。
 
+**跨對話續行：** 新對話／Agent 看到此索引列有 Accepted／進行中工作時，應依其下一步直接恢復並執行未完成工作，不得只做 startup status、要求手動交接 UUID、重複規劃或重跑已完成切片。執行規則及權限界線見根目錄 [AGENTS.md](../../AGENTS.md)「跨對話未完成工作自動續行」。每個切片即時保存階段紀錄並同步本索引，讓 repository 成為可接續的工作狀態來源。
+
 ## 有效決策與進度
 
 | ID | 決策／工作 | 狀態 | 目前階段 | 下一步／阻塞 | 權威主檔 |
 |---|---|---|---|---|---|
-| [ADR-001](active/ADR-001-trip-daily-card-edit-lock-scope.md) | 每日詳細行程統一編輯權、保存協調與更新提示簡化 | Accepted／進行中 | **S2 Cloud Save 接線** | **S1 DB Exit PASS（2026-11-21）。** 下一步按S2文件接線Cloud Save、Repository及daysData callers至唯一Save RPC。 | [ADR-001](active/ADR-001-trip-daily-card-edit-lock-scope.md) |
+| [ADR-001](active/ADR-001-trip-daily-card-edit-lock-scope.md) | 每日詳細行程統一編輯權、保存協調與更新提示簡化 | Accepted／進行中 | **S2 Cloud Save 接線** | **S1 DB Exit PASS（2026-11-21）。S2 切片 1、2 PASS：Save RPC adapter 建立；Checklist／Other Info folders 已分流至 non-itinerary 更新，保留最新 daysData 並以 CAS 防止覆寫；既有 Trip 非版本 upsert 已封鎖，新 Trip 保留獨立 insert。** 尚有 Trip editor/dayCount、Pending 自動同步、衝突解決三個 itinerary callers 待接 Save RPC；須由 S3 提供可信 version read／Trip-level Lease client，並完成 local Supabase 整合驗收。 | [ADR-001](active/ADR-001-trip-daily-card-edit-lock-scope.md) |
 
 ## ADR-001 階段入口
 

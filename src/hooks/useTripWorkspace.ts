@@ -37,6 +37,7 @@ import {
   HistoricalTripLockedError,
   saveTripRecord,
   saveTripRecordWithCloudSync,
+  saveTripNonItineraryFieldsWithCloudSync,
   syncTripEditorEmails,
   updateTripRecord,
 } from "../services/tripRepository";
@@ -835,7 +836,7 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
   const saveCurrentTripDetail = useCallback(
     async (
       nextTrip: TripDetail,
-      enforceVersion = true,
+      scope: "checklist" | "other-info-folders",
     ): Promise<boolean> => {
       if (!selectedTripMeta) return false;
       if (!canWriteSelectedTripNow()) return false;
@@ -848,19 +849,24 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
         currentTripEditorEmails,
       );
 
-      const didSync = await saveTripRecordWithCloudSync(
+      const contentPatch = scope === "checklist"
+        ? { checklistData: nextTrip.content.checklistData ?? [] }
+        : { otherInfoFolders: nextTrip.content.otherInfoFolders ?? [] };
+      const didSync = await saveTripNonItineraryFieldsWithCloudSync(
         supabase,
         record,
-        undefined,
-        enforceVersion,
+        contentPatch,
       );
-      setCurrentTrip(record.detail);
+      const savedDetail = didSync
+        ? readStoredTripRecords().find((item) => item.meta.id === record.meta.id)?.detail ?? record.detail
+        : record.detail;
+      setCurrentTrip(savedDetail);
       setIsLoading(false);
 
       if (currentTrip) {
         void scheduleItineraryCoverDeletion(
           supabase,
-          getUnusedItineraryCoverPaths(currentTrip, record.detail),
+          getUnusedItineraryCoverPaths(currentTrip, savedDetail),
         ).catch((error) => {
           console.warn("Failed to remove unused itinerary covers", error);
         });

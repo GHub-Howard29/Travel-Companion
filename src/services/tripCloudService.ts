@@ -7,6 +7,10 @@ import { isExpenseAttachmentPathForTrip } from "../utils/attachmentUtils";
 import { removeExpiredTravelEstimates } from "../utils/itineraryTravel";
 import { sanitizeItineraryCoverPhotos } from "../utils/itineraryCoverPhoto";
 import { scheduleStorageDeletion } from "./deferredStorageDeletionService";
+import {
+  saveNonItineraryTripCloudFields,
+  type NonItineraryTripContentPatch,
+} from "./nonItineraryTripCloudSave";
 
 interface CloudTripRow {
   id: string;
@@ -394,6 +398,28 @@ export const updateCloudTripRecord = async (
     throw new Error("雲端回傳的旅程資料格式不正確");
   }
   return updatedRecord;
+};
+
+/**
+ * Update only non-itinerary content while preserving the latest Cloud daysData.
+ * The caller must pass a narrow, explicitly allowed content patch. A row CAS
+ * protects the read/merge/write window: an itinerary save between the read and
+ * update causes a conflict instead of allowing a stale snapshot to overwrite it.
+ */
+export const updateCloudTripNonItineraryFields = async (
+  supabase: SupabaseClient,
+  tripId: string,
+  contentPatch: NonItineraryTripContentPatch,
+): Promise<StoredTripRecord> => {
+  if (!navigator.onLine) {
+    throw new Error("非行程卡片雲端更新需要網路連線");
+  }
+
+  return saveNonItineraryTripCloudFields(tripId, contentPatch, {
+    readLatest: (targetTripId) => getCloudTripRecord(supabase, targetTripId),
+    compareAndSwap: (record, expectedUpdatedAt) =>
+      updateCloudTripRecord(supabase, record, expectedUpdatedAt),
+  });
 };
 
 export const cloudTripExists = async (
