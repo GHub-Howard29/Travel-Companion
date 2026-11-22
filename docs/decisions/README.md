@@ -9,7 +9,7 @@
 | ID | 決策／工作 | 狀態 | 目前階段 | 下一步／阻塞 | 權威主檔 |
 |---|---|---|---|---|---|
 | [ADR-001](active/ADR-001-trip-daily-card-edit-lock-scope.md) | 每日詳細行程統一編輯權、保存協調與更新提示簡化 | Accepted／已結案 | **ADR-001 Exit PASS（2026-11-22）** | **ADR-001整體結案／S1／S2／S3／S4 Exit PASS（2026-11-22）。核心 regression／SR-09／SR-10／SR-11、S3 UI evidence、build及docs-links均有PASS證據。雙瀏覽器競爭UI已取消；暫存 synthetic Trip cleanup由使用者自行處理，不列入阻塞／Exit條件。** | [ADR-001](active/ADR-001-trip-daily-card-edit-lock-scope.md) |
-| [ADR-002](active/ADR-002-card-save-screen-flicker.md) | 行程卡片新增／保存畫面閃動根因追查與改善評估 | Proposed／持續追查 | **S1 根因定位／歷史機制比較 ACTIVE（2026-11-22）** | **先驗證保存 state更新、卡片 identity／remount及歷史版本差異；根因與最小方案確認後再請核准實作。尚未授權程式修改。** | [ADR-002](active/ADR-002-card-save-screen-flicker.md) |
+| [ADR-002](active/ADR-002-card-save-screen-flicker.md) | 行程卡片新增／保存畫面閃動根因追查與改善評估 | Proposed／持續追查 | **S1 根因定位 ACTIVE（2026-11-22）** | **測試安排已開始：loopback Supabase與Node/npm符合要求；既有未提交工作保留。Browser-use CDP逾時，專用fixture尚未建立。新觀察：Windows新增卡片1→Android遠端通知／確認或預覽→刷新→刪除1失敗；手機新增卡片2保存後，1又能刪除。另直接核對發現 ADR-001 P3定案取消每日詳細行程預覽及舊通知／確認流程，但目前 `App.tsx` 仍 render `TripDataRevisionNotice`／`TripChangePreviewModal`，`useTripDataRevision.ts` 仍保留 preview／confirmNotice及snapshot baseline副作用；確認P3未完整落實是已證實的實作落差，但與刪除失敗因果尚待驗證。下一步先追查舊流程的依賴／歷史及其 snapshot、revision、Pending、Lease／保存交互，再隔離重現跨端刪除序列並 readback。** | [ADR-002](active/ADR-002-card-save-screen-flicker.md) |
 
 ## ADR-002 階段入口
 

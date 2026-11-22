@@ -559,11 +559,15 @@ export const ItineraryPage = ({
         try {
           const rows = await leaseApi!.listItineraryCardEditLeases(supabase, trip.id);
           if (disposed) return;
-          const next = Object.fromEntries(rows.map((lease) => [lease.cardId, {
-            ownerUserId: lease.ownerUserId,
-            ownerClientId: lease.ownerClientId,
-            expiresAt: lease.expiresAt,
-          }]));
+          // The local Trip lease is an internal save lifecycle signal, not remote UI state.
+          // Excluding it prevents claim/release Realtime events from replacing the card-list state.
+          const next = Object.fromEntries(rows
+            .filter((lease) => lease.ownerClientId !== editLeaseClientRef.current)
+            .map((lease) => [lease.cardId, {
+              ownerUserId: lease.ownerUserId,
+              ownerClientId: lease.ownerClientId,
+              expiresAt: lease.expiresAt,
+            }]));
           const previous = previousLeaseListRef.current;
           if (previous.__trip__ && !next.__trip__) {
             for (const waitingCardId of waitingCardIdsRef.current) {
