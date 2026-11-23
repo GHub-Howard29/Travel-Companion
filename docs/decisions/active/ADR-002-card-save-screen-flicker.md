@@ -1,9 +1,9 @@
 # ADR-002：移除已淘汰的每日行程預覽／同步衍生機制並修復保存更新行為
 
 - **ID：** ADR-002
-- **狀態：** Accepted／實作與逐項驗證中（2026-11-22）
+- **狀態：** Accepted／實作與逐項驗證中（2026-11-23）
 - **建立日期：** 2026-11-22
-- **修訂日期：** 2026-11-22
+- **修訂日期：** 2026-11-23
 - **標題：** 以現行 develop 為基礎，依實際依賴證據拆除不再需要的預覽／通知／變更摘要及同步衍生機制，恢復符合目前決策的同步與保存行為
 
 ## 工作目標
@@ -31,6 +31,7 @@
 - MutationObserver 累計 254 次 mutation，包含 DOM／屬性變化，並非純視覺閃動次數，不能作為閃動量化指標。
 - **2026-11-22 新增操作後請求放大觀察（詳見 ADR-002-S1 第六輪）：** 操作前約 10 分鐘窗口主追蹤 endpoints 計數為 0；手動新增一筆卡片後，短窗口（15:36:41–15:37:08 台灣時間）觀察到 participant-map RPC密集重複呼叫（來源分組 Android 190、Windows 54 POST；秒級分組有不同統計結果，待下一輪原始查詢核對），並伴隨 Trips／Other Info／Lease及Weather endpoints。這是請求放大實測證據，但未定位程式觸發鏈，亦未證明與視覺閃動直接因果；下一輪優先調查此觸發鏈。
 - `tc_read_trip_participant_email_map` 的大量呼叫與 `getCloudTripRecordsStrict()` 的逐 Trip hydration N+1 模式相符；此效率問題尚未證明與本案閃動有直接因果。
+- **問題分流（2026-11-23）：** 既有 viewport／scrollbar reflow 是已單獨確認的桌面水平寬度／垂直 scroll 現象與 mitigation；本次使用者新回報「按下新增保存後仍有約兩至三次畫面／資料更新才完成」屬另一個待查現象，不得逕自視為同一根因或將 viewport mitigation 當成已解決本次回報。Lease dependency候選及保存生命週期 state transitions須另以單次操作 trace驗證。
 - 已曾執行 ADR-001相關 regression（`test:adr001-cloud-save-service`、`verify:adr001-s3-app-integration`）、build及 `git diff --check` 並有PASS紀錄；這些結果並不驗證閃動根因或本案改善。
 - 合成卡片／旅程清理曾因瀏覽器 session timeout 受阻；不得把清理宣稱完成，亦不列為本案根因驗證停止條件。
 
@@ -98,4 +99,11 @@
 - **已核准並實作最小mitigation**：`src/index.css` 的 `html` base rule新增 `overflow-y: scroll`，固定root scrollbar以避免inline editor開／關造成clientWidth水平reflow。這不消除scrollY clamp，桌面可能常態顯示scrollbar。
 - **驗證**：控制試驗已確認固定scrollbar可維持clientWidth一致；正式CSS修改後 `npm run build`（含完整既有驗證鏈）、`npm run verify:docs-links`（154份Markdown／363個目標）及 `git diff --check` PASS。尚未以修改後產品CSS完成Android實機或重新執行桌面實際UI操作驗收。
 - S1 root-cause substage PASS，mitigation已核准並實作；ADR-002整體仍ACTIVE，其他Preview／通知衍生機制及請求放大調查／驗證依原範圍繼續。
+
+## 2026-11-23：卡片上下閃動調查方法修訂
+
+- 既有現象量測、viewport／scroll根因、Lease候選、歷史失敗與有效trace全部保留，不清除或覆寫。
+- 本案新增／刪除卡片上下閃動調查已轉為程式事件因果追蹤：操作handler／state與資料更新／React render-commit／DOM identity／layout-scroll-focus／Paint及network時序整合成trace，再經原始碼核對與受控重複對照確認根因。
+- 完整測試鏈及實作方案的細節、trace欄位與完成門檻以 [ADR-002-S1階段日誌](ADR-002-S1-root-cause-investigation.md) 最新2026-11-23修訂為準。舊測試計劃與證據保持歷史記錄。
+- **狀態：** 調查規劃已修訂；新測試鏈尚未執行。Browser control timeout與合成卡片清理仍為阻塞；根因未確認、未授權修正。
 

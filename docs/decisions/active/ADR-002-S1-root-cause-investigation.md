@@ -528,3 +528,143 @@
 - **目前BLOCKED**：CDP／Open Browser Use socket timeout，無法繼續可靠捕捉刪除操作及完成synthetic card清理。當前無有效證據可確認新增／刪除卡片的上下閃動根因或直接實作修正。
 - **下一步**：恢復可靠的loopback tab控制，先清理上述synthetic card，再以一次操作為窗口重新捕捉新增與刪除事件、CLS source／卡片位置／scrollY／React與DOM identity，並排除observer背景噪訊；只有因果確認後才修改。
 - 本輪未修改產品程式／CSS、未操作正式DB／歷史旅程、未commit／push／deploy。
+
+## 2026-11-23：調查方向修訂—程式因果追蹤鏈及歷史證據保留
+
+### 修訂決策
+- 既有 S1-A～S1-D 計劃、已取得量測、歷史調查紀錄及失敗／阻塞紀錄均保留，不刪除、不覆寫，也不要求重新取得已經有效的證據。
+- **調查方法正式轉向：從畫面現象量測，改為程式執行事件與畫面呈現的因果追蹤。** 既有高度、scroll、Mutation、LayoutShift、DOM identity、Lease及焦點量測作為 baseline／比較證據，並非新測試起點。
+- 新增／刪除卡片上下閃動為本輪唯一核心驗收目標；scrollbar width／水平位移不作此項根因或完成判定。先前scrollbar mitigation與其歷史證據仍保留，但不套用為本項解決證明。
+
+### 新測試鏈（必須依序完成，保存證據後再往下）
+1. **T0—既有證據盤點與trace基線**：將既有量測、有效／無效trace、測試資料狀態及尚存synthetic card清理狀態整理為基線；不重做已有充分證據的測量。先確認專用Trip及卡片資料，操作前保存必要的唯讀資料快照／記錄。
+2. **T1—定位操作入口與呼叫鏈（源碼追蹤）**：新增、刪除 handler、表單 reset、保存入口、保存／reconciliation／local pending／cloud Save RPC及最後資料更新的責任函式，記錄實際檔案、function、分支及呼叫順序。將每個 trace event 綁定可識別來源（function／source location），不得只記抽象事件名稱。
+3. **T2—暫時性程式instrumentation**：以診斷限定的短期 instrumentation／測試頁掛接方式，統一 trace ID與毫秒時間戳，捕捉 handler enter/exit、資料/state更新前後、相關setState／store更新、React render及commit、元件mount/unmount、列表及卡片node identity、Lease effect setup/cleanup/status、Realtime、focus/blur、scroll／visualViewport、ResizeObserver、DOM mutation、Performance LayoutShift及可取得的Layout／Paint／frame訊號、保存相關network request/result。每筆事件須標明source；不得記錄敏感資料、token、Authorization或行程內容。若某訊號無法可靠捕捉，明確列為coverage gap，不假稱已取得。
+4. **T3—一次操作單一trace**：分開執行新增及刪除案例，每次操作前取得baseline，操作後直到穩定；排除trace窗口外及背景事件。初次trace不完整／受到背景污染即判無效，不以其推論根因。
+5. **T4—事件時間軸分析**：從操作入口、資料更新、React commit、DOM／layout、scroll／focus、Paint依時間順序分析；找出第一個與上下位置／畫面呈現異常直接對應的事件及程式來源。區分資料變化、render、commit、DOM replacement、布局變化、scroll reposition與Paint，時間相關不得當因果。
+6. **T5—原始程式核對及受控對照**：對定位候選閱讀完整直接呼叫鏈與分支；設計最小、可逆、隔離的對照，單獨排除／確認候選因素。若是複合因果，逐因素驗證。至少以同一操作條件取得可重複trace；不在此階段改產品程式。
+7. **T6—完整測試鏈及證據封存**：新增與刪除各完成有效trace、候選對照、重複驗證，整理既有歷史證據與新trace的差異、已排除項、coverage gap及根因結論。全鏈完成前不得提出未有證據支持的修正或宣稱根因成立。
+8. **T7—實作方案**：只有T0–T6完整且可核對後，才提出最小實作方案，包含根因及直接證據、對照／反證、修改檔案／function及預期行為、風險與範圍、修正後回歸及實際UI驗收。方案與調查結果先記錄文件，待核准後才實作。
+
+### Trace資料欄位／證據形式
+- Trace ID、操作案例（新增／刪除）、開始／結束時間、測試環境與基準狀態。
+- 時間戳、事件序號、事件類型、source function／source location、事件前後狀態摘要及對應DOM／元件識別。
+- 畫面／layout相關量測、位置／高度、scroll／viewport、node identity及Performance entries；不以mutation count或單一CLS數字代替因果分析。
+- 同一時間軸的Network request結果與關聯資訊（僅必要安全摘要）。
+- Trace有效性、背景干擾、coverage gap、原始資料位置及分析結果。
+
+### 完成／停止標準
+- 新增、刪除兩案例均有有效完整trace，源碼執行鏈可識別且有可核對的事件時間軸。
+- 根因候選經原始碼核對及受控重複對照成立或被排除；若證據仍不足，明確保持未確認並指出缺失，不提出猜測性fix。
+- 新舊證據互相比對，保留歷史觀察及已證實的獨立viewport問題，不將其誤混入上下閃動根因。
+- 完成根因與實作方案文件後才進入修正；本修訂不授權commit／push／deploy或正式環境操作。
+
+## 2026-11-23：Browser Use 跨對話連線故障與成功路徑保存調查
+
+### 本輪實測
+- OpenChatX `start_here` 成功，沿用 Agent UUID `c7489ed6-4558-4da9-8c22-ea932352001f`；Project 為 `Travel-Companion`。Runtime health 回報 healthy，Secure MCP Tunnel control plane connected；Browser Use backend `info` 成功，Chrome extension version `1.1.0`、extensionInstanceId `e2310209-f5bd-40f4-8956-e0e0e3130deb`、nativeHostName `com.ifuryst.open_browser_use.extension`。
+- Browser Use `ping` 回傳 `pong`；`tabs` 可列出 managed tab `278050344`（`http://127.0.0.1:5173/Travel-Companion/`）；`user_tabs` 可列出 Chrome 現存分頁。
+- 對同一 managed tab `278050344` 呼叫 `claim_tab` 多次，均回傳相同錯誤：`read unix @->C:\Users\ahow_ho\AppData\Local\Temp\open-browser-use\8bd9c2a3-ec6b-45b2-99f5-9577fe3c2624.sock: i/o timeout`。因此故障點不是 OpenChatX runtime 整體離線，也不是 Browser Use backend 完全無回應；目前高度集中於接管分頁所依賴的本機 socket／native host request path，但尚未取得 native host process/log 證據，不能確定是程序退出、卡死、請求路由或逾時。
+- Computer Use `get_app_state` 可成功取得 Chrome 畫面及 accessibility tree，但當時 key window 顯示另一分頁；它證明桌面控制替代路徑可用，不能視為 CDP/DOM 控制已恢復。
+
+### 對「換對話就重新測」的判定
+- **已確認的連線問題：** 新對話中 Browser Use 基本 ping/list 可用，但 `claim_tab` 仍在同一 socket timeout。對話更換不是唯一根因，也沒有證據證明每次都因 tunnel session expiry 而關閉。
+- **已確認的交接紀錄缺口：** 專案 `AGENTS.md` 雖允許 Browser Use／Computer Use按可用性切換，但未保存特定成功案例的可重用操作路徑（成功工具、呼叫順序、tab/session識別、成功證據、失效特徵與fallback）。新對話因此只能從通用能力目錄重新查找，無法根據權威紀錄直接復用上次成功路徑。
+- **尚未確認：** socket/native host為何逾時、是否有 idle timeout／程序生命週期限制、是否要重啟特定程序或擴充功能。未取得對應 process/log與成功/失敗時點對照前，不作定論，不進行破壞性重啟。
+
+### 可重用路徑（截至本輪）
+1. Browser Use：先查 `info`、`ping`、`tabs`、`user_tabs`；確認 tab ID、URL與目標後 `claim_tab`；接管成功後使用 `page_info`／CDP。`ping`成功不代表 `claim_tab`成功，兩者需分開記錄。
+2. 若 Browser Use claim/page_info/CDP 因上述 socket error 失敗，不得反覆重試同一呼叫或重新走一遍功能測試；改用 Computer Use取得 Chrome狀態／畫面，先確認 key window與分頁，再執行必要桌面操作。Computer Use不提供等價DOM/CDP保證；需DOM時必須另找已授權且可驗證的路徑。
+3. 新對話若 backend extensionInstanceId、nativeHostName、managed tab及socket path未變，應先比對此紀錄；若識別值改變，記錄為環境／連線實例變更，不沿用舊結論。
+4. 只有在取得 native host／程序狀態與log，且確認安全影響後，才決定是否重啟服務；禁止未診斷即重啟整個Chrome、清除使用者profile或更改全域設定。
+
+### 下一個診斷切片
+- 取得 Open Browser Use native host／extension bridge的程序狀態及日誌位置，確認socket server是否仍存活、最後活動時間與錯誤原因；對照 extensionInstanceId與socket path。
+- 定位上一輪成功的 Browser Use session／Computer Use操作紀錄，補回其成功工具、具體呼叫順序與前置條件；成功結果必須寫回本文件，讓下一對話直接沿用。
+- 在不重啟、不清理Chrome profile的前提下，先驗證原生 CLI／Computer Use或另一已授權DOM入口是否可提供所需控制；只在明確安全且有證據時修復native host。
+- 本輪尚未恢復 `claim_tab`／CDP，未清理 synthetic card，未修改瀏覽器設定、程序或擴充功能。
+## 2026-11-23：手動新增仍出現多次更新；臨時追蹤程式清理
+
+### 使用者手動測試回報
+- 使用者在本機手動新增卡片，按下保存後仍觀察到畫面／資料重複更新約兩至三次才完成保存。這是最新使用者觀察；本輪未對該次操作取得同步瀏覽器事件與 Network trace，故不能直接將其等同於兩至三次 `saveItem()` 或雲端 Save RPC。
+
+### 本機程式落地狀態
+- 前一輪臨時 ADR-002 instrumentation 曾寫入 `src/App.tsx`、`src/components/ItineraryPage.tsx`、`src/hooks/useTripWorkspace.ts`，但只供診斷，並非正式修正，也未 commit／push／deploy。
+- 發現一段未完成的 `cardSaveInFlightRef` 防重入 guard：設為 true 後沒有對應解除；本輪已移除該 guard，恢復原本 `isItemSaving` 條件，避免留下可能阻擋後續保存的永久鎖定。
+- 本輪已清除三個 source files 中的臨時 trace helper／call sites、DOM observer、卡片 ref registry 與 trace 狀態引用；原本既存的 P3 preview-removal 變更及既存 card ref 行為均保留。原始碼搜尋確認不再有 `adr002Trace`／`adr002SaveTrace`／`adr002AppTrace`／`__ADR002_TRACE__` 參照。
+
+### 保存鏈與 Lease effect 程式證據
+- `saveItineraryTripDetail()` 單一呼叫內會先寫本機 Trip／Pending、更新 sync snapshot與 `currentTrip`；接著取得 Trip Lease、讀取雲端 version／Trip、reconcile Pending，再依結果更新 `currentTrip`，最後執行 Save RPC／更新 Synced state／最終 Trip。這些 state transition 本身可能引發多次 React render；render 次數不能直接視為重複保存或重複 RPC。
+- `ItineraryPage` 的 Lease effect dependency 包含 `trip.content.daysData` 物件參照；effect 初始化會切到 `loading`，完成 lease list refresh 後切到 `ready`，cleanup 會移除舊 subscription。上述保存鏈數次替換 `daysData` 物件時，會重新觸發此 effect setup／cleanup。
+- 前一輪受控程度不足的新增 trace 曾觀察到 Lease loading 提示插入／移除；Day panel高度由約 660.5px 變至約 710.0px，再回到 660.5px（約 49.5px變化；提示自身高度約37.5px）。該筆 trace 有測試操作重複新增造成的資料污染，不能用來證明完整閃動因果或每次 render數量；只支持 Lease lifecycle／狀態提示是候選位移來源。
+
+### 驗證結果及界線
+- **PASS** `npx tsc --noEmit`。
+- **PASS** `npm run build`：完整既有 regression／契約驗證鏈及 Vite production build通過（Vite v8.0.16，1943 modules，built in 1.16s）。
+- **PASS** `git diff --check`。
+- 本輪只清除臨時診斷程式及補記進度，未修改正式資料庫、migration、Secrets、Edge Function；未 commit／push／deploy。
+- **尚未解決**：沒有取得使用者最新手動操作的逐事件 trace，故尚無法分辨兩至三次更新究竟是 React render、Lease loading／ready提示、`saveItineraryTripDetail()`重入、重複 Save RPC，或焦點／viewport變動。不得把 Lease dependency候選宣告為根因，也不得將 build PASS當成 UI驗收 PASS。
+
+### 下一步
+1. 使用乾淨的 ADR-002 synthetic test Trip，單次按下新增保存一次，不重複點擊；操作前後核對卡片數與穩定 ID。
+2. 同一時間窗記錄 `saveItem` handler enter次數、`saveItineraryTripDetail` enter及 existingSave、Pending revision、Lease effect setup／cleanup與 status、Save RPC request數、React Profiler commit、卡片 `article` node identity、Day panel rect、focus／blur、`visualViewport`與 `scrollY`。
+3. 若只有一個 handler／workspace save／RPC，但出現多次 render或Lease flap，才針對狀態／effect耦合提出最小修正；若 handler或RPC真的重複，沿呼叫來源追查，不以增加防重入 flag掩蓋問題。
+4. 完成新增與刪除的隔離重複對照後，才判定根因及提出修正；保留本階段ACTIVE，未授權的正式資料操作、commit／push／deploy不執行。
+### 本次文件修訂狀態（2026-11-23更新）
+- **方向修訂已記錄；新測試鏈尚未執行。** 先前 Browser Use `claim_tab` socket timeout不再列為待診斷事項；使用者已明確要求停止追查，後續直接採已成功的 Computer Use／必要時 CDP 替代路徑，不重複調查socket/native host。
+- 前一輪在 `src/App.tsx`、`src/components/ItineraryPage.tsx`、`src/hooks/useTripWorkspace.ts` 寫入的臨時追蹤程式已於本輪清除；未完成的 `cardSaveInFlightRef` guard亦已移除。原先的 Preview-removal 工作樹變更保留，沒有覆蓋或提交。
+- 使用者最新手動回報：按下新增卡片保存後，畫面／資料仍重複更新約兩至三次才完成。尚無該次操作同步取得的完整事件trace，不可將畫面更新次數等同 save handler、workspace save或雲端 Save RPC次數。
+- 乾淨測試基線已經重載確認只剩原始卡片「景點 2」；本輪沒有再新增測試卡，也未更動使用者正式旅程。
+- 本輪完成 TypeScript與完整 `npm run build`、`git diff --check`；均PASS。這些是靜態／建置驗證，不是手動UI閃動驗收。
+- 下一步應使用隔離 synthetic Trip及可觀測的本機頁面，執行一次單擊新增、一次刪除；同步記錄 handler／workspace save／Save RPC數量、Lease effect setup／cleanup、React Profiler commit、卡片DOM identity、Day panel rect、focus／visualViewport／scrollY。未完成前不宣稱根因成立。
+## 2026-11-23：Browser Use 跨對話連線故障與成功路徑保存調查
+
+### 本輪實測
+- OpenChatX `start_here` 成功，沿用 Agent UUID `c7489ed6-4558-4da9-8c22-ea932352001f`；Project 為 `Travel-Companion`。Runtime health 回報 healthy，Secure MCP Tunnel control plane connected；Browser Use backend `info` 成功，Chrome extension version `1.1.0`、extensionInstanceId `e2310209-f5bd-40f4-8956-e0e0e3130deb`、nativeHostName `com.ifuryst.open_browser_use.extension`。
+- Browser Use `ping` 回傳 `pong`；`tabs` 可列出 managed tab `278050344`（`http://127.0.0.1:5173/Travel-Companion/`）；`user_tabs` 可列出 Chrome 現存分頁。
+- 對同一 managed tab `278050344` 呼叫 `claim_tab` 多次，均回傳相同錯誤：`read unix @->C:\Users\ahow_ho\AppData\Local\Temp\open-browser-use\8bd9c2a3-ec6b-45b2-99f5-9577fe3c2624.sock: i/o timeout`。因此故障點不是 OpenChatX runtime 整體離線，也不是 Browser Use backend 完全無回應；目前高度集中於接管分頁所依賴的本機 socket／native host request path，但尚未取得 native host process/log 證據，不能確定是程序退出、卡死、請求路由或逾時。
+- Computer Use `get_app_state` 可成功取得 Chrome 畫面及 accessibility tree，但當時 key window 顯示另一分頁；它證明桌面控制替代路徑可用，不能視為 CDP/DOM 控制已恢復。
+
+### 對「換對話就重新測」的判定
+- **已確認的連線問題：** 新對話中 Browser Use 基本 ping/list 可用，但 `claim_tab` 仍在同一 socket timeout。對話更換不是唯一根因，也沒有證據證明每次都因 tunnel session expiry 而關閉。
+- **已確認的交接紀錄缺口：** 專案 `AGENTS.md` 雖允許 Browser Use／Computer Use按可用性切換，但未保存特定成功案例的可重用操作路徑（成功工具、呼叫順序、tab/session識別、成功證據、失效特徵與fallback）。新對話因此只能從通用能力目錄重新查找，無法根據權威紀錄直接復用上次成功路徑。
+- **尚未確認：** socket/native host為何逾時、是否有 idle timeout／程序生命週期限制、是否要重啟特定程序或擴充功能。未取得對應 process/log與成功/失敗時點對照前，不作定論，不進行破壞性重啟。
+
+### 可重用路徑（截至本輪）
+1. Browser Use：先查 `info`、`ping`、`tabs`、`user_tabs`；確認 tab ID、URL與目標後 `claim_tab`；接管成功後使用 `page_info`／CDP。`ping`成功不代表 `claim_tab`成功，兩者需分開記錄。
+2. 若 Browser Use claim/page_info/CDP 因上述 socket error 失敗，不得反覆重試同一呼叫或重新走一遍功能測試；改用 Computer Use取得 Chrome狀態／畫面，先確認 key window與分頁，再執行必要桌面操作。Computer Use不提供等價DOM/CDP保證；需DOM時必須另找已授權且可驗證的路徑。
+3. 新對話若 backend extensionInstanceId、nativeHostName、managed tab及socket path未變，應先比對此紀錄；若識別值改變，記錄為環境／連線實例變更，不沿用舊結論。
+4. 只有在取得 native host／程序狀態與log，且確認安全影響後，才決定是否重啟服務；禁止未診斷即重啟整個Chrome、清除使用者profile或更改全域設定。
+
+### 下一個診斷切片
+- 取得 Open Browser Use native host／extension bridge的程序狀態及日誌位置，確認socket server是否仍存活、最後活動時間與錯誤原因；對照 extensionInstanceId與socket path。
+- 定位上一輪成功的 Browser Use session／Computer Use操作紀錄，補回其成功工具、具體呼叫順序與前置條件；成功結果必須寫回本文件，讓下一對話直接沿用。
+- 在不重啟、不清理Chrome profile的前提下，先驗證原生 CLI／Computer Use或另一已授權DOM入口是否可提供所需控制；只在明確安全且有證據時修復native host。
+- 本輪尚未恢復 `claim_tab`／CDP，未清理 synthetic card，未修改瀏覽器設定、程序或擴充功能。
+## 2026-11-23：手動新增仍出現多次更新；臨時追蹤程式清理
+
+### 使用者手動測試回報
+- 使用者在本機手動新增卡片，按下保存後仍觀察到畫面／資料重複更新約兩至三次才完成保存。這是最新使用者觀察；本輪未對該次操作取得同步瀏覽器事件與 Network trace，故不能直接將其等同於兩至三次 `saveItem()` 或雲端 Save RPC。
+
+### 本機程式落地狀態
+- 前一輪臨時 ADR-002 instrumentation 曾寫入 `src/App.tsx`、`src/components/ItineraryPage.tsx`、`src/hooks/useTripWorkspace.ts`，但只供診斷，並非正式修正，也未 commit／push／deploy。
+- 發現一段未完成的 `cardSaveInFlightRef` 防重入 guard：設為 true 後沒有對應解除；本輪已移除該 guard，恢復原本 `isItemSaving` 條件，避免留下可能阻擋後續保存的永久鎖定。
+- 本輪已清除三個 source files 中的臨時 trace helper／call sites、DOM observer、卡片 ref registry 與 trace 狀態引用；原本既存的 P3 preview-removal 變更及既存 card ref 行為均保留。原始碼搜尋確認不再有 `adr002Trace`／`adr002SaveTrace`／`adr002AppTrace`／`__ADR002_TRACE__` 參照。
+
+### 保存鏈與 Lease effect 程式證據
+- `saveItineraryTripDetail()` 單一呼叫內會先寫本機 Trip／Pending、更新 sync snapshot與 `currentTrip`；接著取得 Trip Lease、讀取雲端 version／Trip、reconcile Pending，再依結果更新 `currentTrip`，最後執行 Save RPC／更新 Synced state／最終 Trip。這些 state transition 本身可能引發多次 React render；render 次數不能直接視為重複保存或重複 RPC。
+- `ItineraryPage` 的 Lease effect dependency 包含 `trip.content.daysData` 物件參照；effect 初始化會切到 `loading`，完成 lease list refresh 後切到 `ready`，cleanup 會移除舊 subscription。上述保存鏈數次替換 `daysData` 物件時，會重新觸發此 effect setup／cleanup。
+- 前一輪受控程度不足的新增 trace 曾觀察到 Lease loading 提示插入／移除；Day panel高度由約 660.5px 變至約 710.0px，再回到 660.5px（約 49.5px變化；提示自身高度約37.5px）。該筆 trace 有測試操作重複新增造成的資料污染，不能用來證明完整閃動因果或每次 render數量；只支持 Lease lifecycle／狀態提示是候選位移來源。
+
+### 驗證結果及界線
+- **PASS** `npx tsc --noEmit`。
+- **PASS** `npm run build`：完整既有 regression／契約驗證鏈及 Vite production build通過（Vite v8.0.16，1943 modules，built in 1.16s）。
+- **PASS** `git diff --check`。
+- 本輪只清除臨時診斷程式及補記進度，未修改正式資料庫、migration、Secrets、Edge Function；未 commit／push／deploy。
+- **尚未解決**：沒有取得使用者最新手動操作的逐事件 trace，故尚無法分辨兩至三次更新究竟是 React render、Lease loading／ready提示、`saveItineraryTripDetail()`重入、重複 Save RPC，或焦點／viewport變動。不得把 Lease dependency候選宣告為根因，也不得將 build PASS當成 UI驗收 PASS。
+
+### 下一步
+1. 使用乾淨的 ADR-002 synthetic test Trip，單次按下新增保存一次，不重複點擊；操作前後核對卡片數與穩定 ID。
+2. 同一時間窗記錄 `saveItem` handler enter次數、`saveItineraryTripDetail` enter及 existingSave、Pending revision、Lease effect setup／cleanup與 status、Save RPC request數、React Profiler commit、卡片 `article` node identity、Day panel rect、focus／blur、`visualViewport`與 `scrollY`。
+3. 若只有一個 handler／workspace save／RPC，但出現多次 render或Lease flap，才針對狀態／effect耦合提出最小修正；若 handler或RPC真的重複，沿呼叫來源追查，不以增加防重入 flag掩蓋問題。
+4. 完成新增與刪除的隔離重複對照後，才判定根因及提出修正；保留本階段ACTIVE，未授權的正式資料操作、commit／push／deploy不執行。

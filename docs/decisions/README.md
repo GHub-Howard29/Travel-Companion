@@ -9,7 +9,7 @@
 | ID | 決策／工作 | 狀態 | 目前階段 | 下一步／阻塞 | 權威主檔 |
 |---|---|---|---|---|---|
 | [ADR-001](active/ADR-001-trip-daily-card-edit-lock-scope.md) | 每日詳細行程統一編輯權、保存協調與更新提示簡化 | Accepted／已結案 | **ADR-001 Exit PASS（2026-11-22）** | **ADR-001整體結案／S1／S2／S3／S4 Exit PASS（2026-11-22）。核心 regression／SR-09／SR-10／SR-11、S3 UI evidence、build及docs-links均有PASS證據。雙瀏覽器競爭UI已取消；暫存 synthetic Trip cleanup由使用者自行處理，不列入阻塞／Exit條件。** | [ADR-001](active/ADR-001-trip-daily-card-edit-lock-scope.md) |
-| [ADR-002](active/ADR-002-card-save-screen-flicker.md) | 移除已淘汰的每日行程 Preview／通知／同步衍生機制，並追查卡片操作畫面上下閃動 | Accepted／實作中 | **S1拆除slice PASS；卡片新增／刪除上下閃動調查仍ACTIVE／BLOCKED** | **Preview／summary UI、service、snapshot-baseline及DB journal slice已拆除；revision/access/conflict handling、publisher、6 triggers及tombstone保留；local smoke、build、docs-links、diff-check PASS，SR-10 PASS。先前已證實編輯器收縮造成scroll range clamp／viewport reflow，但此非目前新增／刪除卡片上下閃動完成目標。2026-11-23隔離新增測試卡片保存成功，trace尚無足夠因果證據；synthetic card清理及精確刪除trace受CDP timeout阻塞。未修改產品程式／CSS；未commit／push／deploy。** | [ADR-002](active/ADR-002-card-save-screen-flicker.md) |
+| [ADR-002](active/ADR-002-card-save-screen-flicker.md) | 移除已淘汰的每日行程 Preview／通知／同步衍生機制，並追查卡片操作畫面上下閃動 | Accepted／實作中 | **S1拆除slice PASS；新增／刪除操作後更新／閃動因果調查ACTIVE** | **既有 viewport／scrollbar reflow為獨立已確認現象；目前新回報為新增保存後約2–3次畫面／資料更新，尚未取得該次完整trace。Lease effect依賴daysData參照且loading提示曾造成Day區塊約49.5px高度變化，仍屬候選，未證實為全部根因。臨時追蹤碼已清除，防重入guard已撤除；TypeScript／build／diff-check PASS。下一步為隔離單次新增／刪除trace，分別計算handler／workspace save／Save RPC、React commit、Lease lifecycle及DOM／viewport變化。Browser Use socket不再追查，改用Computer Use／已驗證替代路徑。未完成UI驗收、未作產品根因修正。** | [ADR-002](active/ADR-002-card-save-screen-flicker.md) |
 
 ## ADR-002 階段入口
 
