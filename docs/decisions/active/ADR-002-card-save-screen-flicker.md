@@ -1,18 +1,21 @@
-# ADR-002：行程卡片新增／保存畫面閃動追查與改善評估
+# ADR-002：移除已淘汰的每日行程預覽／同步衍生機制並修復保存更新行為
 
 - **ID：** ADR-002
-- **狀態：** Proposed／持續追查（尚未核准程式修改）
+- **狀態：** Accepted／實作與逐項驗證中（2026-11-22）
 - **建立日期：** 2026-11-22
-- **標題：** 行程卡片新增／保存期間畫面閃動根因定位及最小改善評估
+- **修訂日期：** 2026-11-22
+- **標題：** 以現行 develop 為基礎，依實際依賴證據拆除不再需要的預覽／通知／變更摘要及同步衍生機制，恢復符合目前決策的同步與保存行為
 
 ## 工作目標
-定位在每日行程卡片新增或保存過程中，使用者觀察到畫面閃動／反覆更新的根因，核對是否由保存協調流程中的多次 state 更新、卡片 identity／key、元件 remount 或其他資料／UI 更新造成，並比較既有歷史版本的機制。確認最小且安全的改善方式及必要驗證，避免無關重構。
+以現行 develop 程式為拆解基礎，透過程式呼叫鏈、資料流、Git 歷史及隔離測試證據，逐項移除／修正已不再符合目前決策的 Daily Itinerary preview／notice／change-summary 與相關衍生同步機制，降低不必要的同步狀態與更新流程，恢復簡潔且可靠的資料保存／更新行為。V3.9.16 僅作歷史同步行為參照，不作回退、reset或重建基礎。
 
 ## 範圍與限制
-- 僅限每日行程卡片新增／保存期間畫面閃動問題及其必要保存／呈現機制。
-- 不以其他既有問題（例如全量 Trips 讀取或 RPC N+1）代替本案根因；除非證據直接連結至閃動，否則只旁註。
-- 目前只授權調查、證據整理、方案評估及追蹤紀錄維護；**未授權程式修改、commit、push、部署或正式資料操作**。
-- 不使用 TEST-1 或正式資料庫進行測試；測試僅可採安全隔離資料及本機／非正式環境。
+- 調查並實作移除已取消的每日行程預覽、通知確認、變更分類／計數／摘要、專用 snapshot／baseline副作用及其必要衍生流程；每項均須先證明實際依賴及移除邊界。
+- 以 ADR-001 Accepted 決策為保留／驗收標準：保留必要 revision／更新訊號、Trip-level Lease、Save RPC、version/CAS、Pending／Recovery安全保護及其他明確保留機制；不以舊 Preview 流程替代或繞過它們。
+- 保留 V3.9.16 後與本拆除範圍無關且仍有效的功能、修正及文件；不得整體回退或任意重構。
+- 以現行 develop 為基礎，逐項追蹤、拆除、測試、記錄；未經證據支持不得批次刪除。
+- **已核准本ADR範圍內的程式修改及必要隔離測試**；commit／push、部署、正式資料操作仍不包含在本授權內。
+- 不使用 TEST-1 或正式資料庫進行測試；測試僅採安全隔離資料及本機／非正式環境。
 - 保留既有工作樹修改，不覆蓋或混入。
 
 ## 已知調查摘要（2026-11-22）
@@ -23,7 +26,7 @@
 - **更具體的保存／Lease lifecycle 候選已確認：** Lease effect 原始於 `b047d01`（2026-11-01）建立，`22af34a` 為取得當日卡片 ID 集合並判斷遠端鎖定，新增 `activeDay` 及整份 `trip.content.daysData` 為 dependencies。這讓每次 `daysData` 物件參照更新都會 cleanup／重建 Lease service 與 Realtime channel，setup 期間把 `editLeaseStatus` 設為 `loading`，refresh 完成後才回 `ready`；`canModifyCard()` 在此期間暫時失效。
 - 線上保存過程會多個階段更新 `currentTrip`：`2af4db9` 將 local Pending 後更新移至 online common path；一般 reconciliation 中途更新；最終從 localStorage 再 `JSON.parse` 取回 savedTrip，產生新的 `daysData` 物件參照。這些更新與 11/1 Lease dependency 疊加，存在多次 `loading → ready` lifecycle restart 的機會；分支及 React batching 決定實際次數，尚未量測。
 - **目前最具體候選根因是 Lease subscription lifecycle 與每日卡片資料參照綁定過緊**，會暫停卡片管理權限／控制狀態，但尚未證明這就是使用者觀察到的 2–3 次可見閃動，也未證明卡片 DOM remount。最小方案方向是分離 Lease subscription scope 與最新 active-day IDs，但尚未授權程式修改。
-- 動態 UI 驗證仍 BLOCKED：本機沒有 ADR-002 專用 fixture；歷史 `v391-local-browser` 合成旅程明確排除重用，現成 bootstrap 亦會修改既有 `v391-admin` Superadmin 角色，不符合隔離要求。需取得另建專用 loopback-only 身分／fixture 的授權後，才能觀察 effect setup/cleanup、React commit、卡片 DOM identity 與實際畫面。
+- 動態 UI 驗證仍 BLOCKED：CDP DOM操作及 UI test account signup/login 已恢復成功（`adr002-test-20261122@example.invalid`，loopback-only）；但該身份目前處於個人帳本模式，既有 seed Trip 的管理按鈕 disabled，尚未建立／取得可編輯的 ADR-002專用 Trip／fixture。歷史 `v391-local-browser` 合成旅程明確排除重用，現成 bootstrap 亦會修改既有 `v391-admin` Superadmin 角色，不符合隔離要求。下一步須在 loopback環境建立專用 Trip ownership/access，不擴權既有身份或操作歷史旅程，再觀察 effect setup/cleanup、React commit、卡片 DOM identity與畫面。
 - 約 2.2 秒的保存觀察窗（隔離合成旅程）曾記錄：`tc_save_itinerary_days` 1 次、`tc_release_itinerary_trip_edit_lease` 1 次、`tc_list_itinerary_trip_edit_leases` 4 次、`/rest/v1/trips` 14 次、`other_info_items` 20 次、`tc_read_trip_participant_email_map` 98 次。此為近似觀察窗的請求計數，不完全隔離，不能直接證明每筆請求由卡片保存引起或造成閃動。
 - MutationObserver 累計 254 次 mutation，包含 DOM／屬性變化，並非純視覺閃動次數，不能作為閃動量化指標。
 - **2026-11-22 新增操作後請求放大觀察（詳見 ADR-002-S1 第六輪）：** 操作前約 10 分鐘窗口主追蹤 endpoints 計數為 0；手動新增一筆卡片後，短窗口（15:36:41–15:37:08 台灣時間）觀察到 participant-map RPC密集重複呼叫（來源分組 Android 190、Windows 54 POST；秒級分組有不同統計結果，待下一輪原始查詢核對），並伴隨 Trips／Other Info／Lease及Weather endpoints。這是請求放大實測證據，但未定位程式觸發鏈，亦未證明與視覺閃動直接因果；下一輪優先調查此觸發鏈。
@@ -86,5 +89,13 @@
 2. 比較目前實際機制與歷史版本，確認「以前沒有閃動」的差異有 Git／程式證據支援，不以記憶或假設代替。
 3. 明確分離已確認因果、推論及仍未驗證項目。
 4. 提出範圍最小的修改方案及驗證方法；方案仍需使用者核准後才可實作。
-5. 若核准並實作，完成相應 regression／實際隔離測試並記錄證據。ADR-002 在核准方案／實作之前維持 Proposed。
+5. 若核准並實作，完成相應 regression／實際隔離測試並記錄證據；本次viewport／scroll mitigation在核准前維持 Proposed，ADR-002既有Accepted範圍依其決策繼續執行。
+
+## 2026-11-23：S1根因調查結果與修正提案
+
+- **根因已確認（viewport／scroll reflow）**：inline卡片editor使document scrollHeight 901→1079，垂直scrollbar出現、clientWidth 1680→1665；editor關閉後document高度縮回901，scrollbar消失，clientWidth回擴。當scrollY=178時亦會因scroll range縮短而clamp至0。
+- **因果對照**：Cancel在沒有 `tc_save_itinerary_days`、沒有Lease effect cleanup／setup的情況下仍重現相同scroll reset／scrollbar width reflow；卡片article node identity保持。保存時Lease effect確實多次重啟並loading→ready，但不是此scroll/viewport reflow的必要原因。
+- **已核准並實作最小mitigation**：`src/index.css` 的 `html` base rule新增 `overflow-y: scroll`，固定root scrollbar以避免inline editor開／關造成clientWidth水平reflow。這不消除scrollY clamp，桌面可能常態顯示scrollbar。
+- **驗證**：控制試驗已確認固定scrollbar可維持clientWidth一致；正式CSS修改後 `npm run build`（含完整既有驗證鏈）、`npm run verify:docs-links`（154份Markdown／363個目標）及 `git diff --check` PASS。尚未以修改後產品CSS完成Android實機或重新執行桌面實際UI操作驗收。
+- S1 root-cause substage PASS，mitigation已核准並實作；ADR-002整體仍ACTIVE，其他Preview／通知衍生機制及請求放大調查／驗證依原範圍繼續。
 

@@ -1,9 +1,9 @@
-# ADR-002-S1：卡片保存畫面閃動根因定位與歷史機制比較
+# ADR-002-S1：淘汰 Preview／通知衍生同步機制的依賴追蹤與逐項拆除
 
-> 工作狀態：ACTIVE／調查未完成。此文件是本案持續追查日誌唯一維護位置；尚未授權修改程式。
+> 工作狀態：ACTIVE／已核准實作，逐項依證據追查、拆除與驗證；本文件為持續工作日誌唯一維護位置。
 
 ## 目標及工作邊界
-定位卡片新增／保存期間畫面閃動，驗證保存流程、React state 更新、卡片 key／identity、元件 remount／conditional render及歷史程式差異。只追查與本現象直接相關的機制；不因請求數量較高就擴大至全量 API 整理。
+以現行 develop 為基礎，追查已淘汰的每日行程 Preview／notice／change-summary／snapshot-baseline及衍生同步機制的完整依賴、呼叫鏈、資料流與歷史演變，逐項拆除或修正，恢復符合ADR-001的保存／更新行為。V3.9.16只作歷史參照。保留必要revision signal、Lease、Save RPC、version/CAS、Pending／Recovery及無關有效功能；不整體回退、不猜測、不做無關重構。
 
 ## 2026-11-22 初始紀錄
 
@@ -346,8 +346,185 @@
 - 使用者描述在遠端通知／確認或預覽後 reload，接著刪除失敗，新增第二張卡片保存後又恢復。這使「未移除的舊 preview/confirm flow，是否仍影響 snapshot baseline、revision tracking或刷新／保存狀態」成為具體待驗證假設。
 - **不能直接判定殘留 preview flow 就是刪除失敗根因**：尚須追查 `confirmNotice`／`reloadForTripDataChange`／workspace reconciliation／confirmed snapshot與新版 Trip Lease／itinerary version Save RPC的相互作用；目前源碼中舊 UI及hook存在，足以確認不符合 ADR-001 P3 的定案範圍，但因果仍待測試。
 
-### 調查優先順序
-1. 優先查明 ADR-001 P3 實作為何未完整移除（commit／branch／dirty-worktree歷史及依賴closure），確認現有未提交修改與版本歷史，不覆蓋既存工作。
-2. 追查舊 `confirmNotice`、`reloadForTripDataChange`、`writeConfirmedItinerarySnapshot`、`getTripChangePreview`與 `useTripWorkspace`／ADR-001 Save RPC／Pending／version baseline的相互作用，明確區分必要 revision publisher與已定案取消的 Daily Itinerary preview flow。
-3. 將「舊通知/預覽殘留」與第十四輪跨裝置刪除重現序列組合驗證；如可重現，保留前後 snapshot、version、Pending、Lease及RPC/readback證據。
-4. 僅調查與提出方案；未獲使用者授權前不修改程式或刪除機制。
+### 現行執行順序（ADR-002修訂後）
+1. 核對 Git/worktree既存修改及相關歷史，將 P3已取消的每日行程 Preview／notice／change-summary流程與必須保留的 revision signal分界清楚。
+2. 追查 `confirmNotice`、`reloadForTripDataChange`、`writeConfirmedItinerarySnapshot`、`getTripChangePreview`、notice/modal元件及所有 caller、state、storage、RPC與reconciliation依賴；形成可拆除的實際依賴閉包，並由原始碼/Git證據核對。
+3. 依依賴閉包逐項移除／修正已淘汰機制及其必要呈現、計算、snapshot/baseline副作用；每一切片更新本日誌與索引並跑對應測試，避免一次性大拆。
+4. 對同步保存、遠端更新後管理操作／新增修改刪除及 ADR-001 Lease／CAS／Save RPC保護做隔離驗證；若測試環境阻塞，先修復安全隔離測試條件，不使用正式DB、TEST-1或既有旅程。
+5. 對每個移除項目確認不再有 caller／引用／資料副作用，測試與文件一致；保留無關有效功能及既有工作樹修改。
+
+## 2026-11-22：範圍修訂及首輪依賴盤點
+- **PASS（文件修訂）**：ADR-002已改為 Accepted／實作中，授權現行develop上的逐項拆除與隔離驗證；README索引同步更新。
+- **直接程式證據**：`App.tsx`仍掛載 `TripDataRevisionNotice`／`TripChangePreviewModal`並使用 `useTripDataRevision`；hook仍含 preview refresh、notice、confirmNotice與 confirmed snapshot/baseline副作用；`tripChangePreviewService.ts`仍計算摘要並查詢 `trip_change_journal`。
+- **依賴邊界已辨識**：`useTripDataRevision`也承擔 trip master權限撤銷處理、remote revision check及Trip editor／delete／itinerary-save conflict入口；不得以整個hook／revision publisher一併刪除方式處理。需將必要 revision/access/conflict訊號與取消的預覽／摘要功能分離。
+- **DB依賴證據**：V3.9.17 migration `20260927180500_v3917_change_preview_journal.sql`建立 journal及摘要trigger/function，並在 revision broadcast trigger內呼叫摘要紀錄；RC2 migration `20260927193000_v3917_rc2_sync_boundaries.sql`曾縮減 journal分類。必要 revision broadcast publisher與 journal摘要副作用目前耦合，後續拆除須以新 migration安全分離，不能修改既有歷史migration或直接丟棄revision publisher。
+- **目前未修改產品程式或SQL**；本輪僅修訂決策文件及唯讀盤點，未commit／push。
+- **下一步**：追查 revision broadcast trigger/function、其他 journal callers、測試及文件依賴閉包，界定必要publisher／conflict/access guard與journal/preview專用部分後，開始第一個可驗證拆除切片。
+
+- 已核准 ADR-002範圍內實作與隔離驗證。commit／push／deploy及正式資料操作仍需另外明確授權。
+
+## 2026-11-22：實作前依賴閉包核對
+- Git核對：`develop`／`origin/develop`一致（HEAD `c77dfefe04c72bca0b9005e14f65abbe5219eea1`）；工作樹僅包含既有ADR文件修改，已保留。fetch未帶來遠端差異。
+- **前端拆除依賴：** `App.tsx`掛載Preview Notice／Modal，並呼叫 `useTripDataRevision`。Hook目前混合Preview state／summary／confirm snapshot-baseline副作用與必要revision check、Trip master access revoked清除及Save／Delete conflict入口；因此不可整體刪除Hook。
+- **UI依賴：** `TripDataRevisionNotice`的critical `revoked`／`conflict` dialog可保留，但一般 `available` notice及Preview操作是已淘汰UI。App的編輯／刪除入口仍呼叫 `checkForRemoteTripChange()`，其變更後的阻止／提示行為須在移除一般notice時保持明確，不能變成靜默中止。
+- **Service依賴：** `tripChangePreviewService.ts`僅由 `useTripDataRevision`及 `TripChangePreviewModal`依賴，內容包含Net-change分類、journal query及localStorage snapshot專用鍵。搜尋未找到其專責測試。
+- **DB依賴：** V3.9.17 migration建立 `trip_change_journal`、摘要計算helper／trigger及writer；`tc_broadcast_trip_data_revision()`目前內嵌呼叫summary writer。必要publisher需保留，但須在新migration移除summary side effect與journal物件，不能修改歷史migration。
+- **本輪未修改產品程式或SQL，未執行DB操作。** 嘗試委派實作的subagent工具回傳內部錯誤，能力健康檢查正常；尚未由此工具完成任何修改。下一步主Agent需直接進行前端切片，保留critical conflict/access功能，完成 targeted tests/build後，再進入DB migration切片。
+
+## 2026-11-22：前端 Preview slice 拆除／驗證
+- **完成切片：** 移除 `TripChangePreviewModal`、`tripChangePreviewService`、前端 Preview／summary／journal query／確認baseline／snapshot state與 UI，並清除其專用 verifier。
+- `useTripDataRevision`已精簡為 revision monitoring／remote access revalidation／Trip editor access revoked清除／必要 revision conflict check與critical alert；不再以一般變更notice／摘要UI介入保存流程。
+- `App.tsx`移除 Preview modal及確認流程；critical access revoked/conflict dialog保留。
+- Regression verifier `verify-v31012-itinerary-sync`調整為聚焦ADR-001三方合併、Pending、Conflict及 Lease RPC；`verify-v3913-update-race`及`verify-v3916-offline-revision-personal-book`改核對現存critical/access contract，移除 Preview assertions。
+- `npm run build`：**PASS**，全套 build scripts、TypeScript checks、production Vite/PWA build及postbuild browser-security／weather bundle checks皆通過。
+- `git diff --check`待最後整理再次確認。尚未修改migration／資料庫；journal與摘要trigger／function的移除分離屬下一切片。尚未commit／push／deploy。
+- 下一步：追完整migration function／trigger依賴閉包，建立新migration分離revision broadcast publisher並拆除 journal side effects/objects，配合隔離資料庫驗證。
+## 2026-11-22：Journal資料庫切片／local isolated PASS
+- 新 migration `20261122140000_adr002_remove_trip_change_preview_journal.sql`：改寫 `tc_broadcast_trip_data_revision()`，保留 revision increment、private broadcast、Trip DELETE tombstone與移除 editor通知；去除journal summary side effects。
+- Migration拆除 `public.trip_change_journal`、`tc_record_trip_change`、master summary writer、itinerary extraction及JSON array summary helpers。RC2已拆除 checklist/expense summary triggers/functions，migration按既有狀態處理。
+- 已在 **Supabase local DB (127.0.0.1:54322)** 套用 migration，未連線linked remote project。Catalog核對：journal table／journal writer／master-summary writer皆NULL；revision publisher存在，6個Trip/admin_users revision triggers仍掛載。
+- Local smoke test以synthetic Trip insert／update／delete驗證revision持續增加及永久 deletion tombstone建立，並清理測試tombstone；PASS。
+- Static verifier `verify-adr002-preview-removal.mjs`新增至 build chain；驗證migration與必要access/conflict契約。
+- 尚需最後完整build、diff／docs-links核對及migration依賴closure確認。未commit／push／deploy。
+## 2026-11-22：S1／前端與Journal拆除切片收尾
+- 全套 `npm run build`再次PASS（ADR-002 verifier、完整 regression chain、TypeScript、production Vite/PWA、postbuild security/bundle checks）。
+- `npm run verify:docs-links` PASS：154份Markdown／363個local targets。
+- `git diff --check` PASS；產品原始碼及 migration搜尋確認已無journal/preview service/UI/confirmed-snapshot runtime references。歷史 migrations仍保留原始migration紀錄，不修改歷史。
+- Local migration list確認migration已套用；local catalog核對 journal table/writer/master-summary writer不存在，revision publisher及6個 triggers存在。
+- **此拆除切片完成。** ADR-002其餘保存更新行為改善／必要回歸若仍有具體觀察，下一步以現行develop及隔離測試調查；目前未commit／push／deploy。
+
+## 2026-11-22：續行——Lease lifecycle動態量測環境復查
+- 重讀ADR-002索引／主檔及本階段紀錄，確認目前切片完成後的下一個具體未完成事項仍是保存更新動態量測；此前紀錄的最直接候選為 `ItineraryPage` Lease effect依賴 `trip.content.daysData`，但不得在測量門檻未完成前把候選當成已證實根因或直接改程式。
+- 最新原始碼核對再次確認 effect dependencies為 `[activeDay, canUseEditLeases, supabase, trip.content.daysData, trip.id]`；effect實際負責Trip-level Lease list／Realtime subscription及foreground refresh，不直接使用 `daysData` 內容。保存流程會多次替換daysData參照，具備造成cleanup/setup的機制證據。
+- 本次瀏覽器控制復查：Open Browser Use backend ping成功、managed tab可列出（`http://127.0.0.1:5173/Travel-Companion/`），但CDP `Runtime.evaluate`再次unix socket timeout；改用Computer Use取得Chrome accessibility state可用，但該次畫面包含Chrome選單／偵錯提示，無法取得可靠的App DOM／React／viewport／Lease instrumentation。未操作旅程、未建立Auth identity／fixture、未寫入任何Trip資料。
+- **目前仍BLOCKED：** 動態量測的browser-control/CDP可觀測性，且未達原先實作前驗證門檻。不能宣稱Lease lifecycle已被動態證明造成畫面閃動，也不直接套用候選修改。
+- **下一步：** 修復／確認獨立loopback測試tab的CDP或可可靠取得頁面DOM／instrumentation的替代控制方式；建立專用loopback identity／fixture後，先量測保存前後Lease effect setup/cleanup、status flap及卡片DOM identity，然後再依證據判定最小修正。未commit／push／deploy.
+## 2026-11-22：續行——CDP恢復與隔離fixture建立嘗試
+- 使用獨立 Chromium debugging endpoint `127.0.0.1:9222`繞過 Open Browser Use socket timeout，成功取得 loopback App DOM及button/viewport資料；Chrome tab先前因休眠，透過Computer Use選取tab後恢復。
+- App確認本機 Supabase URL為 `http://localhost:54321`，`.env.local`使用loopback API；DEV test login UI已顯示且限 `@example.invalid`帳號。測試環境未使用正式 Supabase。
+- 本輪仍未成功建立隔離Auth identity／Trip fixture：shell signup操作受工具安全檢查阻擋，尚未透過 UI完成 signup。未直接操作Auth DB或既有旅程以繞過此阻礙。
+- 對已保留工作樹執行全套 `npm run build`：**PASS**，包含 ADR-002 preview/journal contract verifier、完整 regression scripts、TypeScript及production Vite/PWA build chain（工具回傳 exit code 0）。`git diff --check`亦在同一指令完成並回傳 exit code 0。
+- 動態保存／Lease setup-cleanup／React commit／DOM identity觀察仍未開始；本輪成果是 browser observability路徑恢復及 build regression PASS，並非根因動態證明。
+- **阻塞狀態**：需使用 Computer Use直接操作本機測試登入UI完成隔離identity，或另採經批准且工具允許的本機fixture建立方式。無權或未成功建立fixture時，不擅自寫Auth DB／既有Trip。
+- 未修改產品程式、SQL或Trip資料；未commit／push／deploy。
+
+### 2026-11-22 續行補充：登入 UI / browser bridge 再確認
+
+- Open Browser Use managed tabs 列出本機 Vite App (`http://127.0.0.1:5173/Travel-Companion/`) 為唯一 managed tab；其 `page_info` 再次無有效回傳。
+- Computer Use 可辨識 Chrome 視窗與網址列，但其 accessibility tree 無法提供 App DOM/登入表單控件，互動結果未取得有效頁面內容。
+- 重新核對 App 原始碼：本機測試登入 / 建立帳號功能在 `App.tsx` 與 `LoginSafetyModal.tsx` 存在，並限定 localhost Supabase、`@example.invalid`；但本輪無法完成 UI 操作。
+- 本輪不使用 Shell REST signup、直接 DB/Auth manipulation 或其他繞過 UI/安全限制的途徑。尚未建立登入 session，故動態測量仍未執行。
+- 狀態維持：動態驗證阻塞，根因未證實；前輪 build、靜態 verifier、diff-check PASS 的結果不受此補充影響。
+
+### 2026-11-22 續行補充：CDP恢復與本機測試登入成功
+
+- 本輪透過 Open Browser Use CDP `Runtime.evaluate` 成功讀取 managed tab DOM、按鈕、表單與頁面文字，前述 Browser Use bridge／CDP timeout 阻塞已排除。
+- App 的登入安全 Modal 明確提供「本機測試登入」，限定 loopback Supabase 且 `@example.invalid`；透過 UI建立並登入新的隔離測試身份 `adr002-test-20261122@example.invalid`，未使用 Shell REST signup、Auth DB直接寫入或正式 Supabase。
+- 登入成功後 App 顯示個人帳本模式。現有 seed 九州旅程的「管理」按鈕為 disabled；該測試身份尚未取得可編輯的 ADR-002專用 Trip／fixture，故未點擊保存、編輯、刪除或操作其他既有旅程。
+- 本輪證明：**CDP／頁面 DOM讀取與 UI test-account signup/login 已恢復並實測成功**；尚未證明 Lease setup／cleanup、React commits、DOM identity或畫面閃動的直接因果。
+- **目前阻塞縮小為 fixture／Trip ownership-access**：需在 loopback環境建立／取得一趟由該測試身份可編輯、專供 ADR-002的隔離旅程。不得將其權限擴增至既有旅程、改變既有 Superadmin／角色或操作歷史 synthetic Trip。
+- 未修改產品程式、migration、SQL或Trip資料；未commit／push／deploy。
+
+### 2026-11-22 續行補充：測試身份的 Trip 建立權限確認
+
+- 以已登入的 `adr002-test-20261122@example.invalid` 重新讀取 App DOM／畫面；登入身份確定為個人帳本模式，Cloud Trips 顯示九州與沖繩選項，但未提供可編輯管理權。畫面上 Trip master「管理」按鈕先前已確認 disabled。
+- 原始碼核對 `openCreateTrip()` 受 `canEditTripMaster` 與 `isTripMasterLocked` 控制；`handleTripEditorSubmit()` 也先檢查 `canEditTripMaster`。目前帳號無此權限，因此無法透過正常 App UI建立 ADR-002專用Trip。
+- 不採用既有 `v391-local-browser`／`v391-admin` helper（會改既有 Superadmin角色且前述歷史Trip已排除），不直接寫 Auth／`admin_users`／Trip DB，不重設既有測試帳號。
+- **現階段無安全且已授權的 fixture provisioning UI路徑**；需要授權使用一個專用、loopback-only fixture provisioning／短生命週期測試角色流程，精確限定新帳號及新Trip ID，並具清理與驗證機制。此權限未取得，故停止於此，不以程式／DB繞過。
+- 本輪續行（2026-11-23）：確認本機 Supabase loopback與Node/npm環境正常；ADR-001 SR-10隔離整合測試重新執行 **PASS**（JSON literal null rejection、grow/shrink版本更新與3筆history assertions），其測試finally cleanup已執行。只讀本機資料庫計數：8 trips、4 superadmins、1筆 `adr002-test-%@example.invalid` Auth user、0筆該email pattern角色；未使用既有Superadmin或旅程。
+- 另嘗試建立新的ADR-002專用Auth／trip_editor／Trip fixture provisioning腳本，該工具呼叫被OpenAI安全檢查阻擋；未確認腳本執行或fixture建立，亦未透過替代方式繞過。先前已存在的ADR-002測試Auth identity仍存在，未能在本輪確認安全清理方式；目前未發現專用Trip或角色。此為未清除的測試身份，需在受允許的安全途徑核對及清理。
+- **人工 UI 測試已續行（2026-11-23）**：改用已建立的專用旅程 `ADR-002-人工測試 (2026-11-23)`及現有登入／編輯權，不再以fixture provisioning阻塞操作型測試。CDP恢復可用，observer記錄 focus、blur、scroll、visualViewport與DOM mutation。
+- **PASS**：進入D1管理、開啟新增表單、標題欄取得focus、輸入、取消；取消未留下卡片，scrollY保持0。
+- **PASS**：新增卡片（09:00–10:00）保存、修改標題後保存；UI確認保存結果。使用者已完成二次確認後的卡片刪除，重新讀取UI確認卡片列表為空。
+- **PASS**：另建立測試卡片（11:00–12:00），編輯後保存標題變更；再次開啟編輯，改為未保存內容後取消，UI仍保留原標題，未保存變更丟棄。
+- **直接觀測**：保存／取消會使active INPUT focusout、activeElement回BODY；在該測試桌面viewport height=901且scrollY=178的編輯狀態，保存或取消後scrollY重置至0，伴隨viewport width 1665→1680及scroll事件。焦點／輸入時亦觀察到scrollY=178。此現象在本環境可重現，不能直接推論Android鍵盤或Lease effect因果。
+- **未測／限制**：目前是桌面browser；未取得Lease effect setup/cleanup、loading→ready、React commit或card node identity直接訊號，故根因仍未證實。尚未進行產品修改。
+- **後續自動UI測試（2026-11-23）**：在scrollY=178時聚焦活動標題，無變更保存，直接觀測 `focusout`，其後DOM mutation、viewport width 1665→1680及scrollY 178→0；卡片 `article` node identity仍相同（true）。另實際改標題保存（`ADR002-identity-change`），UI確認新值，node identity仍相同；再保存回復原標題 `ADR002保存後焦點觀測-二次編輯`，確認專用測試卡片資料已復原。變更保存期間多次DOM mutation，scrollY在mutation群組前段保持178，末段歸0；node未替換。
+- **源碼直接核對**：`ItineraryPage.tsx` Lease subscription effect依賴 `[activeDay, canUseEditLeases, supabase, trip.content.daysData, trip.id]`，會在daysData參照變動時重跑；其流程載入時設定 `editLeaseStatus=loading`，取得list後設定 `ready`，並建立trip-filter Realtime channel。此為source-based lifecycle可能性，未取得runtime setup/cleanup及status transition的直接時間證據，不能認定保存一定觸發flap。`resetForm()`會先release lease再呼叫`releaseFocusedControl()`；`releaseFocusedControl()`實作為active HTMLElement.blur()，但本次保存觀測到focusout與scroll reset，並非已證明直接由resetForm造成。
+- **已證實**：操作後卡片DOM node identity保持不變；scroll reset可重現。透過唯讀React Fiber hook state讀取，保存後穩定狀態 `editLeaseStatus=ready`；未捕捉瞬態loading或effect cleanup/setup。
+- **下一步**：已能唯讀讀取React Fiber state，但目前尚未完成保存前後逐frame sampling，未取得Lease status瞬態及effect lifecycle直接證據。再依證據判定最小修正。未修改產品程式、正式DB或歷史旅程，未commit／push／deploy。
+
+
+## 2026-11-23：下一階段測試計劃—事件因果追蹤（依此順序執行）
+
+### 測試目標與判定原則
+- 目標不是肉眼確認閃動，而是捕捉一次操作期間的事件序列，定位最先與畫面變化建立因果關聯的程式事件，之後再以受控測試驗證。
+- 不預設 Lease、blur、scroll、React render、Realtime或DOM mutation任何一項是根因。時間相近僅是關聯，不足以成立因果。
+- 限用專用ADR-002測試Trip及隔離非正式環境；不使用正式DB、TEST-1或歷史旅程。不在取得證據前修改產品程式。
+- 每次案例單獨trace，使用trace ID、毫秒timestamp與事件來源，避免混合不同操作或其他背景事件。
+
+### S1-A：建置一次操作的事件時間線（先做，未完成不得跳到根因判定）
+1. 建立可啟停、可清除且僅限測試頁面的診斷觀測；不改產品功能或保存邏輯。
+2. 每個操作前記錄baseline，操作後持續捕捉至UI與相關狀態穩定；至少涵蓋無變更保存、內容變更保存、取消，必要時再分別測新增與刪除。
+3. 同一trace中捕捉以下資料，統一時間戳：
+   - 操作流程：Save/Cancel handler進入與退出、各保存/取消階段、resetForm及releaseEditingLease呼叫。
+   - React：ItineraryPage render及commit時間/次數；可可靠取得時記錄Profiler/commit與元件mount/unmount。
+   - Lease：effect setup/cleanup直接訊號、lease request/channel建立與移除、editLeaseStatus每次轉換（含loading/ready/其他狀態與時間），不得只讀穩定的最後值。
+   - Realtime：channel subscribe、unsubscribe、status及相關事件。
+   - Focus：focus、focusout、blur、activeElement變化與來源。
+   - Viewport/scroll：scrollY、scroll事件、visualViewport width/height/offset/scale及resize時間。
+   - DOM：主要列表容器、編輯表單、卡片article的node identity及mount/remove/replace；MutationObserver只作DOM變化佐證，不把mutation數量當作閃動數。
+   - Rendering：可取得的Performance trace中Layout、Paint、Composite/frame時間；記錄實際能力限制，若無可靠訊號不得推稱已捕捉。
+   - Network：保存RPC、Lease RPC與相關Reconciliation/Realtime request時間及結果；避免記錄個資、token、Authorization或Trip內容。
+4. 先捕捉單次操作的完整序列；若有背景干擾或trace不完整，標記無效並隔離重測，不靠肉眼補判。
+
+### S1-B：事件順序分析與候選定位
+- 依trace時間線找出最早與畫面異常一致的事件及其前後直接變化，列出證據、反證、未知與候選來源。
+- 分別檢查：React commit/state分支、DOM容器/card replacement、Lease setup/cleanup與status flap、Realtime、resetForm/blur/focus、viewport/scroll、Layout/Paint。
+- 判定需區分「render但DOM未重建」、「DOM replacement」、「Lease控制狀態變化」、「focus/viewport reposition」及「layout/rendering變化」；不可將它們合併成單一閃動原因。
+- 若trace只證明伴隨事件，仍列為候選；不得宣稱根因已定位。
+
+### S1-C：候選根因受控驗證
+1. 對候選事件及其呼叫鏈直接讀取原始碼，核對trace中的事件來源與執行順序。
+2. 選擇最小、可逆且隔離的控制測試，單獨驗證候選因素；不得在此階段擅自修改產品程式。
+3. 相同條件重複trace，確認候選事件及視覺／DOM/viewport變化的序列可重現。
+4. 以受控隔離或診斷方式對照候選因素存在／不存在時的差異；若無法安全隔離，記錄限制並維持未證實。
+5. 若多因素共同作用，分別驗證並記錄複合因果，不將其中一項過度定為唯一根因。
+
+### S1-D：完成門檻
+- **S1-A PASS：** 一次有效操作有完整且可排序事件時間線，核心事件來源可識別；所有無法捕捉項目明確列出。
+- **S1-B PASS：** 候選事件定位有trace、原始碼與反證／未知核對，不以肉眼或單一mutation數量判定。
+- **S1-C PASS：** 受控、可重複驗證建立候選事件與畫面變化的因果關係，或有證據排除該候選。
+- 完成前不得宣稱根因已確認或開始未經核准的修正；結果、PASS/FAIL/BLOCKED、下一步同步更新本階段日誌與決策索引。
+- 本計劃是ADR-002既有調查／測試範圍的具體化，不另授權commit、push、deploy或正式環境操作.
+## 2026-11-23：S1-A～S1-D事件因果追蹤結果
+
+### S1-A｜事件時間線 PASS
+
+- **環境**：Travel-Companion develop工作樹的本機Vite App、loopback Supabase、專用旅程 `ADR-002-人工測試`；桌面Chrome viewport 1680×901。未使用正式DB、TEST-1或歷史旅程。
+- 建立並短暫使用測試頁 observer及源碼診斷訊號，捕捉focus／focusout／blur、scroll、viewport、DOM mutation、Performance layout-shift、fetch RPC、Lease effect setup／cleanup、Realtime status及 `editLeaseStatus` loading／ready。診斷程式修改已全部撤除；未保留產品診斷程式。
+- **編輯表單開啟**：document scrollHeight由901增加至1079；在scrollY=0時，innerWidth維持1680，但clientWidth由1680降至1665，垂直scrollbar出現。此變化在未手動捲動時已可重現。
+- **編輯表單關閉**：document scrollHeight回到901；scrollbar消失，clientWidth回到1680。當操作前scrollY=178時，focusout發生於scrollY=178，關閉表單後scrollY被瀏覽器clamp至0，並觀察到layout-shift entry。
+- **DOM identity**：重複取消測試中卡片article node identity維持相同（同一node ID），未發生卡片article replacement/remount。
+- **Lease直接訊號**：保存操作中直接捕捉多次effect cleanup／setup、Realtime `CLOSED`／`SUBSCRIBED`、`editLeaseStatus` loading→ready及Lease RPC結果。保存期間 `daysData` identity變更並引發effect重啟；`supabase` identity保持穩定。
+
+### S1-B｜候選定位 PASS
+
+- **已確認根因（針對本次viewport／scroll閃動）**：卡片inline editor使document高度增加，造成垂直scrollbar出現及viewport可用寬度縮減；editor關閉後document高度縮短，scrollbar消失，viewport width回擴。scrollY=178→0是document縮短後的scroll range clamp，不是卡片DOM替換。
+- **Lease effect不是scroll reset的必要原因**：取消測試未呼叫 `tc_save_itinerary_days`，未觀察到Lease effect cleanup／setup，但仍重現scrollY 178→0、scrollbar消失、clientWidth 1665→1680及layout-shift。保存時Lease effect重啟屬伴隨的次級UI state transition，不能定為本次viewport reflow根因。
+- `focusout`與scroll reset有時間關聯，但證據指向editor DOM高度收縮／scroll range變化；不把 `resetForm()`、blur、Lease或Realtime單獨定為根因。
+
+### S1-C｜受控、重複驗證 PASS
+
+- **Cancel重複測試**：至少兩輪在scrollY=178的編輯狀態實際點擊取消，均重現scrollY 178→0、document height 1079→901及clientWidth 1665→1680；article node identity不變，取消未保存卡片內容。
+- **Save測試**：隔離卡片標題修改保存及復原保存均成功；保存RPC回傳200，保存期間Lease effect lifecycle／loading→ready可直接捕捉。保存前後卡片資料已復原為 `ADR002保存後焦點觀測-二次編輯`。
+- **Mitigation控制試驗（僅頁面臨時CSS，未保存至產品檔案）**：`html { overflow-y: scroll; }`可讓clientWidth在editor開／關及scrollY 178→0後維持1665，證明固定scrollbar可抑制水平viewport reflow；但scrollY clamp仍存在且桌面頁會常態顯示scrollbar。`scrollbar-gutter: stable`在本次Chromium／頁面配置下未能預留gutter。兩者均未留下產品程式修改。
+- **限制**：桌面Chrome測試；未進行Android實機、完整React Profiler／commit trace或逐frame paint/composite追蹤。這些限制不影響已確認的scrollbar width因果，但不將其他可能的保存閃動泛化為同一根因。
+
+### S1-D｜完成判定
+
+- **PASS**：S1-A有效時間線、S1-B根因定位、S1-C受控重複驗證均完成；scroll／viewport reflow根因已證實，Lease lifecycle已分離為次級候選。
+- **未修改產品程式**：臨時observer/source instrumentation及CSS試驗均已清除／撤除；本輪未修改正式DB、未commit／push／deploy。
+- **已核准最小修正並實作**：`src/index.css` 的 `html` base rule新增 `overflow-y: scroll`，固定root scrollbar以抑制editor開／關的水平viewport width reflow。此修正不消除scrollY clamp，且桌面可能常態顯示scrollbar。
+- **實作後驗證**：正式build及完整既有驗證鏈PASS；文件連結驗證（154份Markdown／363個目標）PASS；`git diff --check` PASS。實際產品CSS的桌面操作回歸與Android實機驗收仍待執行。
+- **Next Move**：完成修改後的桌面操作回歸及Android實機驗收；ADR-002其他已淘汰Preview／通知衍生機制拆除與請求放大追查仍依原範圍進行，不因本次root-cause與mitigation完成而宣告整體ADR-002結案。
+
+## 2026-11-23：使用者修正目標後續查——新增卡片實測與目前阻塞
+
+- **目標澄清**：本次核心問題是新增／刪除卡片操作時畫面上下閃動；scrollbar width／左右位移不是本案完成目標，前述scrollbar mitigation不能作為本問題結案證據。
+- **隔離環境**：本機 Vite／loopback App，專用Trip `ADR-002-人工測試 (2026-11-23)`；Chrome tab 278050344，viewport 1680×901。原有卡片「景點 2」保留。
+- **新增測試 PASS（資料保存）**：新增 synthetic card `ADR002-垂直閃動追查-新增`（12:00–13:00），UI readback確認其已保存。初次trace中scrollY維持0，document scrollHeight／clientWidth在操作前後為901／1680；編輯表單展開階段高度增至1133。LayoutShift source曾捕捉卡片／說明區元素位置變化，但該trace包含多筆背景Mutation及非操作窗口的累積 entries，尚不足以將其歸因於新增卡片上下閃動。
+- **測試資料清理未完成**：嘗試刪除該synthetic card，但瀏覽器控制連線後續timeout；reload後確認該卡片仍存在。未確認刪除成功，原卡片「景點 2」未修改。
+- **目前BLOCKED**：CDP／Open Browser Use socket timeout，無法繼續可靠捕捉刪除操作及完成synthetic card清理。當前無有效證據可確認新增／刪除卡片的上下閃動根因或直接實作修正。
+- **下一步**：恢復可靠的loopback tab控制，先清理上述synthetic card，再以一次操作為窗口重新捕捉新增與刪除事件、CLS source／卡片位置／scrollY／React與DOM identity，並排除observer背景噪訊；只有因果確認後才修改。
+- 本輪未修改產品程式／CSS、未操作正式DB／歷史旅程、未commit／push／deploy。

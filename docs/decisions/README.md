@@ -1,4 +1,4 @@
-﻿# Travel-Companion 決策總索引
+# Travel-Companion 決策總索引
 
 本文件是持續有效工程決策與工作進度的唯一總入口。開始相關工作時先讀本索引，再讀本次相關 ADR 主檔及依目前階段／工作需求選出的附屬文件；不得全量載入所有 ADR／階段附件。索引只維護狀態、階段、下一步、阻塞、載入條件及連結，詳細內容與證據留在各權威文件。
 
@@ -9,13 +9,13 @@
 | ID | 決策／工作 | 狀態 | 目前階段 | 下一步／阻塞 | 權威主檔 |
 |---|---|---|---|---|---|
 | [ADR-001](active/ADR-001-trip-daily-card-edit-lock-scope.md) | 每日詳細行程統一編輯權、保存協調與更新提示簡化 | Accepted／已結案 | **ADR-001 Exit PASS（2026-11-22）** | **ADR-001整體結案／S1／S2／S3／S4 Exit PASS（2026-11-22）。核心 regression／SR-09／SR-10／SR-11、S3 UI evidence、build及docs-links均有PASS證據。雙瀏覽器競爭UI已取消；暫存 synthetic Trip cleanup由使用者自行處理，不列入阻塞／Exit條件。** | [ADR-001](active/ADR-001-trip-daily-card-edit-lock-scope.md) |
-| [ADR-002](active/ADR-002-card-save-screen-flicker.md) | 行程卡片新增／保存畫面閃動根因追查與改善評估 | Proposed／持續追查 | **S1 根因定位 ACTIVE（2026-11-22）** | **測試安排已開始：loopback Supabase與Node/npm符合要求；既有未提交工作保留。Browser-use CDP逾時，專用fixture尚未建立。新觀察：Windows新增卡片1→Android遠端通知／確認或預覽→刷新→刪除1失敗；手機新增卡片2保存後，1又能刪除。另直接核對發現 ADR-001 P3定案取消每日詳細行程預覽及舊通知／確認流程，但目前 `App.tsx` 仍 render `TripDataRevisionNotice`／`TripChangePreviewModal`，`useTripDataRevision.ts` 仍保留 preview／confirmNotice及snapshot baseline副作用；確認P3未完整落實是已證實的實作落差，但與刪除失敗因果尚待驗證。下一步先追查舊流程的依賴／歷史及其 snapshot、revision、Pending、Lease／保存交互，再隔離重現跨端刪除序列並 readback。** | [ADR-002](active/ADR-002-card-save-screen-flicker.md) |
+| [ADR-002](active/ADR-002-card-save-screen-flicker.md) | 移除已淘汰的每日行程 Preview／通知／同步衍生機制，並追查卡片操作畫面上下閃動 | Accepted／實作中 | **S1拆除slice PASS；卡片新增／刪除上下閃動調查仍ACTIVE／BLOCKED** | **Preview／summary UI、service、snapshot-baseline及DB journal slice已拆除；revision/access/conflict handling、publisher、6 triggers及tombstone保留；local smoke、build、docs-links、diff-check PASS，SR-10 PASS。先前已證實編輯器收縮造成scroll range clamp／viewport reflow，但此非目前新增／刪除卡片上下閃動完成目標。2026-11-23隔離新增測試卡片保存成功，trace尚無足夠因果證據；synthetic card清理及精確刪除trace受CDP timeout阻塞。未修改產品程式／CSS；未commit／push／deploy。** | [ADR-002](active/ADR-002-card-save-screen-flicker.md) |
 
 ## ADR-002 階段入口
 
 | 階段 | 文件 | 按需載入條件 |
 |---|---|---|
-| S1 根因定位／歷史機制比較（ACTIVE） | [ADR-002-S1](active/ADR-002-S1-root-cause-investigation.md) | 卡片保存閃動根因、state／identity／remount及歷史版本比較 |
+| S1 Preview／通知衍生機制依賴追蹤與逐項拆除（ACTIVE） | [ADR-002-S1](active/ADR-002-S1-root-cause-investigation.md) | 已淘汰流程依賴閉包、實作拆除、隔離驗證與歷史行為比對 |
 
 ## ADR-001 階段入口
 
