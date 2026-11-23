@@ -105,5 +105,5 @@
 - 既有現象量測、viewport／scroll根因、Lease候選、歷史失敗與有效trace全部保留，不清除或覆寫。
 - 本案新增／刪除卡片上下閃動調查已轉為程式事件因果追蹤：操作handler／state與資料更新／React render-commit／DOM identity／layout-scroll-focus／Paint及network時序整合成trace，再經原始碼核對與受控重複對照確認根因。
 - 完整測試鏈及實作方案的細節、trace欄位與完成門檻以 [ADR-002-S1階段日誌](ADR-002-S1-root-cause-investigation.md) 最新2026-11-23修訂為準。舊測試計劃與證據保持歷史記錄。
-- **狀態：** 調查規劃已修訂；新測試鏈尚未執行。Browser control timeout與合成卡片清理仍為阻塞；根因未確認、未授權修正。
+- **狀態（2026-11-23 更新）：** S1 Preview／通知衍生機制拆除 slice 已完成並通過專責 verifier；Lease effect dependency 最小修正已實作，Build PASS，專用 loopback Trip 兩次保存／復原成功。新增／刪除操作的直接事件 trace、Lease effect setup／cleanup、status transition、React commit及 DOM identity 仍待量測，故尚未完成整體閃動根因驗證與 UI 驗收。下一步及測試門檻以 S1 階段日誌最新紀錄為準。Browser Use claim_tab socket timeout 不再作為唯一測試路徑；可評估已授權 Computer Use／替代 DOM instrumentation。commit／push／deploy 本輪以外的後續操作仍須另行授權。
 

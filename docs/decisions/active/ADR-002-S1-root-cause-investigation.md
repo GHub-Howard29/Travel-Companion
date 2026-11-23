@@ -1,4 +1,4 @@
-# ADR-002-S1：淘汰 Preview／通知衍生同步機制的依賴追蹤與逐項拆除
+﻿# ADR-002-S1：淘汰 Preview／通知衍生同步機制的依賴追蹤與逐項拆除
 
 > 工作狀態：ACTIVE／已核准實作，逐項依證據追查、拆除與驗證；本文件為持續工作日誌唯一維護位置。
 
@@ -668,3 +668,12 @@
 2. 同一時間窗記錄 `saveItem` handler enter次數、`saveItineraryTripDetail` enter及 existingSave、Pending revision、Lease effect setup／cleanup與 status、Save RPC request數、React Profiler commit、卡片 `article` node identity、Day panel rect、focus／blur、`visualViewport`與 `scrollY`。
 3. 若只有一個 handler／workspace save／RPC，但出現多次 render或Lease flap，才針對狀態／effect耦合提出最小修正；若 handler或RPC真的重複，沿呼叫來源追查，不以增加防重入 flag掩蓋問題。
 4. 完成新增與刪除的隔離重複對照後，才判定根因及提出修正；保留本階段ACTIVE，未授權的正式資料操作、commit／push／deploy不執行。
+
+## 2026-11-23：Lease lifecycle dependency 最小修正與初步驗證
+
+- **修正**：`src/components/ItineraryPage.tsx` Lease effect dependency由 `[activeDay, canUseEditLeases, supabase, trip.content.daysData, trip.id]` 收斂為 `[canUseEditLeases, supabase, trip.id]`。effect內不使用 `activeDay`／`daysData`；Trip-level訂閱不因卡片內容參照更新重啟。
+- **保留**：原有Lease list refresh、Realtime subscription／SUBSCRIBED refresh、visibility/focus refresh、refresh queue、error狀態、cleanup及 `editLeaseRefreshRef`。未新增refresh機制，未更改Save RPC／CAS／Pending／Recovery。
+- **隔離UI保存測試**：專用loopback Trip `ADR-002-人工測試`的測試卡標題先改為 `ADR002_MEASURE_VALIDATION_20261123__lease_test` 保存成功，隨後復原原標題 `ADR002_MEASURE_VALIDATION_20261123`再次保存成功。fetch instrumentation觀察兩次save RPC、4次Lease list RPC、4次Lease release RPC；計數涵蓋兩次保存，不能單獨證明effect setup／cleanup數。
+- **界線**：未捕捉直接的React Profiler、effect setup／cleanup、status flap或卡片DOM identity；Mutation observer未觀察到明確loading文字。保存／復原及Lease refresh請求仍存在已驗證，但尚未直接證明閃動因果已消失。
+- **Build PASS**：Node 22.23.2／npm 10.9.8下 `npm run build`完整既有regression、TypeScript、production build及postbuild chain PASS，含ADR-001 S3及ADR-002 preview-removal verifier。
+- **下一步**：依既有事件因果追蹤計畫直接量測Lease effect setup／cleanup、status transition、DOM identity及Day panel位置；在專用Trip分別完成新增與刪除受控trace。尚未commit／push／deploy。

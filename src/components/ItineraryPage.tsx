@@ -651,7 +651,8 @@ export const ItineraryPage = ({
       window.removeEventListener("focus", refreshOnForeground);
       if (channel) void supabase.removeChannel(channel);
     };
-  }, [activeDay, canUseEditLeases, supabase, trip.content.daysData, trip.id]);
+  // Trip-wide Lease subscription scope; card data updates do not restart the lifecycle.
+  }, [canUseEditLeases, supabase, trip.id]);
   const [weatherByCardId, setWeatherByCardId] = useState<Record<string, WeatherForecastItem>>({});
   const [timeErrors, setTimeErrors] = useState<{
     arrival?: string;
@@ -741,6 +742,7 @@ export const ItineraryPage = ({
   const copyTimeCompositionRef = useRef(false);
   const itineraryTimeCompositionRef = useRef(false);
   const timeAdjustmentCompositionRef = useRef(false);
+
   const orderSensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
@@ -914,6 +916,7 @@ export const ItineraryPage = ({
   }, [hasEditPermission, isOnline, supabase, trip.content.daysData, trip.departureDate, trip.id]);
 
   const currentDayEvents = trip.content.daysData[String(activeDay)] || [];
+
   const displayedDayEvents = (isOrderMode ? orderDraft : currentDayEvents)
     .map((event, originalIndex) => ({ event, originalIndex }));
   const canSaveSelectedCrop = coverPhotoSource === "wikimedia-commons"
@@ -2351,7 +2354,6 @@ export const ItineraryPage = ({
           );
         }
       }
-
       await onSaveTripDetail({
         ...trip,
         content: {
@@ -2388,7 +2390,6 @@ export const ItineraryPage = ({
       return;
     }
     if (!confirm(`確定刪除「${targetEvent.title}」？`)) return;
-
     await onSaveTripDetail({
       ...trip,
       content: {

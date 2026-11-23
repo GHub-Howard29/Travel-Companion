@@ -1041,7 +1041,6 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
           if (!currentPending || currentPending.revision !== pendingState.revision) {
             throw new Error("卡片資料已再次修改，請重新同步最新版本。");
           }
-
           const reconciliation = reconcilePendingItinerarySyncState(
             {
               ...currentPending,

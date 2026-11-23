@@ -20,7 +20,6 @@ import AppSidebar from "./components/layout/AppSidebar";
 import AppHeader from "./components/layout/AppHeader";
 import { TextInfoPage } from "./components/TextInfoPage";
 import { TripDataRevisionNotice } from "./components/TripDataRevisionNotice";
-import { TripChangePreviewModal } from "./components/TripChangePreviewModal";
 import { clearExchangePurchases } from "./storage/exchangeRateStorage";
 import { getDefaultHomeScreen, setDefaultHomeScreen } from "./storage/defaultHomeStorage";
 import { UpdatePrompt } from "./components/UpdatePrompt";
@@ -391,16 +390,8 @@ function ConfiguredApp({
   const {
     noticeKind: tripDataNoticeKind,
     isTripMasterLocked,
-    isChangePreviewOpen,
-    isChangePreviewLoading,
-    isConfirmingPreview: isConfirmingTripDataPreview,
-    changePreviewSummary,
-    changePreviewError,
     checkForRemoteTripChange,
-    openChangePreview,
-    closeChangePreview,
     showConflict: showTripVersionConflict,
-    confirmNotice: confirmTripDataNotice,
     reload: reloadForTripDataChange,
   } = useTripDataRevision({
     supabase,
@@ -1515,24 +1506,7 @@ function ConfiguredApp({
         headerBgClassName={getTravelToolHeaderBgClassName(currentScreenType)}
       />
 
-      <TripDataRevisionNotice
-        kind={updateAvailable ? null : tripDataNoticeKind}
-        isOnline={isOnline}
-        onPreviewChanges={openChangePreview}
-        onConfirm={confirmTripDataNotice}
-        onReload={reloadForTripDataChange}
-      />
-
-      <TripChangePreviewModal
-        isOpen={isChangePreviewOpen}
-        summary={changePreviewSummary}
-        isLoading={isChangePreviewLoading}
-        isConfirming={isConfirmingTripDataPreview}
-        error={changePreviewError}
-        onClose={closeChangePreview}
-        onConfirm={confirmTripDataNotice}
-      />
-
+      <TripDataRevisionNotice kind={updateAvailable ? null : tripDataNoticeKind} onReload={reloadForTripDataChange} />
       {/* 主內容呈現區 */}
       <main className="max-w-md mx-auto p-4 pb-24">
         {isCurrentTripHistorical &&
