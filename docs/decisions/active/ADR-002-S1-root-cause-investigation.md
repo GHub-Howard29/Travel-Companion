@@ -677,3 +677,103 @@
 - **界線**：未捕捉直接的React Profiler、effect setup／cleanup、status flap或卡片DOM identity；Mutation observer未觀察到明確loading文字。保存／復原及Lease refresh請求仍存在已驗證，但尚未直接證明閃動因果已消失。
 - **Build PASS**：Node 22.23.2／npm 10.9.8下 `npm run build`完整既有regression、TypeScript、production build及postbuild chain PASS，含ADR-001 S3及ADR-002 preview-removal verifier。
 - **下一步**：依既有事件因果追蹤計畫直接量測Lease effect setup／cleanup、status transition、DOM identity及Day panel位置；在專用Trip分別完成新增與刪除受控trace。尚未commit／push／deploy。
+
+## 2026-11-23：新增卡片時間排序跳動追查（後續項目）
+
+- **使用者回報**：新增卡片「台北101」填到達時間09:00、離開時間未填（程式自動補為09:00）後，卡片排列持續上下交替跳動；管理模式退出仍不穩定，刷新頁面後才穩定。另一瀏覽器亦觀察到同步跳動，暗示需追查共享資料更新／重套順序來源，但尚未證明。
+- **補充測試條件**：手動新增一筆到達及離開時間均填妥的卡片曾正常保存並依規則定位；依相同標準再次輸入到達／離開時間仍會跳動。因此「離開時間空白」不是目前已證實的唯一觸發條件。
+- **正式排序規則（文件36／V3.8.0）**：daysData陣列位置為唯一正式順序；新增依時間插入；編輯既有卡片時間不自行改變位置；顯示不強制全表依時間重新排序；手動排序須保存陣列順序。
+- **目前程式核對**：`sortItineraryItemsByTime()`依 `item.time`（到達時間）排序，有時間卡片由早到晚、無時間卡片排後方並穩定保留相對順序。新增流程會對整份 `nextEvents`呼叫排序，而編輯既有卡片不重新排序。正常有效資料時排序結果通常與依時間插入相同，但實作操作方式與正式規則描述仍有細節差異。
+- **初步判斷／限制**：排序函式為確定性函式，尚未直接捕捉跳動期間兩份資料／陣列順序交替及其寫入來源。跨瀏覽器同步現象優先支持追查共享更新／資料套用路徑；排序實作差異僅為待驗證候選，尚不能宣告根因。
+- **追蹤方式**：納入ADR-002後續，不另開ADR。下一步直接追查daysData陣列順序被重新產生、覆蓋或套用的更新來源，並以卡片ID及排序序列時間戳比對，必要時受控驗證兩種時間輸入條件。
+- **新增的可重現程式證據（2026-11-23）**：直接以目前 `src/services/itinerarySync.ts` 的 `mergeItineraryDaysData()`執行對照：base陣列 `[A,B]`；local新增已排序卡片後為 `[N,A,B]`；cloud仍為base `[A,B]`。結果merge status=`merged`，但merged order=`[A,B,N]`。原因為 `orderChanged()`只比較base既有卡片的相對順序，忽略新卡片插入位置；因此這種「新增卡片插入」不會被認定為既有卡片排序改變，`mergeOneSidedOrder()`會先沿用base順序，再把新ID追加，重現排序位置丟失。
+- **判斷**：此為已直接重現且確認的同步合併排序缺陷，能解釋保存／同步流程將新卡片插入位置重置至尾端的情況；仍需透過實際畫面與同步trace確認它是否是使用者觀察到反覆跳動的完整因果鏈（例如兩種陣列版本反覆套用）。
+
+- **最新追查結果**：直接測試目前 `mergeItineraryDaysData()`：Base=`[A,B]`、Local（新增卡片已依時間插入）=`[N,A,B]`、Cloud仍為Base=`[A,B]`，實際回傳 status=`merged`、順序=`[A,B,N]`。已證實同步合併會丟失新卡片插入位置。`orderChanged()`僅比較Base既有卡片相對順序，未將新ID插入位置視為排序變更；`mergeOneSidedOrder()`沿用Base並追加新ID，導致排序位置失真。
+- **合併修正（2026-11-23）**：已定位完整保存／套用鏈：`ItineraryPage.saveItem()` 產生依到達時間排序的 `daysData`，交由 `App.tsx` 傳入 `useTripWorkspace.saveItineraryTripDetail()`；該函式先保存本機 Pending，再讀取最新 cloud snapshot，透過 `reconcilePendingItinerarySyncState()` 呼叫 `mergeItineraryDaysData()`。Reconciliation 結果會寫入 Pending、local Trip record，並以 `setCurrentTrip()` 套回畫面，之後才呼叫 itinerary Save RPC。故錯誤合併結果確實會被保存流程重新套回 UI，而非單純 render 重排。
+- **程式修正**：`src/services/itinerarySync.ts` 現在分開判定既有 Base 卡片的相對順序變更與新增卡片；不涉及既有卡片重排時，按前一張 Base 卡片錨點合併 local／cloud 新增項目，保留其插入位置；單邊既有順序變更沿用變更端順序，雙邊既有順序不相容仍建立原有 day-level order conflict。刪除的 Base 錨點不在最終序列時，其後新增項目接回最近仍保留的前序位置。
+- **新增回歸**：`scripts/verify-v31012-itinerary-sync.mjs` 覆蓋 local 頭部／中間插入、cloud 中間插入、雙端同一插入位置、刪除與另一端新增，以及 `reconcilePendingItinerarySyncState()` 將插入順序保留於 `pendingDaysData` 的實際保存收斂層案例。專責 verifier PASS。
+- **測試結果**：`npm run verify:v31012-itinerary-sync` PASS；`npm run verify:itinerary-order` PASS；`npm run test:p0-pending-autosync-idempotency` PASS；`npm run verify:adr001-s3-app-integration` PASS；完整 `npm run build` PASS（全套既有 regression、TypeScript app/node、Production Vite/PWA build、postbuild browser-security 與 weather bundle checks）。
+- **使用者實際驗收 PASS（2026-11-24）**：使用者在本機開發環境 `http://localhost:5173/Travel-Companion/` 實際新增卡片，確認「不管有無時間，都不會再發生跳動，且有遵照時間規則排列卡片」，並明確回報「此項修正有效」。此為本項新增卡片排序／畫面跳動修正的產品驗收證據；不再把該項使用者可見問題列為待驗收。
+- **驗收範圍**：確認新增卡片在有時間及無時間條件下均不再跳動，且排列遵照既定時間規則。未因此宣告 ADR-002 其他保存、刪除、遠端更新或 Lease lifecycle 調查全部結案。
+- **Git／範圍**：保留工作樹既有其他未提交修改。未執行 commit／push／deploy。
+
+## 2026-11-24：ADR-001 Trip Edit Lock 前端入口回歸調查
+
+- **使用者回報**：A 瀏覽器已進入每日行程管理編輯；B 瀏覽器仍能進入管理並新增卡片、調整順序、調整時間，使用者判定 ADR-001 單一編輯權功能失效。此為新的權限／管理入口問題，與新增卡片排序跳動修正分開追蹤。
+- **權威契約**：ADR-001 Accepted 決策明定鎖定單位為整趟 Trip，同一 Trip 同一時間只允許一個有效持有者編輯每日詳細行程；S4 P3 明定進入管理／編輯時應主動原子取得 Trip Edit Lock，並在允許編輯前取得必要最新資料／版本。
+- **已確認的前端缺口**（`src/components/ItineraryPage.tsx`）：`toggleManageMode()` 直接 `setIsManageMode(true)` 並只呼叫 Lease list refresh，沒有 claim Trip Lease；管理入口按鈕 `disabled={!canManageItinerary}`，只檢查帳號權限／online／歷史旅程，未檢查遠端持有者或本端有效 Lease。`startCreateItem()` 同樣未檢查 `hasRemoteLeaseOnActiveDay` 或 `hasValidEditingLease`，因此遠端 Trip Lease 存在時新增入口仍可開啟表單。
+- **另已確認的明確產品放行行為**：Lease list refresh 偵測到其他 client 持有 Trip Lease 時，只關閉排序與時間調整模式；狀態提示明確顯示「新增活動仍可使用」。這與單一 Trip 編輯權契約直接衝突，不是推測。
+- **其他操作路徑**：`startOrderAdjustment()`／`saveOrder()`、`startTimeAdjustment()` 已檢查 `hasRemoteLeaseOnActiveDay`；編輯既有卡片會先 claim Lease。新增 `saveItem()` 只有在 `editingIndex !== null`（編輯既有卡片）時檢查 `hasValidEditingLease`，新增卡片分支沒有相同前端 Lease guard。排序／時間調整保存交由 workspace save flow再 claim Lease。
+- **Server-side protection source review**：migration `20261120120000_adr001_stage1_trip_itinerary_edit_enforcement.sql` 中 `tc_claim_itinerary_trip_edit_lease()` 使用原子 UPSERT，只允許 Lease 過期或同 user/client 時取得；`tc_save_itinerary_days()` 在交易內鎖 Lease row，檢查 `auth.uid()`、client id 及 expiry，不符合即以 `ADR001_EDIT_LEASE_REQUIRED` 拒絕，之後才寫入並推進 version。因此目前源碼證據支持 Save RPC 的伺服器端保護仍存在；但此處尚未以第二個獨立 Auth context 實際呼叫 RPC 驗證 B 的拒絕結果。
+- **本機 Runtime probe**：localhost App目前唯一可控頁籤為 tab `446450590`，登入 `weather-rc-test@example.invalid`，Trip `test-1`（id `trip-b4afae0b-f621-4eb0-93f4-719bb18e07be`）。以其既有頁面 session 呼叫 `tc_claim_itinerary_trip_edit_lease` 成功取得 Lease，`tc_list_itinerary_trip_edit_leases` 隨後讀回同一 user/client；呼叫 `tc_release_itinerary_trip_edit_lease` 回傳 true，再次 list 為空。這只驗證同一 session Claim/List/Release基本路徑，不構成 A/B 競爭驗證；未修改 Trip／daysData／version。
+- **觀測限制**：目前 browser tool managed tabs僅一個 localhost App分頁，沒有第二個獨立登入 session；不能把既有同身份多分頁冒充第二個 user。表格直接 REST SELECT因 authenticated 對 Lease table無 SELECT權限而回403，符合使用 RPC 讀取設計；透過 `tc_list_itinerary_trip_edit_leases` RPC讀取成功。
+- **暫定判斷**：前端管理模式／新增卡片入口明確違反 ADR-001 單一持有者規則，已可定案為功能缺口。尚不能由現有證據宣稱 B 的新增保存已寫入雲端或 server-side Lease／Save RPC也失效；這必須保留為待驗項。
+- **下一步**：最小修正應讓進入管理模式先原子 claim Trip Lease，成功後才開啟管理 UI；Lease list refresh若發現遠端持有者，應立即關閉本端管理／排序／時間調整／新增入口並阻擋所有新增／修改／刪除／排序／時間操作；保存時仍以 Save RPC作最後權威驗證。實作前須先核對 close／release lifecycle 及現有 workspace save flow，避免重複 claim、過早 release或把save lifecycle Lease當成管理 Lease後遺失鎖。此項目前是調查結論及建議，尚未改程式，未新增回歸測試。
+- **Git／範圍**：本輪未修改產品程式／資料庫／migration，未commit／push／deploy；曾用頁面目前登入 session執行一次 Lease claim後已正常 release，readback確認 Lease list為空。既有工作樹修改保留。
+
+## 2026-11-24：ADR-001 Trip Edit Lock 管理入口修復
+
+- **修復內容**：管理入口改為先 Claim Trip-level Lease，確認 claim 成功且 owner client ID為本端後才開啟管理模式；管理期間以既有 Lease renew API定期續租並於前景／focus重新確認。Claim未成功則不開管理模式。
+- **操作封鎖**：管理模式未取得／已失去 Trip Lease時，新增、既有卡片編輯、複製、照片、刪除、排序及時間調整入口均需有效 managed lease；`saveItem()`也增加保存前 managed lease guard。遠端 Lease出現時，立即關閉本端管理／表單／排序／時間調整並停用所有管理入口，文案不再宣稱新增可使用。
+- **Lease／Save lifecycle**：管理模式使用Trip-level Lease heartbeat；管理期間 workspace save仍會原子 claim／驗證Lease，但在 managed lease registry有效時，不會於save finalizer提前release管理Lease。管理退出先阻止尚在保存中的退出，清理表單／模式後release managed Lease；offline/unmount cleanup清除本端registry及timer並嘗試release（離線時由server expiry回收）。
+- **回歸測試**：更新 `scripts/verify-v31012-itinerary-sync.mjs` 舊管理模式契約，新增管理入口先claim、成功owner驗證、heartbeat、managed registry、新增save guard、退出release與workspace save不提前release的 assertions；`scripts/verify-adr001-s3-app-integration.mjs` 亦新增管理Lease lifecycle assertions。兩專責 verifier及全套build均PASS。
+- **Build／測試**：`npm run verify:v31012-itinerary-sync` PASS；`npm run verify:adr001-s3-app-integration` PASS；完整 `npm run build` PASS（全套既有 verifier、app/node TypeScript、Vite production build及postbuild）。Build使用已確認 host `HOWARD-NEWPC`、Node `v22.23.2`、npm `10.9.8`。
+- **本機雙client runtime驗證**：在 localhost `test-1` Trip，兩個同一Auth user但各自不同 sessionStorage client ID的client（client ID `7ac73ba7-d6e2-4315-ab46-848c6cd3a2de`及`0f514374-7794-4de1-9691-0351690324dc`）先後測試。Client B成功進入管理；重新載入Client A後，管理入口disabled、管理UI未開啟，且顯示遠端持有者提示。B退出管理後，再重新載入A，管理入口恢復enabled、遠端提示消失。兩client均未新增／修改／刪除／排序／調整時間或改動Trip資料；Lease正常退出，未留測試lock。
+- **Runtime驗證限制**：此為同一Auth身份下兩個不同client ID的本機競爭驗證，不等同第二個獨立Auth身份／正式跨帳號測試；亦未故意繞過UI向Save RPC提交未持有Lease的寫入。Save RPC的server-side Lease enforcement仍依migration源碼及既有契約 verifier確認，未宣稱獨立Auth runtime拒絕測試已完成。
+- **工作樹保護／Git**：保留原先已有的 `src/components/ItineraryPage.tsx`、`scripts/verify-v3920-other-info-categories.mjs`、ADR-002等未提交修改；未commit／push／deploy。只修改此次必要的管理Lease程式與兩份 verifier；build產物由既有build流程生成，未commit。
+
+## 2026-11-24：新增卡片表單及 Lease 警告時機調整
+
+- **使用者需求**：初次新增卡片時，活動標題輸入後點地圖地點欄位可觸發自動帶入；只新增此行為，既有自動帶入／地點規則及已確認 Place 不帶入規則保持不變。新增表單提交按鈕左側增加取消。遠端 Trip Lease警告只在使用者嘗試管理且被阻擋後出現，不應在單純閱覽時出現；警告的「重新確認」不可擅自退出管理或令管理入口失效。
+- **程式修改**：地圖地點輸入欄位focus時，僅在初次新增（`editingIndex === null`）、無合規 confirmed Place、地點欄位目前空白且活動標題非空時填入標題；不改動onChange、既有地點搜尋／確認及已確認Place行為。新增表單底部按鈕改為左右排列「取消」與「新增行程」；取消沿用resetForm清理。
+- **警告時機／動作**：新增 `showRemoteLeaseAttemptNotice` state；一般閱覽不顯示遠端Lease警告。管理入口保持可點擊但仍需先claim，若遠端Lease阻擋則記錄attempt並顯示警告；警告「重新確認」只清除提示並refresh Lease list，不呼叫 closeManageMode／release。Lease釋放後refresh會清除attempt notice。既有管理／保存操作的Lease guard不放寬。
+- **使用者實際驗收（2026-11-24）**：使用者回報 A退出管理後，B立即可進入管理並重新驗證編輯功能通過。此為管理Lease釋放／再取得的實際驗收證據，記錄為PASS；不宣稱新表單focus帶入及警告顯示時機已經使用者runtime驗收。
+- **回歸／建置**：更新 `scripts/verify-v31012-itinerary-sync.mjs` assertions覆蓋警告需有管理阻擋attempt、重新確認只refresh、地圖欄位focus條件與新增取消按鈕。`npm run verify:v31012-itinerary-sync` PASS；`npm run verify:adr001-s3-app-integration` PASS；完整 `npm run build` PASS（全套 verifier、App/Node TypeScript、production Vite/PWA及postbuild）；`npm run verify:docs-links` PASS（155份Markdown／364個本地目標）；`git diff --check` PASS。
+- **使用者實際回歸驗收（2026-11-24）**：使用者確認以下三項 UI 測試均通過：1. 初次新增卡片時，活動標題於地點欄位 focus 後正確帶入，且既有合規 confirmed Place 不被覆蓋；2. 新增表單取消按鈕可正常取消並清理表單；3. 單純閱覽遠端 Lease 不顯示警告，嘗試管理遭阻擋後才顯示警告，重新確認不退出管理／不使管理入口失效。此為三項新 UI 修改的使用者實際回歸驗收，均記錄 PASS。
+- **驗收整合**：連同前述 A 退出管理後 B 可立即重新取得管理權並通過編輯功能的驗收，這組管理Lease與新增卡片表單／警告時機調整已完成使用者指定項目的回歸驗收；不代表 ADR-002 其餘保存／刪除／遠端更新及Lease生命週期調查已結案。
+- **Git／範圍**：保留工作樹其他既有修改；未commit／push／deploy。
+
+## 2026-11-23：管理提示文字位移問題已解決（使用者驗收回報）
+
+- 使用者確認：儲存或刪除卡片時，管理欄位多次反覆出現提示文案造成卡片上下移動、畫面上下閃動的問題已解決；目前卡片不再因提示文案反覆出現／消失而上下移動。
+- 此項視為該特定提示文案造成的位移現象已解決；與本日新增的時間排序／跨瀏覽器排列跳動回報分開追蹤，不將兩者混為同一問題或根因。
+
+## 2026-11-24：工作項目重新分類與修正後使用者觀察測試
+
+- **保存／刪除／遠端更新的影片分析追查：已結案（限定影片直接視覺原因及已修正現象）。** `ADR-002-video-analysis.md` 已直接定位 `editLeaseStatus === "loading"` 時新增的暫態文字區塊，造成管理區增加約49.5px並令下方卡片位移；該影片觀察已與程式條件核對。使用者其後回報保存／刪除時提示文字反覆出現造成卡片上下移動的問題已修正。這項原先泛列的「保存／刪除／遠端更新動態追查」不再單獨阻塞結案；不將其延伸成所有保存／遠端同步資料契約均已完整測試。
+- **ADR-001 獨立跨 Auth server-side 拒絕：** 另列自動化 API 安全測試。由使用者手動登入兩個隔離測試帳號並提供可控 session／test context後，可由 AI 執行 direct API/RPC attempt與結果核對；不要求手動UI競爭測試，也不重開 ADR-001 Exit。
+第一輪交叉核對已確認：改動涉及管理入口先claim Trip Lease、Heartbeat／foreground renew、保存期間保留Lease、save/delete guard、排序／時間調整／複製 guard、remote lease event時退出管理、workspace save完成後不提前release，以及merge order插入位置保留。既有 verifier assertions涵蓋部分管理Lease lifecycle及sync merge insertion/deletion/conflict，但屬靜態assertions／contract test，不能替代完整runtime。
+  - **Save／資料保護：** `saveItem`、排序／時間調整及相關操作入口都有本端 managed Lease／scope／ready狀態guard；雲端最終仍由ADR-001 Save RPC／CAS／DB enforcement保障。現有修改沒有直接改動Save RPC／DB契約。\n  - **Pending／reconciliation：** `useTripWorkspace` 的save-finally release條件新增 `isManagedItineraryTripLeaseActive(tripId)`，避免管理模式持鎖期間保存完成即釋放；`itinerarySync`修改了合併時插入卡片位置／anchor與雙方插入處理，`verify-v31012-itinerary-sync`增加本地／雲端中間插入及同anchor插入案例。這些範圍已由相關contract assertions覆蓋，但實際跨裝置Pending／Recovery仍非本輪程式分析可證明。\n  - **Lease lifecycle／權限：** 管理入口claim成功才開管理；heartbeat／focus renew失敗會清除managed flag、停止管理；remote Lease event會停止管理並清除操作狀態；退出管理會release。需進一步核對異常分支及release結果是否被上層正確處理，尤其 `releaseManagedTripLease()`失敗回傳目前未阻止 `closeManageMode()`完成UI退出；可能是UI退出但Lease到期回收的設計，不推定為漏洞，需明確記錄。\n  - **分析界線：** 已確認修改入口／guard及既有測試覆蓋方向；未直接重跑測試、未做完整runtime recovery驗證，也未宣稱全部ADR-001安全契約已由這些修改證明。完成最後逐項靜態核對後，若沒有契約缺口，這項工作以程式分析結案，不新增泛化回歸測試。
+- **一次修正後觀察測試：** 在使用者可操作的修正後環境，依序完成以下操作；觀察畫面是否有異常跳動，並記錄／回報結果。結果先記錄，不預設 PASS。
+  1. **新增卡片**
+     - 在管理模式新增一張測試卡片。
+     - 觀察新增時畫面是否閃動、跳動、卡片突然消失再出現。
+     - 留意游標、焦點或捲動位置是否突然改變。
+  2. **保存既有卡片**
+     - 修改一張既有卡片，保存。
+     - 觀察卡片是否突然上下移動、列表重新載入、位置跳回，或只更新內容。
+  3. **刪除卡片**
+     - 刪除一張測試卡片。
+     - 觀察下方卡片是否穩定移動到正常位置，有沒有額外閃動。
+  4. **管理區位移**
+     - 在上述操作期間，留意管理區、提示文字、卡片列表是否上下移動。
+     - 不必量測像素，只判斷肉眼是否看到不正常跳動。
+  5. **管理權及鎖定**
+     - 進入管理。
+     - 保存或刪除卡片。
+     - 退出管理。
+     - 切換日或旅程（必要時）。
+     - 如果另一裝置持有編輯權，嘗試進入管理，確認阻擋提示及重新確認行為。
+     - 觀察管理權是否突然失效、提示反覆出現、操作被錯誤阻擋或管理模式意外退出。
+  6. **遠端更新**
+     - 在隔離測試資料上，由另一裝置／帳號產生遠端更新。
+     - 觀察目前畫面如何提示、是否跳動、是否影響管理或卡片位置。
+  7. **測試後清理核對**
+     - 確認測試卡片的新增／修改／刪除結果。
+     - 刷新後確認資料沒有意外復現。
+     - 確認 Pending 已同步或沒有未完成狀態。
+     - 確認沒有影響其他非測試旅程。
+  - 本輪以使用者肉眼觀察為準，不要求開啟 React 工具、Profiler 或辨識 DOM；若觀察到可重現異常，再討論是否需要進一步專業量測。
+- **後續決策：** 本輪人工觀察先完成一次；只有觀察到可重現異常或結果無法判斷且有實質必要時，才討論是否列為 ADR-002 後續追蹤、是否需專業量測及其範圍。
+- **狀態：** 第3項影片直接原因追查與已修正的可見現象列為已解決；第1項自動化API安全測試、第2項精確程式分析及第4／5項修正後使用者觀察為後續工作。
