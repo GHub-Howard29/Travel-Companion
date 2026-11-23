@@ -164,11 +164,64 @@ const mergeCardFields = (
   return { card: result, conflicts };
 };
 
-const orderChanged = (baseIds: string[], sideIds: string[]): boolean => {
-  const baseExisting = new Set(baseIds);
-  const sideCommon = sideIds.filter((id) => baseExisting.has(id));
-  const baseCommon = baseIds.filter((id) => sideIds.includes(id));
-  return !sameValue(baseCommon, sideCommon);
+const mergeInsertedIdsByBaseAnchors = (
+  baseIds: string[],
+  localIds: string[],
+  cloudIds: string[],
+  keepIds: Set<string>,
+): string[] => {
+  const baseSet = new Set(baseIds);
+  const ordered: string[] = [];
+  const append = (id: string) => {
+    if (keepIds.has(id) && !ordered.includes(id)) ordered.push(id);
+  };
+  const collectInsertions = (ids: string[]) => {
+    const insertionsByAnchor = new Map<string | null, string[]>();
+    let previousBaseId: string | null = null;
+    for (const id of ids) {
+      if (baseSet.has(id)) {
+        previousBaseId = id;
+        continue;
+      }
+      const insertions = insertionsByAnchor.get(previousBaseId) ?? [];
+      insertions.push(id);
+      insertionsByAnchor.set(previousBaseId, insertions);
+    }
+    return insertionsByAnchor;
+  };
+
+  const localInsertions = collectInsertions(localIds);
+  const cloudInsertions = collectInsertions(cloudIds);
+  const retainedBaseIds = baseIds.filter((id) => keepIds.has(id));
+  const appendAtAnchor = (anchorId: string | null) => {
+    (localInsertions.get(anchorId) ?? []).forEach(append);
+    (cloudInsertions.get(anchorId) ?? []).forEach(append);
+  };
+
+  appendAtAnchor(null);
+  for (const id of retainedBaseIds) {
+    append(id);
+    appendAtAnchor(id);
+  }
+
+  // Insertions anchored after a base card deleted by the opposite side are
+  // kept after the nearest preceding retained base card.
+  for (const baseId of baseIds) {
+    if (keepIds.has(baseId)) continue;
+    const anchorIndex = baseIds.indexOf(baseId);
+    let retainedAnchor: string | null = null;
+    for (let index = anchorIndex - 1; index >= 0; index -= 1) {
+      if (keepIds.has(baseIds[index])) {
+        retainedAnchor = baseIds[index];
+        break;
+      }
+    }
+    appendAtAnchor(retainedAnchor);
+  }
+
+  localIds.forEach(append);
+  cloudIds.forEach(append);
+  return ordered;
 };
 
 const mergeOneSidedOrder = (
@@ -338,35 +391,45 @@ export const mergeItineraryDaysData = (
     const baseIds = (baseDaysData[dayKey] ?? []).flatMap((card) => card.id ? [card.id] : []);
     const localIds = (localDaysData[dayKey] ?? []).flatMap((card) => card.id ? [card.id] : []);
     const cloudIds = (cloudDaysData[dayKey] ?? []).flatMap((card) => card.id ? [card.id] : []);
-    const localOrderChanged = orderChanged(baseIds, localIds);
-    const cloudOrderChanged = orderChanged(baseIds, cloudIds);
+    const localBaseOrder = localIds.filter((id) => baseIds.includes(id));
+    const cloudBaseOrder = cloudIds.filter((id) => baseIds.includes(id));
+    const baseOrderChangedLocally = !sameValue(
+      baseIds.filter((id) => localBaseOrder.includes(id)),
+      localBaseOrder,
+    );
+    const baseOrderChangedInCloud = !sameValue(
+      baseIds.filter((id) => cloudBaseOrder.includes(id)),
+      cloudBaseOrder,
+    );
+    const incompatibleBaseOrder = baseOrderChangedLocally && baseOrderChangedInCloud &&
+      !sameValue(
+        localBaseOrder.filter((id) => cloudBaseOrder.includes(id)),
+        cloudBaseOrder.filter((id) => localBaseOrder.includes(id)),
+      );
     const idsForDay = new Set(
       [...merged.entries()]
         .filter(([, value]) => value.dayKey === dayKey)
         .map(([id]) => id),
     );
 
-    if (localOrderChanged && cloudOrderChanged) {
-      const localCommon = localIds.filter((id) => cloudIds.includes(id) && baseIds.includes(id));
-      const cloudCommon = cloudIds.filter((id) => localIds.includes(id) && baseIds.includes(id));
-      if (!sameValue(localCommon, cloudCommon)) {
-        conflicts.push({
-          id: `order:${dayKey}`,
-          kind: "order",
-          dayKey,
-          fields: ["order"],
-          baseOrder: baseIds,
-          localOrder: localIds,
-          cloudOrder: cloudIds,
-        });
-      }
+    if (incompatibleBaseOrder) {
+      conflicts.push({
+        id: `order:${dayKey}`,
+        kind: "order",
+        dayKey,
+        fields: ["order"],
+        baseOrder: baseIds,
+        localOrder: localIds,
+        cloudOrder: cloudIds,
+      });
     }
 
-    const preferredOrder = localOrderChanged ? localIds : cloudOrderChanged ? cloudIds : baseIds;
-    const fallbackOrder = localOrderChanged ? cloudIds : localIds;
-    const order = localOrderChanged && cloudOrderChanged
-      ? mergeOneSidedOrder(baseIds, localIds, cloudIds, idsForDay)
-      : mergeOneSidedOrder(baseIds, preferredOrder, fallbackOrder, idsForDay);
+    const hasBaseReorder = baseOrderChangedLocally || baseOrderChangedInCloud;
+    const preferredOrder = baseOrderChangedLocally ? localIds : cloudIds;
+    const fallbackOrder = baseOrderChangedLocally ? cloudIds : localIds;
+    const order = hasBaseReorder
+      ? mergeOneSidedOrder(baseIds, preferredOrder, fallbackOrder, idsForDay)
+      : mergeInsertedIdsByBaseAnchors(baseIds, localIds, cloudIds, idsForDay);
 
     for (const id of order) {
       const item = merged.get(id);

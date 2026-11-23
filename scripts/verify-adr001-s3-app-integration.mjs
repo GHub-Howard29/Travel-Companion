@@ -54,4 +54,18 @@ assert.match(itineraryPage, /fields\.includes\("duplicate-create"\)[\s\S]*?請�
 assert.match(itineraryPage, /fields\.includes\("duplicate-create"\)[\s\S]*?kind: "local"/);
 assert.match(itineraryPage, /確認並套用選擇/);
 assert.match(itineraryPage, /onApply\(\)/);
-console.log("ADR-001 S3 App caller closure、Pending status、Conflict resolution UI、Trip-level Lease、trusted version、Save RPC 與 generic daysData bypass static regression PASS.");
+
+// Management mode must atomically acquire and retain the Trip lease through saves.
+assert.match(lease, /setManagedItineraryTripLease/);
+assert.match(lease, /isManagedItineraryTripLeaseActive/);
+assert.match(itineraryPage, /claimManagedTripLease[\s\S]*?claimItineraryCardEditLease\(supabase, trip\.id, "__trip__"\)/);
+assert.match(itineraryPage, /!claim\.acquired \|\| claim\.ownerClientId !== leaseApi\.ITINERARY_EDIT_CLIENT_ID/);
+assert.match(itineraryPage, /managedLeaseHeartbeatRef\.current = window\.setInterval/);
+assert.match(itineraryPage, /managedLeaseTripIdRef\.current === trip\.id && hasManagedTripLease/);
+assert.match(itineraryPage, /managedLeaseApiRef\.current\?\.setManagedItineraryTripLease/);
+assert.doesNotMatch(itineraryPage, /^import .*itineraryCardEditLeaseService/m);
+assert.match(itineraryPage, /startCreateItem[\s\S]*?isManageMode[\s\S]*?hasManagedTripLease[\s\S]*?hasRemoteLeaseOnActiveDay/);
+assert.match(itineraryPage, /saveItem[\s\S]*?hasManagedTripLease[\s\S]*?hasRemoteLeaseOnActiveDay/);
+assert.match(itineraryPage, /closeManageMode[\s\S]*?releaseManagedTripLease\(\)/);
+assert.match(workspace, /leaseAcquired && !isManagedItineraryTripLeaseActive\(tripId\)/);
+console.log("ADR-001 S3 App caller closure、Pending status、Conflict resolution UI、Trip-level Lease、管理模式 Lease lifecycle、trusted version、Save RPC 與 generic daysData bypass static regression PASS.");

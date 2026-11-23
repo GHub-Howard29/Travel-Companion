@@ -60,7 +60,7 @@ import {
 } from "../services/tripCloudService";
 import { decideTripReconciliation } from "../services/tripReconciliation";
 import { readItineraryCloudVersion, saveItineraryDaysDataCloud, ItineraryCasConflictError } from "../services/itineraryCloudSaveService";
-import { ITINERARY_EDIT_CLIENT_ID, claimItineraryCardEditLease, releaseItineraryCardEditLease } from "../services/itineraryCardEditLeaseService";
+import { ITINERARY_EDIT_CLIENT_ID, claimItineraryCardEditLease, releaseItineraryCardEditLease, isManagedItineraryTripLeaseActive } from "../services/itineraryCardEditLeaseService";
 import { clearSharedTripDataAfterAccessLoss } from "../storage/sharedTripDataStorage";
 import { isProtectedSeedTripId, isStaticSeedTripId } from "../constants/appConstants";
 import { getUnusedItineraryCoverPaths } from "../utils/itineraryCoverPhoto";
@@ -1172,7 +1172,7 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
           }
           return { localSaved: true, cloudSynced: false };
         } finally {
-          if (leaseAcquired) {
+          if (leaseAcquired && !isManagedItineraryTripLeaseActive(tripId)) {
             try { await releaseItineraryCardEditLease(supabase, tripId, "__trip__"); }
             catch (releaseError) { console.warn("Trip edit lease release failed; lease will expire", releaseError); }
           }

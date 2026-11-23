@@ -16,6 +16,16 @@ const getItineraryEditClientId = (): string => {
 export const ITINERARY_EDIT_CLIENT_ID = getItineraryEditClientId();
 export const ITINERARY_EDIT_LEASE_HEARTBEAT_MS = 15_000;
 
+const managedTripLeases = new Set<string>();
+
+export const setManagedItineraryTripLease = (tripId: string, active: boolean): void => {
+  if (active) managedTripLeases.add(tripId);
+  else managedTripLeases.delete(tripId);
+};
+
+export const isManagedItineraryTripLeaseActive = (tripId: string): boolean =>
+  managedTripLeases.has(tripId);
+
 export interface ItineraryCardEditLease {
   cardId: string;
   ownerUserId: string;

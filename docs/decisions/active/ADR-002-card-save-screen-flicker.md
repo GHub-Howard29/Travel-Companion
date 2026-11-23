@@ -107,3 +107,9 @@
 - 完整測試鏈及實作方案的細節、trace欄位與完成門檻以 [ADR-002-S1階段日誌](ADR-002-S1-root-cause-investigation.md) 最新2026-11-23修訂為準。舊測試計劃與證據保持歷史記錄。
 - **狀態（2026-11-23 更新）：** S1 Preview／通知衍生機制拆除 slice 已完成並通過專責 verifier；Lease effect dependency 最小修正已實作，Build PASS，專用 loopback Trip 兩次保存／復原成功。新增／刪除操作的直接事件 trace、Lease effect setup／cleanup、status transition、React commit及 DOM identity 仍待量測，故尚未完成整體閃動根因驗證與 UI 驗收。下一步及測試門檻以 S1 階段日誌最新紀錄為準。Browser Use claim_tab socket timeout 不再作為唯一測試路徑；可評估已授權 Computer Use／替代 DOM instrumentation。commit／push／deploy 本輪以外的後續操作仍須另行授權。
 
+## 2026-11-23：新增時間排列跳動與已解決提示位移項目
+
+- **已解決（使用者回報）**：儲存／刪除期間管理欄位提示文案反覆出現所造成卡片上下移動已消失；卡片不再因該提示位移上下閃動。
+- **新增追蹤（ACTIVE）**：卡片時間排序跳動，包含到達09:00、離開時間未填自動補值後跳動；到達／離開時間均填寫的另一測試曾正常，但相同標準再次輸入仍跳動。跨瀏覽器亦觀察到排列交替。
+- 正式排序規則與目前 `sortItineraryItemsByTime()`／新增流程的比對及初步判斷，已記錄於 ADR-002-S1 日誌。未證實根因；下一步優先追查共享資料更新／陣列順序重新套用來源。此問題納入ADR-002後續，不另開ADR。
+

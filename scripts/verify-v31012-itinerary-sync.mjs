@@ -118,6 +118,55 @@ assert.deepEqual(
   ["a", "b", "cloud-new", "local-new"].sort(),
 );
 
+// Local insertion is an order change even when the original cards retain
+// their relative order; reconciliation must not append it to the base tail.
+const localMiddleInsertion = mergeItineraryDaysData(
+  base,
+  { "1": [card("local-new-middle", "local middle"), ...base["1"]] },
+  base,
+);
+assert.equal(localMiddleInsertion.status, "merged");
+assert.deepEqual(
+  localMiddleInsertion.daysData["1"].map((item) => item.id),
+  ["local-new-middle", "a", "b"],
+);
+
+// Insertion after an existing card must preserve that exact insertion point.
+const localInteriorInsertion = mergeItineraryDaysData(
+  base,
+  { "1": [base["1"][0], card("local-new-interior", "local interior"), base["1"][1]] },
+  base,
+);
+assert.equal(localInteriorInsertion.status, "merged");
+assert.deepEqual(
+  localInteriorInsertion.daysData["1"].map((item) => item.id),
+  ["a", "local-new-interior", "b"],
+);
+
+// A cloud-only insertion must also be retained at its cloud position.
+const cloudInteriorInsertion = mergeItineraryDaysData(
+  base,
+  base,
+  { "1": [base["1"][0], card("cloud-new-interior", "cloud interior"), base["1"][1]] },
+);
+assert.equal(cloudInteriorInsertion.status, "merged");
+assert.deepEqual(
+  cloudInteriorInsertion.daysData["1"].map((item) => item.id),
+  ["a", "cloud-new-interior", "b"],
+);
+
+// Concurrent insertions at the same boundary are both retained deterministically.
+const bothInteriorInsertions = mergeItineraryDaysData(
+  base,
+  { "1": [base["1"][0], card("local-new", "local addition"), base["1"][1]] },
+  { "1": [base["1"][0], card("cloud-new", "cloud addition"), base["1"][1]] },
+);
+assert.equal(bothInteriorInsertions.status, "merged");
+assert.deepEqual(
+  bothInteriorInsertions.daysData["1"].map((item) => item.id),
+  ["a", "local-new", "cloud-new", "b"],
+);
+
 const localDelete = mergeItineraryDaysData(
   base,
   { "1": [base["1"][1]] },
@@ -125,6 +174,25 @@ const localDelete = mergeItineraryDaysData(
 );
 assert.equal(localDelete.status, "merged");
 assert.deepEqual(localDelete.daysData["1"].map((item) => item.id), ["b", "c"]);
+
+// Reconciliation result is the exact payload reapplied to the current Trip/UI.
+const insertPending = createPendingItinerarySyncState(
+  "trip-insertion-order",
+  "cloud-v1",
+  base,
+  { "1": [card("insert-reconcile", "insert", { time: "08:00" }), ...base["1"]] },
+);
+const insertReconciliation = reconcilePendingItinerarySyncState(
+  insertPending,
+  base,
+  "cloud-v2",
+  2,
+);
+assert.equal(insertReconciliation.status, "pending");
+assert.deepEqual(
+  insertReconciliation.state.pendingDaysData["1"].map((item) => item.id),
+  ["insert-reconcile", "a", "b"],
+);
 
 const concurrentDeleteEdit = mergeItineraryDaysData(
   base,
@@ -320,15 +388,14 @@ assert.match(itinerary, /if \(!canModifyCard\(event\.id\)\)/);
 assert.match(itinerary, /if \(!canModifyCard\(copySource\.id\)\)/);
 assert.match(itinerary, /if \(!canModifyCard\(target\.id\)\)/);
 assert.match(itinerary, /if \(!canModifyCard\(targetEvent\.id\)\)/);
-// 整體管理模式不受單張卡片 lease 阻擋；多卡排序／時間調整只要求租約狀態可確認。
-assert.match(itinerary, /const toggleManageMode = \(\) => \{[\s\S]*?setIsManageMode\(true\)/);
+// 管理模式入口必須先原子 Claim Trip lease，成功才開啟；操作期間續租，退出時釋放。
+assert.match(itinerary, /const toggleManageMode = \(\) => \{[\s\S]*?claimManagedTripLease\(\)/);
 const manageToggle = itinerary.match(/const toggleManageMode = \(\) => \{([\s\S]*?)\n  \};/)?.[1] ?? "";
-assert.match(manageToggle, /setIsManageMode\(true\)/);
+assert.match(manageToggle, /claimManagedTripLease\(\)/);
 assert.doesNotMatch(manageToggle, /currentEditLeases|editLeaseStatus/);
-assert.doesNotMatch(itinerary, /disabled=\{!isOrderMode \|\| \(canUseEditLeases && \(editLeaseStatus !== "ready" \|\| Object\.keys\(currentEditLeases\)\.length > 0\)\)\}/);
 assert.match(itinerary, /const hasRemoteLeaseOnActiveDay = hasCurrentEditLeaseList/);
 assert.match(itinerary, /hasRemoteLeaseOnActiveDay\) \{/);
-assert.match(itinerary, /新增活動仍可使用/);
+assert.match(itinerary, /新增、排序及時間調整已停止/);
 assert.match(itinerary, /setIsOrderMode\(false\)/);
 // Trip-level Lease release broadcasts are read back from the Lease list; card ids are only waiter UI references.
 assert.match(itinerary, /waitingCardIdsRef\.current\.add\(event\.id\)/);
@@ -354,14 +421,20 @@ assert.match(itinerary, /disabled=\{!canModifyCard\(event\.id\)\}/);
 assert.match(itinerary, /bg-white px-3 py-1\.5 text-xs font-bold text-rose-700 hover:bg-rose-50 disabled:cursor-not-allowed/);
 assert.match(itinerary, /: "編輯"/);
 assert.match(itinerary, /卡片已釋放編輯鎖定/);
-assert.match(itinerary, /退出管理並重新確認/);
+assert.match(itinerary, /重新確認/);
+assert.match(itinerary, /showRemoteLeaseAttemptNotice/);
+assert.match(itinerary, /setShowRemoteLeaseAttemptNotice\(true\)/);
+assert.match(itinerary, /setShowRemoteLeaseAttemptNotice\(false\)/);
 assert.match(itinerary, /void editLeaseRefreshRef\.current\?\.\(\)/);
 assert.match(itinerary, /isRemoteLeaseNoticeDismissed/);
 assert.match(itinerary, /setIsRemoteLeaseNoticeDismissed\(true\)/);
 assert.match(itinerary, /setIsRemoteLeaseNoticeDismissed\(false\)/);
-assert.match(itinerary, /hasRemoteLeaseOnActiveDay && !isRemoteLeaseNoticeDismissed/);
+assert.match(itinerary, /hasRemoteLeaseOnActiveDay && showRemoteLeaseAttemptNotice && !isRemoteLeaseNoticeDismissed/);
+assert.match(itinerary, /onFocus=\{\(\) => \{[\s\S]*?editingIndex === null && !isConfirmedPlace\(draft\.place\)/);
+assert.match(itinerary, /className="min-w-0 flex-1 min-h-11 rounded-lg bg-emerald-700/);
+assert.match(itinerary, /onClick=\{\(\) => void resetForm\(\)\}[\s\S]*?取消/);
 assert.match(manageToggle, /setIsRemoteLeaseNoticeDismissed\(false\)/);
-assert.match(manageToggle, /void editLeaseRefreshRef\.current\?\.\(\)/);
+assert.match(manageToggle, /void claimManagedTripLease\(\)/);
 assert.match(itinerary, /releasedWaitingCardIds\.length > 0/);
 assert.match(itinerary, /if \(previous\.__trip__ && !next\.__trip__\)/);
 assert.match(itinerary, /setReleasedWaitingCardIds\(\(current\)/);
