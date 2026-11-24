@@ -14,6 +14,15 @@ export type VersionHistoryItem = {
 
 export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
+    version: "3.11.4",
+    date: "2026-11-22",
+    isMandatoryRelease: false,
+    notes: [
+      "修正批次時間調整的無地點區段推斷與時間格式警告。",
+      "改善行程卡片保存可靠性及編輯／保存整合。",
+    ],
+  },
+  {
     version: "3.11.3",
     date: "2026-11-16",
     isMandatoryRelease: false,

@@ -2,7 +2,7 @@
 
 > 本文件只保留未完成、待補驗或待評估工作；不累積 `[x]` 歷史。
 >
-> 目前狀態以《[14_專案現況總覽](14_專案現況總覽.md)》為準；未完成工作不代表已通過驗收，須依各專項文件列出的證據確認。V3.11.4 批次時間調整依《[115_V3.11.4_批次調整時間修正規格與實作驗收基準](115_V3.11.4_批次調整時間修正規格與實作驗收基準.md)》；每日詳細行程統一編輯／保存架構（ADR-001，原 P0＋P1＋P3）依《[116_卡片編輯故障根因與旅程級編輯契約調查紀錄](116_卡片編輯故障根因與旅程級編輯契約調查紀錄.md)》。最後核對：2026-11-19。
+> 目前狀態以《[14_專案現況總覽](14_專案現況總覽.md)》為準；未完成工作不代表已通過驗收，須依各專項文件列出的證據確認。V3.11.4 批次時間調整依《[115_V3.11.4_批次調整時間修正規格與實作驗收基準](115_V3.11.4_批次調整時間修正規格與實作驗收基準.md)》；每日詳細行程統一編輯／保存架構（ADR-001）依《[116_卡片編輯故障根因與旅程級編輯契約調查紀錄](116_卡片編輯故障根因與旅程級編輯契約調查紀錄.md)》及決策索引。V3.11.5 發布候選與正式 DB migration 阻塞狀態依《[14_專案現況總覽](14_專案現況總覽.md)》。最後核對：2026-11-24。
 
 ## 低優先級發布後觀察
 
@@ -19,7 +19,7 @@
 
 ## 發布後待修與待驗
 
-- [ ] **V3.11.3 Android 更新故障恢復分支待驗（低優先級）**：正常 V3.11.2 → V3.11.3 更新路徑已由使用者於 2026-11-16 實機確認通過；只保留手動「重新啟動 App」安全重試、逾時／接管失敗處理及「複製診斷資訊」分支，無故障案例時不阻擋 V3.11.4。測試時保留診斷 JSON。狀態以《[14_專案現況總覽](14_專案現況總覽.md)》為準。
+- [ ] **V3.11.3 Android 更新故障恢復分支待驗（低優先級）**：正常 V3.11.2 → V3.11.3 更新路徑已由使用者於 2026-11-16 實機確認通過；只保留手動「重新啟動 App」安全重試、逾時／接管失敗處理及「複製診斷資訊」分支，無故障案例時不阻擋後續版本。測試時保留診斷 JSON。狀態以《[14_專案現況總覽](14_專案現況總覽.md)》為準。
 
 ## 後續候選版本
 
@@ -58,9 +58,9 @@
 
 ## 目前待修與待驗
 
-- [ ] **異常旅程資料修復：V3.11.4 後執行（OpenChatX Goal：`travel-companion-trip-data-repair`）**：本項不是只有調查紀錄，必須追蹤到正式資料轉換及實際使用驗收。**硬性前置條件：** V3.11.4 卡片新增／修改／刪除故障修正已完成實作，隔離測試及驗收證據確認，且使用者再次核准正式資料變更；此前只允許唯讀檢查及離線候選驗證，不得修改程式、正式 DB、正式 JSON、manifest 或 Storage。**第一階段—日本九州 Static Seed：** 以 `tmp/seed-repair-candidates/group-tour-2026-10.json` 為候選，正式替換前先備份；替換後必須由 App 實際載入驗證 5 天／31 張卡片／31 個唯一 UUID／25 個 Place ID／17 張封面照片／21 筆 Checklist／12 個 Other Info 資料夾，且 `isPublic=false`，並確認照片、卡片內容及其他資訊可正常顯示。**第二階段—沖繩 Static→Dynamic Trip：** 以 `tmp/seed-repair-candidates/free-travel-2026-01.json` 的 35 個固定 UUID 為準，不得重新產生；正式操作前備份 DB row、manifest、participants 與關聯資料。轉換後必須保留 6 天／35 張卡片／9 筆 Checklist、原四位參與者及 10 筆 active `other_info_items`；完成 Static Seed manifest／程式路由轉換後，以 App 實際驗證 Dynamic 讀取、卡片新增／修改／刪除、儲存後重新載入、雲端同步及 Other Info 正常。**完成證據要求：** 每階段記錄變更前後資料筆數與關鍵欄位比對、備份／回復方式、實際 UI／跨裝置測試結果及未通過項目；只完成 JSON 格式檢查或文件整理不得標記完成。九州驗收通過後才進沖繩正式轉換；兩階段均通過才完成 Goal。台中開刀依既定決策不屬本項範圍，不處理、不重複列管。
+- [ ] **異常旅程資料修復：V3.11.5 後執行（OpenChatX Goal：`travel-companion-trip-data-repair`）**：本項不是只有調查紀錄，必須追蹤到正式資料轉換及實際使用驗收。**硬性前置條件：** V3.11.5 卡片新增／修改／刪除故障修正已完成實作、隔離測試及正式發布；且使用者再次核准正式資料變更；此前只允許唯讀檢查及離線候選驗證，不得修改程式、正式 DB、正式 JSON、manifest 或 Storage。**第一階段—日本九州 Static Seed：** 以 `tmp/seed-repair-candidates/group-tour-2026-10.json` 為候選，正式替換前先備份；替換後必須由 App 實際載入驗證 5 天／31 張卡片／31 個唯一 UUID／25 個 Place ID／17 張封面照片／21 筆 Checklist／12 個 Other Info 資料夾，且 `isPublic=false`，並確認照片、卡片內容及其他資訊可正常顯示。**第二階段—沖繩 Static→Dynamic Trip：** 以 `tmp/seed-repair-candidates/free-travel-2026-01.json` 的 35 個固定 UUID 為準，不得重新產生；正式操作前備份 DB row、manifest、participants 與關聯資料。轉換後必須保留 6 天／35 張卡片／9 筆 Checklist、原四位參與者及 10 筆 active `other_info_items`；完成 Static Seed manifest／程式路由轉換後，以 App 實際驗證 Dynamic 讀取、卡片新增／修改／刪除、儲存後重新載入、雲端同步及 Other Info 正常。**完成證據要求：** 每階段記錄變更前後資料筆數與關鍵欄位比對、備份／回復方式、實際 UI／跨裝置測試結果及未通過項目；只完成 JSON 格式檢查或文件整理不得標記完成。九州驗收通過後才進沖繩正式轉換；兩階段均通過才完成 Goal。台中開刀依既定決策不屬本項範圍，不處理、不重複列管。
 
-- [ ] **V3.11.4 批次時間調整＋每日詳細行程統一編輯／保存架構（ADR-001；原 P0＋P1＋P3 整合）**：批次時間調整仍依文件 115 的 T01–T08 獨立驗收。每日詳細行程部分依 ADR-001 與文件 116 統一審查及實作，不再把卡片保存修正與 Trip-level Edit Lock 分成彼此獨立的架構。既有基礎證據保留：`itinerarySaveGate.ts` 已分離全域 revision 通知與保存許可，保留 `TripVersionConflictError`；save-gate 測試、原 7 項 revision／preview／version recovery／workspace recovery／merge／lease 契約測試、完整 build 及 local Supabase 雙 Auth/JWT/HTTP context 整合測試均有通過紀錄。仍待真實雙瀏覽器 UI 及 offline pending→online lifecycle 驗收；此外使用者曾實測新增保存時出現約 2～3 次 DB 確認／回讀及畫面跳動，此項仍未通過，須納入統一保存入口審查。**統一整合修正完成後，既有 P0 全部已通過的自動化／契約／local Supabase 整合測試與完整 build 必須重新執行；卡片新增、修改、刪除、儲存後 reload/readback、雙瀏覽器／跨裝置一致性及 offline pending→online recovery 必須重新實際瀏覽器操作驗證，整合前 PASS 不得抵用。重新驗證至少包含 `test-itinerary-save-gate.mjs`、七項既有 revision／preview／version recovery／workspace recovery／merge／lease 契約測試、`test-p0-trip-save-local-integration.mjs`、受影響的 release regression 及完整 `npm run build`。若 P3 使舊 preview UI 測試失效，須改用新提示／讀取契約測試取代，不可因此漏測底層 revision、source client、CAS、pending、merge 與 recovery。瀏覽器端須以兩個獨立 profile 重新驗證新增／修改／刪除、刷新後資料不復現、跨端一致、遠端事件只提示、主動更新取最新資料、離線 Pending 保留及重新取得鎖後同步；並重新量測新增保存 DB request 與畫面穩定性。**P1 Trip-level Edit Lock 與 P3 提示簡化已納入同一目標架構但尚未實作**：鎖定以 trip_id 為單位、伺服器端 atomic claim／write enforcement；Realtime 只作通知，保留 Revision、CAS／Version、Local Pending 職責；取消每日詳細行程預覽／變更計數，只保留鎖定與更新提示，進入管理／主動更新時才讀取必要最新狀態。不得改動其他功能的同步與提示機制。批次時間調整：第 1 項提示實機通過；第 2 項分鐘輸入與雙向調整通過，最新推斷／警告修改須重跑專項測試與完整 build 及瀏覽器驗收；第 3、4 項未知記錄依 2026-11-22 發布指示排除（不推定 PASS）；T05（焦點／游標／捲動／DOM）及 T07（本機保存／雲端 pending）已依 2026-11-22 決定列為發布後回歸，不再列為 V3.11.4 發布前阻塞。保留天氣及其他未提交工作；不操作正式 DB，不 commit／push／RC／deploy，除非另獲明確核准。
+- [x] **V3.11.5：每日詳細行程保存保護與管理編輯同步（ADR-001）**：Trip-level Lease 已統一「管理卡片／編輯旅程」兩入口，保留單一 Lease、Trip 隔離、metadata 儲存前重驗、focus 恢復僅查詢狀態及正常釋放；使用者於 2026-11-24 回報新增範圍人工 UI 驗收通過，對應自動化／build 證據與決策文件已更新。ADR-001 原有 S1–S4 Exit PASS 保留，不回溯改寫歷史範圍。正式 Supabase ledger 已確認 ADR-001 四筆 migration 存在。另 V3.11.5 包含 ADR-002 Preview／Journal 舊機制拆除與卡片操作穩定性修正；正式 migration `20261122140000_adr002_remove_trip_change_preview_journal` 尚未安全套用（詳見文件 14）。**V3.11.5 尚未正式發布，正式頁面仍為 V3.11.4；勿將候選狀態視為部署完成。**
 
 - [x] V3.10.6／V3.10.7 天氣跨日與多日快取異常：已由 V3.10.7 的 lease 回寫精度修正及目的地當地時間判斷修正處理；三個新座標地點 D1–D5 共 15 個日期，以及台灣、日本正式網站驗收均通過。若未來再次發生，依新 trace 與最新資料重新診斷，不沿用舊 dump 推定。歷史線索見《[90_DEV安全阻擋與天氣來源問題診斷](90_DEV安全阻擋與天氣來源問題診斷.md)》與 V3.10.7 結案文件。
 - [x] Open-Meteo `source_url` migration `20261018100000_v3101_weather_source_url.sql`：已完成正式部署與版本一致性檢查；既有舊快取不自動補寫 `source_url`，需在線上重新成功取得天氣後驗證新來源網址。

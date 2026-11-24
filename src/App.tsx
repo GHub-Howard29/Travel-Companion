@@ -20,7 +20,6 @@ import AppSidebar from "./components/layout/AppSidebar";
 import AppHeader from "./components/layout/AppHeader";
 import { TextInfoPage } from "./components/TextInfoPage";
 import { TripDataRevisionNotice } from "./components/TripDataRevisionNotice";
-import { TripChangePreviewModal } from "./components/TripChangePreviewModal";
 import { clearExchangePurchases } from "./storage/exchangeRateStorage";
 import { getDefaultHomeScreen, setDefaultHomeScreen } from "./storage/defaultHomeStorage";
 import { UpdatePrompt } from "./components/UpdatePrompt";
@@ -34,6 +33,15 @@ import { useAppUpdate } from "./hooks/useAppUpdate";
 import useTripWorkspace from "./hooks/useTripWorkspace";
 import useSystemUsage from "./hooks/useSystemUsage";
 import { useTripDataRevision } from "./hooks/useTripDataRevision";
+import {
+  ITINERARY_EDIT_CLIENT_ID,
+  ITINERARY_EDIT_LEASE_HEARTBEAT_MS,
+  claimItineraryCardEditLease,
+  listItineraryCardEditLeases,
+  releaseItineraryCardEditLease,
+  renewItineraryCardEditLease,
+  setLocallyHeldTripEditorLease,
+} from "./services/itineraryCardEditLeaseService";
 import { AppContext } from "./app/context/AppContext";
 import { ROLE } from "./permissions/roles";
 import {
@@ -391,16 +399,8 @@ function ConfiguredApp({
   const {
     noticeKind: tripDataNoticeKind,
     isTripMasterLocked,
-    isChangePreviewOpen,
-    isChangePreviewLoading,
-    isConfirmingPreview: isConfirmingTripDataPreview,
-    changePreviewSummary,
-    changePreviewError,
     checkForRemoteTripChange,
-    openChangePreview,
-    closeChangePreview,
     showConflict: showTripVersionConflict,
-    confirmNotice: confirmTripDataNotice,
     reload: reloadForTripDataChange,
   } = useTripDataRevision({
     supabase,
@@ -416,6 +416,10 @@ function ConfiguredApp({
   const [tripEditorMode, setTripEditorMode] = useState<"create" | "edit">("create");
   const [isTripEditorOpen, setIsTripEditorOpen] = useState(false);
   const [tripEditorTargetTripId, setTripEditorTargetTripId] = useState<string | null>(null);
+  const [tripEditorLeaseStatus, setTripEditorLeaseStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
+  const tripEditorLeaseHeartbeatRef = useRef<number | null>(null);
+  const tripEditorLeaseInFlightRef = useRef(false);
+  const tripEditorLeaseTripIdRef = useRef<string | null>(null);
   const [isSharedDataManageMode, setIsSharedDataManageMode] = useState(false);
   const [isVersionInfoOpen, setIsVersionInfoOpen] = useState(false);
   const [isLoginSafetyOpen, setIsLoginSafetyOpen] = useState(false);
@@ -777,6 +781,83 @@ function ConfiguredApp({
       currentScreen,
       currentTrip?.sidebarConfig.find((s) => s.id === currentScreen),
     );
+  const stopTripEditorLeaseHeartbeat = useCallback(() => {
+    if (tripEditorLeaseHeartbeatRef.current !== null) {
+      window.clearInterval(tripEditorLeaseHeartbeatRef.current);
+      tripEditorLeaseHeartbeatRef.current = null;
+    }
+  }, []);
+
+  const refreshTripEditorLease = useCallback(async (tripId: string): Promise<boolean> => {
+    const leases = await listItineraryCardEditLeases(supabase, tripId);
+    const current = leases.find((lease) => lease.cardId === "__trip__");
+    if (!current) {
+      setTripEditorLeaseStatus("error");
+      return false;
+    }
+    if (current.ownerClientId === ITINERARY_EDIT_CLIENT_ID && current.ownerUserId === userId) {
+      setTripEditorLeaseStatus("ready");
+      return true;
+    }
+    setTripEditorLeaseStatus("error");
+    return false;
+  }, [supabase, userId]);
+
+  const closeTripEditor = useCallback(async () => {
+    stopTripEditorLeaseHeartbeat();
+    const tripId = tripEditorLeaseTripIdRef.current;
+    tripEditorLeaseTripIdRef.current = null;
+    if (tripId) setLocallyHeldTripEditorLease(tripId, false);
+    setIsTripEditorOpen(false);
+    setTripEditorLeaseStatus("idle");
+    if (tripId) {
+      try { await releaseItineraryCardEditLease(supabase, tripId, "__trip__"); }
+      catch (error) { console.warn("Trip editor Lease release failed; expiry will recover it", error); }
+    }
+  }, [stopTripEditorLeaseHeartbeat, supabase]);
+
+
+  useEffect(() => {
+    if (!isTripEditorOpen || tripEditorMode !== "edit" || !tripEditorTargetTripId) return;
+    const refresh = () => {
+      if (document.visibilityState !== "visible") return;
+      void refreshTripEditorLease(tripEditorTargetTripId).then((owned) => {
+        if (!owned) {
+          stopTripEditorLeaseHeartbeat();
+          setTripEditorLeaseStatus("error");
+        }
+      }).catch((error) => {
+        stopTripEditorLeaseHeartbeat();
+        setTripEditorLeaseStatus("error");
+        console.warn("Trip editor Lease refresh failed", error);
+      });
+    };
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, [isTripEditorOpen, tripEditorMode, tripEditorTargetTripId, refreshTripEditorLease, stopTripEditorLeaseHeartbeat]);
+
+
+  const startTripEditorLeaseHeartbeat = useCallback((tripId: string) => {
+    stopTripEditorLeaseHeartbeat();
+    tripEditorLeaseHeartbeatRef.current = window.setInterval(() => {
+      if (tripEditorLeaseInFlightRef.current) return;
+      tripEditorLeaseInFlightRef.current = true;
+      void renewItineraryCardEditLease(supabase, tripId, "__trip__")
+        .then((renewed) => {
+          if (!renewed) throw new Error("Trip Lease renew rejected");
+        })
+        .catch((error) => {
+          stopTripEditorLeaseHeartbeat();
+          setTripEditorLeaseStatus("error");
+          console.warn("Trip editor Lease renewal failed", error);
+        })
+        .finally(() => { tripEditorLeaseInFlightRef.current = false; });
+    }, ITINERARY_EDIT_LEASE_HEARTBEAT_MS);
+  }, [stopTripEditorLeaseHeartbeat, supabase]);
   const openCreateTrip = async () => {
     if (isHistoricalOfflineReadOnly || isTripMasterLocked) return;
     if (!isOnline || !navigator.onLine) {
@@ -794,25 +875,69 @@ function ConfiguredApp({
     }
   };
   const openEditTrip = async () => {
+    if (!canEditTripMaster || !selectedTripId || !isOnline || !navigator.onLine) {
+      alert("編輯旅程需要有效的編輯權限及網路連線。");
+      return;
+    }
+    setTripEditorLeaseStatus("loading");
+    try {
+      const claim = await claimItineraryCardEditLease(supabase, selectedTripId, "__trip__");
+      if (!claim.acquired || claim.ownerClientId !== ITINERARY_EDIT_CLIENT_ID || claim.ownerUserId !== userId) {
+        setTripEditorLeaseStatus("error");
+        alert("此旅程目前由其他裝置編輯，無法開啟編輯。");
+        return;
+      }
+      tripEditorLeaseTripIdRef.current = selectedTripId;
+      setLocallyHeldTripEditorLease(selectedTripId, true);
+      await reloadCurrentTrip(true);
+      const renewed = await renewItineraryCardEditLease(supabase, selectedTripId, "__trip__");
+      if (!renewed) throw new Error("Trip Lease expired while refreshing the Trip editor.");
+      setTripEditorMode("edit");
+      setTripEditorTargetTripId(selectedTripId);
+      setTripEditorLeaseStatus("ready");
+      setIsTripEditorOpen(true);
+      startTripEditorLeaseHeartbeat(selectedTripId);
+    } catch (error) {
+      stopTripEditorLeaseHeartbeat();
+      const heldTripId = tripEditorLeaseTripIdRef.current;
+      tripEditorLeaseTripIdRef.current = null;
+      if (heldTripId) setLocallyHeldTripEditorLease(heldTripId, false);
+      if (heldTripId === selectedTripId) {
+        try { await releaseItineraryCardEditLease(supabase, selectedTripId, "__trip__"); }
+        catch (releaseError) { console.warn("Trip editor Lease release failed; expiry is fallback", releaseError); }
+      }
+      setTripEditorLeaseStatus("error");
+      console.error("Failed to acquire Trip editor Lease:", error);
+      alert("無法取得旅程編輯權，請確認網路後重試。");
+    }
+  };
+  const handleTripEditorSubmit = async (input: TripEditorInput) => {
     if (!canEditTripMaster) return;
-    if (isOnline && navigator.onLine) {
+    const editingTripId = tripEditorMode === "edit" ? tripEditorTargetTripId : null;
+    if (editingTripId) {
+      if (!isOnline || !navigator.onLine || !tripEditorLeaseTripIdRef.current || tripEditorLeaseTripIdRef.current !== editingTripId || tripEditorLeaseStatus !== "ready") {
+        alert("旅程編輯鎖目前無法確認，請關閉視窗後重新取得編輯權。");
+        return;
+      }
       try {
-        await reloadCurrentTrip(true);
+        const renewed = await renewItineraryCardEditLease(supabase, editingTripId, "__trip__");
+        if (!renewed) throw new Error("Trip Lease is no longer owned by this client");
+        const currentLeases = await listItineraryCardEditLeases(supabase, editingTripId);
+        const currentLease = currentLeases.find((lease) => lease.cardId === "__trip__");
+        if (!currentLease || currentLease.ownerClientId !== ITINERARY_EDIT_CLIENT_ID || currentLease.ownerUserId !== userId) {
+          throw new Error("Trip Lease owner changed before submit");
+        }
       } catch (error) {
-        console.error("Failed to refresh Trip master snapshot:", error);
-        alert("無法取得最新旅程資料，請確認網路後再開啟編輯。");
+        stopTripEditorLeaseHeartbeat();
+        setTripEditorLeaseStatus("error");
+        console.warn("Trip editor submit blocked by Lease verification", error);
+        alert("旅程編輯權已失效或由其他裝置持有，未儲存任何旅程基本資料。請關閉後重新開啟編輯。");
         return;
       }
     }
-    setTripEditorMode("edit");
-    setTripEditorTargetTripId(selectedTripId);
-    setIsTripEditorOpen(true);
-  };
-
-  const handleTripEditorSubmit = async (input: TripEditorInput) => {
-    if (!canEditTripMaster) return;
     if (await checkForRemoteTripChange()) {
-      setIsTripEditorOpen(false);
+      if (editingTripId) await closeTripEditor();
+      else setIsTripEditorOpen(false);
       return;
     }
     setIsLoading(true);
@@ -836,7 +961,8 @@ function ConfiguredApp({
       } else {
         await updateTrip(nextInput, canManageEditors);
       }
-      setIsTripEditorOpen(false);
+      if (editingTripId) await closeTripEditor();
+      else setIsTripEditorOpen(false);
       setIsMenuOpen(false);
     } catch (error) {
       console.error("Trip save failed:", error);
@@ -847,7 +973,8 @@ function ConfiguredApp({
       } else if (error instanceof HistoricalTripLockedError) {
         alert("歷史行程已鎖定，僅管理者可修改共用資料。");
       } else if (error instanceof TripVersionConflictError) {
-        setIsTripEditorOpen(false);
+        if (editingTripId) await closeTripEditor();
+        else setIsTripEditorOpen(false);
         showTripVersionConflict();
       } else {
         alert("無法儲存旅程，請確認網路連線後再試一次。");
@@ -904,7 +1031,7 @@ function ConfiguredApp({
     if (!selectedTripId || !canEditTripMaster) return;
 
     if (await checkForRemoteTripChange()) {
-      setIsTripEditorOpen(false);
+      await closeTripEditor();
       return;
     }
 
@@ -912,7 +1039,7 @@ function ConfiguredApp({
     try {
       await deleteTrip(selectedTripId);
       clearExchangePurchases(selectedTripId);
-      setIsTripEditorOpen(false);
+      await closeTripEditor();
       setIsMenuOpen(false);
     } catch (error) {
       console.error("Trip deletion failed:", error);
@@ -1486,7 +1613,7 @@ function ConfiguredApp({
           canManageEditors={adminProfile?.role === "super_admin"}
           userId={userId}
           isOpen={isTripEditorOpen}
-          onClose={() => setIsTripEditorOpen(false)}
+          onClose={() => { void closeTripEditor(); }}
           onSubmit={handleTripEditorSubmit}
           onCreateFromExcel={handleTripExcelCreate}
           onDelete={
@@ -1515,24 +1642,7 @@ function ConfiguredApp({
         headerBgClassName={getTravelToolHeaderBgClassName(currentScreenType)}
       />
 
-      <TripDataRevisionNotice
-        kind={updateAvailable ? null : tripDataNoticeKind}
-        isOnline={isOnline}
-        onPreviewChanges={openChangePreview}
-        onConfirm={confirmTripDataNotice}
-        onReload={reloadForTripDataChange}
-      />
-
-      <TripChangePreviewModal
-        isOpen={isChangePreviewOpen}
-        summary={changePreviewSummary}
-        isLoading={isChangePreviewLoading}
-        isConfirming={isConfirmingTripDataPreview}
-        error={changePreviewError}
-        onClose={closeChangePreview}
-        onConfirm={confirmTripDataNotice}
-      />
-
+      <TripDataRevisionNotice kind={updateAvailable ? null : tripDataNoticeKind} onReload={reloadForTripDataChange} />
       {/* 主內容呈現區 */}
       <main className="max-w-md mx-auto p-4 pb-24">
         {isCurrentTripHistorical &&

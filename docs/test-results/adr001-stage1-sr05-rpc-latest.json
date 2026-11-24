@@ -1,14 +1,9 @@
-﻿{
-  "test": "ADR001 SR-05 true concurrent Save RPC vs Claim RPC against current develop migrations",
-  "startedAt": "2026-11-20T11:30:35.994Z",
+{
+  "test": "ADR001 SR-05 true concurrent Save RPC vs Claim RPC",
+  "startedAt": "2026-11-22T07:06:07.355Z",
   "localOnly": true,
-  "pass": true,
-  "saveCompleted": true,
-  "claimBStartedAt": "2026-11-20T11:30:37.303Z",
-  "saveOut": "saved=true,new_version=1",
-  "claimOut": "acquired=false; owner remained A",
-  "finalState": "version=1; daysData savedBy A; lease owner/client remained A",
-  "noDeadlock": true,
-  "cleanedUp": true,
-  "finishedAt": "2026-11-20T11:30:42.671Z"
+  "pass": false,
+  "error": "ERROR:  insert or update on table \"trips\" violates foreign key constraint \"trips_created_by_fkey\"\nDETAIL:  Key (created_by)=(add36e1f-285d-4c0f-b3ac-16bafd89d083) is not present in table \"users\".\n",
+  "finishedAt": "2026-11-22T07:06:08.046Z",
+  "cleanedUp": true
 }

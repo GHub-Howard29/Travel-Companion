@@ -55,7 +55,10 @@ assert.match(page, /revealElementTopWhenViewportStable\(panel, 8\)/);
 assert.match(page, /openEditForm\(item\);\s*scrollManagePanelToTop\(\);/s);
 assert.match(page, /bg-stone-900 px-3 py-2 text-xs font-bold text-white transition-colors hover:bg-stone-700/);
 
-assert.match(itinerary, /revealElementTopWhenViewportStable\(editingCard, 8\)/);
+assert.match(itinerary, /revealElementTopWhenViewportStable\(target, 8\)/);
+assert.ok(itinerary.includes('const createFormRef = useRef<HTMLDivElement | null>(null)'));
+assert.ok(itinerary.includes('isFormOpen && editingIndex === null && ('));
+assert.ok(itinerary.includes('<div ref={createFormRef}'));
 assert.match(viewportUtils, /export const revealElementTopWhenViewportStable/);
 assert.match(viewportUtils, /window\.visualViewport/);
 assert.match(viewportUtils, /previousOffsetTop/);

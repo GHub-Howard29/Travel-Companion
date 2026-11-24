@@ -10,6 +10,33 @@
 - 編輯／保存期間仍必須在伺服器端驗證鎖所有權及版本。Realtime 事件可能因斷線、休眠或事件遺失而漏失，因此「未收到通知」不得視為「資料未更新」；操作時補查及伺服器端 CAS 是必要保護。
 - 以上 P3 簡化只適用每日詳細行程；其他功能的 revision、Realtime、同步、提示及驗證行為不隨之更動。
 
+## 2026-11-24 核准新增範圍（原 S4 Exit 之後）
+
+原 S4 已於 2026-11-22 依當時核准範圍 Exit PASS；以下為 2026-11-24 核准的新增範圍，其實作、自動化驗證及使用者人工 UI 驗收均已完成，新增範圍另於 2026-11-24 達成 Exit PASS：
+
+- 同一 TRIP 的「管理卡片」與「編輯旅程」共用既有 Trip Lease，A→B 及 B→A 兩種入口互斥。
+- 編輯旅程開啟時取得 Lease，表單期間續租；送出前重驗 Lease，失效／他端持有／無法確認時禁止提交旅程基本資料。
+- focus／頁面恢復只查詢 Lease，不主動解除鎖提示；切換 TRIP 依 `trip_id` 重新查詢。
+- 驗證正常離開／保存後釋放 Lease、非正常中斷租約到期恢復，以及其他功能同步完全不變。
+- 刪除旅程仍使用既有編輯旅程入口及 `super_admin` 權限，不新增刪除專用 Lease／DB enforcement。
+- 新增範圍驗收完成後，狀態與證據以本節「2026-11-24 新增範圍實作與人工驗收結案」紀錄為準。
+
+### 2026-11-24 新增範圍實作與人工驗收結案
+
+- **人工 UI 驗收：PASS（依使用者 2026-11-24 明確回報）。** 使用者確認已完成 ADR-001 新增範圍的實際 UI 驗收，並要求將文件狀態改為驗收通過。本紀錄採使用者驗收回報為依據；Agent 未重新操作瀏覽器或獨立觀察該輪操作。
+- 新增範圍驗收結論：**IMPLEMENTED／AUTOMATED PASS／MANUAL ACCEPTANCE PASS／EXIT PASS**。2026-11-24 核准的「管理卡片」與「編輯旅程」共用既有 Trip Lease 範圍完成結案；原 S4 於 2026-11-22 的 Exit PASS 不受影響。
+
+### 2026-11-24 新增範圍實作紀錄
+- `src/App.tsx`：Edit Trip 入口先以既有 `tc_claim_itinerary_trip_edit_lease` 取得 `__trip__` Lease；取得成功才刷新旅程並開啟 Modal。編輯期間每 15 秒續租；focus／visibility 恢復時只讀取 `tc_list_itinerary_trip_edit_leases`，確認 owner 不符或查詢失敗即停止續租並阻止提交，不主動解除其他端鎖定。
+- 提交前再次執行 Lease renew + owner/client readback，確認仍由目前 user/client 持有後才呼叫 `updateTrip`；保存成功、Modal 正常關閉及既有刪除流程結束時釋放原旅程 Lease。刪除 API／DB enforcement 未擴張，仍沿用既有 super_admin UI 權限。
+- `src/hooks/useTripWorkspace.ts`：`daysData` 不變的 metadata-only Cloud update 現在也須 claim 同一 Trip Lease；Edit Trip Modal 已持有 Lease 時透過本端 ownership marker 保留該 Lease，避免 Repository update 途中提早 release、破壞表單 heartbeat。`daysData` 變更時原 Save RPC／CAS／version 流程不變；standalone update 仍自行 claim/release。
+- `src/services/itineraryCardEditLeaseService.ts`：新增本端 Modal Lease ownership marker，僅供同一 App update 流程避免巢狀 release；伺服器 Lease RPC 仍是唯一權威，不建立第二套鎖。
+- `scripts/verify-adr001-s3-app-integration.mjs`：擴增 Edit Trip entry claim、heartbeat、submit revalidation、focus-only query、normal close 與 metadata-only Lease contract assertions。
+- 驗證：`tsc -p tsconfig.app.json --noEmit` PASS；`tsc -p tsconfig.node.json --noEmit` PASS；`verify:adr001-s3-app-integration` PASS（含本次新 assertions）；`test:adr001-cloud-save-service` PASS；`test:trip-workspace-recovery-lifecycle` PASS；完整 `npm run build` PASS（全部 repository regression gates、Vite production build、PWA precache、Browser Security、Weather Bundle）；`git diff --check` PASS。
+- ESLint 目標檔案：本次新增的 `App.tsx` 與 `itineraryCardEditLeaseService.ts` 無新增 lint diagnostics；`useTripWorkspace.ts` 報告 2 個既有 errors（`localSaved` useless assignment、caught error 缺 `cause`）與 1 個既有 hook dependency warning（`refreshItinerarySyncState`），均在本次變更以外的原有位置，未為本次範圍擴大修正。
+- 本次程式與自動化驗證完成後，使用者已確認親自完成新增範圍的實際 UI 人工驗收，並要求記錄驗收通過。依使用者確認，新增範圍狀態更新為 **IMPLEMENTED／AUTOMATED PASS／MANUAL ACCEPTANCE PASS／EXIT PASS**。
+- 人工驗收結果依使用者明確回報記錄為通過；本次文件更新不宣稱 Agent 重新執行或獨立觀察了使用者的瀏覽器操作。
+
 ## 統整驗收入口
 
 完整 Acceptance Matrix、每階段退出條件與根因證據以文件 116 為準；本階段文件維護 S4 執行進度、整合驗收證據、阻塞與下一步。

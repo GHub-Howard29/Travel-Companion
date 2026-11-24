@@ -29,6 +29,8 @@ Travel Companion 是以 Trip 為核心的 Offline First 旅行管理 PWA，使�
 
 ## 持續維護與目前工作
 
+- [ADR-002 行程卡片保存畫面閃動追查](decisions/active/ADR-002-card-save-screen-flicker.md)：持續追查卡片新增／保存期間閃動根因與最小改善評估；目前 Proposed，詳細進度由 ADR-002-S1 階段紀錄維護，尚未授權程式修改。
+
 - [V3.11.2 RC 驗證與發布準備紀錄](113_V3.11.2_RC驗證與發布準備紀錄.md)：V3.11.2 版本專屬發布決策權威文件；明定以 `origin/main` 為基底、依核准白名單組裝候選，納入共享帳本／Trip Workspace／Excel parser 及已核准天氣 P0 domain helper；沿用既有驗收、不新增舊請求競態或額外人工整合測試作為停止線；列明測試資料庫同步、未核准 interval pipeline、工具研究及安裝備份排除項目，以及原專案內候選文件 hunks／stage／工作樹最終核對準則。
 - [V3.11.1 RC 驗證與發布收尾紀錄](111_V3.11.1_RC驗證與發布收尾紀錄.md)：Android PWA Service Worker 更新接管修正；已完成 Git 發布、GitHub Pages 部署與公開資產 smoke，Android 真機跨版本驗收待補。
 - [正式 PWA 網路行為自動鑑測與 AI 診斷計畫](110_正式PWA網路行為自動鑑測與AI診斷計畫.md)：規格已定案、執行時間未定；固定六項測試與六類網路 Metadata，採規則引擎先判斷、AI 再對照原始碼診斷。2026-11-13 工具初步檢查尚未通過完整穩定性驗收，Node.js/CDP 持續事件採集能力仍未證明；正式鑑測前須先通過工具驗收，並逐次核對 GitHub 正式 Tag／Commit 與部署 PWA 版本、取得使用者確認。

@@ -14,11 +14,6 @@ import {
   readItinerarySyncState,
   writeItinerarySyncState,
 } from "../src/storage/itinerarySyncStorage.ts";
-import {
-  summarizeItineraryNetChanges,
-  readConfirmedItinerarySnapshot,
-  writeConfirmedItinerarySnapshot,
-} from "../src/services/tripChangePreviewService.ts";
 
 const card = (id, title, extra = {}) => ({
   id,
@@ -36,42 +31,6 @@ const localDifferentCard = { "1": [card("a", "local A"), card("b", "base B")] };
 const cloudDifferentCard = { "1": [card("a", "base A"), card("b", "cloud B")] };
 
 // 摘要以最後確認快照計算淨差異，不累加已被後續操作抵銷的 journal 動作。
-const afterAddThenDelete = {
-  "1": [card("a", "base A"), card("b", "base B"), card("new-1", "新增 1")],
-};
-const netAddition = summarizeItineraryNetChanges(base, afterAddThenDelete);
-assert.equal(netAddition.total, 1);
-assert.equal(netAddition.actions.added, 1);
-assert.equal(netAddition.actions.deleted, 0);
-const netDelete = summarizeItineraryNetChanges(base, { "1": [card("b", "base B")] });
-assert.equal(netDelete.total, 1);
-assert.equal(netDelete.actions.added, 0);
-assert.equal(netDelete.actions.deleted, 1);
-const netMove = summarizeItineraryNetChanges(
-  { "1": [card("move", "移動卡片")], "2": [] },
-  { "1": [], "2": [card("move", "移動卡片")] },
-);
-assert.equal(netMove.total, 1);
-assert.equal(netMove.actions.updated, 1);
-const netRestored = summarizeItineraryNetChanges(
-  base,
-  { "1": [card("a", "base A"), card("b", "base B")] },
-);
-assert.equal(netRestored, null, "回復至已確認基準時必須視為零淨變更");
-// A、B 各自新增一張卡片；每個 client 的摘要都只應看到另一端新增的一張。
-const baseOneCard = { "1": [card("shared", "共同基準")] };
-const clientACloud = { "1": [...baseOneCard["1"], card("only-a", "A 新增")] };
-const clientBCloud = { "1": [...baseOneCard["1"], card("only-b", "B 新增")] };
-assert.equal(summarizeItineraryNetChanges(baseOneCard, clientBCloud).total, 1);
-assert.equal(summarizeItineraryNetChanges(baseOneCard, clientACloud).total, 1);
-// 新增 3 張再刪除其中 2 張，與基準比較只留下 1 張新增。
-const netAddThreeDeleteTwo = summarizeItineraryNetChanges(
-  base,
-  { "1": [...base["1"], card("new-1", "1")] },
-);
-assert.equal(netAddThreeDeleteTwo.actions.added, 1);
-assert.equal(netAddThreeDeleteTwo.actions.deleted, 0);
-
 const merged = mergeItineraryDaysData(base, localDifferentCard, cloudDifferentCard);
 assert.equal(merged.status, "merged");
 assert.equal(merged.daysData["1"].find((item) => item.id === "a")?.title, "local A");
@@ -159,6 +118,55 @@ assert.deepEqual(
   ["a", "b", "cloud-new", "local-new"].sort(),
 );
 
+// Local insertion is an order change even when the original cards retain
+// their relative order; reconciliation must not append it to the base tail.
+const localMiddleInsertion = mergeItineraryDaysData(
+  base,
+  { "1": [card("local-new-middle", "local middle"), ...base["1"]] },
+  base,
+);
+assert.equal(localMiddleInsertion.status, "merged");
+assert.deepEqual(
+  localMiddleInsertion.daysData["1"].map((item) => item.id),
+  ["local-new-middle", "a", "b"],
+);
+
+// Insertion after an existing card must preserve that exact insertion point.
+const localInteriorInsertion = mergeItineraryDaysData(
+  base,
+  { "1": [base["1"][0], card("local-new-interior", "local interior"), base["1"][1]] },
+  base,
+);
+assert.equal(localInteriorInsertion.status, "merged");
+assert.deepEqual(
+  localInteriorInsertion.daysData["1"].map((item) => item.id),
+  ["a", "local-new-interior", "b"],
+);
+
+// A cloud-only insertion must also be retained at its cloud position.
+const cloudInteriorInsertion = mergeItineraryDaysData(
+  base,
+  base,
+  { "1": [base["1"][0], card("cloud-new-interior", "cloud interior"), base["1"][1]] },
+);
+assert.equal(cloudInteriorInsertion.status, "merged");
+assert.deepEqual(
+  cloudInteriorInsertion.daysData["1"].map((item) => item.id),
+  ["a", "cloud-new-interior", "b"],
+);
+
+// Concurrent insertions at the same boundary are both retained deterministically.
+const bothInteriorInsertions = mergeItineraryDaysData(
+  base,
+  { "1": [base["1"][0], card("local-new", "local addition"), base["1"][1]] },
+  { "1": [base["1"][0], card("cloud-new", "cloud addition"), base["1"][1]] },
+);
+assert.equal(bothInteriorInsertions.status, "merged");
+assert.deepEqual(
+  bothInteriorInsertions.daysData["1"].map((item) => item.id),
+  ["a", "local-new", "cloud-new", "b"],
+);
+
 const localDelete = mergeItineraryDaysData(
   base,
   { "1": [base["1"][1]] },
@@ -166,6 +174,25 @@ const localDelete = mergeItineraryDaysData(
 );
 assert.equal(localDelete.status, "merged");
 assert.deepEqual(localDelete.daysData["1"].map((item) => item.id), ["b", "c"]);
+
+// Reconciliation result is the exact payload reapplied to the current Trip/UI.
+const insertPending = createPendingItinerarySyncState(
+  "trip-insertion-order",
+  "cloud-v1",
+  base,
+  { "1": [card("insert-reconcile", "insert", { time: "08:00" }), ...base["1"]] },
+);
+const insertReconciliation = reconcilePendingItinerarySyncState(
+  insertPending,
+  base,
+  "cloud-v2",
+  2,
+);
+assert.equal(insertReconciliation.status, "pending");
+assert.deepEqual(
+  insertReconciliation.state.pendingDaysData["1"].map((item) => item.id),
+  ["insert-reconcile", "a", "b"],
+);
 
 const concurrentDeleteEdit = mergeItineraryDaysData(
   base,
@@ -319,13 +346,6 @@ try {
   assert.throws(() => writeItinerarySyncState({ ...pending, tripId: "bad" }), /原始 Pending 資料已保留/);
   assert.equal(storage.get("travel_companion_itinerary_sync_bad"), "{", "Recovery guard must prevent overwriting corrupt Pending.");
   assert.equal(clearItinerarySyncState("bad", "wrong-revision"), false);
-  writeConfirmedItinerarySnapshot("trip-a", {
-    revision: 10,
-    updatedAt: "2026-11-01T00:00:00.000Z",
-    daysData: base,
-  });
-  assert.deepEqual(readConfirmedItinerarySnapshot("trip-a")?.daysData, base);
-  assert.equal(readConfirmedItinerarySnapshot("trip-b"), null);
 } finally {
   if (originalLocalStorage === undefined) delete globalThis.localStorage;
   else Object.defineProperty(globalThis, "localStorage", { configurable: true, value: originalLocalStorage });
@@ -354,10 +374,6 @@ assert.match(itinerary, /<ItineraryConflictPanel/);
 assert.match(itinerary, /onChoice=\{onItineraryResolutionChoice\}/);
 assert.match(itinerary, /onApply=\{onApplyItineraryResolution\}/);
 // 跨裝置 revision 通知必須保留；正常通知是資訊提示而非編輯鎖或自動 reload。
-assert.match(revisionHook, /setNoticeKind\(\(current\) => current \?\? "available"\)/);
-assert.match(revisionHook, /if \(suppressNoticeRef\.current \|\| isChangePreviewOpen\) return/);
-assert.match(revisionHook, /if \(isChangePreviewOpen\) \{[\s\S]*?setHasNewChangesDuringPreview\(true\)[\s\S]*?refreshOpenChangePreview\(\)[\s\S]*?\} else \{[\s\S]*?scheduleNotice\(\)/);
-assert.match(revisionHook, /isTripMasterLocked: noticeKind === "revoked"/);
 // 卡片編輯權由獨立租約控制，不可用全旅程版本衝突狀態冒充編輯鎖。
 assert.match(itinerary, /claimItineraryCardEditLease\(supabase, trip\.id, cardId\)/);
 assert.match(itinerary, /renewItineraryCardEditLease\(supabase, trip\.id, cardId\)/);
@@ -372,15 +388,14 @@ assert.match(itinerary, /if \(!canModifyCard\(event\.id\)\)/);
 assert.match(itinerary, /if \(!canModifyCard\(copySource\.id\)\)/);
 assert.match(itinerary, /if \(!canModifyCard\(target\.id\)\)/);
 assert.match(itinerary, /if \(!canModifyCard\(targetEvent\.id\)\)/);
-// 整體管理模式不受單張卡片 lease 阻擋；多卡排序／時間調整只要求租約狀態可確認。
-assert.match(itinerary, /const toggleManageMode = \(\) => \{[\s\S]*?setIsManageMode\(true\)/);
+// 管理模式入口必須先原子 Claim Trip lease，成功才開啟；操作期間續租，退出時釋放。
+assert.match(itinerary, /const toggleManageMode = \(\) => \{[\s\S]*?claimManagedTripLease\(\)/);
 const manageToggle = itinerary.match(/const toggleManageMode = \(\) => \{([\s\S]*?)\n  \};/)?.[1] ?? "";
-assert.match(manageToggle, /setIsManageMode\(true\)/);
+assert.match(manageToggle, /claimManagedTripLease\(\)/);
 assert.doesNotMatch(manageToggle, /currentEditLeases|editLeaseStatus/);
-assert.doesNotMatch(itinerary, /disabled=\{!isOrderMode \|\| \(canUseEditLeases && \(editLeaseStatus !== "ready" \|\| Object\.keys\(currentEditLeases\)\.length > 0\)\)\}/);
 assert.match(itinerary, /const hasRemoteLeaseOnActiveDay = hasCurrentEditLeaseList/);
 assert.match(itinerary, /hasRemoteLeaseOnActiveDay\) \{/);
-assert.match(itinerary, /新增活動仍可使用/);
+assert.match(itinerary, /新增、排序及時間調整已停止/);
 assert.match(itinerary, /setIsOrderMode\(false\)/);
 // Trip-level Lease release broadcasts are read back from the Lease list; card ids are only waiter UI references.
 assert.match(itinerary, /waitingCardIdsRef\.current\.add\(event\.id\)/);
@@ -406,14 +421,20 @@ assert.match(itinerary, /disabled=\{!canModifyCard\(event\.id\)\}/);
 assert.match(itinerary, /bg-white px-3 py-1\.5 text-xs font-bold text-rose-700 hover:bg-rose-50 disabled:cursor-not-allowed/);
 assert.match(itinerary, /: "編輯"/);
 assert.match(itinerary, /卡片已釋放編輯鎖定/);
-assert.match(itinerary, /退出管理並重新確認/);
+assert.match(itinerary, /重新確認/);
+assert.match(itinerary, /showRemoteLeaseAttemptNotice/);
+assert.match(itinerary, /setShowRemoteLeaseAttemptNotice\(true\)/);
+assert.match(itinerary, /setShowRemoteLeaseAttemptNotice\(false\)/);
 assert.match(itinerary, /void editLeaseRefreshRef\.current\?\.\(\)/);
 assert.match(itinerary, /isRemoteLeaseNoticeDismissed/);
 assert.match(itinerary, /setIsRemoteLeaseNoticeDismissed\(true\)/);
 assert.match(itinerary, /setIsRemoteLeaseNoticeDismissed\(false\)/);
-assert.match(itinerary, /hasRemoteLeaseOnActiveDay && !isRemoteLeaseNoticeDismissed/);
+assert.match(itinerary, /hasRemoteLeaseOnActiveDay && showRemoteLeaseAttemptNotice && !isRemoteLeaseNoticeDismissed/);
+assert.match(itinerary, /onFocus=\{\(\) => \{[\s\S]*?editingIndex === null && !isConfirmedPlace\(draft\.place\)/);
+assert.match(itinerary, /className="min-w-0 flex-1 min-h-11 rounded-lg bg-emerald-700/);
+assert.match(itinerary, /onClick=\{\(\) => void resetForm\(\)\}[\s\S]*?取消/);
 assert.match(manageToggle, /setIsRemoteLeaseNoticeDismissed\(false\)/);
-assert.match(manageToggle, /void editLeaseRefreshRef\.current\?\.\(\)/);
+assert.match(manageToggle, /void claimManagedTripLease\(\)/);
 assert.match(itinerary, /releasedWaitingCardIds\.length > 0/);
 assert.match(itinerary, /if \(previous\.__trip__ && !next\.__trip__\)/);
 assert.match(itinerary, /setReleasedWaitingCardIds\(\(current\)/);
@@ -421,13 +442,6 @@ assert.match(app, /key=\{`\$\{selectedTripId\}-\$\{userEmail \?\? "guest"\}`\}/)
 assert.doesNotMatch(app, /key=\{`\$\{selectedTripId\}-\$\{userEmail \?\? "guest"\}-\$\{isOnline/);
 assert.match(itinerary, /if \(canUseEditLeases \|\| !isHistoricalTripReadOnly\) return/);
 // Trip revision 摘要只從使用者進入該 Trip 的最新資料開始計算，不沿用舊確認快照。
-assert.match(revisionHook, /tripMonitoringBaselineRef/);
-assert.match(revisionHook, /isTripBaselineReadyRef/);
-assert.match(revisionHook, /daysData: cloudRecord\.detail\.content\.daysData/);
-assert.match(revisionHook, /fromRevision: baseline\.revision/);
-assert.match(revisionHook, /const baseline = tripMonitoringBaselineRef\.current/);
-assert.match(revisionHook, /toUpdatedAt: latestRevision\.updatedAt/);
-assert.match(readFileSync(new URL("../src/services/tripChangePreviewService.ts", import.meta.url), "utf8"), /monitoringBaseline\?\: ItineraryChangeSnapshot/);
 // 未登入、無一般編輯權、歷史唯讀或離線時，租約查詢／Realtime／RPC 均不可啟用。
 assert.match(app, /isSignedIn=\{isSignedIn\}/);
 assert.match(app, /isHistoricalTripReadOnly=\{isSharedTripReadOnly\}/);
@@ -452,41 +466,6 @@ assert.match(itinerary, /重新確認/);
 assert.match(itinerary, /resetForm = async \(\) => \{\s*await releaseEditingLease\(\)/);
 assert.match(itinerary, /useEffect\(\(\) => \(\) => \{\s*void releaseEditingLease\(\)/);
 assert.doesNotMatch(itinerary, /setInterval\([^\n]*listItineraryCardEditLeases/);
-const previewModal = readFileSync(new URL("../src/components/TripChangePreviewModal.tsx", import.meta.url), "utf8");
-assert.match(revisionNotice, /行程資料已有更新/);
-assert.match(revisionNotice, /其他裝置已更新雲端行程資料。/);
-assert.doesNotMatch(revisionNotice, /安全可合併的卡片會自動同步/);
-assert.match(revisionNotice, /onConfirm/);
-const normalNoticeMarkup = revisionNotice.split('if (kind === "revoked" || kind === "conflict")')[1]?.split("\n  return (")[1] ?? revisionNotice;
-assert.doesNotMatch(normalNoticeMarkup, /稍後|重新載入|onReload/);
-assert.match(revisionNotice, /kind === "conflict"/);
-assert.match(revisionNotice, /onReload/); // 僅撤權／衝突阻擋對話框可重新載入。
-assert.match(previewModal, /onConfirm/);
-assert.match(previewModal, /自上次確認後共有/);
-assert.match(previewModal, /!summary && isLoading/);
-assert.match(previewModal, /\{summary && \(/);
-assert.match(previewModal, /isConfirming \? "正在確認\.\.\." : "確認"/);
-assert.doesNotMatch(previewModal, /hasNewChanges|收到新的變更，摘要已更新|正在更新最新統計|確認最新摘要|稍後再說|確認並重新載入|onReload|window\.location\.reload|此處顯示行程/);
-assert.match(revisionHook, /confirmNotice/);
-assert.match(revisionHook, /const shouldNotify = await acceptRevision\(revision\)/);
-assert.match(revisionHook, /if \(revision\) void acceptRevision\(revision\)/);
-assert.match(revisionHook, /if \(summary\.totalChanges === 0\)[\s\S]*?changePreviewWindowRef\.current = null[\s\S]*?if \(!isChangePreviewOpen\)[\s\S]*?current === "available" \? null : current/);
-assert.match(revisionHook, /writeConfirmedItinerarySnapshot/);
-assert.match(revisionHook, /getCloudTripRecord\(supabase, tripId\)/);
-assert.match(revisionHook, /suppressNoticeRef\.current = true[\s\S]*?if \(!isChangePreviewOpen\)/);
-assert.match(revisionHook, /if \(suppressNoticeRef\.current \|\| isChangePreviewOpen\) return/);
-assert.doesNotMatch(revisionHook, /Calculate the net result immediately/);
-assert.match(revisionHook, /previewRequestRef\.current/);
-assert.match(revisionHook, /previewedRevisionRef\.current = latestRevision\.revision/);
-assert.match(revisionHook, /revisionBeforeRead\.revision !== revisionAfterRead\.revision/);
-assert.match(revisionHook, /setHasNewChangesDuringPreview\(true\)/);
-assert.match(revisionHook, /isConfirmingPreview/);
-assert.match(revisionHook, /setNoticeKind\(\(current\) => current === "available" \? null : current\)/);
-assert.doesNotMatch(previewModal, /收到新的變更，摘要已更新。|正在更新最新統計|確認最新摘要/);
-assert.match(previewModal, /disabled=\{isConfirming \|\| isLoading \|\| Boolean\(error\)\}/);
-assert.doesNotMatch(revisionHook, /const snooze =/);
-assert.match(app, /onPreviewChanges=\{openChangePreview\}/);
-assert.match(app, /onClose=\{closeChangePreview\}/);
 
 assert.match(existingOtherInfoStorage, /travel_companion_other_info_sync/);
 assert.doesNotMatch(

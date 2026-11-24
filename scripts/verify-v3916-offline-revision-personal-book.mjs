@@ -6,20 +6,6 @@ const expenseHook = fs.readFileSync("src/hooks/useExpenseBook.ts", "utf8");
 const expenseScreen = fs.readFileSync("src/components/expense/ExpenseScreen.tsx", "utf8");
 
 assert.match(revisionHook, /if \(!tripId \|\| !email \|\| !navigator\.onLine\) \{\s*return;\s*\}/s);
-assert.match(
-  revisionHook,
-  /if \(!tripId \|\| !email \|\| !navigator\.onLine\) \{\s*return;\s*\}[\s\S]*?setNoticeKind\(\(current\) => current \?\? "available"\)/,
-);
-assert.match(revisionHook, /if \(!navigator\.onLine \|\| !hasAnyManagementRole\) return false;/);
-assert.match(revisionHook, /if \(!revision\) \{\s*return false;\s*\}/s);
-assert.match(
-  revisionHook,
-  /catch \(error\) \{\s*console\.warn\("Failed to check Trip data revision", error\);\s*return false;\s*\}/s,
-);
-assert.doesNotMatch(
-  revisionHook,
-  /Failed to revalidate Trip access after revision"[\s\S]*?current \?\? "available"/,
-);
 
 const personalSaveStart = expenseHook.indexOf("const saveToPersonalBook = async () =>");
 const personalSaveEnd = expenseHook.indexOf("const saveToOfflineSandbox = async () =>");
@@ -33,3 +19,5 @@ assert.match(expenseScreen, /帳目與照片不會同步到共用雲端；照片
 assert.match(expenseScreen, /個人帳本・僅存本機/);
 
 console.log("V3.9.16 離線 revision 誤報與個人帳本非阻斷提示 regression 通過。");
+assert.match(revisionHook, /getCurrentTripRemoteAccess\(supabase,tripId,email\)/);
+assert.match(revisionHook, /clearSharedTripDataAfterAccessLoss/);

@@ -1,4 +1,4 @@
-﻿# Travel-Companion 決策總索引
+# Travel-Companion 決策總索引
 
 本文件是持續有效工程決策與工作進度的唯一總入口。開始相關工作時先讀本索引，再讀本次相關 ADR 主檔及依目前階段／工作需求選出的附屬文件；不得全量載入所有 ADR／階段附件。索引只維護狀態、階段、下一步、阻塞、載入條件及連結，詳細內容與證據留在各權威文件。
 
@@ -8,7 +8,15 @@
 
 | ID | 決策／工作 | 狀態 | 目前階段 | 下一步／阻塞 | 權威主檔 |
 |---|---|---|---|---|---|
-| [ADR-001](active/ADR-001-trip-daily-card-edit-lock-scope.md) | 每日詳細行程統一編輯權、保存協調與更新提示簡化 | Accepted／已結案 | **ADR-001 Exit PASS（2026-11-22）** | **ADR-001整體結案／S1／S2／S3／S4 Exit PASS（2026-11-22）。核心 regression／SR-09／SR-10／SR-11、S3 UI evidence、build及docs-links均有PASS證據。雙瀏覽器競爭UI已取消；暫存 synthetic Trip cleanup由使用者自行處理，不列入阻塞／Exit條件。** | [ADR-001](active/ADR-001-trip-daily-card-edit-lock-scope.md) |
+| [ADR-001](active/ADR-001-trip-daily-card-edit-lock-scope.md) | 每日詳細行程與編輯旅程共用 Trip Lease 的互斥編輯協調 | Accepted／新增範圍實作、自動化及人工驗收均通過；Exit PASS | **原 S1／S2／S3／S4 Exit PASS（2026-11-22）；2026-11-24 核准新增範圍已完成程式實作、自動化驗證及使用者人工 UI 驗收，新增範圍 Exit PASS。** | **新增範圍：編輯旅程與管理卡片共用既有 Trip Lease；編輯旅程定時續租、focus 只查詢、提交前重驗；metadata-only update 受同一 Lease 保護；正常保存／關閉／刪除後釋放。完整 build、專項自動化測試及使用者確認的人工驗收均 PASS。** | [ADR-001](active/ADR-001-trip-daily-card-edit-lock-scope.md) |
+| [ADR-002](active/ADR-002-card-save-screen-flicker.md) | 移除已淘汰的每日行程 Preview／通知／同步衍生機制，並追查卡片操作畫面上下閃動 | Accepted／多工作線進行中；S2 已核准直接實作 | **S2 登入身份切換與登出生命週期（2026-11-24 Accepted，尚未實作）；S1 原 Preview／卡片畫面與排序工作線維持各自狀態。** | **下一步直接依 ADR-002-S2 Step 1–4 實作，不需重複調查或再次核准；完成 S2-01～S2-14、targeted regression、typecheck／lint／build、文件連結及 diff 驗證。S1 未核准項目不因 S2 授權而自動取得實作授權。** | [ADR-002](active/ADR-002-card-save-screen-flicker.md) |
+
+## ADR-002 階段入口
+
+| 階段 | 文件 | 按需載入條件 |
+|---|---|---|
+| S1 Preview／通知衍生機制依賴追蹤與逐項拆除（ACTIVE） | [ADR-002-S1](active/ADR-002-S1-root-cause-investigation.md) | 已淘汰流程依賴閉包、實作拆除、隔離驗證與歷史行為比對 |
+| **S2 登入身份切換與登出生命週期（ACCEPTED／實作待開始）** | [ADR-002-S2](active/ADR-002-S2-auth-workspace-lifecycle.md) | **新對話直接依已核准 Step 1–4 實作；完成 S2-01～S2-14 及自動化／build／文件驗證，不需重複調查或再次核准。** |
 
 ## ADR-001 階段入口
 

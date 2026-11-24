@@ -60,7 +60,7 @@ import {
 } from "../services/tripCloudService";
 import { decideTripReconciliation } from "../services/tripReconciliation";
 import { readItineraryCloudVersion, saveItineraryDaysDataCloud, ItineraryCasConflictError } from "../services/itineraryCloudSaveService";
-import { ITINERARY_EDIT_CLIENT_ID, claimItineraryCardEditLease, releaseItineraryCardEditLease } from "../services/itineraryCardEditLeaseService";
+import { ITINERARY_EDIT_CLIENT_ID, claimItineraryCardEditLease, releaseItineraryCardEditLease, isManagedItineraryTripLeaseActive, isLocallyHeldTripEditorLease } from "../services/itineraryCardEditLeaseService";
 import { clearSharedTripDataAfterAccessLoss } from "../storage/sharedTripDataStorage";
 import { isProtectedSeedTripId, isStaticSeedTripId } from "../constants/appConstants";
 import { getUnusedItineraryCoverPaths } from "../utils/itineraryCoverPhoto";
@@ -751,8 +751,11 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
         refreshItinerarySyncState(selectedTripId);
         setCurrentTrip(record.detail);
         if (navigator.onLine && cloudSnapshot) {
-          const lease = await claimItineraryCardEditLease(supabase, selectedTripId, "__trip__");
-          if (!lease.acquired || lease.ownerClientId !== ITINERARY_EDIT_CLIENT_ID) throw new Error("另一個裝置持有旅程編輯權；本機天數及卡片修改已保留待同步。");
+          const ownsEditorLease = isLocallyHeldTripEditorLease(selectedTripId);
+          if (!ownsEditorLease) {
+            const lease = await claimItineraryCardEditLease(supabase, selectedTripId, "__trip__");
+            if (!lease.acquired || lease.ownerClientId !== ITINERARY_EDIT_CLIENT_ID) throw new Error("另一個裝置持有旅程編輯權；本機天數及卡片修改已保留待同步。");
+          }
           try {
             const baseVersion = await readItineraryCloudVersion(supabase, selectedTripId);
             const metadataRecord = {
@@ -779,13 +782,32 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
             }
             refreshItinerarySyncState(selectedTripId);
           } finally {
-            try { await releaseItineraryCardEditLease(supabase, selectedTripId, "__trip__"); }
-            catch (releaseError) { console.warn("Trip editor Lease release failed", releaseError); }
+            if (!ownsEditorLease) {
+              try { await releaseItineraryCardEditLease(supabase, selectedTripId, "__trip__"); }
+              catch (releaseError) { console.warn("Trip editor Lease release failed", releaseError); }
+            }
           }
         }
       } else {
-        await saveTripRecordWithCloudSync(supabase, record, expectedUpdatedAt);
-        finalRecord = readStoredTripRecords().find((item) => item.meta.id === selectedTripId)?.detail ? record : record;
+        if (!navigator.onLine || !cloudSnapshot) {
+          throw new Error("旅程基本資料更新需要連線並取得最新雲端資料，已停止保存。");
+        }
+        const ownsEditorLease = isLocallyHeldTripEditorLease(selectedTripId);
+        if (!ownsEditorLease) {
+          const lease = await claimItineraryCardEditLease(supabase, selectedTripId, "__trip__");
+          if (!lease.acquired || lease.ownerClientId !== ITINERARY_EDIT_CLIENT_ID) {
+            throw new Error("另一個裝置持有旅程編輯權，旅程基本資料未保存。");
+          }
+        }
+        try {
+          await saveTripRecordWithCloudSync(supabase, record, expectedUpdatedAt);
+          finalRecord = record;
+        } finally {
+          if (!ownsEditorLease) {
+            try { await releaseItineraryCardEditLease(supabase, selectedTripId, "__trip__"); }
+            catch (releaseError) { console.warn("Trip metadata Lease release failed", releaseError); }
+          }
+        }
       }
       try {
         await scheduleItineraryCoverDeletion(supabase, getUnusedItineraryCoverPaths(currentTrip, finalRecord.detail));
@@ -1041,7 +1063,6 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
           if (!currentPending || currentPending.revision !== pendingState.revision) {
             throw new Error("卡片資料已再次修改，請重新同步最新版本。");
           }
-
           const reconciliation = reconcilePendingItinerarySyncState(
             {
               ...currentPending,
@@ -1173,7 +1194,7 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
           }
           return { localSaved: true, cloudSynced: false };
         } finally {
-          if (leaseAcquired) {
+          if (leaseAcquired && !isManagedItineraryTripLeaseActive(tripId)) {
             try { await releaseItineraryCardEditLease(supabase, tripId, "__trip__"); }
             catch (releaseError) { console.warn("Trip edit lease release failed; lease will expire", releaseError); }
           }
