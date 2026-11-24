@@ -17,6 +17,16 @@ export const ITINERARY_EDIT_CLIENT_ID = getItineraryEditClientId();
 export const ITINERARY_EDIT_LEASE_HEARTBEAT_MS = 15_000;
 
 const managedTripLeases = new Set<string>();
+const locallyHeldTripEditorLeases = new Set<string>();
+
+// Local ownership marker only; server RPCs remain the authority for Lease ownership.
+export const setLocallyHeldTripEditorLease = (tripId: string, active: boolean): void => {
+  if (active) locallyHeldTripEditorLeases.add(tripId);
+  else locallyHeldTripEditorLeases.delete(tripId);
+};
+
+export const isLocallyHeldTripEditorLease = (tripId: string): boolean =>
+  locallyHeldTripEditorLeases.has(tripId);
 
 export const setManagedItineraryTripLease = (tripId: string, active: boolean): void => {
   if (active) managedTripLeases.add(tripId);
@@ -55,8 +65,9 @@ const readLeaseRow = (data: unknown): ItineraryCardEditLeaseClaim => {
 export const claimItineraryCardEditLease = async (
   supabase: SupabaseClient,
   tripId: string,
-  _cardId: string,
+  cardId: string,
 ): Promise<ItineraryCardEditLeaseClaim> => {
+  void cardId;
   const { data, error } = await supabase.rpc("tc_claim_itinerary_trip_edit_lease", {
     p_trip_id: tripId,
     p_client_id: ITINERARY_EDIT_CLIENT_ID,
@@ -68,8 +79,9 @@ export const claimItineraryCardEditLease = async (
 export const renewItineraryCardEditLease = async (
   supabase: SupabaseClient,
   tripId: string,
-  _cardId: string,
+  cardId: string,
 ): Promise<boolean> => {
+  void cardId;
   const { data, error } = await supabase.rpc("tc_renew_itinerary_trip_edit_lease", {
     p_trip_id: tripId,
     p_client_id: ITINERARY_EDIT_CLIENT_ID,
@@ -81,8 +93,9 @@ export const renewItineraryCardEditLease = async (
 export const releaseItineraryCardEditLease = async (
   supabase: SupabaseClient,
   tripId: string,
-  _cardId: string,
+  cardId: string,
 ): Promise<void> => {
+  void cardId;
   const { error } = await supabase.rpc("tc_release_itinerary_trip_edit_lease", {
     p_trip_id: tripId,
     p_client_id: ITINERARY_EDIT_CLIENT_ID,

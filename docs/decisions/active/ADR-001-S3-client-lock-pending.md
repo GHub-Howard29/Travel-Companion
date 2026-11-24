@@ -11,7 +11,20 @@ S2 已依重新界定的範圍達到 Exit；以下工作原先混列於 S2 Exit�
 5. 封閉既有 Trip `updateCloudTripRecord()`／generic update對 `daysData` 的旁路，保留新 Trip create／seed insert。
 6. 建立 caller closure regression並驗證 App實際 caller、local Supabase／獨立 Auth contexts、保存讀回及相關build／regression。
 
-S3完成後仍須依 S4整合驗收，不得把 S3完成等同 ADR-001結案.
+S3完成後仍須依 S4整合驗收，不得把 S3完成等同 ADR-001結案。
+
+### 2026-11-24 核准新增：編輯旅程入口共用 Trip Lease
+
+此項為原 S3／S4 結案後新增的核准範圍，不回溯改寫 2026-11-21 的 S3 Exit PASS 或 2026-11-22 的 ADR-001 整體 Exit 記錄；本新增範圍須另行實作與驗收。
+
+- 同一 TRIP 的「管理卡片」與「編輯旅程」共用既有 Trip Lease，兩入口互斥；不同 TRIP 仍以 `trip_id` 隔離，不新增第二種 Lease。
+- 進入「編輯旅程」前確認並 claim／持有同一 Trip Lease；編輯期間依現有生命週期續租，正常完成或離開時釋放。若 Lease 被他端持有、已失效或無法確認，不得進入／繼續編輯。
+- 編輯旅程視窗送出前再次確認 Lease 仍有效且由本端持有；旅程基本資料更新不得只依賴入口檢查。
+- 「管理卡片」與「編輯旅程」重新聚焦／頁面恢復時，只查詢目前 TRIP 的 Lease 狀態，不主動解除鎖定提示；切換 TRIP 後改查新 `trip_id`。
+- 刪除旅程沿用編輯旅程入口及既有 `super_admin` 權限，不新增刪除專用 Lease／DB enforcement；本 Lease 是正常操作互斥協調，不是防範具管理權限者繞過的安全邊界。
+- 範圍嚴格限於「管理卡片」與「編輯旅程」兩個編輯同步功能；其他功能同步、revision、Realtime、CAS／版本及權限流程不得變更。
+- 驗收至少涵蓋雙端入口互斥（A管理卡片→B編輯旅程、反向亦同）、metadata 儲存前 Lease 重驗、focus 不主動解除、切換 TRIP 隔離、Lease 過期／網路中斷處理、正常釋放，以及其他功能同步無回歸。
+- 新增範圍目前為核准待實作；實作與驗收證據須在後續新增階段紀錄，並同步更新 ADR-001 與決策總索引。
 
 ### 2026-11-21 核准離線禁編政策修訂
 
@@ -129,6 +142,7 @@ S3完成後仍須依 S4整合驗收，不得把 S3完成等同 ADR-001結案.
 ### 2026-11-21：S3 Exit checklist核對—PASS
 
 - 原定 S3工作範圍 1–6項逐項核對：trusted version／Trip Lease、metadata-dayCount與daysData分離、Save RPC及resolution caller、Pending／Conflict／unknown outcome recovery、generic daysData bypass closure、caller closure regression及local Auth／DB保存讀回與build均已有實作及測試證據。
+- **Exit 範圍註記：** 本次核對只代表當時核准的每日詳細行程卡片編輯／保存範圍完成；2026-11-24 新核准的「編輯旅程」共用 Lease 與旅程基本資料提交保護是新增範圍，不包含在本次歷史 Exit PASS 之內。
 - DayCount grow／shrink UI（含最後不可逆確認及Cloud讀回）、失網立即關閉編輯、offline入口阻擋、復網後重新編輯／Lease恢復、Conflict UI選擇→Apply→Cloud readback已完成。
 - Conflict UI採synthetic fixture，驗證實際App UI與Apply／Save RPC／Cloud readback流程；並未宣稱由兩個真實登入端競爭Save觸發，該項不屬原定Exit必要條件。
 - 回歸與建置於本輪再次PASS：verify:adr001-s3-app-integration、verify:v31012-itinerary-sync、test:adr001-cloud-save-service、test:p0-pending-autosync-idempotency、test:trip-workspace-recovery-lifecycle、npm run build。

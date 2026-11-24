@@ -775,5 +775,30 @@
      - 確認 Pending 已同步或沒有未完成狀態。
      - 確認沒有影響其他非測試旅程。
   - 本輪以使用者肉眼觀察為準，不要求開啟 React 工具、Profiler 或辨識 DOM；若觀察到可重現異常，再討論是否需要進一步專業量測。
-- **後續決策：** 本輪人工觀察先完成一次；只有觀察到可重現異常或結果無法判斷且有實質必要時，才討論是否列為 ADR-002 後續追蹤、是否需專業量測及其範圍。
-- **狀態：** 第3項影片直接原因追查與已修正的可見現象列為已解決；第1項自動化API安全測試、第2項精確程式分析及第4／5項修正後使用者觀察為後續工作。
+- **2026-11-24 使用者人工驗收回報（A 項 7 項）：** 使用者回報第 1–4 項通過、第 6–7 項通過；第 5 項部分通過。此結果依使用者實際雙端操作回報記錄，不將部分通過擴張為完整 PASS。
+  1. **PASS｜新增卡片**：通過。
+  2. **PASS｜保存既有卡片**：通過。
+  3. **PASS｜刪除卡片**：通過。
+  4. **PASS｜管理區位移**：通過。
+  5. **PARTIAL PASS｜管理權及鎖定**：卡片管理編輯時 A/B 互鎖定通過；編輯旅程頁修改天數時鎖定通過。但編輯旅程頁修改出發日期及刪除旅程，均未被鎖定，屬未預期缺口。
+     - **預期行為／已觀察契約**：B 進入管理後 A 顯示鎖定；B 再進入編輯旅程時，A 仍顯示鎖定並要求重新確認。此為預期 UI 行為；系統不主動推送解除鎖定，應等待使用者手動詢問鎖定狀態後，再執行相應權限確認。
+     - **額外異常／待討論**：B 執行上述未受鎖定保護的出發日期修改或刪除旅程後，A 重新聚焦頁面，會執行同步並直接解除鎖定。需一併檢討 focus/reconciliation 同步是否能在未完成使用者手動確認時清除 A 的鎖定狀態。
+     - **使用者核准後續修訂（2026-11-24；決策已記錄於 ADR-001）**：同一 TRIP 的「管理卡片」與「編輯旅程」共用既有 Trip Lease，兩入口互斥；旅程基本資料提交前重驗 Lease；focus/reconciliation 只查詢 Lease、不主動解除提示；切換 TRIP 依 `trip_id` 隔離。刪除旅程仍位於編輯旅程入口並維持既有 `super_admin` 權限，不新增刪除專用 Lease／DB enforcement。其他功能同步行為不變。此範圍已完成程式實作及自動化驗證，人工雙入口互斥與 TTL 恢復驗收待完成；不得沿用舊的「metadata 更新／刪除都需 DB Lease enforcement」建議。
+  6. **PASS｜遠端更新**：通過。
+  7. **PASS｜測試後清理核對**：通過。
+- **人工驗收總結**：1–4、6–7 PASS；5 PARTIAL PASS。第 5 項未結問題不回頭否定其他六項結果，也不自動授權擴大 Trip Lease。
+- **後續決策**：第 5 項缺口已由使用者核准擴大 ADR-001 範圍處理，程式實作與自動化驗證已完成；實際雙入口互斥及 TTL 恢復仍待人工驗收。既定跨 Auth server-side 拒絕仍列為後續自動化 API 安全測試。
+- **狀態**：第 3 項影片直接原因追查與已修正的可見現象列為已解決；本輪人工驗收依上述結果記錄；第 5 項契約缺口為待討論事項。
+
+## 2026-11-24：編輯旅程入口沿用既有 Trip Lease 專項確認（已核准、實作完成、自動化通過）
+
+**實作前唯讀證據：** 可重用 `itineraryCardEditLeaseService.ts` 的 Trip Lease、同 TRIP 隔離及 `ItineraryPage.tsx` 現有 focus／visibilitychange refresh，不需建立第二套鎖。當時 `App.tsx` 的 `openEditTrip`、`handleTripEditorSubmit` 尚未查詢同一 Trip Lease；`useTripWorkspace.updateTrip` 只有 `daysDataChanged` 時才 Claim `__trip__`，一般 Trip metadata 更新不受該 Lease 保護。`isTripMasterLocked` 來自 `useTripDataRevision` 的權限撤銷提示，並非管理卡片 Trip Lease 狀態，不能直接拿來當鎖定判斷。
+
+**2026-11-24 使用者已核准的範圍（權威決策：ADR-001）：**
+- 同一 TRIP 的「管理卡片」與「編輯旅程」共用既有 Trip Lease，兩入口互斥，不新增第二種鎖。
+- 編輯旅程入口阻擋、已開啟視窗送出前 Lease guard、旅程基本資料更新納入同一 Lease 協調。
+- focus／visibilitychange 只重新查詢指定 TRIP 的 Lease，不主動清除鎖提示；切換 TRIP 後依新 `trip_id` 查詢。
+- 刪除旅程仍只從編輯旅程入口提供並維持既有 `super_admin` 權限；不增加刪除專用 Lease／DB enforcement。這項 Lease 是正常編輯操作協調，不是針對管理者刻意繞過的安全邊界。
+- 其他功能的同步、revision、Realtime、CAS／版本及驗證流程不得變更。
+
+**實作與驗證結果（2026-11-24）：** 已完成 `App.tsx` 編輯入口 Claim／heartbeat／focus-only requery／submit revalidation／正常 close release，以及 `useTripWorkspace.updateTrip` metadata-only Lease 保護；擴增 `verify-adr001-s3-app-integration.mjs`。TypeScript app/node、ADR-001 integration、Cloud Save Service、Workspace Recovery、完整 `npm run build` 與 `git diff --check` 均 PASS。未修改 DB／migration，未操作正式資料。人工雙入口互斥及非正常中斷 TTL 恢復仍待驗收；狀態為 IMPLEMENTED／AUTOMATED PASS／MANUAL ACCEPTANCE PENDING。
