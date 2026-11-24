@@ -672,6 +672,17 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
     userEmail,
   ]);
 
+  const [itinerarySyncSnapshot, setItinerarySyncSnapshot] = useState(() => ({
+    tripId: selectedTripId,
+    state: selectedTripId ? readItinerarySyncState(selectedTripId) : null,
+  }));
+  const refreshItinerarySyncState = useCallback((tripId: string): void => {
+    setItinerarySyncSnapshot({ tripId, state: readItinerarySyncState(tripId) });
+  }, []);
+  const itinerarySyncState = itinerarySyncSnapshot.tripId === selectedTripId
+    ? itinerarySyncSnapshot.state
+    : selectedTripId ? readItinerarySyncState(selectedTripId) : null;
+
   const createTrip = useCallback(
     async (input: TripEditorInput, syncEditors = true) => {
       let record = createTripRecord(input);
@@ -820,7 +831,7 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
       setActiveDay(getDefaultActiveDay(finalRecord.detail.departureDate, finalRecord.detail.content.days));
       setIsLoading(false);
     },
-    [canWriteSelectedTripNow, currentTrip, getBasePath, selectedTripId, selectedTripMeta, supabase],
+    [canWriteSelectedTripNow, currentTrip, getBasePath, refreshItinerarySyncState, selectedTripId, selectedTripMeta, supabase],
   );
 
   const refreshTripOptionsAndSelect = useCallback(
@@ -960,17 +971,6 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
     [canWriteSelectedTripNow, currentTripEditorEmails, selectedTripMeta],
   );
 
-  const [itinerarySyncSnapshot, setItinerarySyncSnapshot] = useState(() => ({
-    tripId: selectedTripId,
-    state: selectedTripId ? readItinerarySyncState(selectedTripId) : null,
-  }));
-  const refreshItinerarySyncState = useCallback((tripId: string): void => {
-    setItinerarySyncSnapshot({ tripId, state: readItinerarySyncState(tripId) });
-  }, []);
-  const itinerarySyncState = itinerarySyncSnapshot.tripId === selectedTripId
-    ? itinerarySyncSnapshot.state
-    : selectedTripId ? readItinerarySyncState(selectedTripId) : null;
-
   const saveItineraryTripDetail = useCallback(
     (nextTrip: TripDetail, editBaseDaysData?: Record<string, ItineraryItem[]>): Promise<{ localSaved: boolean; cloudSynced: boolean }> => {
       const existingSave = itinerarySavePromisesRef.current.get(nextTrip.id);
@@ -1024,14 +1024,12 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
         );
 
         // 先保存本機正式資料，再寫入待同步狀態；任一步驟失敗都回復原始本機紀錄。
-        let localSaved = false;
         try {
           saveTripRecord({
             ...localRecord,
             cloudUpdatedAt: storedRecord.cloudUpdatedAt ?? storedRecord.updatedAt,
           });
           writeItinerarySyncState(pendingState);
-          localSaved = true;
         } catch (error) {
           try {
             saveTripRecord(storedRecord);
@@ -1165,7 +1163,7 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
               writeItinerarySyncState(freshReconciliation.state);
               refreshItinerarySyncState(tripId);
               setCurrentTrip((current) => current?.id === tripId ? { ...current, content: { ...current.content, daysData: freshReconciliation.state.pendingDaysData } } : current);
-              throw new Error("CAS競爭：已重新校正並保留最新待同步資料，請再次確認後保存。");
+              throw new Error("CAS競爭：已重新校正並保留最新待同步資料，請再次確認後保存。", { cause: saveError });
             } else {
               throw saveError;
             }
@@ -1180,7 +1178,6 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
           setCurrentTrip((current) => current?.id === tripId ? savedTrip : current);
           return { localSaved: true, cloudSynced: true };
         } catch (error) {
-          if (!localSaved) throw error;
           const latestState = readItinerarySyncState(tripId);
           if (latestState?.status === "pending") {
             writeItinerarySyncState({

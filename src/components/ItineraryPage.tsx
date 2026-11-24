@@ -533,13 +533,13 @@ export const ItineraryPage = ({
   const [showRemoteLeaseAttemptNotice, setShowRemoteLeaseAttemptNotice] = useState(false);
   const previousLeaseListRef = useRef<typeof editLeases>({});
   const waitingCardIdsRef = useRef<Set<string>>(new Set());
-  const isCardLockedByOther = (_cardId?: string) => Boolean(
+  const isCardLockedByOther = () => Boolean(
     hasCurrentEditLeaseList && currentEditLeases.__trip__ &&
     currentEditLeases.__trip__.ownerClientId !== editLeaseClientId,
   );
   const hasRemoteLeaseOnActiveDay = hasCurrentEditLeaseList && isCardLockedByOther();
   const canModifyCard = (cardId?: string) => canManageItinerary && isManageMode && hasManagedTripLease && managedLeaseTripIdRef.current === trip.id &&
-    hasCurrentEditLeaseList && Boolean(cardId) && !isCardLockedByOther(cardId) && !isClaimingEdit && !isClaimingManagedLease;
+    hasCurrentEditLeaseList && Boolean(cardId) && !isCardLockedByOther() && !isClaimingEdit && !isClaimingManagedLease;
 
   useEffect(() => {
     previousLeaseListRef.current = {};
@@ -1203,7 +1203,7 @@ export const ItineraryPage = ({
     setIsTimeAdjustmentMode(false);
     setIsOrderMode(false);
     setEditClaimError("網路已中斷，卡片編輯已停止；重新連線並確認編輯權後才能修改。");
-  }, [isOnline, isFormOpen, isManageMode]);
+  }, [isOnline, isFormOpen, isManageMode, trip.id]);
 
   const startCreateItem = () => {
     if (!canManageItinerary || !isManageMode || !hasManagedTripLease || managedLeaseTripIdRef.current !== trip.id || hasRemoteLeaseOnActiveDay || editLeaseStatus !== "ready" || isItemSaving || isOrderSaving || isTimeAdjustmentSaving || isCopySaving) {
@@ -1227,7 +1227,7 @@ export const ItineraryPage = ({
       setEditClaimError("目前未取得有效的行程編輯權，無法修改卡片。");
       return;
     }
-    if (isCardLockedByOther(event.id)) {
+    if (isCardLockedByOther()) {
       if (event.id) waitingCardIdsRef.current.add(event.id);
       setEditClaimError("此卡片目前由另一個裝置編輯中；釋放後會通知你，請勿持續嘗試編輯。");
       return;
@@ -3661,8 +3661,8 @@ export const ItineraryPage = ({
                   <button
                     type="button"
                     onClick={() => void startEditItem(event, originalIndex)}
-                    disabled={isClaimingEdit || !hasCurrentEditLeaseList || isCardLockedByOther(event.id)}
-                    title={isCardLockedByOther(event.id) ? "此卡片目前由其他裝置編輯" : undefined}
+                    disabled={isClaimingEdit || !hasCurrentEditLeaseList || isCardLockedByOther()}
+                    title={isCardLockedByOther() ? "此卡片目前由其他裝置編輯" : undefined}
                     className="rounded-lg bg-white px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {isClaimingEdit && claimingCardId === event.id
@@ -3677,7 +3677,7 @@ export const ItineraryPage = ({
                     type="button"
                     onClick={() => void deleteItem(originalIndex)}
                     disabled={!canModifyCard(event.id)}
-                    title={isCardLockedByOther(event.id) ? "此卡片目前由其他裝置編輯" : undefined}
+                    title={isCardLockedByOther() ? "此卡片目前由其他裝置編輯" : undefined}
                     className="rounded-lg bg-white px-3 py-1.5 text-xs font-bold text-rose-700 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     刪除
