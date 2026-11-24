@@ -12,7 +12,12 @@ interface UseTripDataRevisionOptions {
 }
 
 export const useTripDataRevision = ({ supabase, userId, userEmail, selectedTripId, role, hasAnyManagementRole, isOnline, onReconcileTrips }: UseTripDataRevisionOptions) => {
-  const [noticeKind, setNoticeKind] = useState<TripDataNoticeKind | null>(null);
+  const noticeScope = `${selectedTripId}:${isOnline}:${hasAnyManagementRole}`;
+  const [notice, setNotice] = useState<{ scope: string; kind: TripDataNoticeKind } | null>(null);
+  const noticeKind = notice?.scope === noticeScope ? notice.kind : null;
+  const setNoticeKind = useCallback((kind: TripDataNoticeKind | null) => {
+    setNotice(kind ? { scope: noticeScope, kind } : null);
+  }, [noticeScope]);
   const knownRevisionRef = useRef<number | null>(null);
   const tripRef = useRef(selectedTripId);
   const emailRef = useRef(userEmail);
@@ -21,7 +26,6 @@ export const useTripDataRevision = ({ supabase, userId, userEmail, selectedTripI
 
   useEffect(() => {
     knownRevisionRef.current = null;
-    setNoticeKind(null);
     if (!selectedTripId || !isOnline || !hasAnyManagementRole) return;
     let disposed = false;
     void getAppDataRevision(supabase).then(revision => {
@@ -43,7 +47,7 @@ export const useTripDataRevision = ({ supabase, userId, userEmail, selectedTripI
         await clearSharedTripDataAfterAccessLoss(tripId,email); setNoticeKind("revoked");
       }
     } catch(error) { console.warn("Failed to revalidate Trip access",error); }
-  },[onReconcileTrips,supabase]);
+  },[onReconcileTrips,setNoticeKind,supabase]);
 
   const acceptRevision=useCallback(async (revision: AppDataRevision):Promise<boolean> => {
     if (!tripRef.current || knownRevisionRef.current===null || revision.revision<=knownRevisionRef.current) return false;
@@ -67,7 +71,7 @@ export const useTripDataRevision = ({ supabase, userId, userEmail, selectedTripI
     return()=>{void supabase.removeChannel(channel);};
   },[acceptRevision,checkForRemoteTripChange,hasAnyManagementRole,isOnline,noticeKind,supabase,userId]);
   useEffect(()=>{const visible=()=>{if(document.visibilityState==="visible")void checkForRemoteTripChange();};const focus=()=>void checkForRemoteTripChange();window.addEventListener("focus",focus);window.addEventListener("online",focus);document.addEventListener("visibilitychange",visible);return()=>{window.removeEventListener("focus",focus);window.removeEventListener("online",focus);document.removeEventListener("visibilitychange",visible);};},[checkForRemoteTripChange]);
-  const showConflict=useCallback(()=>setNoticeKind("conflict"),[]);
+  const showConflict=useCallback(()=>setNoticeKind("conflict"),[setNoticeKind]);
   const reload=useCallback(()=>window.location.reload(),[]);
   return {noticeKind,isTripMasterLocked:noticeKind==="revoked",checkForRemoteTripChange,showConflict,reload,sourceClientId:APP_SOURCE_CLIENT_ID};
 };
