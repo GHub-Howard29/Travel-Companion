@@ -1,9 +1,9 @@
 # ADR-002：移除已淘汰的每日行程預覽／同步衍生機制並修復保存更新行為
 
 - **ID：** ADR-002
-- **狀態：** Accepted／實作與逐項驗證中（2026-11-23）
+- **狀態：** Accepted／S1 原工作線持續進行；S2 登入身份切換與登出生命週期已核准直接實作（2026-11-24）
 - **建立日期：** 2026-11-22
-- **修訂日期：** 2026-11-23
+- **修訂日期：** 2026-11-24
 - **標題：** 以現行 develop 為基礎，依實際依賴證據拆除不再需要的預覽／通知／變更摘要及同步衍生機制，恢復符合目前決策的同步與保存行為
 
 ## 工作目標
@@ -14,7 +14,7 @@
 - 以 ADR-001 Accepted 決策為保留／驗收標準：保留必要 revision／更新訊號、Trip-level Lease、Save RPC、version/CAS、Pending／Recovery安全保護及其他明確保留機制；不以舊 Preview 流程替代或繞過它們。
 - 保留 V3.9.16 後與本拆除範圍無關且仍有效的功能、修正及文件；不得整體回退或任意重構。
 - 以現行 develop 為基礎，逐項追蹤、拆除、測試、記錄；未經證據支持不得批次刪除。
-- **已核准本ADR範圍內的程式修改及必要隔離測試**；commit／push、部署、正式資料操作仍不包含在本授權內。
+- **已核准本 ADR 範圍內的程式修改及必要隔離測試。2026-11-24 使用者另明確核准本次 V3.11.5 全專案提交／推送與標準發布流程；該授權不免除正式資料庫備份、還原驗證及其他安全停止條件。**
 - 不使用 TEST-1 或正式資料庫進行測試；測試僅採安全隔離資料及本機／非正式環境。
 - 保留既有工作樹修改，不覆蓋或混入。
 
@@ -83,14 +83,15 @@
 - 尚未確認手機事件窗口的Windows reconciliation實際由哪個入口啟動；目前優先待核對 connectivity recovery pending／focus-visible retry，其次 App Update／Restart。
 
 ## 階段導航
-- [ADR-002-S1 根因定位與歷史比較](ADR-002-S1-root-cause-investigation.md)：唯一持續追查工作日誌。
+- [ADR-002-S1 根因定位與歷史比較](ADR-002-S1-root-cause-investigation.md)：原 Preview／通知衍生機制與卡片畫面閃動工作線的持續追查／驗證日誌；保留其原有 ACTIVE 項目。
+- [ADR-002-S2 登入身份切換與登出生命週期](ADR-002-S2-auth-workspace-lifecycle.md)：2026-11-24 新增 Accepted 範圍；登入清單 reconciliation、登出 Loading、卡片管理／編輯旅程 Lease 清理、已送出保存與身份資料隔離。已核准直接實作，詳細證據、步驟及 S2-01～S2-14 驗收條件以 S2 文件為準。
 
 ## 本案完成條件
 1. 以可重現且可觀察的證據確認或排除主要候選根因：state 更新序列、卡片 identity/key、remount、列表／資料替換、loading／conditional rendering。
 2. 比較目前實際機制與歷史版本，確認「以前沒有閃動」的差異有 Git／程式證據支援，不以記憶或假設代替。
 3. 明確分離已確認因果、推論及仍未驗證項目。
-4. 提出範圍最小的修改方案及驗證方法；方案仍需使用者核准後才可實作。
-5. 若核准並實作，完成相應 regression／實際隔離測試並記錄證據；本次viewport／scroll mitigation在核准前維持 Proposed，ADR-002既有Accepted範圍依其決策繼續執行。
+4. S1 原卡片閃動／排序追查工作仍依其階段紀錄及各自核准狀態執行；不得把本次新增 S2 的授權套用到 S1 尚未核准的其他修改。
+5. S2 登入身份切換與登出生命週期為 2026-11-24 新增 Accepted 範圍，已核准依 S2 階段文件直接實作及驗證；其具體邊界、步驟及驗收條件見 [ADR-002-S2](ADR-002-S2-auth-workspace-lifecycle.md)。
 
 ## 2026-11-23：S1根因調查結果與修正提案
 
@@ -112,4 +113,48 @@
 - **已解決（使用者回報）**：儲存／刪除期間管理欄位提示文案反覆出現所造成卡片上下移動已消失；卡片不再因該提示位移上下閃動。
 - **新增追蹤（ACTIVE）**：卡片時間排序跳動，包含到達09:00、離開時間未填自動補值後跳動；到達／離開時間均填寫的另一測試曾正常，但相同標準再次輸入仍跳動。跨瀏覽器亦觀察到排列交替。
 - 正式排序規則與目前 `sortItineraryItemsByTime()`／新增流程的比對及初步判斷，已記錄於 ADR-002-S1 日誌。未證實根因；下一步優先追查共享資料更新／陣列順序重新套用來源。此問題納入ADR-002後續，不另開ADR。
+
+## 2026-11-24：新增 Accepted 範圍 — 登入身份切換與登出生命週期
+
+### 決策狀態與授權
+
+- **Accepted，已核准直接實作及必要隔離驗證。** 新對話依 [ADR-002-S2](ADR-002-S2-auth-workspace-lifecycle.md) 直接實作，不需重新調查已確認程式現況，也不需再次詢問本範圍是否授權。
+- 本新增範圍獨立於 S1 原卡片畫面閃動／排序調查；不改寫 S1 原有狀態及未核准工作。
+- 詳細證據、實作順序、草稿／已送出保存界線及 S2-01～S2-14 驗收條件，以 S2 階段文件為唯一詳細規格。
+
+### 最新調查結論
+
+1. **登入後清單不更新：** `useTripWorkspace.ts` 初始 Workspace effect 依賴 `isSessionReady`，未依賴 `userId`／身份變更；訪客載入完成後登入不會觸發完整清單 reconciliation。選取旅程 effect 雖依賴 `userEmail` 更新權限，但不等於更新整份旅程清單。
+2. **身份競態：** `reconciliationPromiseRef` 是單一共用 Promise，沒有綁定啟動身份／Workspace epoch；guest → signed-in 亦未明確使舊 Workspace 失效。舊 Promise 可能被新身份重用，或由舊 finally 清除新 Promise。此為程式結構可確認的競態風險，尚未動態重現。
+3. **登出 Loading：** `App.tsx` 的 `handleLogout()` 未重設 `isLoading=false`；Trip load 在 epoch 不符時會提前 return，跳過後續解除 Loading，兩者可共同造成登出後持續 Loading。
+4. **卡片管理 Lease：** `ItineraryPage` 已有 `closeManageMode()`、`releaseEditingLease()`、`resetForm()`、`releaseManagedTripLease()` 及卸載清理；但 `closeManageMode()` 保存中會拒絕退出，卸載時 Release 也可能因 Session 已失效而失敗。登出應重用其底層清理核心，不只依賴 unmount。
+5. **編輯旅程 Lease：** heartbeat 位於 `App.tsx`；既有 `closeTripEditor()` 可停止 heartbeat、清除本機 marker 並 Release `__trip__`，但 `handleLogout()` 未呼叫它。Modal 卸載不會停止 App 層 heartbeat。
+6. **保存生命週期：** 卡片保存已有 `itinerarySavePromisesRef`；已送出的保存必須與未送出草稿分開處理。未送出的草稿直接丟棄；已送出保存等待既有 Promise 收斂；已確認本機保存成功但雲端待同步的正式資料／Pending 必須保留。
+7. **費用簿識別：** `expenseBookTripId` 是獨立 state；登出清空 selectedTripId 後，selected Trip effect 會提前 return，可能未清除此 ID。登出須清空它，避免費用簿 hook 以舊 ID 啟動載入。
+8. **隱私清理：** 既有 `clearSharedTripDataAfterAccessLoss()` 仍必須執行；其同步 localStorage 清理與附件／封面非同步清理不可因 UI reset 重排而跳過。
+
+### 已核准修正邊界
+
+- 以 Supabase `user.id`／identity generation 作身份隔離；身份變更時使舊 Workspace 請求失效，初始清單 reconciliation 隨身份變更觸發。
+- reconciliation Promise 按身份／epoch 隔離；舊 Promise 不可污染新身份或清除新 Promise。
+- 登出沿用既有卡片及編輯旅程 Lease service／RPC／scope；先停止 heartbeat、清除本機 marker，舊 Session 有效時嘗試 Release。
+- 日期切換與登出共用卡片管理底層清理核心；不因一般 UI saving guard 阻止登出清理，但須先等待已送出的保存。
+- 未送出草稿直接丟棄；已送出的卡片／Trip Editor 保存等待結果；已確認保存成功資料及 Pending 保留。
+- 登出同步清除舊身份畫面狀態、`expenseBookTripId` 及 Loading；非同步附件／封面清理不得讓 UI 永久停在 Loading。
+- Release 離線／失敗時停止本機 heartbeat 並清 marker；雲端 Lease 依既有 expiry 回收，不宣稱立即釋放。
+
+### 不得擴大的範圍
+
+- 不修改 Trip seed／cloud／local merge 演算法。
+- 不改卡片 Save RPC、CAS、version、Pending／Recovery、Checklist、Other Info、費用簿及其他同步協定。
+- 不新增草稿保護／持久化、Lease RPC、lease key、TTL 或新鎖定模型。
+- 不修改 ADR-001 Accepted 契約。
+- 不執行正式 Supabase、Secrets、Edge Function、部署操作。
+- 程式修改及隔離測試已核准；Git commit／push／merge／tag／deploy 不在本次授權內。
+
+### 實作與驗收入口
+
+- **唯一直接續行入口：** [ADR-002-S2 登入身份切換與登出生命週期](ADR-002-S2-auth-workspace-lifecycle.md)。
+- 依 S2 Step 1～4 實作，依 S2-01～S2-14 驗收，另完成 targeted regression tests、typecheck／lint／build、`npm run verify:docs-links` 及 `git diff --check`。
+- 2026-11-24 本輪僅完成唯讀調查及文件定案，尚未修改程式、執行測試或動態重現；任何測試項目在取得實際證據前均不得標示 PASS。
 

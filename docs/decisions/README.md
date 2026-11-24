@@ -8,14 +8,15 @@
 
 | ID | 決策／工作 | 狀態 | 目前階段 | 下一步／阻塞 | 權威主檔 |
 |---|---|---|---|---|---|
-| [ADR-001](active/ADR-001-trip-daily-card-edit-lock-scope.md) | 每日詳細行程與編輯旅程共用 Trip Lease 的互斥編輯協調 | Accepted／新增範圍實作完成、自動化驗證通過；人工驗收待完成 | **原 S1／S2／S3／S4 Exit PASS（2026-11-22）；2026-11-24 核准新增範圍已完成程式實作與自動化驗證，人工驗收尚未完成（續行入口：ADR-001-S4）。** | **新增範圍：編輯旅程與管理卡片共用既有 Trip Lease；編輯旅程定時續租、focus 只查詢、提交前重驗；metadata-only update 受同一 Lease 保護；正常保存／關閉／刪除後釋放。完整 build 與專項自動化測試 PASS。尚待人工驗證兩入口互斥與非正常中斷 TTL 恢復；不得標記新增範圍 Exit PASS。** | [ADR-001](active/ADR-001-trip-daily-card-edit-lock-scope.md) |
-| [ADR-002](active/ADR-002-card-save-screen-flicker.md) | 移除已淘汰的每日行程 Preview／通知／同步衍生機制，並追查卡片操作畫面上下閃動 | Accepted／實作與逐項驗證中 | **S1 Preview／通知衍生機制拆除 slice PASS；新增卡片排序／跳動修正、管理 Lease／表單指定回歸 PASS；使用者 A 項人工驗收 1–4、6–7 PASS，第 5 項管理權／鎖定 PARTIAL PASS。** | **本輪使用者人工驗收：1–4、6–7 PASS；5 PARTIAL PASS。2026-11-24 使用者已核准依 ADR-001 新增範圍實作：編輯旅程入口與管理卡片共用 Lease、metadata 提交重驗；刪除旅程沿用編輯旅程入口及既有 super_admin 權限，不新增刪除 Lease／DB enforcement；其他功能同步不變。原始觀察與專項唯讀證據詳見 ADR-002-S1 當日紀錄。** | [ADR-002](active/ADR-002-card-save-screen-flicker.md) |
+| [ADR-001](active/ADR-001-trip-daily-card-edit-lock-scope.md) | 每日詳細行程與編輯旅程共用 Trip Lease 的互斥編輯協調 | Accepted／新增範圍實作、自動化及人工驗收均通過；Exit PASS | **原 S1／S2／S3／S4 Exit PASS（2026-11-22）；2026-11-24 核准新增範圍已完成程式實作、自動化驗證及使用者人工 UI 驗收，新增範圍 Exit PASS。** | **新增範圍：編輯旅程與管理卡片共用既有 Trip Lease；編輯旅程定時續租、focus 只查詢、提交前重驗；metadata-only update 受同一 Lease 保護；正常保存／關閉／刪除後釋放。完整 build、專項自動化測試及使用者確認的人工驗收均 PASS。** | [ADR-001](active/ADR-001-trip-daily-card-edit-lock-scope.md) |
+| [ADR-002](active/ADR-002-card-save-screen-flicker.md) | 移除已淘汰的每日行程 Preview／通知／同步衍生機制，並追查卡片操作畫面上下閃動 | Accepted／多工作線進行中；S2 已核准直接實作 | **S2 登入身份切換與登出生命週期（2026-11-24 Accepted，尚未實作）；S1 原 Preview／卡片畫面與排序工作線維持各自狀態。** | **下一步直接依 ADR-002-S2 Step 1–4 實作，不需重複調查或再次核准；完成 S2-01～S2-14、targeted regression、typecheck／lint／build、文件連結及 diff 驗證。S1 未核准項目不因 S2 授權而自動取得實作授權。** | [ADR-002](active/ADR-002-card-save-screen-flicker.md) |
 
 ## ADR-002 階段入口
 
 | 階段 | 文件 | 按需載入條件 |
 |---|---|---|
 | S1 Preview／通知衍生機制依賴追蹤與逐項拆除（ACTIVE） | [ADR-002-S1](active/ADR-002-S1-root-cause-investigation.md) | 已淘汰流程依賴閉包、實作拆除、隔離驗證與歷史行為比對 |
+| **S2 登入身份切換與登出生命週期（ACCEPTED／實作待開始）** | [ADR-002-S2](active/ADR-002-S2-auth-workspace-lifecycle.md) | **新對話直接依已核准 Step 1–4 實作；完成 S2-01～S2-14 及自動化／build／文件驗證，不需重複調查或再次核准。** |
 
 ## ADR-001 階段入口
 

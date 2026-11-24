@@ -55,7 +55,7 @@
 
 ## 階段索引與目前進度
 
-2026-11-24 核准的「編輯旅程入口共用 Trip Lease」屬原 S4 Exit 後新增範圍，原 S1／S2／S3／S4 Exit PASS 僅對當時範圍有效；新增範圍尚未實作／驗收，依 `docs/decisions/README.md` 指定的續行入口執行，不得回溯宣稱已完成。
+2026-11-24 核准的「編輯旅程入口共用 Trip Lease」屬原 S4 Exit 後新增範圍；截至 2026-11-24，新增範圍已完成實作、自動化驗證及使用者人工 UI 驗收，新增範圍 Exit PASS。原 S1／S2／S3／S4 Exit PASS 仍保留其原始日期與範圍。
 
 `docs/decisions/README.md` 是此 ADR 狀態、當前階段、下一步與阻塞的唯一總索引；目前階段文件是階段工作進度及執行紀錄的唯一維護位置。階段詳細規格依工作需要載入，不得每次讀取本 ADR 就自動載入所有階段文件。
 
@@ -63,8 +63,8 @@
 |---|---|---|---|
 | [ADR-001-S1](ADR-001-S1-db-enforcement.md) | DB schema、Lease、version、Trigger、Save RPC、安全及資料庫驗證基準與詳細測試紀錄 | **S1 DB Exit PASS（2026-11-21）；SR-01～SR-11 DB slice已核對。** S3應用層Pending／Recovery不阻塞S1 DB Exit。 | DB／RPC／migration 工作時 |
 | [ADR-001-S2](ADR-001-S2-cloud-save-integration.md) | Cloud Save service／Repository 基礎契約、非 itinerary 保存隔離、RPC adapter／DB contract 基礎驗證 | **S2 Exit PASS（2026-11-21；依核准重新界定範圍核對）** | Cloud／Repository contract 工作時 |
-| [ADR-001-S3](ADR-001-S3-client-lock-pending.md) | App callers／Trip metadata-dayCount 分離、Trip-level Lease／可信 version client、Pending／Recovery／Conflict Save RPC 整合、旁路 closure | **原範圍 S3 Exit PASS（2026-11-21）；2026-11-24 核准新增編輯旅程 Lease 協調範圍，尚待另行實作驗收。** | 原範圍已結案；新增範圍依 README 後續安排 |
-| [ADR-001-S4](ADR-001-S4-acceptance.md) | 整合後驗收及退出條件（雙瀏覽器競爭UI已取消） | **原範圍 S4 Exit PASS／2026-11-22；2026-11-24 核准新增編輯旅程 Lease 協調範圍，尚待另行實作驗收。** | 原範圍已結案；新增範圍依 README 後續安排 |
+| [ADR-001-S3](ADR-001-S3-client-lock-pending.md) | App callers／Trip metadata-dayCount 分離、Trip-level Lease／可信 version client、Pending／Recovery／Conflict Save RPC 整合、旁路 closure | **原範圍 S3 Exit PASS（2026-11-21）；2026-11-24 核准新增編輯旅程 Lease 協調範圍，已完成實作與自動化驗證。** | 原範圍已結案；新增範圍依 S4 完成人工驗收 |
+| [ADR-001-S4](ADR-001-S4-acceptance.md) | 整合後驗收及退出條件（雙瀏覽器競爭UI已取消） | **原範圍 S4 Exit PASS／2026-11-22；2026-11-24 新增編輯旅程 Lease 協調範圍已完成實作、自動化及使用者人工驗收，Exit PASS。** | **S4 全部範圍結案（2026-11-24）** |
 | [文件 116](../../116_卡片編輯故障根因與旅程級編輯契約調查紀錄.md) | 根因證據、呼叫鏈調查、工程審查及原始／補充測試證據 | 調查證據來源；不維護階段進度 | 根因調查或需核對原始證據時 |
 
 ### 階段治理
