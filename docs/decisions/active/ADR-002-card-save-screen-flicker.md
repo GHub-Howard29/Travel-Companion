@@ -157,4 +157,3 @@
 - **唯一直接續行入口：** [ADR-002-S2 登入身份切換與登出生命週期](ADR-002-S2-auth-workspace-lifecycle.md)。
 - 依 S2 Step 1～4 實作，依 S2-01～S2-14 驗收，另完成 targeted regression tests、typecheck／lint／build、`npm run verify:docs-links` 及 `git diff --check`。
 - 2026-11-24 本輪僅完成唯讀調查及文件定案，尚未修改程式、執行測試或動態重現；任何測試項目在取得實際證據前均不得標示 PASS。
-
