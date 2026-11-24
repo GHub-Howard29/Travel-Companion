@@ -1,6 +1,6 @@
 ﻿# ADR-002-S1：淘汰 Preview／通知衍生同步機制的依賴追蹤與逐項拆除
 
-> 工作狀態：ACTIVE／已核准實作，逐項依證據追查、拆除與驗證；本文件為持續工作日誌唯一維護位置。
+> 工作狀態：ACTIVE／主要使用者可見卡片穩定性問題及管理權／鎖定新增範圍均已修正、驗收並正式發布 V3.11.5。S1 目前只保留確認是否仍存在新可重現異常的存在性判斷；若無新現象，不需補做歷史動態量測。Participant RPC N+1 與 Weather APP 重複請求僅為未來重新取證的性能改善候選，未授權實作。本文件為持續工作日誌唯一維護位置。
 
 ## 目標及工作邊界
 以現行 develop 為基礎，追查已淘汰的每日行程 Preview／notice／change-summary／snapshot-baseline及衍生同步機制的完整依賴、呼叫鏈、資料流與歷史演變，逐項拆除或修正，恢復符合ADR-001的保存／更新行為。V3.9.16只作歷史參照。保留必要revision signal、Lease、Save RPC、version/CAS、Pending／Recovery及無關有效功能；不整體回退、不猜測、不做無關重構。
@@ -13,22 +13,22 @@
 - 請求／mutation計數已記錄於 ADR-002 主檔摘要，計數屬近似觀察，不是根因證明。
 - `tc_read_trip_participant_email_map` N+1 pattern已被辨識，但尚無因果證據連結至閃動，暫不列為本案主要原因。
 
-### 未確認／候選
-1. 保存期間多次 `setCurrentTrip`／sync state update是否令卡片區域短暫重置或重新渲染，是否為實際閃動原因。
-2. card IDs在本機保存、cloud reconciliation及同步後是否維持一致；legacy index fallback是否可使 key變動。
-3. 保存期間是否由 loading／conditional rendering、資料替換、父層 key、sortable transition或 layout effect導致 remount／可見跳動。
-4. 以前版本是否使用不同 state／保存／列表呈現方式，且差異直接解釋目前現象。
+### 初始未確認／候選（2026-11-22 歷史紀錄；不代表目前現象仍存在）
+1. 當時推測保存期間多次 `setCurrentTrip`／sync state update 是否令卡片區域短暫重置或重新渲染。
+2. 當時待查 card IDs 在本機保存、cloud reconciliation 及同步後是否維持一致；legacy index fallback 是否可能使 key 變動。
+3. 當時待查保存期間是否由 loading／conditional rendering、資料替換、父層 key、sortable transition 或 layout effect 導致 remount／可見跳動。
+4. 當時待比較以前版本是否使用不同 state／保存／列表呈現方式，且差異是否直接解釋當時現象。後續已知使用者可見問題的修正驗收與目前剩餘工作，以本文件 2026-11-25 狀態校正為準。
 
-### 下一步（按順序）
+### 初始調查下一步（2026-11-22 歷史紀錄；目前狀態以本文件末段 2026-11-25「S1 尚餘工作」為準）
 1. **已完成（2026-11-22）：** 檢查列表／父層 key、條件式掛載及 SortableCard identity；一般有效 ID 的新增／編輯／刪除會保留既有 ID。
 2. **已完成（2026-11-22）：** 比較 `ensureItineraryDaysDataIds`、一般保存／reconciliation與 Git 歷史；確認 `22af34a` 將 `trip.content.daysData` 加入 Lease effect dependencies，`2af4db9` 將 local Pending 後 `setCurrentTrip` 移至 online common path。
-3. **目前 ACTIVE：** 取得 ADR-002 專用 loopback fixture 的明確授權，完成 CDP 動態量測 Lease effect setup／cleanup、`editLeaseStatus`、React commit、卡片 DOM identity及實際視覺變化。不得操作歷史 synthetic Trip、改動既有 Superadmin、使用 TEST-1 或正式 DB。
-4. 動態證據確認後，彙整最小方案供核准；未核准前不修改程式。
+3. **歷史候選（未確認仍有產品問題）：** 當時曾規劃取得 ADR-002 專用 loopback fixture，量測 Lease effect setup／cleanup、`editLeaseStatus`、React commit、卡片 DOM identity及實際視覺變化。主要可見異常其後已修正並由使用者驗收；不得把此舊測試計畫當成目前 ACTIVE 任務。
+4. 只有確認目前仍有可重現異常，且使用者同意進一步量測時，才提出最小隔離方案；未獲必要測試授權前不建立 fixture、不操作資料。
 
-### 狀態
-- **PASS**：已識別需優先追查的保存 state更新序列與卡片 identity。
-- **PENDING**：根因證明、歷史差異比較、可重現證據、改善方案審查。
-- **禁止**：自行修改程式、commit/push/deploy、使用 TEST-1／正式 DB測試。
+### 初始狀態（2026-11-22 歷史紀錄）
+- **當時 PASS：** 已識別需優先追查的保存 state 更新序列與卡片 identity。
+- **當時 PENDING：** 根因證明、歷史差異比較、可重現證據、改善方案審查。之後主要使用者可見閃動／排序問題已修正並有使用者驗收；目前狀態請以本文件 2026-11-25「S1 尚餘工作」為準。
+- **持續安全限制：** 不使用 TEST-1／正式 DB 測試；新建 loopback fixture／identity 前須有明確測試授權；未取得實作授權不得修改程式。
 
 ## 2026-11-22 第一輪調查：列表 identity、掛載條件與保存時序
 
@@ -163,26 +163,25 @@
 - 同日另有約 13,210 次已驗證 APP `weather-forecast` POST，主要集中 UTC 03:00–05:00，故天氣表的大量內部讀取主要由 APP 請求風暴觸發，不是固定 Cron 自身造成。前端 Weather effect 依賴 `trip.content.daysData` 物件參照，現有 dedupe 只涵蓋同一請求尚未完成期間，沒有完成後的短期結果去重。
 - 因此目前應分成兩條問題：**請求放大／效能與費用問題已確認**；**畫面閃動的直接 DOM／React 因果仍未確認**。最具體的直接候選仍是 Lease effect 將整份 `daysData` 參照綁入 subscription lifecycle，保存期間多次新參照可能反覆 `cleanup/setup`，使 `editLeaseStatus` 出現 `loading → ready`；這是 UI state flap 證據，不等同卡片 DOM remount 證明。
 
-### 改善方向（待核准，不代表已授權實作）
+### 歷史改善候選（未授權實作；目前不構成 S1 待辦）
 
-1. **P0／先驗證 Lease lifecycle：** 將 subscription scope 與每日卡片內容更新解耦；active-day IDs 改由 ref／最新 callback 提供，保留 trip switching、active day、權限及 reconnect 的正確性。
-2. **P1／抑制 Weather APP 放大：** 以 weather target 的語意 fingerprint（地點、座標、日期、timezone 等）作為請求鍵，加入完成結果的短期 dedupe／cache；保留 in-flight dedupe、cache lease 與 Cron refresh 的邊界。
-3. **P1／抑制 participant N+1：** 先加 session／Trip 層級短期 cache，長期評估一次批次 RPC；確認私有 email 不會跨 user、跨 Trip 或跨權限洩漏。
-4. **P1／補足可歸因觀測：** 分開記錄 APP／Cron、request fingerprint、cache hit／miss、lease restart、React commit 與 DOM identity；避免只用總 mutation 或總 API 次數判斷根因。
-5. **驗收前置：** 取得全新 loopback-only fixture，對 valid IDs、legacy／duplicate ID 正規化、Weather 無卡片及 focus／visibility 變化分開量測；確認相同 snapshot 不新增 participant／weather request，並以 React／DOM／畫面證據才能將候選升級為根因。
+上述五點均為當時的改善構想，不是目前實作計畫。現階段不得依此直接建立快取、批次 RPC、改動 Lease／Weather effect 或新增觀測機制；未來如要處理，須依 2026-11-25 校正規則重新取得最新數據、審查必要性並再次取得使用者授權。
 
-### 本輪狀態
+### 本輪狀態（歷史紀錄；依後續驗收與發布紀錄更新）
 
-- **PASS：** 程式呼叫鏈、排程／cache 邊界、正式 logs 及既有 ADR 證據已完成交叉核對；已把請求放大與畫面根因分流。
-- **PENDING／BLOCKED：** 尚缺 ADR-002 專用 loopback fixture／瀏覽器授權，無法完成 CDP／React Profiler／DOM identity 的直接因果驗證。
-- **維持限制：** ADR-002 仍為 Proposed，S1 仍為 ACTIVE；本輪沒有修改程式、資料庫、migration、Secrets、Cron、Edge Function，也沒有 commit／push。
+- 本節原始 PASS／PENDING／BLOCKED 僅反映 2026-11-22 當時狀態，不代表目前工作狀態；後續完成項目以本文件 2026-11-24 之紀錄及 ADR-001 S4 結案紀錄為準。
+- Participant RPC N+1 與 Weather APP 重複請求：當時正式 logs／程式呼叫鏈已確認存在請求放大現象，但數據來自 2026-11-19／22，不能代表目前流量或目前仍具改善必要性；不作為卡片閃動根因，也不列入本輪 S1 必做修正。
+- 這兩項只保留為未來性能改善候選。未來真正排程處理時，必須重新取得最新正式數據、重新檢視現行程式呼叫鏈及影響、審查修正必要性，再向使用者提出具體範圍並取得再次明確實作授權；取得授權前不得修改程式、RPC、快取、Weather 請求或排程。
+
+### S1 尚餘工作（截至 2026-11-25）
+
+1. **動態因果證據／是否仍有改善必要：** 歷史調查曾將 Lease effect lifecycle 與 `daysData` 參照綁定過緊列為候選，當時缺少完整 React commit／卡片 DOM identity 的直接量測。主要使用者可見問題（提示位移、新增／刪除閃動、時間排序跳動）其後已經修正且使用者驗收通過；因此不得再假定原閃動仍存在。若仍要完成 ADR-002 原「畫面閃動根因」調查，先確認目前是否仍有可觀察的未解現象；只有仍存在且值得調查時，才提出最小的隔離動態量測方案。建立新 loopback identity／fixture 或啟動相關操作前，仍須取得明確測試授權；不得使用 TEST-1、正式 DB、歷史 synthetic Trip 或變更既有 Superadmin。
+2. **歷史 Preview／保存失敗敘述的狀態對齊：** 舊紀錄保留為歷史證據，不將早期「刪除失敗／Preview 交互作用」假設當成目前未修復故障；若未來有新的實際回報，依當時證據另行定位。
+3. **不在 S1 待辦的項目：** 管理卡片／編輯旅程雙入口互斥、管理權及鎖定、編輯旅程 metadata Lease 保護已由 ADR-001 新增範圍完成程式、自動化及使用者人工 UI 驗收，並於 V3.11.5 正式發布；跨 Auth server-side Lease 拒絕不另列測試或重開 ADR-001 Exit。Participant RPC N+1 與 Weather APP 重複請求僅依上段規則作為未來候選。
 
 ### S1 下一步
 
-1. 取得 ADR-002 專用 loopback fixture／瀏覽器 session 的明確測試授權；準備流程須建立全新隔離身份及全新 fixture ID，不能重用歷史 `v391-admin`／`v391-local-browser`。
-2. 以 CDP／React Profiler 或同等觀察紀錄一次新增卡片保存期間：Lease effect setup/cleanup 次數、`editLeaseStatus` 變化、React commit、列表容器存續及每個卡片 DOM node identity。
-3. 以同樣 fixture 再測編輯與刪除；valid IDs 與缺 ID／duplicate ID 一次性正規化情境分開量測。不要把新增、編輯、刪除所有流程合併成同一測試。
-4. 確認瀏覽器證據後，將本節最小修正方向整理成 ADR-002 決策變更提案，待使用者明確核准後才能修改程式。
+先不新增程式工作。若要結束 S1 原畫面根因調查，唯一前置判斷是確認目前是否仍有實際可重現的閃動／保存異常；沒有新的現象，就不必為了補齊歷史 instrumentation 而建立 fixture 或再做一次已無產品問題的測試。Participant／Weather 兩候選不阻塞 S1 完成，不自動啟動。
 
 ## 2026-11-22 第六輪：卡片新增操作後正式 API/RPC 呼叫量實測（暫存，待下一輪調查）
 
@@ -273,7 +272,7 @@
 1. 由既有 local fixture 建立流程補足 ownership 欄位契約，或由專案維護者提供符合可見性規則的全新 fixture；不得操作正式 DB／歷史 Trip。
 2. 重跑新增、編輯、刪除三個獨立案例；每案量測 React commit、Lease setup／cleanup、`editLeaseStatus`、列表容器及卡片 node identity。
 3. 將 participant／Weather 請求數與 DOM 量測分開記錄，確認是否為同一 reconciliation 入口造成的連鎖，而非僅時間相近。
-4. 只有在上述證據完成後，才把 P0 Lease scope 解耦整理成正式 implementation proposal；目前 ADR-002 維持 Proposed、S1 維持 ACTIVE。
+4. 本段為 2026-11-23 當時的歷史規劃；後續主要可見異常已修正並由使用者驗收，Participant／Weather 亦已改列未來候選。現行狀態及授權邊界以本文件 2026-11-25「S1 尚餘工作」及 ADR-002 主檔校正紀錄為準。
 
 - 本輪未修改程式、正式 DB、migration、Secrets、Cron 或 Edge Function，未commit／push。
 
@@ -698,7 +697,7 @@
 - **驗收範圍**：確認新增卡片在有時間及無時間條件下均不再跳動，且排列遵照既定時間規則。未因此宣告 ADR-002 其他保存、刪除、遠端更新或 Lease lifecycle 調查全部結案。
 - **Git／範圍**：保留工作樹既有其他未提交修改。未執行 commit／push／deploy。
 
-## 2026-11-24：ADR-001 Trip Edit Lock 前端入口回歸調查
+## 2026-11-24：ADR-001 Trip Edit Lock 前端入口回歸調查（歷史紀錄；後續已完成）
 
 - **使用者回報**：A 瀏覽器已進入每日行程管理編輯；B 瀏覽器仍能進入管理並新增卡片、調整順序、調整時間，使用者判定 ADR-001 單一編輯權功能失效。此為新的權限／管理入口問題，與新增卡片排序跳動修正分開追蹤。
 - **權威契約**：ADR-001 Accepted 決策明定鎖定單位為整趟 Trip，同一 Trip 同一時間只允許一個有效持有者編輯每日詳細行程；S4 P3 明定進入管理／編輯時應主動原子取得 Trip Edit Lock，並在允許編輯前取得必要最新資料／版本。
@@ -742,8 +741,8 @@
 ## 2026-11-24：工作項目重新分類與修正後使用者觀察測試
 
 - **保存／刪除／遠端更新的影片分析追查：已結案（限定影片直接視覺原因及已修正現象）。** `ADR-002-video-analysis.md` 已直接定位 `editLeaseStatus === "loading"` 時新增的暫態文字區塊，造成管理區增加約49.5px並令下方卡片位移；該影片觀察已與程式條件核對。使用者其後回報保存／刪除時提示文字反覆出現造成卡片上下移動的問題已修正。這項原先泛列的「保存／刪除／遠端更新動態追查」不再單獨阻塞結案；不將其延伸成所有保存／遠端同步資料契約均已完整測試。
-- **ADR-001 獨立跨 Auth server-side 拒絕：** 另列自動化 API 安全測試。由使用者手動登入兩個隔離測試帳號並提供可控 session／test context後，可由 AI 執行 direct API/RPC attempt與結果核對；不要求手動UI競爭測試，也不重開 ADR-001 Exit。
-第一輪交叉核對已確認：改動涉及管理入口先claim Trip Lease、Heartbeat／foreground renew、保存期間保留Lease、save/delete guard、排序／時間調整／複製 guard、remote lease event時退出管理、workspace save完成後不提前release，以及merge order插入位置保留。既有 verifier assertions涵蓋部分管理Lease lifecycle及sync merge insertion/deletion/conflict，但屬靜態assertions／contract test，不能替代完整runtime。
+- **ADR-001 跨 Auth server-side 拒絕（歷史規劃，已由既有證據覆蓋）：** 後續 ADR-001 S4 已完成 SR-11 雙 Auth session／JWT 自動化 API／DB 契約驗證，並於 2026-11-22 達成原 S4 Exit PASS；2026-11-24 新增範圍亦完成人工驗收及 Exit PASS。此項不再安排額外補測、不重開 ADR-001 Exit。
+第一輪交叉核對（歷史程式分析；實作與最終驗收依下方結案紀錄及 ADR-001 S4）：改動涵蓋管理入口 Claim、Heartbeat／foreground renew、保存期間 Lease 保留、save/delete guard、排序／時間調整／複製 guard、remote Lease event 時退出管理、workspace save 完成後不提前 release，以及 merge order 插入位置保留。既有 verifier assertions 覆蓋部分管理 Lease lifecycle 及 sync merge insertion/deletion/conflict；後續另完成程式與自動化驗證，並由使用者回報人工 UI 驗收通過。
   - **Save／資料保護：** `saveItem`、排序／時間調整及相關操作入口都有本端 managed Lease／scope／ready狀態guard；雲端最終仍由ADR-001 Save RPC／CAS／DB enforcement保障。現有修改沒有直接改動Save RPC／DB契約。\n  - **Pending／reconciliation：** `useTripWorkspace` 的save-finally release條件新增 `isManagedItineraryTripLeaseActive(tripId)`，避免管理模式持鎖期間保存完成即釋放；`itinerarySync`修改了合併時插入卡片位置／anchor與雙方插入處理，`verify-v31012-itinerary-sync`增加本地／雲端中間插入及同anchor插入案例。這些範圍已由相關contract assertions覆蓋，但實際跨裝置Pending／Recovery仍非本輪程式分析可證明。\n  - **Lease lifecycle／權限：** 管理入口claim成功才開管理；heartbeat／focus renew失敗會清除managed flag、停止管理；remote Lease event會停止管理並清除操作狀態；退出管理會release。需進一步核對異常分支及release結果是否被上層正確處理，尤其 `releaseManagedTripLease()`失敗回傳目前未阻止 `closeManageMode()`完成UI退出；可能是UI退出但Lease到期回收的設計，不推定為漏洞，需明確記錄。\n  - **分析界線：** 已確認修改入口／guard及既有測試覆蓋方向；未直接重跑測試、未做完整runtime recovery驗證，也未宣稱全部ADR-001安全契約已由這些修改證明。完成最後逐項靜態核對後，若沒有契約缺口，這項工作以程式分析結案，不新增泛化回歸測試。
 - **一次修正後觀察測試：** 在使用者可操作的修正後環境，依序完成以下操作；觀察畫面是否有異常跳動，並記錄／回報結果。結果先記錄，不預設 PASS。
   1. **新增卡片**
@@ -783,12 +782,12 @@
   5. **PARTIAL PASS｜管理權及鎖定**：卡片管理編輯時 A/B 互鎖定通過；編輯旅程頁修改天數時鎖定通過。但編輯旅程頁修改出發日期及刪除旅程，均未被鎖定，屬未預期缺口。
      - **預期行為／已觀察契約**：B 進入管理後 A 顯示鎖定；B 再進入編輯旅程時，A 仍顯示鎖定並要求重新確認。此為預期 UI 行為；系統不主動推送解除鎖定，應等待使用者手動詢問鎖定狀態後，再執行相應權限確認。
      - **額外異常／待討論**：B 執行上述未受鎖定保護的出發日期修改或刪除旅程後，A 重新聚焦頁面，會執行同步並直接解除鎖定。需一併檢討 focus/reconciliation 同步是否能在未完成使用者手動確認時清除 A 的鎖定狀態。
-     - **使用者核准後續修訂（2026-11-24；決策已記錄於 ADR-001）**：同一 TRIP 的「管理卡片」與「編輯旅程」共用既有 Trip Lease，兩入口互斥；旅程基本資料提交前重驗 Lease；focus/reconciliation 只查詢 Lease、不主動解除提示；切換 TRIP 依 `trip_id` 隔離。刪除旅程仍位於編輯旅程入口並維持既有 `super_admin` 權限，不新增刪除專用 Lease／DB enforcement。其他功能同步行為不變。此範圍已完成程式實作及自動化驗證，人工雙入口互斥與 TTL 恢復驗收待完成；不得沿用舊的「metadata 更新／刪除都需 DB Lease enforcement」建議。
+     - **使用者核准後續修訂（2026-11-24；權威決策及結案見 ADR-001）**：同一 TRIP 的「管理卡片」與「編輯旅程」共用既有 Trip Lease，兩入口互斥；旅程基本資料提交前重驗 Lease；focus/reconciliation 只查詢 Lease、不主動解除提示；切換 TRIP 依 `trip_id` 隔離。刪除旅程仍位於編輯旅程入口並維持既有 `super_admin` 權限，不新增刪除專用 Lease／DB enforcement。其他功能同步行為不變。此範圍已完成程式實作、自動化驗證及使用者人工 UI 驗收，並於 2026-11-24 達成 ADR-001 新增範圍 Exit PASS；不得再列為待驗收，也不得沿用舊的「metadata 更新／刪除都需 DB Lease enforcement」建議。
   6. **PASS｜遠端更新**：通過。
   7. **PASS｜測試後清理核對**：通過。
-- **人工驗收總結**：1–4、6–7 PASS；5 PARTIAL PASS。第 5 項未結問題不回頭否定其他六項結果，也不自動授權擴大 Trip Lease。
-- **後續決策**：第 5 項缺口已由使用者核准擴大 ADR-001 範圍處理，程式實作與自動化驗證已完成；實際雙入口互斥及 TTL 恢復仍待人工驗收。既定跨 Auth server-side 拒絕仍列為後續自動化 API 安全測試。
-- **狀態**：第 3 項影片直接原因追查與已修正的可見現象列為已解決；本輪人工驗收依上述結果記錄；第 5 項契約缺口為待討論事項。
+- **原始人工驗收總結（歷史狀態）**：該輪首次回報時為 1–4、6–7 PASS；5 PARTIAL PASS。這是 2026-11-24 新增範圍修正前的初始結果，不再代表最終狀態；第 5 項已由後續核准修正、實作、自動化及使用者人工驗收完成，最終結案依 ADR-001 S4 紀錄為準。
+- **後續決策（依 2026-11-24 後續結案紀錄更正）：** 第 5 項缺口已由使用者核准擴大 ADR-001 範圍處理；程式實作、自動化驗證及使用者人工 UI 驗收均已完成，新增範圍 Exit PASS。管理卡片／編輯旅程雙入口互斥、管理權及鎖定不再是 ADR-002 S1 待辦。跨 Auth server-side Lease 拒絕已有 ADR-001 SR-11 雙 Auth session／JWT 自動化 API／DB 契約測試覆蓋；不另列補測、不重開 ADR-001 Exit。
+- **狀態更正：** 上述 2026-11-24 原始驗收 1–4、6–7 PASS／第 5 項 PARTIAL PASS 是新增範圍修正前的歷史結果。修正後第 5 項及 2026-11-24 核准新增範圍的人工驗收結果，以 ADR-001 S4「2026-11-24 新增範圍實作與人工驗收結案」為準：IMPLEMENTED／AUTOMATED PASS／MANUAL ACCEPTANCE PASS／EXIT PASS。
 
 ## 2026-11-24：編輯旅程入口沿用既有 Trip Lease 專項確認（已核准、實作完成、自動化通過）
 
@@ -801,4 +800,4 @@
 - 刪除旅程仍只從編輯旅程入口提供並維持既有 `super_admin` 權限；不增加刪除專用 Lease／DB enforcement。這項 Lease 是正常編輯操作協調，不是針對管理者刻意繞過的安全邊界。
 - 其他功能的同步、revision、Realtime、CAS／版本及驗證流程不得變更。
 
-**實作與驗證結果（2026-11-24）：** 已完成 `App.tsx` 編輯入口 Claim／heartbeat／focus-only requery／submit revalidation／正常 close release，以及 `useTripWorkspace.updateTrip` metadata-only Lease 保護；擴增 `verify-adr001-s3-app-integration.mjs`。TypeScript app/node、ADR-001 integration、Cloud Save Service、Workspace Recovery、完整 `npm run build` 與 `git diff --check` 均 PASS。未修改 DB／migration，未操作正式資料。人工雙入口互斥及非正常中斷 TTL 恢復仍待驗收；狀態為 IMPLEMENTED／AUTOMATED PASS／MANUAL ACCEPTANCE PENDING。
+**實作與驗證結果（2026-11-24；歷史自動化結果）：** 已完成 `App.tsx` 編輯入口 Claim／heartbeat／focus-only requery／submit revalidation／正常 close release，以及 `useTripWorkspace.updateTrip` metadata-only Lease 保護；擴增 `verify-adr001-s3-app-integration.mjs`。TypeScript app/node、ADR-001 integration、Cloud Save Service、Workspace Recovery、完整 `npm run build` 與 `git diff --check` 均 PASS。未修改 DB／migration，未操作正式資料。此段當時的 MANUAL ACCEPTANCE PENDING 已由同日稍後 ADR-001 S4 新增範圍驗收紀錄取代；最終狀態為 IMPLEMENTED／AUTOMATED PASS／MANUAL ACCEPTANCE PASS／EXIT PASS。
