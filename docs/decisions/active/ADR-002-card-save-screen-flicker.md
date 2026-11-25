@@ -1,9 +1,9 @@
 # ADR-002：移除已淘汰的每日行程預覽／同步衍生機制並修復保存更新行為
 
 - **ID：** ADR-002
-- **狀態：** Accepted／S1 原工作線持續進行；S2 登入身份切換與登出生命週期已核准直接實作（2026-11-24）
+- **狀態：** Accepted／S1 已完成 Preview 衍生機制拆除及主要卡片穩定性修正；管理權／雙入口互斥新增範圍已由 ADR-001 完成驗收並隨 V3.11.5 正式發布。S1 僅保留是否仍需動態因果調查的判斷；Participant RPC N+1 與 Weather APP 重複請求為未來重新取證、審查及再次授權的性能候選，不是目前實作工作。S2 登入身份切換與登出生命週期已核准直接實作（2026-11-24），Step 1–4 第一輪實作完成，S2-01～14 逐項 PASS 且整體 Exit PASS（2026-11-25）；S2 階段紀錄詳見 [ADR-002-S2](ADR-002-S2-auth-workspace-lifecycle.md)。
 - **建立日期：** 2026-11-22
-- **修訂日期：** 2026-11-24
+- **修訂日期：** 2026-11-25
 - **標題：** 以現行 develop 為基礎，依實際依賴證據拆除不再需要的預覽／通知／變更摘要及同步衍生機制，恢復符合目前決策的同步與保存行為
 
 ## 工作目標
@@ -25,8 +25,8 @@
 - 一般列表仍有條件式掛載：`displayedDayEvents.length > 0`；父層 `isLoading`、screen 或 `currentTrip` 條件也會卸載 `ItineraryPage`。同旅程保存時 `App` key 固定，普通 `currentTrip` 更新本身不等於 remount；目前 save 函式可見的 `setIsLoading(false)` 不會主動進入 loading spinner。
 - **更具體的保存／Lease lifecycle 候選已確認：** Lease effect 原始於 `b047d01`（2026-11-01）建立，`22af34a` 為取得當日卡片 ID 集合並判斷遠端鎖定，新增 `activeDay` 及整份 `trip.content.daysData` 為 dependencies。這讓每次 `daysData` 物件參照更新都會 cleanup／重建 Lease service 與 Realtime channel，setup 期間把 `editLeaseStatus` 設為 `loading`，refresh 完成後才回 `ready`；`canModifyCard()` 在此期間暫時失效。
 - 線上保存過程會多個階段更新 `currentTrip`：`2af4db9` 將 local Pending 後更新移至 online common path；一般 reconciliation 中途更新；最終從 localStorage 再 `JSON.parse` 取回 savedTrip，產生新的 `daysData` 物件參照。這些更新與 11/1 Lease dependency 疊加，存在多次 `loading → ready` lifecycle restart 的機會；分支及 React batching 決定實際次數，尚未量測。
-- **目前最具體候選根因是 Lease subscription lifecycle 與每日卡片資料參照綁定過緊**，會暫停卡片管理權限／控制狀態，但尚未證明這就是使用者觀察到的 2–3 次可見閃動，也未證明卡片 DOM remount。最小方案方向是分離 Lease subscription scope 與最新 active-day IDs，但尚未授權程式修改。
-- 動態 UI 驗證仍 BLOCKED：CDP DOM操作及 UI test account signup/login 已恢復成功（`adr002-test-20261122@example.invalid`，loopback-only）；但該身份目前處於個人帳本模式，既有 seed Trip 的管理按鈕 disabled，尚未建立／取得可編輯的 ADR-002專用 Trip／fixture。歷史 `v391-local-browser` 合成旅程明確排除重用，現成 bootstrap 亦會修改既有 `v391-admin` Superadmin 角色，不符合隔離要求。下一步須在 loopback環境建立專用 Trip ownership/access，不擴權既有身份或操作歷史旅程，再觀察 effect setup/cleanup、React commit、卡片 DOM identity與畫面。
+- **2026-11-22 調查當時的候選根因：Lease subscription lifecycle 與每日卡片資料參照綁定過緊**，可能暫停卡片管理權限／控制狀態；當時尚未證明這就是使用者觀察到的 2–3 次可見閃動，也未證明卡片 DOM remount。最小方案方向是分離 Lease subscription scope 與最新 active-day IDs。後續 S1／S2 進度及目前決策依本文件後續階段紀錄與決策索引，不以本段初始調查狀態作為現行判斷。
+- **2026-11-22 初始調查時的動態 UI 驗證阻塞（歷史）：** 當時 CDP DOM 操作及 UI test account signup/login 已恢復成功（`adr002-test-20261122@example.invalid`，loopback-only），但該身份處於個人帳本模式，尚無可編輯的 ADR-002 專用 Trip／fixture；重用歷史 `v391-local-browser` 或修改既有 `v391-admin` 角色均不符合隔離要求。此阻塞僅描述初始 S1 調查輪；後續 S1／S2 階段另有其驗收紀錄，不可將此句解讀為目前 S2 動態驗收仍 BLOCKED。
 - 約 2.2 秒的保存觀察窗（隔離合成旅程）曾記錄：`tc_save_itinerary_days` 1 次、`tc_release_itinerary_trip_edit_lease` 1 次、`tc_list_itinerary_trip_edit_leases` 4 次、`/rest/v1/trips` 14 次、`other_info_items` 20 次、`tc_read_trip_participant_email_map` 98 次。此為近似觀察窗的請求計數，不完全隔離，不能直接證明每筆請求由卡片保存引起或造成閃動。
 - MutationObserver 累計 254 次 mutation，包含 DOM／屬性變化，並非純視覺閃動次數，不能作為閃動量化指標。
 - **2026-11-22 新增操作後請求放大觀察（詳見 ADR-002-S1 第六輪）：** 操作前約 10 分鐘窗口主追蹤 endpoints 計數為 0；手動新增一筆卡片後，短窗口（15:36:41–15:37:08 台灣時間）觀察到 participant-map RPC密集重複呼叫（來源分組 Android 190、Windows 54 POST；秒級分組有不同統計結果，待下一輪原始查詢核對），並伴隨 Trips／Other Info／Lease及Weather endpoints。這是請求放大實測證據，但未定位程式觸發鏈，亦未證明與視覺閃動直接因果；下一輪優先調查此觸發鏈。
@@ -114,6 +114,15 @@
 - **新增追蹤（ACTIVE）**：卡片時間排序跳動，包含到達09:00、離開時間未填自動補值後跳動；到達／離開時間均填寫的另一測試曾正常，但相同標準再次輸入仍跳動。跨瀏覽器亦觀察到排列交替。
 - 正式排序規則與目前 `sortItineraryItemsByTime()`／新增流程的比對及初步判斷，已記錄於 ADR-002-S1 日誌。未證實根因；下一步優先追查共享資料更新／陣列順序重新套用來源。此問題納入ADR-002後續，不另開ADR。
 
+## 2026-11-25：ADR-002 S1 狀態校正與完成邊界
+
+- 依 ADR-001 S4 2026-11-24 新增範圍結案紀錄，以及 V3.11.5 正式發布紀錄，校正本 ADR 及 S1 階段日誌。
+- S1 Preview／通知衍生機制拆除已完成並正式發布；管理卡片／編輯旅程雙入口互斥及管理權鎖定新增範圍亦已完成程式、自動化及使用者人工 UI 驗收，ADR-001 新增範圍 Exit PASS。不得再列為 S1 待辦。
+- 跨 Auth server-side Lease 拒絕已有 ADR-001 SR-11 雙 Auth session／JWT 自動化 API／DB 契約測試證據；不再提出額外跨 Auth 補測，不重開 ADR-001 Exit。
+- 新增卡片提示位移、卡片新增／刪除上下閃動及時間排序跳動均已有修正後使用者驗收證據；不得因早期待驗紀錄將其重新列為未完成。
+- Participant RPC N+1 及 Weather APP 重複請求只保存為歷史性能候選。未來處理時須重新取得最新正式 logs／指標及現行呼叫鏈，審查是否仍有改善必要，再提出明確範圍並取得使用者再次實作授權；本次不實作、不改 RPC／cache／Weather／Cron。
+- S1 剩餘判斷只有一項：確認目前是否還有實際可重現的卡片閃動／保存異常。若沒有新的未解現象，不為補齊歷史 instrumentation 而重新建立 fixture 或重做已驗收行為；若有，再提出最小隔離動態調查方案並先取得必要測試授權。
+
 ## 2026-11-24：新增 Accepted 範圍 — 登入身份切換與登出生命週期
 
 ### 決策狀態與授權
@@ -156,4 +165,4 @@
 
 - **唯一直接續行入口：** [ADR-002-S2 登入身份切換與登出生命週期](ADR-002-S2-auth-workspace-lifecycle.md)。
 - 依 S2 Step 1～4 實作，依 S2-01～S2-14 驗收，另完成 targeted regression tests、typecheck／lint／build、`npm run verify:docs-links` 及 `git diff --check`。
-- 2026-11-24 本輪僅完成唯讀調查及文件定案，尚未修改程式、執行測試或動態重現；任何測試項目在取得實際證據前均不得標示 PASS。
+- 2026-11-24 本 ADR 初始調查輪僅完成唯讀調查及文件定案，當時尚未修改程式、執行測試或動態重現；此句只描述初始調查輪，不代表後續 S2 實作／驗收現況。S2 現行逐項狀態與整體 Exit 下一步，唯一以 [ADR-002-S2](ADR-002-S2-auth-workspace-lifecycle.md) 及 [決策總索引](../README.md) 為準。

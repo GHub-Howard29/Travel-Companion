@@ -53,30 +53,22 @@
 
 使用者於 2026-11-19 核准將 P0 卡片保存修正、P1 旅程級單一編輯權及 P3 提示簡化整合為同一架構，避免新增日後重複的卡片獨立驗證流程。使用者於 2026-11-24 另核准同一 TRIP 的「管理卡片」與「編輯旅程」共用 Trip Lease，並確認刪除旅程仍由編輯旅程入口及既有 `super_admin` 權限共同限制，不額外增加刪除專用 Lease／DB enforcement。上述決策持續有效，直到使用者明確核准修訂或取代；階段文件不得自行改寫本節決策。
 
-## 階段索引與目前進度
+## 實作結案與歷史執行紀錄
 
-2026-11-24 核准的「編輯旅程入口共用 Trip Lease」屬原 S4 Exit 後新增範圍；截至 2026-11-24，新增範圍已完成實作、自動化驗證及使用者人工 UI 驗收，新增範圍 Exit PASS。原 S1／S2／S3／S4 Exit PASS 仍保留其原始日期與範圍。
+**實作狀態：Completed（2026-11-24）。** 原 S1／S2／S3／S4 範圍均已 Exit PASS（S1／S2／S3：2026-11-21；S4：2026-11-22）；2026-11-24 核准的「編輯旅程入口共用 Trip Lease」新增範圍亦已完成程式實作、自動化驗證及使用者人工 UI 驗收，Exit PASS。
 
-`docs/decisions/README.md` 是此 ADR 狀態、當前階段、下一步與阻塞的唯一總索引；目前階段文件是階段工作進度及執行紀錄的唯一維護位置。階段詳細規格依工作需要載入，不得每次讀取本 ADR 就自動載入所有階段文件。
+**決策狀態仍為 Accepted，持續有效。** 實作結案及階段紀錄歸檔不代表決策退休、失效或被取代；未來若需變更，仍須依決策治理規則取得核准並修訂本 ADR。
 
-| 階段文件 | 內容 | 狀態 | 讀取時機 |
-|---|---|---|---|
-| [ADR-001-S1](ADR-001-S1-db-enforcement.md) | DB schema、Lease、version、Trigger、Save RPC、安全及資料庫驗證基準與詳細測試紀錄 | **S1 DB Exit PASS（2026-11-21）；SR-01～SR-11 DB slice已核對。** S3應用層Pending／Recovery不阻塞S1 DB Exit。 | DB／RPC／migration 工作時 |
-| [ADR-001-S2](ADR-001-S2-cloud-save-integration.md) | Cloud Save service／Repository 基礎契約、非 itinerary 保存隔離、RPC adapter／DB contract 基礎驗證 | **S2 Exit PASS（2026-11-21；依核准重新界定範圍核對）** | Cloud／Repository contract 工作時 |
-| [ADR-001-S3](ADR-001-S3-client-lock-pending.md) | App callers／Trip metadata-dayCount 分離、Trip-level Lease／可信 version client、Pending／Recovery／Conflict Save RPC 整合、旁路 closure | **原範圍 S3 Exit PASS（2026-11-21）；2026-11-24 核准新增編輯旅程 Lease 協調範圍，已完成實作與自動化驗證。** | 原範圍已結案；新增範圍依 S4 完成人工驗收 |
-| [ADR-001-S4](ADR-001-S4-acceptance.md) | 整合後驗收及退出條件（雙瀏覽器競爭UI已取消） | **原範圍 S4 Exit PASS／2026-11-22；2026-11-24 新增編輯旅程 Lease 協調範圍已完成實作、自動化及使用者人工驗收，Exit PASS。** | **S4 全部範圍結案（2026-11-24）** |
-| [文件 116](../../116_卡片編輯故障根因與旅程級編輯契約調查紀錄.md) | 根因證據、呼叫鏈調查、工程審查及原始／補充測試證據 | 調查證據來源；不維護階段進度 | 根因調查或需核對原始證據時 |
+S1～S4 階段執行與驗收紀錄已移至 `docs/decisions/history/`，僅供日後查閱，不再作為目前工作入口：
 
-### 階段治理
+| 歷史紀錄 | 範圍 |
+|---|---|
+| [S1 DB enforcement](../history/ADR-001-S1-db-enforcement.md) | DB schema、Lease、version、Trigger、Save RPC、安全及資料庫驗證 |
+| [S2 Cloud Save integration](../history/ADR-001-S2-cloud-save-integration.md) | Cloud Save service／Repository contract、RPC adapter 與 DB contract 驗證 |
+| [S3 Client lock／Pending／Recovery](../history/ADR-001-S3-client-lock-pending.md) | App 整合、Trip Lease、Pending／Recovery／Conflict 與旁路 closure |
+| [S4 Acceptance](../history/ADR-001-S4-acceptance.md) | 整合後驗收、Exit 條件及結案證據 |
+| [S4 Tool handoff](../history/ADR-001-S4-tool-handoff.md) | 已取消的雙瀏覽器驗收規則修訂及工具交接歷史 |
 
-1. 每次只執行 README 指定的當前階段；先讀本 ADR，再讀該階段文件及必要領域權威規格。
-2. 階段文件保存本階段規格、持續工作進度、每輪執行及測試結果、PASS／FAIL／BLOCKED、未完成項、退出條件與證據連結；它是階段執行紀錄的唯一維護位置。不要複製本 ADR 的 Accepted 決策或文件 116 的根因調查原文。
-3. 每次執行、驗證結果、阻塞或下一步變更時，更新該階段文件；同步更新 `docs/decisions/README.md` 的精簡狀態／下一步。文件 116 僅在新增根因分析或原始證據時更新，不用來代替階段工作日誌；不可在未達退出條件時推進階段。
-4. 新的持續性架構決策或對 Accepted 內容的修改，仍須依決策治理規則取得核准並同步更新 ADR 主檔與 README；階段檔不能單方面改變決策。
-5. 原型 PASS、Stage exit PASS、程式完成、DB migration 套用與正式環境驗收是不同狀態，必須分開標示。
+[文件 116](../../116_卡片編輯故障根因與旅程級編輯契約調查紀錄.md) 仍保留根因證據、呼叫鏈調查及原始／補充測試資料；不承擔 ADR 階段進度維護。
 
-## Stage 1 驗證狀態
-
-**S1 DB Exit PASS（2026-11-21），目前進入 S2 Cloud Save 接線。** S1的DB enforcement／Lease／version／Save RPC必要驗證（SR-01～SR-11 DB slice）已完成追溯核對。SR-09／SR-12的App Pending／Recovery屬S3跨層工作，不阻塞S1 DB Exit；整體ADR-001仍須依S2、S3及S4完成整合與驗收。進度／下一步以 [決策總索引](../../decisions/README.md) 為準，詳細S1證據以 [S1階段文件](ADR-001-S1-db-enforcement.md)為準。文件116僅保留根因分析與原始調查證據。
-- [文件 112：區段預報 P0 技術驗證與實作前檢查紀錄](../../112_區段預報P0技術驗證與實作前檢查紀錄.md)：僅在涉及該領域時讀取；非 ADR-001 的替代決策來源。
-- 本 ADR 不授權正式程式實作、正式 DB 操作、commit、push 或 deployment；各步驟仍依使用者明確授權及專案操作規範執行。
+本 ADR 不授權未來程式實作、正式 DB 操作、commit、push 或 deployment；各步驟仍依使用者明確授權及專案操作規範執行。

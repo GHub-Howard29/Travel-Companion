@@ -76,7 +76,7 @@ assert.ok(
   "本機正式資料必須先保存，再寫入待同步狀態",
 );
 assert.match(saveFunctionBlock, /saveTripRecord\(storedRecord\)/);
-assert.match(saveFunctionBlock, /if \(!localSaved\) throw error/);
+assert.match(saveFunctionBlock, /return \{ localSaved: true, cloudSynced: false \}/);
 assert.match(saveFunctionBlock, /return \{ localSaved: false, cloudSynced: false \}/);
 assert.match(saveFunctionBlock, /return \{ localSaved: true, cloudSynced: true \}/);
 
