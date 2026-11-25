@@ -148,6 +148,7 @@ interface ItineraryPageProps {
   otherInfoFolders: Folder[];
   onOpenOtherInfoFolder: (folderId: string) => void;
   onManageModeChange?: (isManaging: boolean) => void;
+  onRegisterIdentityLeave?: (handler: (() => Promise<void>) | null) => void;
 }
 
 const ITINERARY_CONFLICT_FIELD_LABELS: Record<string, string> = {
@@ -450,6 +451,7 @@ export const ItineraryPage = ({
   otherInfoFolders,
   onOpenOtherInfoFolder,
   onManageModeChange,
+  onRegisterIdentityLeave,
 }: ItineraryPageProps) => {
   const [isManageMode, setIsManageMode] = useState(false);
   const [isOrderMode, setIsOrderMode] = useState(false);
@@ -1099,18 +1101,7 @@ export const ItineraryPage = ({
       setEditClaimError("保存作業尚未完成；目前保留行程編輯權，請稍後退出管理。");
       return;
     }
-    if (!(await releaseEditingLease())) return;
-    releaseFocusedControl();
-    setIsRemoteLeaseNoticeDismissed(true);
-    setReleasedWaitingCardIds([]);
-    setIsManageMode(false);
-    await resetForm();
-    resetTimeAdjustment();
-    resetOrder();
-    await releaseManagedTripLease();
-    closeCopyDialog();
-    setShowOrderSaved(false);
-    setCopySuccess(null);
+    await cleanupManagementSession(true);
   };
 
   const updateDraft = (patch: Partial<ItineraryItem>) => {
@@ -1362,6 +1353,41 @@ export const ItineraryPage = ({
       return false;
     }
   };
+
+  const cleanupManagementSession = async (requireLeaseRelease: boolean): Promise<boolean> => {
+    const cardLeaseReleased = await releaseEditingLease();
+    if (requireLeaseRelease && !cardLeaseReleased) return false;
+    releaseFocusedControl();
+    setIsRemoteLeaseNoticeDismissed(true);
+    setReleasedWaitingCardIds([]);
+    setIsManageMode(false);
+    await resetForm();
+    resetTimeAdjustment();
+    resetOrder();
+    const managedLeaseReleased = await releaseManagedTripLease();
+    setCopySource(null);
+    setCopyTargetDays([]);
+    setCopyArrivalTime("");
+    setCopyDepartureTime("");
+    setCopyTimeAlertErrors(null);
+    setCopySaveError(null);
+    setShowOrderSaved(false);
+    setCopySuccess(null);
+    return cardLeaseReleased && managedLeaseReleased;
+  };
+
+  const prepareIdentityLeaveRef = useRef<() => Promise<void>>(async () => undefined);
+  useEffect(() => {
+    prepareIdentityLeaveRef.current = async () => {
+      await cleanupManagementSession(false);
+    };
+  });
+
+  useEffect(() => {
+    const handler = () => prepareIdentityLeaveRef.current();
+    onRegisterIdentityLeave?.(handler);
+    return () => onRegisterIdentityLeave?.(null);
+  }, [onRegisterIdentityLeave]);
 
   const claimManagedTripLease = async (): Promise<boolean> => {
     if (!canManageItinerary || editLeaseStatus !== "ready" || hasRemoteLeaseOnActiveDay || !editLeaseApiRef.current) {

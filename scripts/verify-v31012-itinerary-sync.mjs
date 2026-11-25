@@ -416,7 +416,7 @@ assert.match(itinerary, /window\.addEventListener\("focus", renewWhenVisible\)/)
 assert.match(itinerary, /editLeaseVisibilityCleanupRef\.current/);
 assert.match(itinerary, /setInterval\(\s*\(\) => void renewLease\(\)/);
 // 遠端鎖定時編輯與刪除均 disabled，呈白底禁用游標，編輯文案不改變。
-assert.match(itinerary, /disabled=\{isClaimingEdit \|\| !hasCurrentEditLeaseList \|\| isCardLockedByOther\(event\.id\)\}/);
+assert.match(itinerary, /disabled=\{isClaimingEdit \|\| !hasCurrentEditLeaseList \|\| isCardLockedByOther\(\)\}/);
 assert.match(itinerary, /disabled=\{!canModifyCard\(event\.id\)\}/);
 assert.match(itinerary, /bg-white px-3 py-1\.5 text-xs font-bold text-rose-700 hover:bg-rose-50 disabled:cursor-not-allowed/);
 assert.match(itinerary, /: "編輯"/);

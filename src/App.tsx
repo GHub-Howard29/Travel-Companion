@@ -1,5 +1,5 @@
 // React 核心
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 // Supabase 雲端資料庫
 import { createClient } from "@supabase/supabase-js";
@@ -336,6 +336,8 @@ function ConfiguredApp({
     hasEditPermission,
     setHasEditPermission,
     expenseBookTripId,
+    setExpenseBookTripId,
+    waitForPendingItinerarySaves,
     selectedTripMeta,
     currentCurrencyCode,
     currentCurrencySymbol,
@@ -420,6 +422,9 @@ function ConfiguredApp({
   const tripEditorLeaseHeartbeatRef = useRef<number | null>(null);
   const tripEditorLeaseInFlightRef = useRef(false);
   const tripEditorLeaseTripIdRef = useRef<string | null>(null);
+  const tripEditorSubmitPromiseRef = useRef<Promise<void> | null>(null);
+  const itineraryIdentityLeaveRef = useRef<(() => Promise<void>) | null>(null);
+  const logoutInProgressRef = useRef(false);
   const [isSharedDataManageMode, setIsSharedDataManageMode] = useState(false);
   const [isVersionInfoOpen, setIsVersionInfoOpen] = useState(false);
   const [isLoginSafetyOpen, setIsLoginSafetyOpen] = useState(false);
@@ -438,6 +443,12 @@ function ConfiguredApp({
   >([]);
   const handleSharedDataManageModeChange = useCallback(
     (isManaging: boolean) => setIsSharedDataManageMode(isManaging),
+    [],
+  );
+  const registerItineraryIdentityLeave = useCallback(
+    (handler: (() => Promise<void>) | null) => {
+      itineraryIdentityLeaveRef.current = handler;
+    },
     [],
   );
 
@@ -667,29 +678,55 @@ function ConfiguredApp({
   };
 
   const handleLogout = async () => {
+    if (logoutInProgressRef.current) return;
+    logoutInProgressRef.current = true;
     const previousEmail = userEmail ?? "";
-    invalidateWorkspaceAccess();
-    await supabase.auth.signOut();
-    // V3.9.26: never leave cloud-backed private Trip data available to a
-    // different user of the same device after an explicit logout.
-    for (const record of readStoredTripRecords()) {
-      if (!record.cloudUpdatedAt) continue;
-      await clearSharedTripDataAfterAccessLoss(record.meta.id, previousEmail, true);
+
+    try {
+      await waitForPendingItinerarySaves();
+      await tripEditorSubmitPromiseRef.current;
+      await itineraryIdentityLeaveRef.current?.();
+      await closeTripEditor();
+      invalidateWorkspaceAccess();
+
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+
+      // Start privacy cleanup while the old identity is known, but do not let
+      // slow attachment/cover deletion keep the signed-out screen loading.
+      const cleanupTasks = readStoredTripRecords()
+        .filter((record) => Boolean(record.cloudUpdatedAt))
+        .map((record) =>
+          clearSharedTripDataAfterAccessLoss(record.meta.id, previousEmail, true)
+            .catch((error) => {
+              console.warn("Shared Trip privacy cleanup failed after logout", error);
+            }),
+        );
+
+      setCurrentTrip(null);
+      setSelectedTripId("");
+      setTripOptions([]);
+      Object.keys(localStorage).forEach((key) => {
+        if (key.startsWith("auth_") || key.startsWith("admin_profile_")) {
+          localStorage.removeItem(key);
+        }
+      });
+      setUserId(null);
+      setUserEmail(null);
+      setAdminProfile(null);
+      setHasEditPermission(false);
+      setExpenseBookTripId("");
+      setCurrentScreen("itinerary");
+      setIsMenuOpen(false);
+      setIsLoading(false);
+      void Promise.allSettled(cleanupTasks);
+    } catch (error) {
+      console.error("Logout cleanup failed", error);
+      alert("登出前的保存或編輯權清理未能完成，請確認網路後重試。");
+    } finally {
+      setIsLoading(false);
+      logoutInProgressRef.current = false;
     }
-    setCurrentTrip(null);
-    setSelectedTripId("");
-    setTripOptions([]);
-    Object.keys(localStorage).forEach((key) => {
-      if (key.startsWith("auth_") || key.startsWith("admin_profile_")) {
-        localStorage.removeItem(key);
-      }
-    });
-    setUserId(null);
-    setUserEmail(null);
-    setAdminProfile(null);
-    setHasEditPermission(false);
-    setCurrentScreen("itinerary");
-    setIsMenuOpen(false);
   };
 
   const handlePersonalExpenseAliasSave = useCallback(
@@ -816,6 +853,19 @@ function ConfiguredApp({
     }
   }, [stopTripEditorLeaseHeartbeat, supabase]);
 
+  const previousWorkspaceUserIdRef = useRef(userId);
+  useLayoutEffect(() => {
+    if (previousWorkspaceUserIdRef.current === userId) return;
+    previousWorkspaceUserIdRef.current = userId;
+    if (logoutInProgressRef.current) return;
+    const itineraryLeave = itineraryIdentityLeaveRef.current?.();
+    void (async () => {
+      await closeTripEditor();
+      await itineraryLeave;
+    })().catch((error) => {
+      console.warn("Workspace identity transition cleanup failed; Lease expiry is fallback", error);
+    });
+  }, [closeTripEditor, userId]);
 
   useEffect(() => {
     if (!isTripEditorOpen || tripEditorMode !== "edit" || !tripEditorTargetTripId) return;
@@ -911,8 +961,9 @@ function ConfiguredApp({
       alert("無法取得旅程編輯權，請確認網路後重試。");
     }
   };
-  const handleTripEditorSubmit = async (input: TripEditorInput) => {
-    if (!canEditTripMaster) return;
+  const handleTripEditorSubmit = (input: TripEditorInput) => {
+    const submit = (async () => {
+    if (logoutInProgressRef.current || !canEditTripMaster) return;
     const editingTripId = tripEditorMode === "edit" ? tripEditorTargetTripId : null;
     if (editingTripId) {
       if (!isOnline || !navigator.onLine || !tripEditorLeaseTripIdRef.current || tripEditorLeaseTripIdRef.current !== editingTripId || tripEditorLeaseStatus !== "ready") {
@@ -981,6 +1032,15 @@ function ConfiguredApp({
       }
       setIsLoading(false);
     }
+    })();
+    tripEditorSubmitPromiseRef.current = submit;
+    const clearSubmitLock = () => {
+      if (tripEditorSubmitPromiseRef.current === submit) {
+        tripEditorSubmitPromiseRef.current = null;
+      }
+    };
+    void submit.then(clearSubmitLock, clearSubmitLock);
+    return submit;
   };
   const handleTripExcelCreate = async (
     workbook: ParsedTripExcel,
@@ -1707,16 +1767,20 @@ function ConfiguredApp({
                   setRequestedOtherInfoFolderId(folderId);
                   setCurrentScreen(screen.id);
                 }}
-                onSaveTripDetail={(trip) =>
-                  saveItineraryWithRevisionNotice(trip, {
+                onSaveTripDetail={(trip) => {
+                  if (logoutInProgressRef.current) {
+                    return Promise.resolve({ localSaved: false, cloudSynced: false });
+                  }
+                  return saveItineraryWithRevisionNotice(trip, {
                     canEdit: canEditTripMaster,
                     checkForRemoteTripChange,
                     save: saveItineraryTripDetail,
                     showVersionConflict: showTripVersionConflict,
                     isVersionConflict: (error) => error instanceof TripVersionConflictError,
-                  })
-                }
+                  });
+                }}
                 onManageModeChange={handleSharedDataManageModeChange}
+                onRegisterIdentityLeave={registerItineraryIdentityLeave}
               />
             )}
 

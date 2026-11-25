@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Session, SupabaseClient } from "@supabase/supabase-js";
 import {
   DEFAULT_TRIP_CURRENCY,
   type AdminProfile,
@@ -135,9 +135,14 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
   // 防止重連時較早開始的讀取，在較新的儲存後才回寫舊快照。
   const tripLoadRevisionRef = useRef(0);
   const initialCloudRecordsRef = useRef<Awaited<ReturnType<typeof getCloudTripRecordsStrict>> | null>(null);
-  const reconciliationPromiseRef = useRef<Promise<TripWorkspaceReconciliationResult> | null>(null);
+  const reconciliationPromiseRef = useRef<{
+    userId: string | null;
+    epoch: number;
+    promise: Promise<TripWorkspaceReconciliationResult>;
+  } | null>(null);
   const itinerarySavePromisesRef = useRef(new Map<string, Promise<{ localSaved: boolean; cloudSynced: boolean }>>());
   const selectedTripIdRef = useRef(selectedTripId);
+  const userIdRef = useRef(userId);
   const userEmailRef = useRef(userEmail);
   const connectivityRecoveryPendingRef = useRef(startsOffline);
   const activeDayRef = useRef(activeDay);
@@ -152,8 +157,9 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
 
   useEffect(() => {
     selectedTripIdRef.current = selectedTripId;
+    userIdRef.current = userId;
     userEmailRef.current = userEmail;
-  }, [selectedTripId, userEmail]);
+  }, [selectedTripId, userId, userEmail]);
 
   useEffect(() => {
     activeDayRef.current = activeDay;
@@ -239,47 +245,56 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
   }, []);
 
   const refreshDefaultParticipantProfiles = useCallback(async () => {
+    const expectedEpoch = workspaceEpochRef.current;
     const profiles = await getAdminProfiles(supabase);
+    if (workspaceEpochRef.current !== expectedEpoch) return [];
     setDefaultParticipantProfiles(profiles);
     return profiles;
   }, [supabase]);
 
   useEffect(() => {
-    void supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
-        setUserId(session.user.id || null);
-        setUserEmail(session.user.email || null);
-        rememberAuthenticatedEmail(session.user.email);
-      } else if (navigator.onLine) {
-        setUserId(null);
-        setUserEmail(null);
-      }
-      setIsSessionReady(true);
-    }).catch((error) => {
-      console.warn("Failed to restore Supabase session", error);
-      setIsSessionReady(true);
-    });
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
+    let authEventReceived = false;
+    const applySession = (session: Session | null, event?: string) => {
+      const nextUserId = session?.user.id ?? null;
       const nextEmail = session?.user.email?.trim().toLowerCase() ?? null;
-      if (event === "SIGNED_OUT" || (userEmailRef.current && nextEmail !== userEmailRef.current)) {
+      if (userIdRef.current !== nextUserId) {
+        userIdRef.current = nextUserId;
         invalidateWorkspaceAccess();
+        setCurrentTrip(null);
+        setTripOptions([]);
+        setIsLoading(true);
+        setAdminProfile(null);
+        setHasEditPermission(false);
+        setHasAnyManagementRole(false);
+        setExpenseBookTripId("");
+        setCurrentTripEditorEmails([]);
+        setSuperAdminEmails([]);
       }
       userEmailRef.current = nextEmail;
       if (session) {
-        setUserId(session.user.id || null);
+        setUserId(nextUserId);
         setUserEmail(session.user.email || null);
         rememberAuthenticatedEmail(session.user.email);
       } else if (event === "SIGNED_OUT" || navigator.onLine) {
         setUserId(null);
         setUserEmail(null);
-        if (event === "SIGNED_OUT") {
-          localStorage.removeItem(LAST_AUTHENTICATED_EMAIL_KEY);
-        }
+        if (event === "SIGNED_OUT") localStorage.removeItem(LAST_AUTHENTICATED_EMAIL_KEY);
       }
       setIsSessionReady(true);
+    };
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      authEventReceived = true;
+      applySession(session, event);
+    });
+
+    void supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!authEventReceived) applySession(session);
+    }).catch((error) => {
+      console.warn("Failed to restore Supabase session", error);
+      if (!authEventReceived) setIsSessionReady(true);
     });
 
     return () => subscription.unsubscribe();
@@ -312,9 +327,16 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
     if (!isSessionReady || !navigator.onLine) {
       return { completed: false, selectedTripWasRemoved: false };
     }
-    if (reconciliationPromiseRef.current) return reconciliationPromiseRef.current;
-
     const expectedEpoch = workspaceEpochRef.current;
+    const expectedUserId = userIdRef.current;
+    const existingReconciliation = reconciliationPromiseRef.current;
+    if (
+      existingReconciliation &&
+      existingReconciliation.userId === expectedUserId &&
+      existingReconciliation.epoch === expectedEpoch
+    ) {
+      return existingReconciliation.promise;
+    }
     const reconciliation = (async (): Promise<TripWorkspaceReconciliationResult> => {
       const [cloudRecords, tombstones] = await Promise.all([
         getCloudTripRecordsStrict(supabase),
@@ -384,10 +406,16 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
 
       return { completed: true, selectedTripWasRemoved };
     })().finally(() => {
-      reconciliationPromiseRef.current = null;
+      if (reconciliationPromiseRef.current?.promise === reconciliation) {
+        reconciliationPromiseRef.current = null;
+      }
     });
 
-    reconciliationPromiseRef.current = reconciliation;
+    reconciliationPromiseRef.current = {
+      userId: expectedUserId,
+      epoch: expectedEpoch,
+      promise: reconciliation,
+    };
     return reconciliation;
   }, [getBasePath, isSessionReady, supabase]);
 
@@ -395,6 +423,13 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
     const result = await reconcileTripWorkspaceWithResult();
     return result.selectedTripWasRemoved;
   }, [reconcileTripWorkspaceWithResult]);
+
+  useEffect(() => {
+    if (!isSessionReady || !userId || !navigator.onLine) return;
+    void reconcileTripWorkspaceWithResult().catch((error) => {
+      console.warn("Workspace reconciliation after identity change failed", error);
+    });
+  }, [isSessionReady, userId, reconcileTripWorkspaceWithResult]);
 
   useEffect(() => {
     const recovery = startTripWorkspaceRecoveryLifecycle({
@@ -417,13 +452,18 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
     if (!isSessionReady) return;
 
     let isActive = true;
+    const expectedEpoch = workspaceEpochRef.current;
+    const expectedUserId = userId;
+    const isCurrentIdentity = () =>
+      workspaceEpochRef.current === expectedEpoch &&
+      userIdRef.current === expectedUserId;
 
     const loadStoredWorkspace = async () => {
       const storedRecords = readStoredTripRecords();
       const sortedTrips = storedRecords.length > 0
         ? sortTripsByDateDesc(storedRecords.map((record) => record.meta))
         : await getTripMetas(supabase, getBasePath(), []);
-      if (!isActive) return;
+      if (!isActive || !isCurrentIdentity()) return;
 
       setTripOptions(sortedTrips);
       if (sortedTrips.length > 0) {
@@ -446,6 +486,7 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
       try {
         await reconcileTripWorkspace();
       } catch (error) {
+        if (!isActive || !isCurrentIdentity()) return;
         console.warn("Initial cloud workspace load failed; using cached trip data", error);
         // A failed reconciliation can be caused by parsing, permissions, or
         // local storage errors; it does not prove that the browser is offline.
@@ -455,7 +496,7 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
     };
 
     void loadInitialWorkspace().catch((error) => {
-      if (!isActive) return;
+      if (!isActive || !isCurrentIdentity()) return;
       console.error(error);
       setIsLoading(false);
     });
@@ -463,10 +504,10 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
     return () => {
       isActive = false;
     };
-  }, [getBasePath, isSessionReady, reconcileTripWorkspace, supabase]);
+  }, [getBasePath, isSessionReady, reconcileTripWorkspace, supabase, userId]);
 
   useEffect(() => {
-    if (!selectedTripId) return;
+    if (!selectedTripId || !selectedTripMeta) return;
 
     const loadTripAndAuthData = async () => {
       const expectedEpoch = workspaceEpochRef.current;
@@ -526,6 +567,7 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
         getTripEditorEmails(supabase, selectedTripId)
           .then((emails) => { if (workspaceEpochRef.current === expectedEpoch) setCurrentTripEditorEmails(emails); })
           .catch((error) => {
+            if (workspaceEpochRef.current !== expectedEpoch) return;
             console.warn(error);
             setCurrentTripEditorEmails([]);
           });
@@ -630,11 +672,13 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
         getSuperAdminEmails(supabase)
           .then((emails) => { if (workspaceEpochRef.current === expectedEpoch) setSuperAdminEmails(emails); })
           .catch((error) => {
+            if (workspaceEpochRef.current !== expectedEpoch) return;
             console.warn(error);
             setSuperAdminEmails([]);
           });
         refreshDefaultParticipantProfiles()
           .catch((error) => {
+            if (workspaceEpochRef.current !== expectedEpoch) return;
             console.warn(error);
             setDefaultParticipantProfiles([]);
           });
@@ -670,6 +714,7 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
     selectedTripMeta,
     supabase,
     userEmail,
+    userId,
   ]);
 
   const [itinerarySyncSnapshot, setItinerarySyncSnapshot] = useState(() => ({
@@ -1392,6 +1437,10 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
     selectedTripId,
   ]);
 
+  const waitForPendingItinerarySaves = useCallback(async (): Promise<void> => {
+    await Promise.allSettled(Array.from(itinerarySavePromisesRef.current.values()));
+  }, []);
+
   const reloadCurrentTrip = useCallback(async (preferCloud = false) => {
     if (!selectedTripId || !navigator.onLine) return;
 
@@ -1472,6 +1521,7 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
     refreshTripOptionsAndSelect,
     saveCurrentTripDetail,
     saveItineraryTripDetail,
+    waitForPendingItinerarySaves,
     saveCurrentTripDetailLocally,
     reloadCurrentTrip,
     reconcileTripWorkspace,

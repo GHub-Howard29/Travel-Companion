@@ -2,7 +2,7 @@
 
 > **工作狀態：ACCEPTED／Step 1–4 第一輪程式實作完成；S2-01～14 依各自驗收證據與 2026-11-25 校正後邊界判定：S2-01～14 全部 PASS。S2-10 不要求離線 Auth signOut；S2-13 不要求直接讀取 React hook 內部 state，費用簿行為證據沿用 S2-11。S2 整體 Exit 狀態仍須依階段總結條件確認。**
 >
-> 本文件是 S2 實作、逐項驗證與跨對話續行的唯一階段紀錄。新對話應依本文件「實作順序」直接執行，不需重新調查已列出的程式證據，也不得要求使用者再次核准本文件已明確授權的範圍。
+> 本文件是 S2 實作、逐項驗證與跨對話續行的唯一階段紀錄。實作順序供尚未完成的 Step 執行；Step 1–4 第一輪實作及 S2-01～14 逐項驗收現已完成。新對話應以第 9.4 節現行總表與文件末端最新紀錄確認狀態，直接處理整體 Exit 總結及尚缺的必要證據；不得依較早輪次的歷史 PENDING／BLOCKED 指示重跑已完成案例，也不得要求使用者再次核准本文件已明確授權的範圍。
 
 - **日期：** 2026-11-24
 - **所屬決策：** [ADR-002](ADR-002-card-save-screen-flicker.md)
@@ -225,7 +225,7 @@
 
 1. 先讀 `docs/decisions/README.md`。
 2. 讀 [ADR-002 主檔](ADR-002-card-save-screen-flicker.md) 的 S2 Accepted 範圍，再讀本文件。
-3. Step 1–4 已完成第一輪實作；接續時先讀第 9 節，執行尚未完成的 targeted regression、完整 build、文件驗證及 S2-01～S2-14 動態驗收，不要重做已通過檢查。
+3. Step 1–4 已完成第一輪實作；本文件後續第 9 節紀錄已完成 S2-01～S2-14 逐項驗收。接續工作不得重跑已 PASS 案例；目前依第 9.4 節確認整體 Exit 條件與工程驗證證據，僅補做尚未取得有效證據的必要檢查。
 4. 不得重新調查本文件第 3 節已列出的現況，也不得再次要求使用者核准已 Accepted 的實作範圍。
 5. 若實作時發現文件未涵蓋的重大安全風險、與 ADR-001 衝突或不可避免的範圍變更，才暫停受影響部分並記錄具體證據；其餘工作繼續。
 6. 每完成一個可驗證切片，更新本文件的實際變更／測試證據與狀態，再同步更新 `docs/decisions/README.md`。
@@ -310,18 +310,18 @@
 | S2-08 已送出卡片保存等待 | PASS（App UI／DB）— 卡片保存 RPC in-flight 期間登出等待；成功分支雲端保存完成，失敗分支 Pending 保留且未誤報同步成功，Lease 歸零 |
 | S2-09 已送出 Trip Editor submit 等待 | PASS（App UI／DB）— Trip Editor metadata PATCH in-flight 時登出等待 submit Promise；放行後更新成功、卡片數與 itinerary version 保持不變，Modal 關閉、signOut 完成、Lease 歸零 |
 | S2-10 離線退出管理／Lease expiry fallback | PASS — 第四輪已證實離線退出管理、停止續租、45 秒 TTL expiry，及另一有效 Session 透過 App UI 接管；Auth signOut 不屬此案例要求 |
-| S2-11 費用簿舊 ID 隔離 | PENDING — 尚未執行 Realtime／load 驗收 |
-| S2-12 附件清理延遲／失敗 | PENDING — 尚未執行延遲／失敗注入驗收 |
-| S2-13 登出後重新登入／身份隔離 | PASS — 第六輪已完成 A 同帳號 logout→relogin，Auth userId／Email、原始 Trip selection、App permission 與無殘留 Lease 均有證據；不同帳號 A→B 的 App／Auth／Workspace 切換及 B 個人帳本代號初始化亦已 PASS。費用簿舊 ID 不再啟動 load／Realtime／sync 的專項證據沿用 S2-11；不要求直接讀取 S2-13 當輪的 React hook 內部 state |
-| S2-14 日期切換退出管理回歸 | PENDING — 尚未執行 UI 回歸驗收 |
+| S2-11 費用簿舊 ID 隔離 | **PASS（App UI／Auth／實際 hook）** — 第五輪 7 項 `useExpenseBook` lifecycle assertions 全部通過：舊 Trip ID 查詢不增加、Realtime channel 移除、hook state 清空且無延遲 Load 重用舊 ID；`test:expense-realtime-lifecycle` 亦 PASS。 |
+| S2-12 附件清理延遲／失敗 | **PASS（App UI／Runtime）** — 第五輪注入一次性 900ms 延遲後 rejection；確認清理 probe started／failed、manifest／身份快取清除、Auth token=null、Trip cache=[]、Loading indicators=0。 |
+| S2-13 登出後重新登入／身份隔離 | **PASS（App UI／Auth／Workspace；第六輪）** — 同帳號 logout→relogin、A→B 不同帳號切換、Auth 身份、Trip selection、permission、個人帳本代號及 Lease 均有證據；費用簿舊 ID 行為沿用 S2-11 專項 hook 證據，不要求直接讀取 S2-13 當輪的 React hook 內部 state。 |
+| S2-14 日期切換退出管理回歸 | **PASS（App UI／DB；第六輪）** — 原始 A/B Fixture 的 D1→D2、D2→D1 均在切換後退出管理並釋放 Lease；空白 D2 可進入管理，A/B Lease 互斥及接管亦已驗證。 |
 
 - S2-01～04 的 PASS 是實際 `useTripWorkspace` hook 動態測試與真實本機 Auth／repository service 測試；hook 測試以 deferred mock Supabase 控制請求順序，不等於完整 App UI／正式資料庫端到端驗收。
 - App-level logout coordinator 的保存等待／Lease Release、卡片草稿與 Modal heartbeat 由 S2-05～09 覆蓋；S2-05～09 均已取得 App UI／DB 動態證據。S2-10 離線管理退出與 Lease expiry fallback 已由第四輪 App UI／DB 動態驗收 PASS；不得以 hook-level logout 結果替代。
-- fixture 使用全新 UUID 與 loopback Supabase；測試後已刪除兩個合成 Auth 使用者、兩筆角色、專用 Trip 及其 tombstone，並確認六張同步資料表與 local change clock 回到測試前基準。沒有操作既有帳號／旅程。
-- 本輪未連線正式 Supabase、未使用 TEST-1、未執行 migration／正式資料庫修復／部署。
-- 本輪未 commit／push；所有變更保留在目前工作樹供後續驗證。
+- fixture 使用全新 UUID 與 loopback Supabase；該輪測試後已刪除兩個合成 Auth 使用者、兩筆角色、專用 Trip 及其 tombstone，並確認六張同步資料表與 local change clock 回到當時測試前基準。沒有操作既有帳號／旅程。
+- 該輪未連線正式 Supabase、未使用 TEST-1、未執行 migration／正式資料庫修復／部署；歷史狀態以該輪紀錄為準。
+- 該輪未 commit／push；其後驗收進度見本文件後續日期紀錄，勿將此輪的下一步視為目前待辦。
 
-**下一步：** 接續 S2-05～07，使用隔離 fixture 與受控 localhost UI 驗證草稿／Lease 清理、管理排序狀態及 Trip Editor Modal heartbeat；再完成 S2-08～14 的保存等待、submit 等待、離線 fallback、費用簿 Realtime、附件清理、重新登入及日期切換回歸。S2 尚未 Exit PASS。
+**該輪當時下一步（歷史）：** 接續 S2-05～07；此項已由後續輪次完成，現行狀態以本節 9.4 總表及文件末端最新校正為準。
 
 
 ## 2026-11-25：交接續行與 S2 動態驗收環境確認
@@ -350,7 +350,7 @@
 - 動態 UI／Lease 驗收需要一次性 loopback identity、專用 Trip access／fixture、可控兩個 Session 及保存／提交延遲注入。現有本機資料沒有可直接使用且可由本階段 test account 編輯的專用 fixture；歷史帳號與既有 Trips 不得挪用。新增的 fixture provisioning 仍須遵循先前 ADR-002 記錄的明確隔離與 cleanup 邊界，不能以擴權既有帳號或直接修改其密碼代替。
 - 因此本輪不執行資料庫建立／刪除／角色授權、不操作任何現有旅程、不宣稱雲端 Lease release 或 S2 Exit PASS。後續若提供合適測試 fixture provisioning 路徑，應使用全新 UUID 資料、測試前後數量／ownership 基準核對及 finally cleanup，並將 UI 行為證據逐項記錄。
 
-### 下一步（保持既定範圍）
+### 當輪下一步（歷史基線；後續已完成）
 1. 準備一個可自動建立及完整清理的 loopback-only S2 test fixture，提供兩個不同 Auth Session、專用 trip_editor 權限及唯一測試 Trip；不得沿用上述既有帳號／旅程。
 2. 建立最小可驅動實際 hook／App 行為的測試入口（不是 source regex），以 deferred query／save／submit Promise 逐項驗 S2-01～04、08～09、11～13；若需新增可注入 seam，先維持最小範圍並不得改變正式產品行為。
 3. 使用受控 localhost UI 與上述 fixture 完成 S2-05～07、10、14 的 heartbeat／Lease／草稿／日期切換案例；明確區分 Release 成功與 offline expiry fallback。
@@ -384,7 +384,7 @@ Hook 測試共 10 項斷言全部 PASS。這是實際 hook 的動態測試，不
 - `npm run lint`：PASS，0 errors／0 warnings。
 - `npm run verify:docs-links`：PASS，156 份 Markdown／378 個本地目標。
 - `git diff --check`：PASS。
-- 本輪未更動產品程式碼，未執行 commit／push／deploy，未連線正式 Supabase、未使用 TEST-1。測試 fixture 已完整清除；下一步接續 S2-05～07，不需重新調查或重建本輪已驗證的基礎。
+- 本輪未更動產品程式碼，未執行 commit／push／deploy，未連線正式 Supabase、未使用 TEST-1。測試 fixture 已完整清除；**本輪當時的下一步是接續 S2-05～07，此歷史待辦已由後續輪次完成，不是現行工作。**
 
 ## 2026-11-25：S2-05～07 App UI／Lease 動態驗證進度
 
@@ -433,7 +433,7 @@ Hook 測試共 10 項斷言全部 PASS。這是實際 hook 的動態測試，不
 ### 驗收結論與下一步
 - S2-08 的成功與失敗兩條 in-flight 分支均已取得 App UI、Promise 等待及 loopback DB 證據，判定 PASS。
 - 成功分支確認登出不會早於已送出的卡片保存；失敗分支確認保存失敗後仍遵守既有 Pending 保留契約，登出可在 Promise 收斂後完成，沒有假成功。
-- S2-01～09 已有驗收證據，不重跑；下一步直接接續 **S2-10「離線登出與 expiry fallback」**。S2-10～14 仍待驗收，S2 尚未 Exit PASS。
+- **本輪當時進度（歷史）：** S2-01～09 已有驗收證據，不重跑；當時下一步接續 S2-10「離線登出與 expiry fallback」，S2-10～14 當時仍待驗收。此狀態已由後續第四至第八輪完成／校正；現行狀態以第 9.4 節總表及文件末端最新紀錄為準。
 - 本輪未修改產品程式碼／migration／正式資料庫，未連線正式 Supabase、未使用 TEST-1，未執行 commit／push／deploy；唯一臨時 DB trigger／function 已移除，fixture cleanup 與環境停止均已驗證。
 
 ## 2026-11-25：S2-09 Trip Editor submit in-flight 登出等待動態驗收
@@ -452,7 +452,7 @@ Hook 測試共 10 項斷言全部 PASS。這是實際 hook 的動態測試，不
 ### 驗收結論與下一步
 - S2-09 已證明 Trip Editor submit Promise 尚未收斂時，logout 不會先行 signOut 或釋放 Modal Lease；待 PATCH 完成後才完成 Modal 關閉與登出。測試值復原後，卡片數與 itinerary version 均保持不變，判定 PASS。
 - 本輪 S2-08 成功／失敗分支與 S2-09 均使用修正後的 Day Number Fixture；測試腳本只調整本機 Fixture seed／cleanup schema，未修改產品程式碼。
-- S2-01～09 已有驗收證據，不重跑；下一步直接接續 **S2-10「離線登出與 expiry fallback」**。S2-10～14 仍待驗收，S2 尚未 Exit PASS。
+- **本輪當時進度（歷史）：** S2-01～09 已有驗收證據，不重跑；當時下一步接續 S2-10「離線登出與 expiry fallback」，S2-10～14 當時仍待驗收。此狀態已由後續第四至第八輪完成／校正；現行狀態以第 9.4 節總表及文件末端最新紀錄為準。
 - 未連線正式 Supabase、未使用 TEST-1、未修改 migration／正式資料，未執行 commit／push／deploy；臨時 trigger／function 已移除，Fixture cleanup 與環境停止均已驗證。
 
 ## 2026-11-25：S2-10 離線管理退出與 Lease expiry 動態驗收（部分完成，第二輪）
@@ -541,9 +541,10 @@ Hook 測試共 10 項斷言全部 PASS。這是實際 hook 的動態測試，不
 
 ### 驗收結論與下一步
 - S2-12 的延遲封面快取失敗仍能完成登出及關閉 Loading，判定 PASS。
-- S2-11 維持 PARTIAL PASS；S2-13 PENDING；S2-14 BLOCKED（需可安全使用的至少兩天隔離 Fixture）。
+- **本輪當時狀態（歷史；已由第六輪後續驗收取代）：** S2-11 維持 PARTIAL PASS；S2-13 PENDING；S2-14 BLOCKED（當時需可安全使用的至少兩天隔離 Fixture）。
+- **本輪當時下一步（歷史；已由第六輪後續驗收取代）：** 建立兩日隔離 Fixture 驗證 S2-14，並完成 S2-13 同帳號重新登入及不同身份切換；此待辦已在後續輪次取得 PASS 證據，不再是目前工作。
 - 本輪未修改產品程式碼／migration／正式資料，未執行 fixture cleanup，未 commit／push／deploy；既有 worktree 未提交變更完整保留。
-- 後續建立全新 UUID 的兩日隔離 Fixture（不要改動目前 B 使用中的單日 Fixture）驗證 S2-14；S2-13 需由正常 UI 操作重新登入 A，同帳號重登後核對 trip list、selected trip、permission、expenseBook 與 Lease，再測不同使用者切換。
+- 後續建立全新 UUID 的兩日隔離 Fixture（不要改動目前 B 使用中的單日 Fixture）驗證 S2-14；S2-13 需由正常 UI 操作重新登入 A，同帳號重登後核對 trip list、selected trip、permission、expenseBook 與 Lease，再測不同使用者切換。**此為本輪當時的待辦紀錄，已由第六輪後續驗收完成，不代表現行待辦。**
 
 ## 2026-11-25：S2-13／14 原始 A/B Fixture 接續驗收（第六輪）
 
@@ -580,7 +581,7 @@ Hook 測試共 10 項斷言全部 PASS。這是實際 hook 的動態測試，不
 - 本輪沒有修改產品程式碼、migration、正式資料或原始 D1／D2 卡片內容；未改寫原始 Fixture 的權限設定、未重設任何既有帳號密碼。
 - 原始 A Session 已由使用者正常 UI 重新登入並保留；最後原始 Trip 的 Lease row 為 0。先前建立的另一筆兩日測試 Fixture（`adr002-s2-two-day-2a4cf411-da57-47d4-8a3e-58313355b3e5`）與獨立測試 Profile 是不同測試資源，不與本節原始 Trip 證據混用。該額外 Fixture 與兩個測試 Auth users 仍留在本機 DB；清理操作遭平台安全檢查阻擋，未執行刪除，亦未留下臨時清理腳本。其 manifest 暫存檔仍存在，後續需在允許的清理途徑中單獨處理。
 - 依 2026-11-25 本次驗收邊界修正：S2-10 PASS（離線退出管理、Lease 停止續租／expiry fallback、B App UI 接管）；S2-13 PASS（同帳號重新登入、A／B 身份切換及費用簿清理沿用 S2-11 hook lifecycle 證據）；S2-11、S2-12、S2-14 均保留既有 PASS。歷史第七輪「離線 Auth signOut NOT COVERED」及 hook state NOT PROVEN 如實保留為當時測試記錄，但不再構成現行驗收缺項。
-- **下一步：** S2-10 與 S2-13 無待補測試；不得為了補做已移除的額外證據形式要求而重跑案例。S2 其他項目依既有狀態處理；S2 尚未 Exit PASS。
+- **本輪當時下一步（歷史；後續第八輪完成驗收邊界校正）：** S2-10 與 S2-13 無待補測試；不得為了補做已移除的額外證據形式要求而重跑案例。當時 S2 整體 Exit 尚未 PASS；現行狀態及唯一下一步以文件末端最新校正為準。
 - 未執行 commit／push／deploy；既有 dirty worktree 全部保留。
 
 ## 2026-11-25：S2 最終測試收斂（第七輪；後續驗收邊界校正見本節最末）
@@ -626,3 +627,41 @@ Hook 測試共 10 項斷言全部 PASS。這是實際 hook 的動態測試，不
 - S2-13 不再安排 `expenseBookTripId` hook state 直接讀取，不建立新的測試 seam，不修復只為該額外讀取而使用的測試頁等待條件。
 - 第七輪 `S2-10 NOT COVERED` 與 `S2-13 NOT PROVEN` 均保留為當輪實際測試紀錄；這些記錄沒有被改寫成測試成功。校正的是它們不是原始 Accepted 驗收的必要項，因此不再阻擋兩項驗收 PASS。
 - 本輪只修正 ADR 與決策索引文件；未修改產品程式、測試程式、migration，未操作瀏覽器登入登出或資料庫，未 commit／push／deploy。
+
+## 2026-11-25：S2 現行狀態與歷史紀錄矛盾整理
+
+### 文件矛盾及處理
+- 第 9.4 節原驗收總表將 S2-11、S2-12、S2-14 留在 PENDING，但第五輪已分別取得費用簿 hook lifecycle、附件清理延遲失敗、日期切換 App UI／DB PASS 證據。已將總表校正為 S2-01～14 全部逐項 PASS，並保留第五／第六輪原始證據。
+- 第 9.4 節原「下一步」仍指向 S2-05～07；該工作已由後續輪次完成。已改為目前唯一下一步：核對 S2 整體 Exit 條件與必要工程驗證證據。
+- 文件第 4 節「接續實作順序」及開頭交接說明原先仍引導新對話重新執行 S2-01～14。已明確標示 Step 1–4 第一輪實作及逐項驗收均已完成；新對話依第 9.4 現行總表及文件末端最新紀錄接續，不得重跑已 PASS 案例。
+- 第 9.4 節前段的「下一步」與已完成輪次衝突，已標註為歷史輪次當時狀態，避免舊進度取代後續證據；逐輪日誌內的 PENDING／BLOCKED／NOT COVERED 保留原貌，因其是當時測試事實，不應回寫成當時已通過。
+- ADR-002 主檔末端原句「2026-11-24 本輪尚未修改程式／測試」容易被誤讀為目前狀態，已限定為初始調查輪的歷史描述，並指向 S2 階段文件作為現行依據。
+- `docs/decisions/README.md` 的 ADR-002 狀態、階段入口與下一步已同步：逐項 S2 PASS；目前僅待整體 Exit 總結。
+
+### 現行狀態（截至 2026-11-25 Exit 核對後）
+- S2 Step 1–4：第一輪程式實作完成。
+- S2-01～14：全部逐項 PASS；S2-10 不要求離線 Auth signOut；S2-13 的費用簿舊 ID 行為沿用 S2-11 hook lifecycle 證據。
+- S2 整體 Exit：**PASS**。階段規定的 targeted regression、前端／Node TypeScript、全專案 lint、完整 production build 及文件／diff 檢查均已取得本輪實際 PASS 證據；逐項動態驗收亦全數 PASS。
+- 歷史第七輪 `NOT COVERED`／`NOT PROVEN`、第五輪 `PENDING`／`BLOCKED` 均保留其歷史事實；已依原始 Accepted 驗收邊界校正，不構成現行缺項。
+- 本次完整 build 僅執行本機 production build 與其 postbuild checks；沒有 deploy、正式 DB 寫入或 Git commit／push。
+
+### Exit 核對證據（2026-11-25）
+| 檢查 | 結果 | 本輪證據 |
+|---|---|---|
+| `npm run verify:adr002-s2-auth-workspace-lifecycle` | PASS | S2 identity／workspace／logout 靜態 regression guard |
+| `npm run test:expense-realtime-lifecycle` | PASS | Realtime 事件、重連／恢復、focus／online／visibility、offline guard、cleanup |
+| `npm run test:trip-workspace-recovery-lifecycle` | PASS | Session Ready、offline guard、event trigger、in-flight dedupe、failure retention、success clearing、cleanup |
+| `npm run test:p0-pending-autosync-idempotency` | PASS | Pending auto-sync idempotency regression |
+| `npm exec tsc -- -p tsconfig.app.json --noEmit` | PASS | 前端 TypeScript |
+| `npm exec tsc -- -p tsconfig.node.json --noEmit` | PASS | Node／scripts TypeScript |
+| `npm run lint` | PASS | 全專案 ESLint，exit code 0 |
+| `npm run build` | PASS | 完整 verify chain、前後端 TypeScript、Vite production build、PWA precache、browser security、weather bundle；job `job-1795600896607-hq671g` exit code 0 |
+| `npm run verify:docs-links` | PASS | 156 份 Markdown、374 個本地目標 |
+| `git diff --check` | PASS | 無 whitespace／patch 格式錯誤 |
+
+- 執行環境：`TPEPC-TM7503-01`／`NICE-GREEN`；Node `C:\\nvm\\v22.23.2\\node.exe` v22.23.2；npm 10.9.8。
+- S2-01～14 既有逐項動態驗收證據沿用，不重跑；本輪僅補齊整體 Exit 工程檢查。
+- Git：`develop`，HEAD `59be5b137f3aea4161b1ea7a7629448ec2b2d551`，與 `origin/develop` ahead／behind 0／0；工作樹保留既有修改及新增檔案，未 stage／commit／push。
+
+### 唯一下一步
+S2 階段已 Exit PASS，無需再安排 S2-01～14 或工程驗證重跑。保留目前工作樹，等待使用者決定後續工作；Git commit／push 仍須明確指示。

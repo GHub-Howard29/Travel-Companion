@@ -1,18 +1,18 @@
 /** App 發布版本設定；須與 public/app-version.json 保持一致。 */
-export const APP_VERSION = "3.11.5";
+export const APP_VERSION = "3.11.6";
 
 /**
  * 最近一次已發布版本；此版本必須存在於 versionHistory.ts。
  * production build 會驗證這個規則，避免升版後遺漏版本歷史。
  */
-export const PREVIOUS_RELEASE_VERSION = "3.11.4";
+export const PREVIOUS_RELEASE_VERSION = "3.11.5";
 
-export const RELEASE_DATE = "2026-11-24";
+export const RELEASE_DATE = "2026-11-25";
 
 export const RELEASE_NOTES = [
-  "修正每日行程卡片編輯與保存的跨裝置競態，統一使用 Trip 層級編輯租約保護。",
-  "改善卡片管理與行程編輯的保存協調及狀態更新可靠性。",
-  "移除不再使用的行程變更預覽／Journal 流程，簡化相關提示與同步狀態處理。",
+  "修正登入身份切換後旅程清單未即時 reconciliation 的問題，並隔離舊身份的非同步結果。",
+  "修正登出期間 Workspace Loading、編輯 Lease heartbeat 與舊帳本識別的生命週期清理。",
+  "保護已送出的保存及雲端待同步資料，避免身份切換或登出不當中斷。",
 ];
 
 /** 目前版本發布時保存的更新政策；不隨執行中客戶端是否已達最低版本而改變。 */

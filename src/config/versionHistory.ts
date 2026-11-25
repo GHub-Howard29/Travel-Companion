@@ -14,6 +14,16 @@ export type VersionHistoryItem = {
 
 export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
+    version: "3.11.5",
+    date: "2026-11-24",
+    isMandatoryRelease: false,
+    notes: [
+      "修正每日行程卡片編輯與保存的跨裝置競態，統一使用 Trip 層級編輯租約保護。",
+      "改善卡片管理與行程編輯的保存協調及狀態更新可靠性。",
+      "移除不再使用的行程變更預覽／Journal 流程，簡化相關提示與同步狀態處理。",
+    ],
+  },
+  {
     version: "3.11.4",
     date: "2026-11-22",
     isMandatoryRelease: false,
