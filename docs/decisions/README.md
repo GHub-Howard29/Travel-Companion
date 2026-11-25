@@ -9,14 +9,14 @@
 | ID | 決策／工作 | 狀態 | 目前階段 | 下一步／阻塞 | 權威主檔 |
 |---|---|---|---|---|---|
 | [ADR-001](active/ADR-001-trip-daily-card-edit-lock-scope.md) | 每日詳細行程與編輯旅程共用 Trip Lease 的互斥編輯協調 | Accepted（決策持續有效）／Implementation Completed（2026-11-24） | **原 S1／S2／S3／S4 均 Exit PASS；2026-11-24 核准新增範圍亦完成實作、自動化驗證及使用者人工 UI 驗收，Exit PASS。** | **已結案，無待辦。實作結案不代表 Accepted 決策退休；如需修改，須先核准 ADR 修訂。歷史階段紀錄由 ADR-001 主檔連結至 `history/`。** | [ADR-001](active/ADR-001-trip-daily-card-edit-lock-scope.md) |
-| [ADR-002](active/ADR-002-card-save-screen-flicker.md) | 移除已淘汰的每日行程 Preview／通知／同步衍生機制，並追查卡片操作畫面上下閃動 | Accepted／S1 已完成發布範圍；S2 Step 1–4 第一輪實作完成；S2-01～04 hook-level 動態驗收 PASS；S2-05～14 待完成 | **S1：Preview 衍生機制拆除、主要卡片穩定性修正及 ADR-001 管理權／雙入口互斥新增範圍均已完成並隨 V3.11.5 正式發布。Participant RPC N+1、Weather APP 請求放大列為未來候選，不阻塞 S1。** **S2：登入身份切換與登出生命週期（2026-11-24 Accepted；2026-11-25 Step 1–4 第一輪實作完成）。2026-11-25 已建立可重複 loopback fixture／hook test harness，S2-01～04 動態 hook 驗證 PASS；真實本機雙 Auth Session 與正式 cloud service／Trip repository 驗證 PASS，fixture 已清理並還原同步資料基準。** | **S1 不再安排管理權／鎖定或跨 Auth 額外測試；若要結束原畫面根因調查，只先確認目前是否仍有實際可重現的未解現象。Participant／Weather 未來重新排程時必須重新取得最新數據、審查必要性並再次取得實作授權。S2 已完成身份／epoch Promise 隔離、已送出保存等待、共用 Lease 清理入口及登出 UI／費用簿收斂；靜態 regression、typecheck、全專案 ESLint、既有測試、完整 build、文件連結及 diff 驗證均 PASS。S2-01～04 的 hook-level 動態測試及真實本機雙 Session／repository 測試均 PASS，但不替代 App-level UI／Lease／保存驗收。下一步接續 S2-05～07：草稿／Lease 清理、管理排序狀態及 Trip Editor Modal heartbeat；之後完成 S2-08～14。S2 尚未 Exit PASS。** | [ADR-002](active/ADR-002-card-save-screen-flicker.md) |
+| [ADR-002](active/ADR-002-card-save-screen-flicker.md) | 移除已淘汰的每日行程 Preview／通知／同步衍生機制，並追查卡片操作畫面上下閃動 | Accepted／S1 已完成發布範圍；S2 Step 1–4 第一輪實作完成；S2-01～14 均 PASS（依 2026-11-25 校正後驗收邊界） | **S1：Preview 衍生機制拆除、主要卡片穩定性修正及 ADR-001 管理權／雙入口互斥新增範圍均已完成並隨 V3.11.5 正式發布。Participant RPC N+1、Weather APP 請求放大列為未來候選，不阻塞 S1。** **S2：登入身份切換與登出生命週期（2026-11-24 Accepted；2026-11-25 Step 1–4 第一輪實作完成）。S2-01～14 均依各案例原始目的與已取得證據判定 PASS。S2-10 驗收為離線退出管理／Lease expiry fallback／B App UI 接管，不要求離線 Auth signOut；S2-13 驗收以同／異帳號身份切換及新 Session 正確狀態為準，費用簿舊 ID 清理沿用 S2-11 hook lifecycle 證據，不要求直接讀取 React hook 內部 state。** | **S1 不再安排管理權／鎖定或跨 Auth 額外測試；Participant／Weather 未來重新排程時須重新取證並取得實作授權。S2-10、S2-13 的額外證據形式門檻已移除；S2-01～14 均 PASS。S2 各案例均 PASS；尚待依階段總結條件確認整體 Exit。** | [ADR-002](active/ADR-002-card-save-screen-flicker.md) |
 
 ## ADR-002 階段入口
 
 | 階段 | 文件 | 按需載入條件 |
 |---|---|---|
 | S1 Preview／通知衍生機制拆除與卡片穩定性（主要發布範圍已完成；僅保留未解現象存在性判斷） | [ADR-002-S1](active/ADR-002-S1-root-cause-investigation.md) | 主要可見問題及管理權新增範圍已完成並隨 V3.11.5 發布；僅在仍有實際重現異常時才提出最小動態調查。Participant／Weather 為未來重新取證及再次授權的候選，不阻塞 S1 |
-| **S2 登入身份切換與登出生命週期（ACCEPTED／Step 1–4 第一輪實作完成；S2-01～04 hook-level 動態驗收 PASS）** | [ADR-002-S2](active/ADR-002-S2-auth-workspace-lifecycle.md) | **新對話讀取 S2 第 9 節與 2026-11-25 最新驗證紀錄，直接接續 S2-05～07 草稿／Lease 清理及 Trip Editor Modal heartbeat；S2-01～04、已通過的 targeted regression、build 及文件檢查不需重跑。** |
+| **S2 登入身份切換與登出生命週期（ACCEPTED／Step 1–4 第一輪實作完成；S2-01～14 全部 PASS，依 2026-11-25 校正後驗收邊界）** | [ADR-002-S2](active/ADR-002-S2-auth-workspace-lifecycle.md) | **S2-10 離線退出管理／Lease expiry／B App UI 接管 PASS；不要求離線 Auth signOut。S2-13 同帳號重新登入、不同帳號切換及正確 Workspace／帳本狀態 PASS；費用簿舊 ID 清理沿用 S2-11 hook lifecycle 證據，不要求直接讀取內部 React hook state。S2-10 與 S2-13 均無待補測試，不得重跑已通過案例。** |
 
 ## 載入規則
 
