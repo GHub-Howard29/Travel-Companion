@@ -142,7 +142,7 @@
 ### 本機 UI 驗證安全邊界
 
 - `npm run regression:local:status` PASS：Supabase loopback `http://localhost:54321` ready、Auth/Vite/Edge HTTP 200、fixture env存在。
-- 唯讀查詢確認本機沒有 ADR-002／flicker 專用 Trip；存在歷史 `v391-local-browser-6240070a-86ce-4146-9908-6e2683a681f4`，但 `ADR-001-S4-tool-handoff.md` 明確要求不重用／不操作，`ADR-001-S4-acceptance.md` 亦記載交由使用者自行刪除，故本次排除。
+- 唯讀查詢確認本機沒有 ADR-002／flicker 專用 Trip；存在歷史 `v391-local-browser-6240070a-86ce-4146-9908-6e2683a681f4`，但 `docs/decisions/history/ADR-001-S4-tool-handoff.md` 明確要求不重用／不操作，`docs/decisions/history/ADR-001-S4-acceptance.md` 亦記載交由使用者自行刪除，故本次排除。
 - 現成 `regression:local:browser-bootstrap` 的 `prepareMode()` 會修改或建立 `.env.local`、管理員帳號／角色及 synthetic Trip；先前 S4 已判定其提升既有 `v391-admin@example.invalid` 為 Superadmin 不符合身份隔離要求。即使服務為 loopback，本次亦未執行該 bootstrap，避免未授權的環境／角色副作用。
 - 本機開啟的 DEV 瀏覽器只有未登入瀏覽模式及既有 static SEED 九州旅程，不是 ADR-002 隔離測試 session；未執行點擊、保存或其他資料變更。
 - **動態驗證 BLOCKED（授權／fixture）：** 目前沒有可合法使用的 ADR-002 專用登入 fixture；要驗證 DOM identity、effect setup/cleanup 次數與畫面閃動，需另行授權建立專用 loopback-only fixture，且不得更改既有 Superadmin 帳號／角色、不得操作歷史 synthetic Trip、不得使用 TEST-1／正式 DB。
