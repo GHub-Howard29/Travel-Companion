@@ -36,14 +36,18 @@ export const MAX_ATTACHMENT_BYTES = 1024 * 1024;
 // 壓縮後照片最長邊限制
 export const MAX_ATTACHMENT_EDGE = 1800;
 export const STATIC_SEED_TRIP_IDS = [
-  "free-travel-2026-01",
   "group-tour-2026-10",
 ] as const;
 
 export const isStaticSeedTripId = (tripId: string): boolean =>
   (STATIC_SEED_TRIP_IDS as readonly string[]).includes(tripId);
 
-// Static SEED Trip IDs are system-reserved and cannot be permanently deleted through normal Trip lifecycle actions.
-export const PROTECTED_SEED_TRIP_IDS = STATIC_SEED_TRIP_IDS;
+// Protected trip IDs cannot be permanently deleted through normal Trip lifecycle actions; this list is independent of Static Seed loading.
+// Okinawa now loads dynamically, but remains deletion-protected to match the server-side guard.
+export const PROTECTED_SEED_TRIP_IDS = [
+  "free-travel-2026-01",
+  ...STATIC_SEED_TRIP_IDS,
+] as const;
 
-export const isProtectedSeedTripId = isStaticSeedTripId;
+export const isProtectedSeedTripId = (tripId: string): boolean =>
+  PROTECTED_SEED_TRIP_IDS.some((protectedId) => protectedId === tripId);

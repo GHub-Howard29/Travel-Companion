@@ -51,59 +51,6 @@ const createOtherInfoItem = (
 });
 
 export const OTHER_INFO_DATA_BY_TRIP_ID: Record<string, OtherInfoTripData> = {
-  "free-travel-2026-01": {
-    folders: [],
-    items: [
-      createOtherInfoItem(
-        "free-travel-2026-01",
-        "other-info-transport",
-        "ft-transport-rental-car",
-        "OTS 租車取還車",
-        "取車：OTS 臨空豐崎營業所（那覇機場）\n取車時間：2026-01-23 14:00\n還車時間：2026-01-27 13:30\n車款：YARISCROSS\n提醒：準備台灣駕照、日文譯本、護照與預約資料，ETC 與保險內容取車時再次確認。",
-        1,
-      ),
-      createOtherInfoItem(
-        "free-travel-2026-01",
-        "other-info-hotels",
-        "ft-hotel-naha",
-        "那霸住宿",
-        "hotel aqua city naha\n用途：抵達沖繩後前幾晚住宿據點\n提醒：確認入住人數、停車方式、早餐與寄放行李規則。",
-        1,
-      ),
-      createOtherInfoItem(
-        "free-travel-2026-01",
-        "other-info-attractions",
-        "ft-attraction-makishi",
-        "牧志公設市場",
-        "適合抵達第一天輕鬆逛街與用餐。\n重點：市場、周邊小吃、國際通散步。\n提醒：若當天抵達較晚，可視體力縮短停留時間。",
-        1,
-      ),
-      createOtherInfoItem(
-        "free-travel-2026-01",
-        "other-info-food",
-        "ft-food-aw",
-        "A&W / Root Beer",
-        "沖繩特色速食，可安排在晚間或移動途中補給。\n提醒：Root Beer 風味特殊，適合當作沖繩體驗項目。",
-        1,
-      ),
-      createOtherInfoItem(
-        "free-travel-2026-01",
-        "other-info-shopping",
-        "ft-shopping-ashibinaa",
-        "ASHIBINAA Outlet",
-        "回程前可安排購物與補貨。\n提醒：預留停車、退稅與前往機場的緩衝時間。",
-        1,
-      ),
-      createOtherInfoItem(
-        "free-travel-2026-01",
-        "other-info-other",
-        "ft-other-navigation",
-        "導航與離線準備",
-        "出發前先儲存主要景點、飯店、租車店與機場地圖。\n建議：Google Maps 離線地圖、重要地址截圖、行程資料本機備份。",
-        1,
-      ),
-    ],
-  },
   "group-tour-2026-10": {
     folders: [],
     items: [

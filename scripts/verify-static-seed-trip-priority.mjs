@@ -4,11 +4,10 @@ import { readFile } from "node:fs/promises";
 import { isStaticSeedTripId, STATIC_SEED_TRIP_IDS } from "../src/constants/appConstants.ts";
 
 const expectedSeedIds = [
-  "free-travel-2026-01",
   "group-tour-2026-10",
 ];
 assert.deepEqual(STATIC_SEED_TRIP_IDS, expectedSeedIds);
-assert.equal(isStaticSeedTripId("free-travel-2026-01"), true);
+assert.equal(isStaticSeedTripId("free-travel-2026-01"), false);
 assert.equal(isStaticSeedTripId("group-tour-2026-10"), true);
 assert.equal(isStaticSeedTripId("trip-shikoku-1"), false);
 
