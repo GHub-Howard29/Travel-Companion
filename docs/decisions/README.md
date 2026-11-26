@@ -9,15 +9,23 @@
 | ID | 決策／工作 | 狀態 | 目前階段 | 下一步／阻塞 | 權威主檔 |
 |---|---|---|---|---|---|
 | [ADR-001](active/ADR-001-trip-daily-card-edit-lock-scope.md) | 每日詳細行程與編輯旅程共用 Trip Lease 的互斥編輯協調 | Accepted（決策持續有效）／Implementation Completed（2026-11-24） | **原 S1／S2／S3／S4 均 Exit PASS；2026-11-24 核准新增範圍亦完成實作、自動化驗證及使用者人工 UI 驗收，Exit PASS。** | **已結案，無待辦。實作結案不代表 Accepted 決策退休；如需修改，須先核准 ADR 修訂。歷史階段紀錄由 ADR-001 主檔連結至 `history/`。** | [ADR-001](active/ADR-001-trip-daily-card-edit-lock-scope.md) |
-| [ADR-002](active/ADR-002-card-save-screen-flicker.md) | 移除已淘汰的每日行程 Preview／通知／同步衍生機制，並追查卡片操作畫面上下閃動 | Accepted／S1 已完成發布範圍；S2 Step 1–4 第一輪實作完成；S2-01～14 全部逐項 PASS；**S2 整體 Exit PASS（2026-11-25）** | **S1：Preview 衍生機制拆除、主要卡片穩定性修正及 ADR-001 管理權／雙入口互斥新增範圍均已完成並隨 V3.11.5 正式發布。Participant RPC N+1、Weather APP 請求放大列為未來候選，不阻塞 S1。** **S2：登入身份切換與登出生命週期（2026-11-24 Accepted；2026-11-25 Step 1–4 第一輪實作完成）。S2-01～14 依現行驗收邊界及後續輪次證據全部 PASS；targeted regression、TypeScript、lint、完整 build、文件連結及 diff 檢查均 PASS，整體 Exit 已通過。歷史輪次 PENDING／BLOCKED 保留為歷史紀錄。** | **S1 不再安排管理權／鎖定或跨 Auth 額外測試；Participant／Weather 未來重新排程時須重新取證並取得實作授權。S2 已 Exit PASS，無待辦；不得重跑已 PASS 案例。Git commit／push 仍依使用者明確指示。** | [ADR-002](active/ADR-002-card-save-screen-flicker.md) |
+| [ADR-002](active/ADR-002-card-save-screen-flicker.md) | 移除已淘汰的每日行程 Preview／通知／同步衍生機制，並修復卡片保存／畫面穩定性與登入身份生命週期 | **Accepted（決策持續有效）／Implementation Completed（2026-11-25；2026-11-26 歸檔）** | **S1、S2 均 Exit PASS；S2-01～14 全數 PASS。S1／S2 階段執行紀錄與影片證據已移至 `history/`，原始輪次紀錄完整保留。** | **無現行待辦。Participant RPC N+1／Weather APP 重複請求僅列未來候選，須重新取證及另行核准；新問題以新證據啟動最小調查。歸檔不代表 Accepted 決策退休。** | [ADR-002](active/ADR-002-card-save-screen-flicker.md) |
+| [ADR-003](active/ADR-003-weather-interval-forecast.md) | 行程卡片時間區段天氣預報（Interval V1） | **Accepted／Implementation In Progress** | **Hourly pipeline、Interval cache／RLS／RPC／Lease／purge、APP／Cron 逐卡資格及前端摘要 metadata 已接通；目前進入 V1 必要收尾。** | **依序完成 A 最小資料保護驗證、B 條件式一次隔離 refresh smoke、C Android PWA 產品驗收；完成後進一般 RC。正式環境操作另行授權。** | [ADR-003](active/ADR-003-weather-interval-forecast.md) |
 | **[異常旅程資料修復](../09_待辦事項_TODO.md)** | **日本九州 Static Seed → 沖繩 Static→Dynamic** | **COMPLETED（2026-11-26）** | **九州及沖繩實機驗收全數通過：新增／刪除／編輯卡片、共用資料、私人資料、其他資料及帳本均正常；九州景點照片正常顯示。** | **已結案，無剩餘待驗項目。資料修正及文件均已同步 develop／main；四國相關正式旅程及 fixture 未觸碰。** | [TODO](../09_待辦事項_TODO.md) |
 
-## ADR-002 階段入口
+## ADR-002 歷史階段與證據紀錄
+
+| 紀錄 | 文件 | 狀態／用途 |
+|---|---|---|
+| S1 Preview／Journal 拆除與卡片穩定性 | [ADR-002-S1](history/ADR-002-S1-root-cause-investigation.md) | **已歸檔（2026-11-26）；Exit PASS。** 主要卡片穩定性修正及 Preview／Journal 拆除已隨 V3.11.5 發布；沒有現行 S1 待辦。 |
+| S2 登入身份切換與登出生命週期 | [ADR-002-S2](history/ADR-002-S2-auth-workspace-lifecycle.md) | **已歸檔（2026-11-26）；Exit PASS（2026-11-25）。** Step 1–4 完成，S2-01～14 全數 PASS；不重跑。 |
+| 新增／刪除畫面跳動影片分析 | [影片證據](history/ADR-002-video-analysis.md) | **已歸檔（2026-11-26）。** 保留影片抽幀、動態量測及程式因果鏈；不是現行待辦。 |
+
+## ADR-003 階段入口
 
 | 階段 | 文件 | 按需載入條件 |
 |---|---|---|
-| S1 Preview／通知衍生機制拆除與卡片穩定性（主要發布範圍已完成；僅保留未解現象存在性判斷） | [ADR-002-S1](active/ADR-002-S1-root-cause-investigation.md) | 主要可見問題及管理權新增範圍已完成並隨 V3.11.5 發布；僅在仍有實際重現異常時才提出最小動態調查。Participant／Weather 為未來重新取證及再次授權的候選，不阻塞 S1 |
-| **S2 登入身份切換與登出生命週期（ACCEPTED／Step 1–4 第一輪實作完成；S2-01～14 逐項 PASS；整體 Exit PASS，2026-11-25）** | [ADR-002-S2](active/ADR-002-S2-auth-workspace-lifecycle.md) | **S2-01～14 均依最新逐項驗收證據判定 PASS；targeted regression、TypeScript、全專案 lint、完整 build、文件連結及 diff 檢查亦 PASS。歷史輪次 PENDING／BLOCKED／NOT COVERED 保留為當時紀錄，不代表目前待辦。S2-10 不要求離線 Auth signOut；S2-13 費用簿舊 ID 清理沿用 S2-11 hook lifecycle 證據，不要求直接讀取內部 React hook state。** **S2 整體 Exit 已 PASS，無待辦；不得重跑已 PASS 案例。Git commit／push 依使用者明確指示。** |
+| Interval V1 必要整合收尾與產品驗收 | [ADR-003](active/ADR-003-weather-interval-forecast.md)／[執行證據](../112_區段預報P0技術驗證與實作前檢查紀錄.md) §7.4 | 只依 §7.4 A–C 接續：A 資料保護、B 條件式隔離 refresh、C Android PWA 驗收；不要重跑已 PASS 項目或擴大壓力／效能測試。 |
 
 ## 載入規則
 

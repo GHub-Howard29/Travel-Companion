@@ -1,9 +1,9 @@
 # ADR-002：移除已淘汰的每日行程預覽／同步衍生機制並修復保存更新行為
 
 - **ID：** ADR-002
-- **狀態：** Accepted／S1 已完成 Preview 衍生機制拆除及主要卡片穩定性修正；管理權／雙入口互斥新增範圍已由 ADR-001 完成驗收並隨 V3.11.5 正式發布。S1 僅保留是否仍需動態因果調查的判斷；Participant RPC N+1 與 Weather APP 重複請求為未來重新取證、審查及再次授權的性能候選，不是目前實作工作。S2 登入身份切換與登出生命週期已核准直接實作（2026-11-24），Step 1–4 第一輪實作完成，S2-01～14 逐項 PASS 且整體 Exit PASS（2026-11-25）；S2 階段紀錄詳見 [ADR-002-S2](ADR-002-S2-auth-workspace-lifecycle.md)。
+- **狀態：** Accepted（決策持續有效）／Implementation Completed（2026-11-25；歸檔整理 2026-11-26）。S1 的 Preview／Journal 衍生機制拆除、卡片穩定性修正與 ADR-001 管理權新增範圍均已完成並隨 V3.11.5 發布；S2 登入身份切換與登出生命週期 Step 1–4 已實作，S2-01～14 全部 PASS，整體 Exit PASS。S1／S2 執行紀錄已移至 `../history/`，本 ADR 保留 Accepted 決策，不代表決策退休。Participant RPC N+1 與 Weather APP 重複請求僅為未來性能候選，未授權實作；若有新證據，須重新取證並取得實作授權。
 - **建立日期：** 2026-11-22
-- **修訂日期：** 2026-11-25
+- **修訂日期：** 2026-11-26
 - **標題：** 以現行 develop 為基礎，依實際依賴證據拆除不再需要的預覽／通知／變更摘要及同步衍生機制，恢復符合目前決策的同步與保存行為
 
 ## 工作目標
@@ -82,16 +82,19 @@
 - 第十輪程式核對已定位全量 RPC burst 入口：`getCloudTripRecordsStrict()` 只由 `reconcileTripWorkspaceWithResult()` 呼叫；觸發入口目前確認為 session ready後 initial workspace load、pending connectivity recovery（初始 retry／online／focus／visible）、以及 App Update／Restart。指定Trip的 `refreshTripOptionsAndSelect()` 走 `getCloudTripRecord()`，不是全量 hydration。src內未找到 app_data_revision／Trip Realtime直接觸發全量 reconciliation 的呼叫鏈。
 - 尚未確認手機事件窗口的Windows reconciliation實際由哪個入口啟動；目前優先待核對 connectivity recovery pending／focus-visible retry，其次 App Update／Restart。
 
-## 階段導航
-- [ADR-002-S1 根因定位與歷史比較](ADR-002-S1-root-cause-investigation.md)：原 Preview／通知衍生機制與卡片畫面閃動工作線的持續追查／驗證日誌；保留其原有 ACTIVE 項目。
-- [ADR-002-S2 登入身份切換與登出生命週期](ADR-002-S2-auth-workspace-lifecycle.md)：2026-11-24 新增 Accepted 範圍；登入清單 reconciliation、登出 Loading、卡片管理／編輯旅程 Lease 清理、已送出保存與身份資料隔離。已核准直接實作，詳細證據、步驟及 S2-01～S2-14 驗收條件以 S2 文件為準。
+## 歷史階段與證據紀錄
+- [ADR-002-S1 根因定位與 Preview／通知機制拆除](../history/ADR-002-S1-root-cause-investigation.md)：已完成並歸檔。主要卡片穩定性與排序問題已修正，Preview／Journal 衍生機制拆除及 V3.11.5 發布驗收完成；無現行 S1 待續行項目。
+- [ADR-002-S2 登入身份切換與登出生命週期](../history/ADR-002-S2-auth-workspace-lifecycle.md)：已完成並歸檔。Step 1–4 實作完成；S2-01～14 全部 PASS，整體 Exit PASS（2026-11-25）。
+- [ADR-002 影片切片分析與動態證據](../history/ADR-002-video-analysis.md)：已歸檔的獨立證據附件，保留影片觀察、49.5 px 管理區位移與 Lease effect loading／ready 因果追蹤紀錄。
+
+**歸檔不改變決策效力：** 本 ADR 仍為 Accepted。新出現可重現的相關問題時，依新證據建立最小調查；Participant RPC N+1／Weather APP 重複請求不得直接沿用舊觀察展開實作。
 
 ## 本案完成條件
 1. 以可重現且可觀察的證據確認或排除主要候選根因：state 更新序列、卡片 identity/key、remount、列表／資料替換、loading／conditional rendering。
 2. 比較目前實際機制與歷史版本，確認「以前沒有閃動」的差異有 Git／程式證據支援，不以記憶或假設代替。
 3. 明確分離已確認因果、推論及仍未驗證項目。
 4. S1 原卡片閃動／排序追查工作仍依其階段紀錄及各自核准狀態執行；不得把本次新增 S2 的授權套用到 S1 尚未核准的其他修改。
-5. S2 登入身份切換與登出生命週期為 2026-11-24 新增 Accepted 範圍，已核准依 S2 階段文件直接實作及驗證；其具體邊界、步驟及驗收條件見 [ADR-002-S2](ADR-002-S2-auth-workspace-lifecycle.md)。
+5. S2 登入身份切換與登出生命週期為 2026-11-24 新增 Accepted 範圍，已核准依 S2 階段文件直接實作及驗證；其具體邊界、步驟及驗收條件見 [ADR-002-S2](../history/ADR-002-S2-auth-workspace-lifecycle.md)。
 
 ## 2026-11-23：S1根因調查結果與修正提案
 
@@ -105,7 +108,7 @@
 
 - 既有現象量測、viewport／scroll根因、Lease候選、歷史失敗與有效trace全部保留，不清除或覆寫。
 - 本案新增／刪除卡片上下閃動調查已轉為程式事件因果追蹤：操作handler／state與資料更新／React render-commit／DOM identity／layout-scroll-focus／Paint及network時序整合成trace，再經原始碼核對與受控重複對照確認根因。
-- 完整測試鏈及實作方案的細節、trace欄位與完成門檻以 [ADR-002-S1階段日誌](ADR-002-S1-root-cause-investigation.md) 最新2026-11-23修訂為準。舊測試計劃與證據保持歷史記錄。
+- 完整測試鏈及實作方案的細節、trace欄位與完成門檻以 [ADR-002-S1階段日誌](../history/ADR-002-S1-root-cause-investigation.md) 最新2026-11-23修訂為準。舊測試計劃與證據保持歷史記錄。
 - **狀態（2026-11-23 更新）：** S1 Preview／通知衍生機制拆除 slice 已完成並通過專責 verifier；Lease effect dependency 最小修正已實作，Build PASS，專用 loopback Trip 兩次保存／復原成功。新增／刪除操作的直接事件 trace、Lease effect setup／cleanup、status transition、React commit及 DOM identity 仍待量測，故尚未完成整體閃動根因驗證與 UI 驗收。下一步及測試門檻以 S1 階段日誌最新紀錄為準。Browser Use claim_tab socket timeout 不再作為唯一測試路徑；可評估已授權 Computer Use／替代 DOM instrumentation。commit／push／deploy 本輪以外的後續操作仍須另行授權。
 
 ## 2026-11-23：新增時間排列跳動與已解決提示位移項目
@@ -127,7 +130,7 @@
 
 ### 決策狀態與授權
 
-- **Accepted，已核准直接實作及必要隔離驗證。** 新對話依 [ADR-002-S2](ADR-002-S2-auth-workspace-lifecycle.md) 直接實作，不需重新調查已確認程式現況，也不需再次詢問本範圍是否授權。
+- **Accepted，已核准直接實作及必要隔離驗證。** 新對話依 [ADR-002-S2](../history/ADR-002-S2-auth-workspace-lifecycle.md) 直接實作，不需重新調查已確認程式現況，也不需再次詢問本範圍是否授權。
 - 本新增範圍獨立於 S1 原卡片畫面閃動／排序調查；不改寫 S1 原有狀態及未核准工作。
 - 詳細證據、實作順序、草稿／已送出保存界線及 S2-01～S2-14 驗收條件，以 S2 階段文件為唯一詳細規格。
 
@@ -163,7 +166,7 @@
 
 ### 實作與驗收入口
 
-- **唯一直接續行入口：** [ADR-002-S2 登入身份切換與登出生命週期](ADR-002-S2-auth-workspace-lifecycle.md)。
+- **唯一直接續行入口：** [ADR-002-S2 登入身份切換與登出生命週期](../history/ADR-002-S2-auth-workspace-lifecycle.md)。
 - 依 S2 Step 1～4 實作，依 S2-01～S2-14 驗收，另完成 targeted regression tests、typecheck／lint／build、`npm run verify:docs-links` 及 `git diff --check`。
-- 2026-11-24 本 ADR 初始調查輪僅完成唯讀調查及文件定案，當時尚未修改程式、執行測試或動態重現；此句只描述初始調查輪，不代表後續 S2 實作／驗收現況。S2 現行逐項狀態與整體 Exit 下一步，唯一以 [ADR-002-S2](ADR-002-S2-auth-workspace-lifecycle.md) 及 [決策總索引](../README.md) 為準。
+- 2026-11-24 本 ADR 初始調查輪僅完成唯讀調查及文件定案，當時尚未修改程式、執行測試或動態重現；此句只描述初始調查輪，不代表後續 S2 實作／驗收現況。S2 現行逐項狀態與整體 Exit 下一步，唯一以 [ADR-002-S2](../history/ADR-002-S2-auth-workspace-lifecycle.md) 及 [決策總索引](../README.md) 為準。
 

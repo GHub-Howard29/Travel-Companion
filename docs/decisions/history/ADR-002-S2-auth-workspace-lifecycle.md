@@ -1,3 +1,5 @@
+> **歸檔註記（2026-11-26）：** S2 執行紀錄已完成並移至 `docs/decisions/history/ADR-002-S2-auth-workspace-lifecycle.md`。S2 Step 1–4 實作完成；S2-01～14 全部 PASS，整體 Exit PASS（2026-11-25）。本記錄完整保留逐項驗收、歷史 PENDING／BLOCKED 輪次與 Exit 證據；不再有 S2 待續行項目，也不得重跑已 PASS 案例。ADR-002 的 Accepted 決策仍持續有效。
+
 # ADR-002-S2：登入身份切換、旅程清單 reconciliation 與登出生命週期
 
 > **工作狀態：ACCEPTED／Step 1–4 第一輪程式實作完成；S2-01～14 依各自驗收證據與 2026-11-25 校正後邊界判定：S2-01～14 全部 PASS。S2-10 不要求離線 Auth signOut；S2-13 不要求直接讀取 React hook 內部 state，費用簿行為證據沿用 S2-11。S2 整體 Exit 狀態仍須依階段總結條件確認。**
@@ -5,7 +7,7 @@
 > 本文件是 S2 實作、逐項驗證與跨對話續行的唯一階段紀錄。實作順序供尚未完成的 Step 執行；Step 1–4 第一輪實作及 S2-01～14 逐項驗收現已完成。新對話應以第 9.4 節現行總表與文件末端最新紀錄確認狀態，直接處理整體 Exit 總結及尚缺的必要證據；不得依較早輪次的歷史 PENDING／BLOCKED 指示重跑已完成案例，也不得要求使用者再次核准本文件已明確授權的範圍。
 
 - **日期：** 2026-11-24
-- **所屬決策：** [ADR-002](ADR-002-card-save-screen-flicker.md)
+- **所屬決策：** [ADR-002](../active/ADR-002-card-save-screen-flicker.md)
 - **基準分支／Commit：** `develop`／`4d4d31f522129e292913f6c5803d694c34c491e7`
 - **調查方式：** 程式碼唯讀檢查；未執行動態測試。
 
@@ -224,7 +226,7 @@
 新對話／新 Agent 必須：
 
 1. 先讀 `docs/decisions/README.md`。
-2. 讀 [ADR-002 主檔](ADR-002-card-save-screen-flicker.md) 的 S2 Accepted 範圍，再讀本文件。
+2. 讀 [ADR-002 主檔](../active/ADR-002-card-save-screen-flicker.md) 的 S2 Accepted 範圍，再讀本文件。
 3. Step 1–4 已完成第一輪實作；本文件後續第 9 節紀錄已完成 S2-01～S2-14 逐項驗收。接續工作不得重跑已 PASS 案例；目前依第 9.4 節確認整體 Exit 條件與工程驗證證據，僅補做尚未取得有效證據的必要檢查。
 4. 不得重新調查本文件第 3 節已列出的現況，也不得再次要求使用者核准已 Accepted 的實作範圍。
 5. 若實作時發現文件未涵蓋的重大安全風險、與 ADR-001 衝突或不可避免的範圍變更，才暫停受影響部分並記錄具體證據；其餘工作繼續。
