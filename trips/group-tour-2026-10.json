@@ -1,199 +1,1218 @@
 {
-  "id": "group-tour-2026-10",
-  "title": "英鈦日本九州極上五日",
-  "departureDate": "2026-10-03",
-  "isPublic": false,
-  "sidebarConfig": [
-    {"id": "itinerary", "title": "團體每日行程", "type": "itinerary"},
-    {"id": "checklist", "title": "共同檢查清單", "type": "checklist"},
-    {"id": "leader_info", "title": "領隊導遊聯絡資訊", "type": "text"},
-    {"id": "other_info", "title": "其他資訊", "type": "otherInfo"},
-    {"id": "expense", "title": "旅費記帳本", "type": "expense"}
-  ],
-  "content": {
-    "days": [1, 2, 3, 4, 5],
-    "custom_tab_1": {
-      "subtitle": "星宇航空豪華客機・北九州秋楓出遊",
-      "mainText": "去程航班：星宇航空 JX846 | 桃園機場 07:30 ➡️ 熊本機場 10:45\n回程航班：星宇航空 JX841 | 福岡機場 14:15 ➡️ 桃園機場 15:45\n團體叮嚀：請於出發當天 05:30 前抵達桃園機場指定櫃檯找領隊集合辦理登機。"
-    },
-    "checklistData": [
-      { "id": "gt-1", "category": "必備證件", "label": "護照正本（確認效期大於 6 個月）" },
-      { "id": "gt-2", "category": "必備證件", "label": "團體換匯日幣（準備個人自費/購物部分即可）" },
-      { "id": "gt-3", "category": "跟團專屬", "label": "給導遊領隊的每日小費（依旅行社規定準備）" },
-      { "id": "gt-4", "category": "隨身行李", "label": "舒適好走的球鞋（多個神社與峽谷步道需步行）" },
-      { "id": "gt-5", "category": "隨身行李", "label": "薄外套或輕便雨具（秋季阿蘇山區早晚溫差較大）" }
-    ],
-    "daysData": {
-      "1": [
-        {
-          "time": "05:30",
-          "title": "桃園國際機場集合",
-          "type": "交通",
-          "typeColor": "bg-emerald-50 text-emerald-700 border-emerald-200",
-          "desc": "於指定櫃檯集合，辦理團體登機與行李託運。搭乘星宇航空 JX846（07:30 起飛）。",
-          "location": "桃園國際機場"
-        },
-        {
-          "time": "10:45",
-          "title": "抵達熊本空港 ➡️ 前往熊本城",
-          "type": "交通",
-          "typeColor": "bg-emerald-50 text-emerald-700 border-emerald-200",
-          "desc": "專車迎賓出發，前往參觀名列日本三大名城之一的「熊本城」，特別登臨氣勢磅礡的黑色天守閣。",
-          "location": "熊本城"
-        },
-        {
-          "time": "13:30",
-          "title": "櫻之馬場‧城彩苑",
-          "type": "景點",
-          "typeColor": "bg-purple-50 text-purple-700 border-purple-200",
-          "desc": "漫步在重現江戶時代城下町風貌的復古老街，可自行品嚐各式熊本在地傳統點心與美食。",
-          "location": "櫻之馬場‧城彩苑"
-        },
-        {
-          "time": "15:00",
-          "title": "特別安排 ★ 熊本熊電鐵體驗",
-          "type": "景點",
-          "typeColor": "bg-purple-50 text-purple-700 border-purple-200",
-          "desc": "搭乘極具人氣、車廂外觀彩繪著滿滿萌樣營業部長的「熊本熊地方路面電車」。",
-          "location": "熊本熊電鐵"
-        },
-        {
-          "time": "18:00",
-          "title": "夜訪熊本上下通商店街 & 飯店",
-          "type": "景點",
-          "typeColor": "bg-purple-50 text-purple-700 border-purple-200",
-          "desc": "入住市區飯店後，可自由漫步全九州最大的拱廊商店街「下通、上通」，自由逛街購物與享用道地晚餐。",
-          "location": "熊本上、下通商店街"
-        }
-      ],
-      "2": [
-        {
-          "time": "09:30",
-          "title": "峽谷秘境～高千穗峽散策",
-          "type": "景點",
-          "typeColor": "bg-purple-50 text-purple-700 border-purple-200",
-          "desc": "漫步在神話之鄉的自然芬多精步道，欣賞由阿蘇火山噴發冷卻形成的壯麗柱狀節理斷崖。",
-          "location": "高千穗峽"
-        },
-        {
-          "time": "11:00",
-          "title": "日本瀑布百選～真名井瀑布",
-          "type": "景點",
-          "typeColor": "bg-purple-50 text-purple-700 border-purple-200",
-          "desc": "親眼見證從高達 17 公尺的高處傾瀉而下的絕美飛瀑，也是高千穗峽最經典的地標景致。",
-          "location": "真名井瀑布"
-        },
-        {
-          "time": "13:30",
-          "title": "天岩戶神社參拜",
-          "type": "景點",
-          "typeColor": "bg-purple-50 text-purple-700 border-purple-200",
-          "desc": "參拜充滿日本神話色彩的神社，遠眺天照大神曾經隱居的神祕洞窟（天岩戶）。",
-          "location": "天岩戶神社"
-        },
-        {
-          "time": "15:30",
-          "title": "夢幻異世界～上色見熊野座神社",
-          "type": "景點",
-          "typeColor": "bg-purple-50 text-purple-700 border-purple-200",
-          "desc": "拾級而上穿過宛如動漫、電影場景般的深綠色青苔石燈籠參道，走入隱密夢幻的神聖結界空間。",
-          "location": "上色見熊野座神社"
-        },
-        {
-          "time": "18:00",
-          "title": "抵達阿蘇溫泉區飯店",
-          "type": "住宿",
-          "typeColor": "bg-amber-50 text-amber-700 border-amber-200",
-          "desc": "入住大自然懷抱中的溫泉旅館，享用精緻會席料理，並體驗舒適溫泉徹底放鬆身心。",
-          "location": "阿蘇溫泉旅館"
-        }
-      ],
-      "3": [
-        {
-          "time": "09:30",
-          "title": "九州自然動物園～叢林巴士探險",
-          "type": "景點",
-          "typeColor": "bg-purple-50 text-purple-700 border-purple-200",
-          "desc": "搭乘特製專屬的獅子、大象造型叢林巴士出發，在開放園區內近距離親手餵食猛獸與草食動物！",
-          "location": "九州自然動物園 African Safari"
-        },
-        {
-          "time": "13:00",
-          "title": "由布院金鱗湖 ＆ 湯之坪街道散策",
-          "type": "景點",
-          "typeColor": "bg-purple-50 text-purple-700 border-purple-200",
-          "desc": "漫步於如夢似幻、半溫泉半冷水交互湧出的金鱗湖畔；隨後前往充滿歐風童話與文青小店的湯之坪街道自由探索。",
-          "location": "由布院"
-        },
-        {
-          "time": "16:00",
-          "title": "別府海地獄巡禮",
-          "type": "景點",
-          "typeColor": "bg-purple-50 text-purple-700 border-purple-200",
-          "desc": "參觀著名的別府地獄溫泉。海地獄因富含硫酸鐵，呈現如Tiffany藍一般的神祕澄澈蔚藍色，卻是高達 98 度的滾燙溫泉。",
-          "location": "別府海地獄"
-        },
-        {
-          "time": "18:00",
-          "title": "入住別府溫泉飯店",
-          "type": "住宿",
-          "typeColor": "bg-amber-50 text-amber-700 border-amber-200",
-          "desc": "入住全日本湧泉量第一的別府溫泉區，享用在地豐盛料理，今晚繼續享受極上湯泉溫養。",
-          "location": "別府溫泉飯店"
-        }
-      ],
-      "4": [
-        {
-          "time": "09:30",
-          "title": "SAPPORO 啤酒九州日田工廠見學",
-          "type": "景點",
-          "typeColor": "bg-purple-50 text-purple-700 border-purple-200",
-          "desc": "特別安排工廠導覽，深入瞭解知名日系啤酒的釀造與包裝製程，結束後提供新鮮出廠的美味啤酒試飲體驗。",
-          "location": "SAPPORO 啤酒日田工廠"
-        },
-        {
-          "time": "12:30",
-          "title": "太宰府天滿宮參拜",
-          "type": "景點",
-          "typeColor": "bg-purple-50 text-purple-700 border-purple-200",
-          "desc": "前往供奉日本學問之神菅原道真的總本宮參拜，祈求考運與順利。推薦在表參道購買現烤的「梅枝餅」品嚐。",
-          "location": "太宰府天滿宮"
-        },
-        {
-          "time": "15:00",
-          "title": "免稅店採購時間",
-          "type": "景點",
-          "typeColor": "bg-purple-50 text-purple-700 border-purple-200",
-          "desc": "停留約一小時。這裡提供豐富的日系健康保健品、美妝護膚及在地特色名產伴手禮，可輕鬆一次購足。",
-          "location": "福岡市內免稅店"
-        },
-        {
-          "time": "17:00",
-          "title": "夜訪天神中洲不夜城 ＆ 飯店入住",
-          "type": "景點",
-          "typeColor": "bg-purple-50 text-purple-700 border-purple-200",
-          "desc": "入住福岡市區飯店。傍晚可自行前往福岡最繁華的天神商圈購物，或沿著那珂川散步至「中洲屋台街」品嚐經典的博多豚骨拉麵宵夜。",
-          "location": "天神 / 中洲屋台"
-        }
-      ],
-      "5": [
-        {
-          "time": "11:30",
-          "title": "抵達福岡空港",
-          "type": "交通",
-          "typeColor": "bg-emerald-50 text-emerald-700 border-emerald-200",
-          "desc": "專車前往福岡國際機場，由領隊協助團體辦理劃位登機及行李託運手續，免稅店進行最後採買。",
-          "location": "福岡空港"
-        },
-        {
-          "time": "14:15",
-          "title": "搭機返台 ➡️ 抵達桃園國際機場",
-          "type": "交通",
-          "typeColor": "bg-emerald-50 text-emerald-700 border-emerald-200",
-          "desc": "搭乘星宇航空豪華客機 JX841，預計於台灣時間 15:45 抵達桃園機場，圓滿結束精彩的北九州極上五日遊！",
-          "location": "桃園國際機場"
-        }
-      ]
-    }
-  }
+    "id":  "group-tour-2026-10",
+    "title":  "英鈦日本九州極上五日",
+    "departureDate":  "2026-10-03",
+    "isPublic":  false,
+    "sidebarConfig":  [
+                          {
+                              "id":  "itinerary",
+                              "type":  "itinerary",
+                              "title":  "團體每日行程"
+                          },
+                          {
+                              "id":  "checklist",
+                              "type":  "checklist",
+                              "title":  "共同檢查清單"
+                          },
+                          {
+                              "id":  "trip_special_info",
+                              "type":  "otherInfo",
+                              "title":  "領隊導遊聯絡資訊"
+                          },
+                          {
+                              "id":  "privateChecklist",
+                              "type":  "privateChecklist",
+                              "title":  "私人確認清單"
+                          },
+                          {
+                              "id":  "other_info",
+                              "type":  "otherInfo",
+                              "title":  "其他資訊"
+                          },
+                          {
+                              "id":  "expense",
+                              "type":  "expense",
+                              "title":  "旅費記帳本"
+                          },
+                          {
+                              "id":  "exchange_rate",
+                              "type":  "exchangeRate",
+                              "title":  "外幣換算"
+                          }
+                      ],
+    "content":  {
+                    "mode":  "guided",
+                    "showLunarDate":  true,
+                    "days":  [
+                                 1,
+                                 2,
+                                 3,
+                                 4,
+                                 5
+                             ],
+                    "custom_tab_1":  {
+                                         "mainText":  "去程航班：星宇航空 JX846 | 桃園機場 07:30 ➡️ 熊本機場 10:45\n回程航班：星宇航空 JX841 | 福岡機場 14:15 ➡️ 桃園機場 15:45\n團體叮嚀：請於出發當天 05:30 前抵達桃園機場指定櫃檯找領隊集合辦理登機。",
+                                         "subtitle":  "星宇航空豪華客機・北九州秋楓出遊"
+                                     },
+                    "checklistData":  [
+                                          {
+                                              "id":  "shared_ms6cbj6i",
+                                              "label":  "Esim卡資訊下載",
+                                              "category":  "隨身行李",
+                                              "updatedAt":  "2026-10-01T16:25:27.389874+00:00"
+                                          },
+                                          {
+                                              "id":  "shared_ms6cghqs",
+                                              "label":  "盥洗用具(導遊說可以不用帶)",
+                                              "category":  "隨身行李",
+                                              "updatedAt":  "2026-10-01T16:25:27.477171+00:00"
+                                          },
+                                          {
+                                              "id":  "shared_mup91tz6",
+                                              "label":  "吹風機(導遊說可以不用帶)",
+                                              "category":  "隨身行李",
+                                              "updatedAt":  "2026-10-01T16:25:27.554388+00:00"
+                                          },
+                                          {
+                                              "id":  "gt-5",
+                                              "label":  "薄外套或輕便雨具（秋季阿蘇山區早晚溫差較大）",
+                                              "category":  "隨身行李",
+                                              "updatedAt":  "2026-10-01T16:25:27.639243+00:00"
+                                          },
+                                          {
+                                              "id":  "gt-4",
+                                              "label":  "舒適好走的球鞋（多個神社與峽谷步道需步行）",
+                                              "category":  "隨身行李",
+                                              "updatedAt":  "2026-10-01T16:25:27.731375+00:00"
+                                          },
+                                          {
+                                              "id":  "shared_mucufocb",
+                                              "label":  "柏佑-抹茶餅乾",
+                                              "category":  "伴手禮",
+                                              "updatedAt":  "2026-10-01T16:25:27.813526+00:00"
+                                          },
+                                          {
+                                              "id":  "shared_mucumne0",
+                                              "label":  "柏佑-抹茶小雞餅乾",
+                                              "category":  "伴手禮",
+                                              "updatedAt":  "2026-10-01T16:25:27.8939+00:00"
+                                          },
+                                          {
+                                              "id":  "shared_mucugd0x",
+                                              "label":  "湘芸-毛毛拖鞋",
+                                              "category":  "伴手禮",
+                                              "updatedAt":  "2026-10-01T16:25:27.979685+00:00"
+                                          },
+                                          {
+                                              "id":  "gt-1",
+                                              "label":  "護照正本（確認效期大於 6 個月）",
+                                              "category":  "必備證件",
+                                              "updatedAt":  "2026-10-01T16:25:28.06366+00:00"
+                                          },
+                                          {
+                                              "id":  "gt-2",
+                                              "label":  "團體換匯日幣（準備個人自費/購物部分即可）",
+                                              "category":  "必備證件",
+                                              "updatedAt":  "2026-10-01T16:25:28.146452+00:00"
+                                          },
+                                          {
+                                              "id":  "shared_ms6cdsot",
+                                              "label":  "確認導遊聯絡資料",
+                                              "category":  "跟團專屬",
+                                              "updatedAt":  "2026-10-01T16:25:28.233166+00:00"
+                                          },
+                                          {
+                                              "id":  "shared_mucuhmj9",
+                                              "label":  "湘芸-黑巧克力餅乾",
+                                              "category":  "伴手禮",
+                                              "updatedAt":  "2026-10-01T16:25:28.324537+00:00"
+                                          },
+                                          {
+                                              "id":  "shared_ms6ckuen",
+                                              "label":  "雨傘、保溫杯、拖鞋",
+                                              "category":  "隨身行李",
+                                              "updatedAt":  "2026-10-01T16:25:28.404932+00:00"
+                                          },
+                                          {
+                                              "id":  "shared_mup94ax7",
+                                              "label":  "每位旅客限託運一件23公斤內行李，長寬高合計不可超過158公分",
+                                              "category":  "隨身行李",
+                                              "updatedAt":  "2026-10-01T16:25:28.491743+00:00"
+                                          },
+                                          {
+                                              "id":  "shared_mup94rv1",
+                                              "label":  "每位旅客上機限一件個人物品(如背包)及一件手提行李(如登機箱)，各邊以23 x 36 x 56公分為上限，或長寬高總和尺寸不得超過115公分，限重7公斤。",
+                                              "category":  "隨身行李",
+                                              "updatedAt":  "2026-10-01T16:25:28.571042+00:00"
+                                          },
+                                          {
+                                              "id":  "shared_mup95zyd",
+                                              "label":  "隨身用購物袋",
+                                              "category":  "隨身行李",
+                                              "updatedAt":  "2026-10-01T16:25:28.658939+00:00"
+                                          },
+                                          {
+                                              "id":  "shared_mup98d16",
+                                              "label":  "個人藥品(感冒藥、腸胃藥、退燒藥、常備用藥、慢性病藥）",
+                                              "category":  "隨身行李",
+                                              "updatedAt":  "2026-10-01T16:25:28.737534+00:00"
+                                          },
+                                          {
+                                              "id":  "shared_mup98wgy",
+                                              "label":  "筆:一人一支",
+                                              "category":  "隨身行李",
+                                              "updatedAt":  "2026-10-01T16:25:28.818211+00:00"
+                                          },
+                                          {
+                                              "id":  "shared_mupqw1fy",
+                                              "label":  "雅芳、宜芊生日禮物",
+                                              "category":  "伴手禮",
+                                              "updatedAt":  "2026-10-01T16:25:28.889791+00:00"
+                                          },
+                                          {
+                                              "id":  "shared_mupqwm6a",
+                                              "label":  "Nicole伴手禮",
+                                              "category":  "伴手禮",
+                                              "updatedAt":  "2026-10-01T16:25:27.304548+00:00"
+                                          },
+                                          {
+                                              "id":  "shared_mupqx4x7",
+                                              "label":  "志如吹風機",
+                                              "category":  "伴手禮",
+                                              "updatedAt":  "2026-10-01T16:25:50.635Z"
+                                          }
+                                      ],
+                    "otherInfoFolders":  [
+                                             {
+                                                 "id":  "other-info-attractions",
+                                                 "order":  1,
+                                                 "title":  "景點",
+                                                 "tripId":  "group-tour-2026-10",
+                                                 "isSystem":  true,
+                                                 "parentId":  null,
+                                                 "createdAt":  "2026-09-30T14:03:05.223Z",
+                                                 "isVisible":  true,
+                                                 "updatedAt":  "2026-09-30T15:06:48.181Z"
+                                             },
+                                             {
+                                                 "id":  "other-info-flights",
+                                                 "order":  2,
+                                                 "title":  "機票",
+                                                 "tripId":  "group-tour-2026-10",
+                                                 "isSystem":  true,
+                                                 "parentId":  null,
+                                                 "createdAt":  "2026-09-30T14:03:05.223Z",
+                                                 "isVisible":  true,
+                                                 "updatedAt":  "2026-09-30T14:03:05.223Z"
+                                             },
+                                             {
+                                                 "id":  "other-info-hotels",
+                                                 "order":  3,
+                                                 "title":  "飯店",
+                                                 "tripId":  "group-tour-2026-10",
+                                                 "isSystem":  true,
+                                                 "parentId":  null,
+                                                 "createdAt":  "2026-09-30T14:03:05.223Z",
+                                                 "isVisible":  true,
+                                                 "updatedAt":  "2026-09-30T14:03:05.223Z"
+                                             },
+                                             {
+                                                 "id":  "other-info-transport",
+                                                 "order":  4,
+                                                 "title":  "交通",
+                                                 "tripId":  "group-tour-2026-10",
+                                                 "isSystem":  true,
+                                                 "parentId":  null,
+                                                 "createdAt":  "2026-09-30T14:03:05.223Z",
+                                                 "isVisible":  true,
+                                                 "updatedAt":  "2026-09-30T14:03:05.223Z"
+                                             },
+                                             {
+                                                 "id":  "other-info-tickets",
+                                                 "order":  5,
+                                                 "title":  "票券",
+                                                 "tripId":  "group-tour-2026-10",
+                                                 "isSystem":  true,
+                                                 "parentId":  null,
+                                                 "createdAt":  "2026-09-30T14:03:05.223Z",
+                                                 "isVisible":  true,
+                                                 "updatedAt":  "2026-09-30T14:03:05.223Z"
+                                             },
+                                             {
+                                                 "id":  "other-info-insurance",
+                                                 "order":  6,
+                                                 "title":  "保險",
+                                                 "tripId":  "group-tour-2026-10",
+                                                 "isSystem":  true,
+                                                 "parentId":  null,
+                                                 "createdAt":  "2026-09-30T14:03:05.223Z",
+                                                 "isVisible":  true,
+                                                 "updatedAt":  "2026-09-30T14:03:05.223Z"
+                                             },
+                                             {
+                                                 "id":  "other-info-visa",
+                                                 "order":  7,
+                                                 "title":  "天氣",
+                                                 "tripId":  "group-tour-2026-10",
+                                                 "isSystem":  true,
+                                                 "parentId":  null,
+                                                 "createdAt":  "2026-09-30T14:03:05.223Z",
+                                                 "isVisible":  true,
+                                                 "updatedAt":  "2026-09-30T14:05:12.399Z"
+                                             },
+                                             {
+                                                 "id":  "other-info-food",
+                                                 "order":  8,
+                                                 "title":  "美食",
+                                                 "tripId":  "group-tour-2026-10",
+                                                 "isSystem":  true,
+                                                 "parentId":  null,
+                                                 "createdAt":  "2026-09-30T14:03:05.223Z",
+                                                 "isVisible":  true,
+                                                 "updatedAt":  "2026-09-30T14:03:05.223Z"
+                                             },
+                                             {
+                                                 "id":  "other-info-shopping",
+                                                 "order":  9,
+                                                 "title":  "購物",
+                                                 "tripId":  "group-tour-2026-10",
+                                                 "isSystem":  true,
+                                                 "parentId":  null,
+                                                 "createdAt":  "2026-09-30T14:03:05.223Z",
+                                                 "isVisible":  true,
+                                                 "updatedAt":  "2026-09-30T14:03:05.223Z"
+                                             },
+                                             {
+                                                 "id":  "other-info-other",
+                                                 "order":  10,
+                                                 "title":  "其他",
+                                                 "tripId":  "group-tour-2026-10",
+                                                 "isSystem":  true,
+                                                 "parentId":  null,
+                                                 "createdAt":  "2026-09-30T14:03:05.223Z",
+                                                 "isVisible":  true,
+                                                 "updatedAt":  "2026-09-30T14:03:05.223Z"
+                                             },
+                                             {
+                                                 "id":  "6cf14ac3-d7ed-4940-af86-8b460666dc01",
+                                                 "order":  11,
+                                                 "title":  "eSIM",
+                                                 "tripId":  "group-tour-2026-10",
+                                                 "isSystem":  false,
+                                                 "parentId":  null,
+                                                 "createdAt":  "2026-10-01T04:24:48.926Z",
+                                                 "isVisible":  true,
+                                                 "updatedAt":  "2026-10-01T04:24:48.926Z"
+                                             },
+                                             {
+                                                 "id":  "b4706334-26b3-4d49-bcda-897600ff063f",
+                                                 "order":  12,
+                                                 "title":  "御朱印",
+                                                 "tripId":  "group-tour-2026-10",
+                                                 "isSystem":  false,
+                                                 "parentId":  null,
+                                                 "createdAt":  "2026-09-30T14:03:41.273Z",
+                                                 "isVisible":  true,
+                                                 "updatedAt":  "2026-09-30T14:03:41.273Z"
+                                             }
+                                         ],
+                    "daysData":  {
+                                     "1":  [
+                                               {
+                                                   "id":  "df63d2e2-ec51-449e-b7eb-1155ac4f3ad6",
+                                                   "desc":  "最晚出門開車時間",
+                                                   "time":  "04:00",
+                                                   "type":  "交通",
+                                                   "place":  {
+                                                                 "placeId":  "ChIJGfX5FQAhaDQRIdkl-0DH_nY"
+                                                             },
+                                                   "title":  "出門時間",
+                                                   "location":  "桃園機場 第三停車場",
+                                                   "typeColor":  "bg-emerald-50 text-emerald-700 border-emerald-200",
+                                                   "departureTime":  "04:00",
+                                                   "travelModeToNext":  "drive"
+                                               },
+                                               {
+                                                   "id":  "f081fa98-be2b-48c3-8cf6-1a816f6ba1fe",
+                                                   "desc":  "::travel-companion-rich-text-v1::{\"text\":\"05:30集合辦理團體登機與行李託運。搭乘星宇航空 JX846（07:30 起飛）。\",\"colors\":[{\"start\":0,\"end\":7,\"color\":\"#dc2626\"}]}",
+                                                   "time":  "05:30",
+                                                   "type":  "交通",
+                                                   "place":  {
+                                                                 "placeId":  "ChIJWR2yz8CfQjQRJpfLLB0FAoo"
+                                                             },
+                                                   "title":  "桃園機場第一航廈 星宇航空5 號櫃台集合",
+                                                   "location":  "桃園國際機場第一航廈",
+                                                   "typeColor":  "bg-emerald-50 text-emerald-700 border-emerald-200",
+                                                   "coverPhoto":  {
+                                                                      "mime":  "image/webp",
+                                                                      "size":  36740,
+                                                                      "width":  640,
+                                                                      "credit":  "https://www.flickr.com/photos/bryansjs/39856836973/",
+                                                                      "height":  480,
+                                                                      "source":  "wikimedia-commons",
+                                                                      "creator":  "bryan... from Taipei, Taiwan",
+                                                                      "license":  "CC BY-SA 2.0",
+                                                                      "modified":  true,
+                                                                      "fileTitle":  "File:Airport vehicles and ROC national flag board at Taoyuan Airport 20190115.jpg",
+                                                                      "licenseUrl":  "https://creativecommons.org/licenses/by-sa/2.0",
+                                                                      "selectedAt":  "2026-09-13T16:40:17.566Z",
+                                                                      "sourceSha1":  "eefa4fea3c83dfa82a42236f8fd75c68636a0123",
+                                                                      "storagePath":  "s_67726f75702d746f75722d323032362d3130/s_66303831666139382d626532622d343863332d386366362d316138313666366261316665/280a8145-a646-45ad-93a5-57dd5f8c4b78.webp",
+                                                                      "sourcePageUrl":  "https://commons.wikimedia.org/wiki/File:Airport_vehicles_and_ROC_national_flag_board_at_Taoyuan_Airport_20190115.jpg",
+                                                                      "sourceRevisionAt":  "2019-03-20T18:46:15Z"
+                                                                  },
+                                                   "travelKind":  "flight",
+                                                   "departureTime":  "07:30",
+                                                   "otherInfoFolderId":  "other-info-flights"
+                                               },
+                                               {
+                                                   "id":  "803f9e17-365a-40d1-8f2d-a0a95ec16458",
+                                                   "desc":  "::travel-companion-rich-text-v1::{\"text\":\"漫步在重現江戶時代城下町風貌的復古老街，可自行品嚐各式熊本在地傳統點心與美食。 \\n10/3「熊本城 太鼓・箏・茶の和み」\\n演出地點： 城彩苑內親水舞台／親交廣場區域\\n詳細節目時間表：\\n太鼓演奏： 10:30～ / 12:30～（日間時段）\\n戶外茶會（野点）： 16:00～\\n箏（日本箏）演奏： 17:00～（傍晚時段）\",\"colors\":[{\"start\":92,\"end\":119,\"color\":\"#dc2626\"},{\"start\":137,\"end\":159,\"color\":\"#dc2626\"}]}",
+                                                   "time":  "12:00",
+                                                   "type":  "景點",
+                                                   "place":  {
+                                                                 "placeId":  "ChIJVVWF5hL0QDURK6OuEjMkKjw"
+                                                             },
+                                                   "title":  "櫻之馬場‧城彩苑",
+                                                   "location":  "櫻之馬場‧城彩苑",
+                                                   "typeColor":  "bg-purple-50 text-purple-700 border-purple-200",
+                                                   "coverPhoto":  {
+                                                                      "mime":  "image/webp",
+                                                                      "size":  30200,
+                                                                      "width":  640,
+                                                                      "credit":  "https://web.archive.org/web/20161101145016/http://www.panoramio.com/photo/115770021",
+                                                                      "height":  174,
+                                                                      "source":  "wikimedia-commons",
+                                                                      "creator":  "z tanuki",
+                                                                      "license":  "CC BY 3.0",
+                                                                      "modified":  true,
+                                                                      "fileTitle":  "File:Sakuranobaba-johsaien , 桜の馬場城彩苑 - panoramio (2).jpg",
+                                                                      "licenseUrl":  "https://creativecommons.org/licenses/by/3.0",
+                                                                      "selectedAt":  "2026-09-12T16:51:49.348Z",
+                                                                      "sourceSha1":  "67c9fbe8d7f4c5bc31b52acb61f9510de2de5a9a",
+                                                                      "storagePath":  "s_67726f75702d746f75722d323032362d3130/s_38303366396531372d333635612d343064312d386632642d613061393565633136343538/18a589e6-1091-4574-b894-1f1df489915f.webp",
+                                                                      "sourcePageUrl":  "https://commons.wikimedia.org/wiki/File:Sakuranobaba-johsaien_,_%E6%A1%9C%E3%81%AE%E9%A6%AC%E5%A0%B4%E5%9F%8E%E5%BD%A9%E8%8B%91_-_panoramio_(2).jpg",
+                                                                      "sourceRevisionAt":  "2017-05-19T14:16:19Z"
+                                                                  },
+                                                   "travelToNext":  {
+                                                                        "mode":  "drive",
+                                                                        "expiresAt":  "2026-11-02T06:48:52.680Z",
+                                                                        "originKey":  "place:ChIJVVWF5hL0QDURK6OuEjMkKjw",
+                                                                        "queriedAt":  "2026-10-03T06:48:52.383Z",
+                                                                        "destinationKey":  "place:ChIJFRTd1w30QDURjZBg4UBaAQk",
+                                                                        "distanceMeters":  750,
+                                                                        "durationSeconds":  205,
+                                                                        "transitDaytimeFallback":  false
+                                                                    },
+                                                   "departureTime":  "13:30",
+                                                   "travelModeToNext":  "drive",
+                                                   "otherInfoFolderId":  "other-info-food"
+                                               },
+                                               {
+                                                   "id":  "3ec4773a-7ef3-4ca0-908b-6556b3cff001",
+                                                   "desc":  "::travel-companion-rich-text-v1::{\"text\":\"行程內沒有\\n星期六、09:00–17:00\\n這座神社就位在熊本城的東側石垣正下方，第一天下午你們參觀熊本城與櫻之馬場城彩苑時，走路只要 10 分鐘左右就能順道走過去。\\n這裡的御朱印和御守非常有特色：\\n多樣化的御朱印： 除了基本款之外，這裡經常推出非常精緻的期間限定「剪紙御朱印」，甚至還有推出正面繡有熊本城、背面繡有神社的專屬御朱印帳。\\n超吸睛的蕾絲御守： 這裡的「神使守（白狐）」和「稻荷守」是用透明感的蕾絲編織做的，超級可愛，在日本女生之間也是大爆紅的必買御守。\",\"colors\":[{\"start\":0,\"end\":5,\"color\":\"#dc2626\"}]}",
+                                                   "time":  "13:40",
+                                                   "type":  "景點",
+                                                   "place":  {
+                                                                 "placeId":  "ChIJFRTd1w30QDURjZBg4UBaAQk"
+                                                             },
+                                                   "title":  "熊本城稻荷神社",
+                                                   "location":  "熊本城稻荷神社",
+                                                   "typeColor":  "bg-purple-50 text-purple-700 border-purple-200",
+                                                   "travelToNext":  {
+                                                                        "mode":  "walk",
+                                                                        "expiresAt":  "2026-11-02T06:47:28.648Z",
+                                                                        "originKey":  "place:ChIJFRTd1w30QDURjZBg4UBaAQk",
+                                                                        "queriedAt":  "2026-10-03T06:47:28.281Z",
+                                                                        "destinationKey":  "place:ChIJWco6Ag70QDURMOTNdshmi14",
+                                                                        "distanceMeters":  794,
+                                                                        "durationSeconds":  707,
+                                                                        "transitDaytimeFallback":  false
+                                                                    },
+                                                   "departureTime":  "13:50",
+                                                   "travelModeToNext":  "walk",
+                                                   "otherInfoFolderId":  "other-info-other"
+                                               },
+                                               {
+                                                   "id":  "d9b56863-d85f-4012-9bba-16c642b33c01",
+                                                   "desc":  "::travel-companion-rich-text-v1::{\"text\":\"專車迎賓出發，前往參觀名列日本三大名城之一的「熊本城」，特別登臨氣勢磅礡的黑色天守閣。\\t\\n御城印位置： 熊本城天守閣或園區內販賣部。\\n看點： 雖然不是神社，但可以買到登城紀念的「御城印」（通常是黑底金字，印有加藤家與細川家的家徽）。\",\"colors\":[{\"start\":45,\"end\":66,\"color\":\"#dc2626\"}]}",
+                                                   "time":  "14:10",
+                                                   "type":  "景點",
+                                                   "place":  {
+                                                                 "placeId":  "ChIJWco6Ag70QDURMOTNdshmi14"
+                                                             },
+                                                   "title":  "抵達熊本空港 ➡️ 前往熊本城",
+                                                   "location":  "熊本城",
+                                                   "typeColor":  "bg-purple-50 text-purple-700 border-purple-200",
+                                                   "coverPhoto":  {
+                                                                      "mime":  "image/webp",
+                                                                      "size":  56360,
+                                                                      "width":  640,
+                                                                      "credit":  "Own work",
+                                                                      "height":  480,
+                                                                      "source":  "wikimedia-commons",
+                                                                      "creator":  "Hyppolyte de Saint-Rambert",
+                                                                      "license":  "CC BY 4.0",
+                                                                      "modified":  true,
+                                                                      "fileTitle":  "File:Kumamoto castle (Chuo-ku, Kumamoto) VLux5 hdsr kt14.jpg",
+                                                                      "licenseUrl":  "https://creativecommons.org/licenses/by/4.0",
+                                                                      "selectedAt":  "2026-09-13T16:17:01.660Z",
+                                                                      "sourceSha1":  "27e4db8ac6e8c3433e15d11fb9c4a1d0100da880",
+                                                                      "storagePath":  "s_67726f75702d746f75722d323032362d3130/s_64396235363836332d643835662d343031322d396262612d313663363432623333633031/cfa5dba1-aa60-4967-8770-199138d183e0.webp",
+                                                                      "sourcePageUrl":  "https://commons.wikimedia.org/wiki/File:Kumamoto_castle_(Chuo-ku,_Kumamoto)_VLux5_hdsr_kt14.jpg",
+                                                                      "sourceRevisionAt":  "2026-06-24T08:30:18Z"
+                                                                  },
+                                                   "travelToNext":  {
+                                                                        "mode":  "walk",
+                                                                        "expiresAt":  "2026-11-02T06:47:29.730Z",
+                                                                        "originKey":  "place:ChIJWco6Ag70QDURMOTNdshmi14",
+                                                                        "queriedAt":  "2026-10-03T06:47:29.497Z",
+                                                                        "destinationKey":  "place:ChIJWW5PHgD1QDUR7havx-pZHaM",
+                                                                        "distanceMeters":  2498,
+                                                                        "durationSeconds":  2074,
+                                                                        "transitDaytimeFallback":  false
+                                                                    },
+                                                   "departureTime":  "15:40",
+                                                   "travelModeToNext":  "walk"
+                                               },
+                                               {
+                                                   "id":  "c87a05b0-1a32-4a88-9db7-e9a5958a13cf",
+                                                   "desc":  "搭乘極具人氣、車廂外觀彩繪著滿滿萌樣營業部長的「熊本熊地方路面電車」。",
+                                                   "time":  "16:18",
+                                                   "type":  "景點",
+                                                   "place":  {
+                                                                 "placeId":  "ChIJWW5PHgD1QDUR7havx-pZHaM"
+                                                             },
+                                                   "title":  "特別安排 ★ 熊本熊電鐵體驗",
+                                                   "location":  "熊本熊 電車",
+                                                   "typeColor":  "bg-purple-50 text-purple-700 border-purple-200",
+                                                   "coverPhoto":  {
+                                                                      "mime":  "image/webp",
+                                                                      "size":  49808,
+                                                                      "width":  640,
+                                                                      "height":  640,
+                                                                      "source":  "user-upload",
+                                                                      "modified":  true,
+                                                                      "selectedAt":  "2026-09-26T15:42:50.080Z",
+                                                                      "storagePath":  "s_67726f75702d746f75722d323032362d3130/s_63383761303562302d316133322d346138382d396462372d653961353935386131336366/d4d6e411-cf6a-4259-8339-82d2216abb19.webp",
+                                                                      "transformation":  "blurred-background-resized-and-webp-transcoded"
+                                                                  },
+                                                   "travelToNext":  {
+                                                                        "mode":  "drive",
+                                                                        "expiresAt":  "2026-10-13T16:15:52.446Z",
+                                                                        "originKey":  "place:ChIJWW5PHgD1QDUR7havx-pZHaM",
+                                                                        "queriedAt":  "2026-09-13T16:15:52.578Z",
+                                                                        "destinationKey":  "place:ChIJwXor9wz0QDUR1U_sEZet4OE",
+                                                                        "distanceMeters":  2668,
+                                                                        "durationSeconds":  611,
+                                                                        "transitDaytimeFallback":  false
+                                                                    },
+                                                   "departureTime":  "16:48",
+                                                   "travelModeToNext":  "drive"
+                                               },
+                                               {
+                                                   "id":  "6a0e85f6-2f6e-4824-b9e9-73919b0bfddd",
+                                                   "desc":  "入住市區飯店後，可自由漫步全九州最大的拱廊商店街「下通、上通」，自由逛街購物與享用道地晚餐。",
+                                                   "time":  "18:00",
+                                                   "type":  "景點",
+                                                   "place":  {
+                                                                 "placeId":  "ChIJwXor9wz0QDUR1U_sEZet4OE"
+                                                             },
+                                                   "title":  "夜訪熊本上下通商店街 \u0026 飯店",
+                                                   "location":  "熊本上、下通商店街",
+                                                   "typeColor":  "bg-purple-50 text-purple-700 border-purple-200",
+                                                   "coverPhoto":  {
+                                                                      "mime":  "image/webp",
+                                                                      "size":  62972,
+                                                                      "width":  640,
+                                                                      "credit":  "Own work",
+                                                                      "height":  425,
+                                                                      "source":  "wikimedia-commons",
+                                                                      "creator":  "Asturio Cantabrio",
+                                                                      "license":  "CC BY-SA 4.0",
+                                                                      "modified":  true,
+                                                                      "fileTitle":  "File:Shimotori ac (12).jpg",
+                                                                      "licenseUrl":  "https://creativecommons.org/licenses/by-sa/4.0",
+                                                                      "selectedAt":  "2026-09-13T16:20:17.074Z",
+                                                                      "sourceSha1":  "50ad4b652c64fc9263b43c84759a04bb5e286600",
+                                                                      "storagePath":  "s_67726f75702d746f75722d323032362d3130/s_36613065383566362d326636652d343832342d623965392d373339313962306266646464/abfddcb0-bc3e-4d4e-874f-e9151cf44162.webp",
+                                                                      "sourcePageUrl":  "https://commons.wikimedia.org/wiki/File:Shimotori_ac_(12).jpg",
+                                                                      "sourceRevisionAt":  "2023-02-17T16:14:15Z"
+                                                                  },
+                                                   "travelToNext":  {
+                                                                        "mode":  "walk",
+                                                                        "expiresAt":  "2026-10-09T17:55:55.18+00:00",
+                                                                        "originKey":  "place:ChIJwXor9wz0QDUR1U_sEZet4OE",
+                                                                        "queriedAt":  "2026-09-13T16:13:57.134Z",
+                                                                        "destinationKey":  "place:ChIJmzfvMQ_0QDUROFnOR2wq8YE",
+                                                                        "distanceMeters":  727,
+                                                                        "durationSeconds":  614,
+                                                                        "transitDaytimeFallback":  false
+                                                                    },
+                                                   "departureTime":  "18:00",
+                                                   "travelModeToNext":  "walk",
+                                                   "otherInfoFolderId":  "other-info-attractions"
+                                               },
+                                               {
+                                                   "id":  "2e5c9f9e-df60-4d2e-b831-d6152b889c07",
+                                                   "desc":  "熊本城前方舟飯店509\n(全館有WIFI)",
+                                                   "time":  "19:00",
+                                                   "type":  "住宿",
+                                                   "place":  {
+                                                                 "placeId":  "ChIJmzfvMQ_0QDUROFnOR2wq8YE"
+                                                             },
+                                                   "title":  "熊本ARK",
+                                                   "location":  "熊本ARK",
+                                                   "typeColor":  "bg-amber-50 text-amber-700 border-amber-200",
+                                                   "coverPhoto":  {
+                                                                      "mime":  "image/webp",
+                                                                      "size":  63108,
+                                                                      "width":  640,
+                                                                      "height":  640,
+                                                                      "source":  "user-upload",
+                                                                      "modified":  true,
+                                                                      "selectedAt":  "2026-09-26T15:42:26.263Z",
+                                                                      "storagePath":  "s_67726f75702d746f75722d323032362d3130/s_32653563396639652d646636302d346432652d623833312d643631353262383839633037/0a0952c4-5826-4217-8f95-411f53dc3efa.webp",
+                                                                      "transformation":  "blurred-background-resized-and-webp-transcoded"
+                                                                  },
+                                                   "travelToNext":  {
+                                                                        "mode":  "walk",
+                                                                        "expiresAt":  "2026-10-29T09:57:02.972Z",
+                                                                        "originKey":  "place:ChIJmzfvMQ_0QDUROFnOR2wq8YE",
+                                                                        "queriedAt":  "2026-09-29T09:57:04.792Z",
+                                                                        "destinationKey":  "place:ChIJWco6Ag70QDURMOTNdshmi14",
+                                                                        "distanceMeters":  972,
+                                                                        "durationSeconds":  863,
+                                                                        "transitDaytimeFallback":  false
+                                                                    },
+                                                   "departureTime":  "19:30",
+                                                   "travelModeToNext":  "walk",
+                                                   "otherInfoFolderId":  "other-info-hotels"
+                                               },
+                                               {
+                                                   "id":  "2ae04f09-5970-4b9e-8017-80f5593bd2ee",
+                                                   "desc":  "熊本城「秋之熊本城祭」夜間特別開放\n剛好趕上 10/2～11/1 期間舉辦的「秋之熊本城祭（秋のくまもとお城まつり）」。\n10/3 當天夜間開放至 21:00（最後入場 20:00），天守閣與天守閣前廣場將有光雕投影、雷射光影與竹燈籠裝飾，呈現點燈狀態。\n熊本城特別公開區域（收費）\n若要進入天守閣前廣場、天守閣內部及觀賞夜間點燈（城あかり）等特別公開區域，需購買門票：\n高中生以上（成人）： 800 日圓\n晚間前往時，可先於 17:00 到城彩苑欣賞箏樂演奏，隨後步行進入熊本城",
+                                                   "time":  "20:00",
+                                                   "type":  "其他",
+                                                   "place":  {
+                                                                 "placeId":  "ChIJWco6Ag70QDURMOTNdshmi14"
+                                                             },
+                                                   "title":  "10/3（六）夜間限定特別景點",
+                                                   "location":  "熊本城",
+                                                   "typeColor":  "bg-slate-50 text-slate-700 border-slate-200",
+                                                   "departureTime":  "21:00",
+                                                   "otherInfoFolderId":  "other-info-food"
+                                               }
+                                           ],
+                                     "2":  [
+                                               {
+                                                   "id":  "2337f05a-bc49-4a2c-a3b3-52b79903b523",
+                                                   "desc":  "10樓早餐\n7：50集合",
+                                                   "time":  "08:00",
+                                                   "type":  "住宿",
+                                                   "place":  {
+                                                                 "placeId":  "ChIJmzfvMQ_0QDUROFnOR2wq8YE"
+                                                             },
+                                                   "title":  "熊本ARK",
+                                                   "location":  "熊本ARK",
+                                                   "typeColor":  "bg-amber-50 text-amber-700 border-amber-200",
+                                                   "travelToNext":  {
+                                                                        "mode":  "drive",
+                                                                        "expiresAt":  "2026-10-10T07:31:54.028Z",
+                                                                        "originKey":  "place:ChIJmzfvMQ_0QDUROFnOR2wq8YE",
+                                                                        "queriedAt":  "2026-09-10T07:31:54.126Z",
+                                                                        "destinationKey":  "place:ChIJLwml_t0sRzURix_JnSldeVg",
+                                                                        "distanceMeters":  76149,
+                                                                        "durationSeconds":  5753,
+                                                                        "transitDaytimeFallback":  false
+                                                                    },
+                                                   "departureTime":  "08:00",
+                                                   "travelModeToNext":  "drive"
+                                               },
+                                               {
+                                                   "id":  "a3d30573-039e-4bec-a60f-11d47c2ee893",
+                                                   "desc":  "漫步在神話之鄉的自然芬多精步道，欣賞由阿蘇火山噴發冷卻形成的壯麗柱狀節理斷崖。",
+                                                   "time":  "10:00",
+                                                   "type":  "景點",
+                                                   "place":  {
+                                                                 "placeId":  "ChIJLwml_t0sRzURix_JnSldeVg"
+                                                             },
+                                                   "title":  "峽谷秘境～高千穗峽散策",
+                                                   "location":  "高千穗峽",
+                                                   "typeColor":  "bg-purple-50 text-purple-700 border-purple-200",
+                                                   "coverPhoto":  {
+                                                                      "mime":  "image/webp",
+                                                                      "size":  54598,
+                                                                      "width":  427,
+                                                                      "credit":  "Takasunrise0921",
+                                                                      "height":  640,
+                                                                      "source":  "wikimedia-commons",
+                                                                      "creator":  "Takasunrise0921",
+                                                                      "license":  "CC BY 2.5",
+                                                                      "modified":  true,
+                                                                      "fileTitle":  "File:Takachiho-gorge.jpg",
+                                                                      "licenseUrl":  "https://creativecommons.org/licenses/by/2.5",
+                                                                      "selectedAt":  "2026-09-14T04:01:13.000Z",
+                                                                      "sourceSha1":  "ed0192aeccde2a60fb9e346ebb52336821bfe0d0",
+                                                                      "storagePath":  "s_67726f75702d746f75722d323032362d3130/s_61336433303537332d303339652d346265632d613630662d313164343763326565383933/3e93b158-973c-473e-a540-b471008233eb.webp",
+                                                                      "sourcePageUrl":  "https://commons.wikimedia.org/wiki/File:Takachiho-gorge.jpg",
+                                                                      "sourceRevisionAt":  "2006-10-05T13:18:19Z"
+                                                                  },
+                                                   "travelToNext":  {
+                                                                        "mode":  "walk",
+                                                                        "expiresAt":  "2026-10-10T03:07:28.013Z",
+                                                                        "originKey":  "place:ChIJLwml_t0sRzURix_JnSldeVg",
+                                                                        "queriedAt":  "2026-09-10T03:07:27.989Z",
+                                                                        "destinationKey":  "place:ChIJX5kg6N0sRzUR3EGZ-mf6Yds",
+                                                                        "distanceMeters":  189,
+                                                                        "durationSeconds":  156,
+                                                                        "transitDaytimeFallback":  false
+                                                                    },
+                                                   "departureTime":  "10:50",
+                                                   "travelModeToNext":  "walk"
+                                               },
+                                               {
+                                                   "id":  "b5de559c-b410-4053-bbac-a4206ea6881b",
+                                                   "desc":  "親眼見證從高達 17 公尺的高處傾瀉而下的絕美飛瀑，也是高千穗峽最經典的地標景致。",
+                                                   "time":  "11:00",
+                                                   "type":  "景點",
+                                                   "place":  {
+                                                                 "placeId":  "ChIJX5kg6N0sRzUR3EGZ-mf6Yds"
+                                                             },
+                                                   "title":  "日本瀑布百選～真名井瀑布",
+                                                   "location":  "真名井瀑布",
+                                                   "typeColor":  "bg-purple-50 text-purple-700 border-purple-200",
+                                                   "coverPhoto":  {
+                                                                      "mime":  "image/webp",
+                                                                      "size":  122390,
+                                                                      "width":  640,
+                                                                      "credit":  "Takachiho Gorge",
+                                                                      "height":  640,
+                                                                      "source":  "wikimedia-commons",
+                                                                      "creator":  "Raita Futo from Tokyo, Japan",
+                                                                      "license":  "CC BY 2.0",
+                                                                      "modified":  true,
+                                                                      "fileTitle":  "File:Takachiho Gorge (52132194587).jpg",
+                                                                      "licenseUrl":  "https://creativecommons.org/licenses/by/2.0",
+                                                                      "selectedAt":  "2026-10-01T16:49:36.051Z",
+                                                                      "sourceSha1":  "095103afbf9b35b290226bff90e66f4fea839558",
+                                                                      "storagePath":  "s_67726f75702d746f75722d323032362d3130/s_62356465353539632d623431302d343035332d626261632d613432303665613638383162/56b58802-d2d4-40cb-8183-a03f6c0a3df7.webp",
+                                                                      "sourcePageUrl":  "https://commons.wikimedia.org/wiki/File:Takachiho_Gorge_(52132194587).jpg",
+                                                                      "transformation":  "blurred-background-resized-and-webp-transcoded",
+                                                                      "sourceRevisionAt":  "2023-03-29T12:12:42Z"
+                                                                  },
+                                                   "travelToNext":  {
+                                                                        "mode":  "drive",
+                                                                        "expiresAt":  "2026-10-10T03:06:20.196Z",
+                                                                        "originKey":  "place:ChIJX5kg6N0sRzUR3EGZ-mf6Yds",
+                                                                        "queriedAt":  "2026-09-10T03:06:20.167Z",
+                                                                        "destinationKey":  "place:ChIJNcALc-gsRzUR-st4jmE03b4",
+                                                                        "distanceMeters":  1340,
+                                                                        "durationSeconds":  197,
+                                                                        "transitDaytimeFallback":  false
+                                                                    },
+                                                   "departureTime":  "11:30",
+                                                   "travelModeToNext":  "drive"
+                                               },
+                                               {
+                                                   "id":  "7b1037e9-ebbb-4523-b785-7b6251a61aa3",
+                                                   "desc":  "::travel-companion-rich-text-v1::{\"text\":\"行程內未安排，但是順路，希望可以安排參觀及收集御朱印\",\"colors\":[{\"start\":0,\"end\":26,\"color\":\"#7c3aed\"}]}",
+                                                   "time":  "12:00",
+                                                   "type":  "景點",
+                                                   "place":  {
+                                                                 "placeId":  "ChIJNcALc-gsRzUR-st4jmE03b4"
+                                                             },
+                                                   "title":  "高千穗神社",
+                                                   "location":  "高千穗神社",
+                                                   "typeColor":  "bg-purple-50 text-purple-700 border-purple-200",
+                                                   "coverPhoto":  {
+                                                                      "mime":  "image/webp",
+                                                                      "size":  102294,
+                                                                      "width":  640,
+                                                                      "credit":  "Own work",
+                                                                      "height":  480,
+                                                                      "source":  "wikimedia-commons",
+                                                                      "creator":  "Naokijp",
+                                                                      "license":  "CC BY-SA 4.0",
+                                                                      "modified":  true,
+                                                                      "fileTitle":  "File:Takachiho-jinja, Torii Gate 01.jpg",
+                                                                      "licenseUrl":  "https://creativecommons.org/licenses/by-sa/4.0",
+                                                                      "selectedAt":  "2026-09-14T04:26:27.005Z",
+                                                                      "sourceSha1":  "3366759700cb161054dbc7e7bbc50a8e0c135aa5",
+                                                                      "storagePath":  "s_67726f75702d746f75722d323032362d3130/s_37623130333765392d656262622d343532332d623738352d376236323531613631616133/8aef5f99-b422-4778-8da7-ba682ef1b5aa.webp",
+                                                                      "sourcePageUrl":  "https://commons.wikimedia.org/wiki/File:Takachiho-jinja,_Torii_Gate_01.jpg",
+                                                                      "sourceRevisionAt":  "2023-07-28T07:37:41Z"
+                                                                  },
+                                                   "travelToNext":  {
+                                                                        "mode":  "drive",
+                                                                        "expiresAt":  "2026-10-10T03:06:45.162Z",
+                                                                        "originKey":  "place:ChIJNcALc-gsRzUR-st4jmE03b4",
+                                                                        "queriedAt":  "2026-09-10T03:06:45.233Z",
+                                                                        "destinationKey":  "place:ChIJfROknsIrRzURpLyxKAE_j_8",
+                                                                        "distanceMeters":  7941,
+                                                                        "durationSeconds":  772,
+                                                                        "transitDaytimeFallback":  false
+                                                                    },
+                                                   "departureTime":  "12:30",
+                                                   "travelModeToNext":  "drive"
+                                               },
+                                               {
+                                                   "id":  "13a76c3f-de5e-44c6-80c4-9b42909073e0",
+                                                   "desc":  "::travel-companion-rich-text-v1::{\"text\":\"參拜充滿日本神話色彩的神社，遠眺天照大神曾經隱居的神祕洞窟（天岩戶）。\\n作為天照大神神話的發源地 ，這裡有提供「天岩戶神社」本身的御朱印，另外也可以在這裡一併詢問附近「天安河原」的御朱印 (「4+2」款御朱印)。\",\"colors\":[{\"start\":50,\"end\":68,\"color\":\"#dc2626\"},{\"start\":83,\"end\":105,\"color\":\"#dc2626\"}]}",
+                                                   "time":  "13:00",
+                                                   "type":  "景點",
+                                                   "place":  {
+                                                                 "placeId":  "ChIJfROknsIrRzURpLyxKAE_j_8"
+                                                             },
+                                                   "title":  "天岩戶神社參拜",
+                                                   "location":  "天岩戶神社",
+                                                   "typeColor":  "bg-purple-50 text-purple-700 border-purple-200",
+                                                   "coverPhoto":  {
+                                                                      "mime":  "image/webp",
+                                                                      "size":  62884,
+                                                                      "width":  340,
+                                                                      "credit":  "http://en.wikipedia.org/wiki/Image:AmanoiwatoTorii.jpg",
+                                                                      "height":  480,
+                                                                      "source":  "wikimedia-commons",
+                                                                      "creator":  "original uploader was Fg2 from english wikipedia",
+                                                                      "license":  "Public domain",
+                                                                      "modified":  true,
+                                                                      "fileTitle":  "File:Torii at Ama-no-Iwato Shrine, Takachiho, Miyazaki Prefecture.jpg",
+                                                                      "selectedAt":  "2026-09-14T04:26:44.999Z",
+                                                                      "sourceSha1":  "106c22762248082c4a26dbd9cb8658754a23c921",
+                                                                      "storagePath":  "s_67726f75702d746f75722d323032362d3130/s_31336137366333662d646535652d343463362d383063342d396234323930393037336530/050ef481-94f8-4348-b6ff-338375d0c025.webp",
+                                                                      "sourcePageUrl":  "https://commons.wikimedia.org/wiki/File:Torii_at_Ama-no-Iwato_Shrine,_Takachiho,_Miyazaki_Prefecture.jpg",
+                                                                      "sourceRevisionAt":  "2008-03-30T16:11:52Z"
+                                                                  },
+                                                   "travelToNext":  {
+                                                                        "mode":  "drive",
+                                                                        "expiresAt":  "2026-10-10T03:07:00.926Z",
+                                                                        "originKey":  "place:ChIJfROknsIrRzURpLyxKAE_j_8",
+                                                                        "queriedAt":  "2026-09-10T03:07:00.901Z",
+                                                                        "destinationKey":  "place:ChIJYaNe7szXQDURfseK99Yvd3U",
+                                                                        "distanceMeters":  40655,
+                                                                        "durationSeconds":  3049,
+                                                                        "transitDaytimeFallback":  false
+                                                                    },
+                                                   "departureTime":  "13:00",
+                                                   "travelModeToNext":  "drive"
+                                               },
+                                               {
+                                                   "id":  "3b0bb7ca-2f84-4543-96f2-ea2e14c2d052",
+                                                   "desc":  "::travel-companion-rich-text-v1::{\"text\":\"拾級而上穿過宛如動漫、電影場景般的深綠色青苔石燈籠參道，走入隱密夢幻的神聖結界空間。\\n這座以「異世界螢火之森」夢幻氛圍聞名的神社 ，由於平時可能是無人駐守的社務所，現場通常會提供「書置朱印」（事先寫好/印刷在紙上，讓旅客自行投入香油錢領取並貼在朱印帳上），去參拜時記得留意參道或社務所旁的告示。\",\"colors\":[{\"start\":90,\"end\":94,\"color\":\"#dc2626\"}]}",
+                                                   "time":  "14:00",
+                                                   "type":  "景點",
+                                                   "place":  {
+                                                                 "placeId":  "ChIJYaNe7szXQDURfseK99Yvd3U"
+                                                             },
+                                                   "title":  "夢幻異世界～上色見熊野座神社",
+                                                   "location":  "上色見熊野座神社",
+                                                   "typeColor":  "bg-purple-50 text-purple-700 border-purple-200",
+                                                   "coverPhoto":  {
+                                                                      "mime":  "image/webp",
+                                                                      "size":  64742,
+                                                                      "width":  427,
+                                                                      "credit":  "上色見熊野座神社",
+                                                                      "height":  640,
+                                                                      "source":  "wikimedia-commons",
+                                                                      "creator":  "Ann Lee",
+                                                                      "license":  "CC BY-SA 2.0",
+                                                                      "modified":  true,
+                                                                      "fileTitle":  "File:上色見熊野座神社 (34685910823).jpg",
+                                                                      "licenseUrl":  "https://creativecommons.org/licenses/by-sa/2.0",
+                                                                      "selectedAt":  "2026-09-14T04:27:08.254Z",
+                                                                      "sourceSha1":  "74eb6fe95157717118234dfccb10a7e6186e2ff1",
+                                                                      "storagePath":  "s_67726f75702d746f75722d323032362d3130/s_33623062623763612d326638342d343534332d393666322d656132653134633264303532/b40d09ae-4462-41b8-b961-77f8463a4fd0.webp",
+                                                                      "sourcePageUrl":  "https://commons.wikimedia.org/wiki/File:%E4%B8%8A%E8%89%B2%E8%A6%8B%E7%86%8A%E9%87%8E%E5%BA%A7%E7%A5%9E%E7%A4%BE_(34685910823).jpg",
+                                                                      "sourceRevisionAt":  "2020-03-01T04:55:06Z"
+                                                                  },
+                                                   "travelToNext":  {
+                                                                        "mode":  "drive",
+                                                                        "expiresAt":  "2026-10-10T03:07:12.254Z",
+                                                                        "originKey":  "place:ChIJYaNe7szXQDURfseK99Yvd3U",
+                                                                        "queriedAt":  "2026-09-10T03:07:12.247Z",
+                                                                        "destinationKey":  "place:ChIJ24F8qRwnQTURVQ3W09KUFg4",
+                                                                        "distanceMeters":  22456,
+                                                                        "durationSeconds":  1924,
+                                                                        "transitDaytimeFallback":  false
+                                                                    },
+                                                   "departureTime":  "14:00",
+                                                   "travelModeToNext":  "drive"
+                                               },
+                                               {
+                                                   "id":  "37be4fb1-5ded-43e7-b9f9-f84bcf614c8c",
+                                                   "desc":  "坐擁阿蘇山景緻的休閒溫泉飯店，步行 11 分鐘可至阿蘇卡德利動物樂園、14 分鐘可至阿蘇火車站。\n溫馨的客房採用木質裝飾元素，提供免費 Wi-Fi、衛星電視、迷你冰箱和泡茶器具。部分客房設有榻榻米地板、日式床墊、矮餐桌和/或起居區。雙層套房設有閣樓臥室。\n飯店提供 4 間餐廳、咖啡廳、植物園和足球場。SPA 設施包括室內泳池和三溫暖、2 間男女分開並設有室內及戶外溫泉池的公共澡堂。",
+                                                   "time":  "15:00",
+                                                   "type":  "住宿",
+                                                   "place":  {
+                                                                 "placeId":  "ChIJ24F8qRwnQTURVQ3W09KUFg4"
+                                                             },
+                                                   "title":  "龜之井阿蘇公園度假村",
+                                                   "location":  "龜之井阿蘇公園度假村",
+                                                   "typeColor":  "bg-amber-50 text-amber-700 border-amber-200",
+                                                   "departureTime":  "15:00",
+                                                   "travelModeToNext":  "drive",
+                                                   "otherInfoFolderId":  "other-info-hotels"
+                                               }
+                                           ],
+                                     "3":  [
+                                               {
+                                                   "id":  "6e953aa8-3d13-421d-bd7b-8450f97cb560",
+                                                   "desc":  "",
+                                                   "time":  "08:00",
+                                                   "type":  "住宿",
+                                                   "place":  {
+                                                                 "placeId":  "ChIJ24F8qRwnQTURVQ3W09KUFg4"
+                                                             },
+                                                   "title":  "龜之井阿蘇公園度假村",
+                                                   "location":  "龜之井阿蘇公園度假村",
+                                                   "typeColor":  "bg-amber-50 text-amber-700 border-amber-200",
+                                                   "travelToNext":  {
+                                                                        "mode":  "drive",
+                                                                        "expiresAt":  "2026-10-17T15:16:45.986Z",
+                                                                        "originKey":  "place:ChIJ24F8qRwnQTURVQ3W09KUFg4",
+                                                                        "queriedAt":  "2026-09-17T15:16:46.049Z",
+                                                                        "destinationKey":  "place:ChIJLyzRYCWoRjURzQqJ-wBenm8",
+                                                                        "distanceMeters":  84099,
+                                                                        "durationSeconds":  6031,
+                                                                        "transitDaytimeFallback":  false
+                                                                    },
+                                                   "departureTime":  "08:00",
+                                                   "travelModeToNext":  "drive"
+                                               },
+                                               {
+                                                   "id":  "7f184d4e-68c4-4ab9-b594-9fcecb72e35a",
+                                                   "desc":  "搭乘特製專屬的獅子、大象造型叢林巴士出發，在開放園區內近距離親手餵食猛獸與草食動物！\n\n註:叢林巴士為現場排隊搭乘，如因現場園區人數過多或停止販售，巴士券將無法安排搭乘餵食動物將改為搭乘一般巴士遊園參觀，並退1000 日幣/人",
+                                                   "time":  "10:00",
+                                                   "type":  "景點",
+                                                   "place":  {
+                                                                 "placeId":  "ChIJLyzRYCWoRjURzQqJ-wBenm8"
+                                                             },
+                                                   "title":  "九州自然動物園～叢林巴士探險",
+                                                   "location":  "九州自然動物園 African Safari",
+                                                   "typeColor":  "bg-purple-50 text-purple-700 border-purple-200",
+                                                   "coverPhoto":  {
+                                                                      "mime":  "image/webp",
+                                                                      "size":  53690,
+                                                                      "width":  640,
+                                                                      "credit":  "170222_3308",
+                                                                      "height":  640,
+                                                                      "source":  "wikimedia-commons",
+                                                                      "creator":  "Gordon Cheung from Hong Kong",
+                                                                      "license":  "CC BY 2.0",
+                                                                      "modified":  true,
+                                                                      "fileTitle":  "File:動物園バス (33405606922).jpg",
+                                                                      "licenseUrl":  "https://creativecommons.org/licenses/by/2.0",
+                                                                      "selectedAt":  "2026-09-26T16:09:46.240Z",
+                                                                      "sourceSha1":  "8f6e1e0dca0045d340bac0d0b6aaff041a0807b4",
+                                                                      "storagePath":  "s_67726f75702d746f75722d323032362d3130/s_37663138346434652d363863342d346162392d623539342d396663656362373265333561/49f6a415-4b8d-4678-a523-187a22f3393a.webp",
+                                                                      "sourcePageUrl":  "https://commons.wikimedia.org/wiki/File:%E5%8B%95%E7%89%A9%E5%9C%92%E3%83%90%E3%82%B9_(33405606922).jpg",
+                                                                      "transformation":  "blurred-background-resized-and-webp-transcoded",
+                                                                      "sourceRevisionAt":  "2017-03-25T08:03:07Z"
+                                                                  },
+                                                   "travelToNext":  {
+                                                                        "mode":  "drive",
+                                                                        "expiresAt":  "2026-10-17T15:17:38.071Z",
+                                                                        "originKey":  "place:ChIJLyzRYCWoRjURzQqJ-wBenm8",
+                                                                        "queriedAt":  "2026-09-17T15:17:38.119Z",
+                                                                        "destinationKey":  "place:ChIJa7QFnn2uRjUR5ofN82Ctd44",
+                                                                        "distanceMeters":  16557,
+                                                                        "durationSeconds":  1603,
+                                                                        "transitDaytimeFallback":  false
+                                                                    },
+                                                   "departureTime":  "12:00",
+                                                   "travelModeToNext":  "drive"
+                                               },
+                                               {
+                                                   "id":  "689ffd74-c83d-4391-b765-c11de916f785",
+                                                   "desc":  "漫步於如夢似幻、半溫泉半冷水交互湧出的金鱗湖畔；隨後前往充滿歐風童話與文青小店的湯之坪街道自由探索。",
+                                                   "time":  "13:00",
+                                                   "type":  "景點",
+                                                   "place":  {
+                                                                 "placeId":  "ChIJa7QFnn2uRjUR5ofN82Ctd44"
+                                                             },
+                                                   "title":  "由布院金鱗湖 ＆ 湯之坪街道散策",
+                                                   "location":  "由布院金鱗湖",
+                                                   "typeColor":  "bg-purple-50 text-purple-700 border-purple-200",
+                                                   "coverPhoto":  {
+                                                                      "mime":  "image/webp",
+                                                                      "size":  71742,
+                                                                      "width":  640,
+                                                                      "credit":  "https://www.flickr.com/photos/49952487@N08/42512844220/",
+                                                                      "height":  640,
+                                                                      "source":  "wikimedia-commons",
+                                                                      "creator":  "HyunJae Park",
+                                                                      "license":  "Public domain",
+                                                                      "modified":  true,
+                                                                      "fileTitle":  "File:Lake Kinrin in Yufuin, Oita - Aug 24, 2018 (1).jpg",
+                                                                      "selectedAt":  "2026-09-26T16:40:39.324Z",
+                                                                      "sourceSha1":  "0ffc73b46a47e6fba50a3de6e7312e00fee58e18",
+                                                                      "storagePath":  "s_67726f75702d746f75722d323032362d3130/s_36383966666437342d633833642d343339312d623736352d633131646539313666373835/ca65e0d1-dd1f-455a-b00a-01cf0f600354.webp",
+                                                                      "sourcePageUrl":  "https://commons.wikimedia.org/wiki/File:Lake_Kinrin_in_Yufuin,_Oita_-_Aug_24,_2018_(1).jpg",
+                                                                      "sourceRevisionAt":  "2022-08-21T18:36:03Z"
+                                                                  },
+                                                   "travelToNext":  {
+                                                                        "mode":  "drive",
+                                                                        "expiresAt":  "2026-10-17T15:18:01.456Z",
+                                                                        "originKey":  "place:ChIJa7QFnn2uRjUR5ofN82Ctd44",
+                                                                        "queriedAt":  "2026-09-17T15:18:01.550Z",
+                                                                        "destinationKey":  "place:ChIJq4-fiLynRjURj0PbI_2JcAw",
+                                                                        "distanceMeters":  20131,
+                                                                        "durationSeconds":  1915,
+                                                                        "transitDaytimeFallback":  false
+                                                                    },
+                                                   "departureTime":  "13:00",
+                                                   "travelModeToNext":  "drive"
+                                               },
+                                               {
+                                                   "id":  "7e8d4a8f-6fa3-465a-aa12-307e236166fa",
+                                                   "desc":  "參觀著名的別府地獄溫泉。海地獄因富含硫酸鐵，呈現如Tiffany藍一般的神祕澄澈蔚藍色，卻是高達 98 度的滾燙溫泉。",
+                                                   "time":  "16:00",
+                                                   "type":  "景點",
+                                                   "place":  {
+                                                                 "placeId":  "ChIJq4-fiLynRjURj0PbI_2JcAw"
+                                                             },
+                                                   "title":  "別府海地獄巡禮",
+                                                   "location":  "別府海地獄",
+                                                   "typeColor":  "bg-purple-50 text-purple-700 border-purple-200",
+                                                   "coverPhoto":  {
+                                                                      "mime":  "image/webp",
+                                                                      "size":  50818,
+                                                                      "width":  640,
+                                                                      "credit":  "Own work",
+                                                                      "height":  427,
+                                                                      "source":  "wikimedia-commons",
+                                                                      "creator":  "663highland",
+                                                                      "license":  "CC BY 2.5",
+                                                                      "modified":  true,
+                                                                      "fileTitle":  "File:Beppu Umi-jigoku04n4272.jpg",
+                                                                      "licenseUrl":  "https://creativecommons.org/licenses/by/2.5",
+                                                                      "selectedAt":  "2026-09-14T04:29:29.701Z",
+                                                                      "sourceSha1":  "b066909b8bfb8ef603a9bce59ce5c398364238b4",
+                                                                      "storagePath":  "s_67726f75702d746f75722d323032362d3130/s_37653864346138662d366661332d343635612d616131322d333037653233363136366661/fd20ce52-594f-4314-84aa-cea110da5d4e.webp",
+                                                                      "sourcePageUrl":  "https://commons.wikimedia.org/wiki/File:Beppu_Umi-jigoku04n4272.jpg",
+                                                                      "sourceRevisionAt":  "2009-07-03T22:25:00Z"
+                                                                  },
+                                                   "travelToNext":  {
+                                                                        "mode":  "drive",
+                                                                        "expiresAt":  "2026-10-17T15:24:49.784Z",
+                                                                        "originKey":  "place:ChIJq4-fiLynRjURj0PbI_2JcAw",
+                                                                        "queriedAt":  "2026-09-17T15:24:49.928Z",
+                                                                        "destinationKey":  "place:ChIJFUFE8QgdRDURaAlzEQA4KEU",
+                                                                        "distanceMeters":  9414,
+                                                                        "durationSeconds":  1194,
+                                                                        "transitDaytimeFallback":  false
+                                                                    },
+                                                   "departureTime":  "16:00",
+                                                   "travelModeToNext":  "drive"
+                                               },
+                                               {
+                                                   "id":  "c3b8c38e-742f-400e-a4c4-afbfcb6e6205",
+                                                   "desc":  "🏨 飯店三大亮點\n無敵景觀：飯店面對別府灣，房間可看海景或山景。\n放鬆設施（必去！）：設有室內/室外公共大浴場（溫泉）、桑拿（三溫暖）及芳療休息室，非常適合一天行程後泡湯放鬆。\n餐飲服務：早晨提供自助早餐，館內另有酒吧與小吃店。\n---\n 🛏️ 客房重點\n基本配備：溫馨風格，皆有 Wi-Fi、電視、小冰箱、電熱水壺。\n房型差異（視旅行社幫您預訂的方案而定）：\n一般房/升級房：部分有海景浴缸。\n家庭房：配有上下舖與兒童玩具（適合親子）。",
+                                                   "time":  "18:00",
+                                                   "type":  "住宿",
+                                                   "place":  {
+                                                                 "placeId":  "ChIJFUFE8QgdRDURaAlzEQA4KEU"
+                                                             },
+                                                   "title":  "別府灣和藏溫泉飯店",
+                                                   "location":  "Grandvrio Hotel Beppuwan Wakura グランヴィリオホテル別府湾 和蔵",
+                                                   "typeColor":  "bg-amber-50 text-amber-700 border-amber-200",
+                                                   "coverPhoto":  {
+                                                                      "mime":  "image/webp",
+                                                                      "size":  57234,
+                                                                      "width":  640,
+                                                                      "height":  640,
+                                                                      "source":  "user-upload",
+                                                                      "modified":  true,
+                                                                      "selectedAt":  "2026-09-26T16:19:55.888Z",
+                                                                      "storagePath":  "s_67726f75702d746f75722d323032362d3130/s_63336238633338652d373432662d343030652d613463342d616662666362366536323035/6e456ee8-0fe9-4db8-b3d9-a0d5bbe52606.webp",
+                                                                      "transformation":  "blurred-background-resized-and-webp-transcoded"
+                                                                  },
+                                                   "departureTime":  "18:00",
+                                                   "otherInfoFolderId":  "other-info-hotels"
+                                               }
+                                           ],
+                                     "4":  [
+                                               {
+                                                   "id":  "893df4b6-0d00-486a-a290-2b800ade79a9",
+                                                   "desc":  "",
+                                                   "time":  "08:00",
+                                                   "type":  "住宿",
+                                                   "place":  {
+                                                                 "placeId":  "ChIJFUFE8QgdRDURaAlzEQA4KEU"
+                                                             },
+                                                   "title":  "別府灣和藏溫泉飯店",
+                                                   "location":  "Grandvrio Hotel Beppuwan Wakura グランヴィリオホテル別府湾 和蔵",
+                                                   "typeColor":  "bg-amber-50 text-amber-700 border-amber-200",
+                                                   "travelToNext":  {
+                                                                        "mode":  "drive",
+                                                                        "expiresAt":  "2026-10-17T15:24:03.773Z",
+                                                                        "originKey":  "place:ChIJFUFE8QgdRDURaAlzEQA4KEU",
+                                                                        "queriedAt":  "2026-09-17T15:24:03.845Z",
+                                                                        "destinationKey":  "place:ChIJVR5mPnRAQTUR4W9rnx5mHVI",
+                                                                        "distanceMeters":  83445,
+                                                                        "durationSeconds":  4759,
+                                                                        "transitDaytimeFallback":  false
+                                                                    },
+                                                   "departureTime":  "08:30",
+                                                   "travelModeToNext":  "drive"
+                                               },
+                                               {
+                                                   "id":  "87fa3311-6cc6-48a8-a8ef-ef1776938f3c",
+                                                   "desc":  "位於九州著名梅產地-大分縣日田市大山町，產梅已歷時半世紀。\n廠區周圍遍佈梅園，大山夢工房不因為酒而生產梅，而是因梅而釀製梅酒。\n嚴選自產和當地契作農家生產新鮮甜酸的鶯宿梅，精湛釀製工藝創造出高質感和生命感的梅酒。\n鶯宿梅是日本千年傳統的罕見梅樹種，未經品種改良，稀少珍貴，果實大顆厚實，獨特梅香，是非常適合製作梅酒的梅子。",
+                                                   "time":  "10:00",
+                                                   "type":  "景點",
+                                                   "place":  {
+                                                                 "placeId":  "ChIJVR5mPnRAQTUR4W9rnx5mHVI"
+                                                             },
+                                                   "title":  "日田的大山梅酒(見學+試飲梅酒)",
+                                                   "location":  "日田的大山梅酒",
+                                                   "typeColor":  "bg-purple-50 text-purple-700 border-purple-200",
+                                                   "departureTime":  "11:00"
+                                               },
+                                               {
+                                                   "id":  "cc50229d-1a71-47b3-9ffe-420eef8c69d8",
+                                                   "desc":  "",
+                                                   "time":  "12:20",
+                                                   "type":  "餐飲",
+                                                   "title":  "午餐(升級黑毛和牛涮涮鍋吃到飽)",
+                                                   "location":  "",
+                                                   "typeColor":  "bg-blue-50 text-blue-700 border-blue-200",
+                                                   "departureTime":  "14:00"
+                                               },
+                                               {
+                                                   "id":  "3632c73a-c2ea-43c1-a468-a9ab18d0be2f",
+                                                   "desc":  "前往供奉日本學問之神菅原道真的總本宮參拜，祈求考運與順利。推薦在表參道購買現烤的「梅枝餅」品嚐。",
+                                                   "time":  "14:45",
+                                                   "type":  "景點",
+                                                   "title":  "太宰府天滿宮參拜",
+                                                   "location":  "太宰府天滿宮",
+                                                   "typeColor":  "bg-purple-50 text-purple-700 border-purple-200",
+                                                   "coverPhoto":  {
+                                                                      "mime":  "image/webp",
+                                                                      "size":  109380,
+                                                                      "width":  640,
+                                                                      "credit":  "fukuoka_20150901164932",
+                                                                      "height":  640,
+                                                                      "source":  "wikimedia-commons",
+                                                                      "creator":  "inunami",
+                                                                      "license":  "CC BY 2.0",
+                                                                      "modified":  true,
+                                                                      "fileTitle":  "File:Fukuoka 20150901164932 (23930602969).jpg",
+                                                                      "licenseUrl":  "https://creativecommons.org/licenses/by/2.0",
+                                                                      "selectedAt":  "2026-09-26T03:03:44.480Z",
+                                                                      "sourceSha1":  "b1fa7593bb23771a427a7cd5f44668749df1c816",
+                                                                      "storagePath":  "s_67726f75702d746f75722d323032362d3130/s_33363332633733612d633265612d343363312d613436382d613961623138643062653266/9bdbd3d7-04d3-46a2-878b-8de8c9e1635a.webp",
+                                                                      "sourcePageUrl":  "https://commons.wikimedia.org/wiki/File:Fukuoka_20150901164932_(23930602969).jpg",
+                                                                      "transformation":  "blurred-background-resized-and-webp-transcoded",
+                                                                      "sourceRevisionAt":  "2023-03-28T05:36:28Z"
+                                                                  },
+                                                   "departureTime":  "16:00"
+                                               },
+                                               {
+                                                   "id":  "5bf3a4f4-9b88-48d0-9fdb-25b868f64973",
+                                                   "desc":  "這裡提供豐富的日系健康保健品、美妝護膚及在地特色名產伴手禮，可輕鬆一次購足。",
+                                                   "time":  "16:30",
+                                                   "type":  "其他",
+                                                   "title":  "免稅店採購時間",
+                                                   "location":  "福岡市內免稅店",
+                                                   "typeColor":  "bg-slate-50 text-slate-700 border-slate-200",
+                                                   "departureTime":  "17:10"
+                                               },
+                                               {
+                                                   "id":  "da540366-96d9-49bd-9b7a-8b62cb6b51fc",
+                                                   "desc":  "入住福岡市區飯店。傍晚可自行前往福岡最繁華的天神商圈購物，或沿著那珂川散步至「中洲屋台街」品嚐經典的博多豚骨拉麵宵夜。",
+                                                   "time":  "18:00",
+                                                   "type":  "景點",
+                                                   "title":  "夜訪天神中洲不夜城 ＆ 飯店入住",
+                                                   "location":  "天神 / 中洲屋台",
+                                                   "typeColor":  "bg-purple-50 text-purple-700 border-purple-200",
+                                                   "coverPhoto":  {
+                                                                      "mime":  "image/webp",
+                                                                      "size":  53138,
+                                                                      "width":  640,
+                                                                      "credit":  "Nakasu Yatai Stalls",
+                                                                      "height":  640,
+                                                                      "source":  "wikimedia-commons",
+                                                                      "creator":  "Yoshikazu TAKADA from Tokyo, Japan",
+                                                                      "license":  "CC BY 2.0",
+                                                                      "modified":  true,
+                                                                      "fileTitle":  "File:Nakasu Yatai Stalls (19979437930).jpg",
+                                                                      "licenseUrl":  "https://creativecommons.org/licenses/by/2.0",
+                                                                      "selectedAt":  "2026-09-26T03:08:38.149Z",
+                                                                      "sourceSha1":  "7460549cc727baa283e581967b21ff2453f56545",
+                                                                      "storagePath":  "s_67726f75702d746f75722d323032362d3130/s_64613534303336362d393664392d343962642d396237612d386236326362366235316663/1ea85fbd-0819-44ae-84ba-a38b72ec9503.webp",
+                                                                      "sourcePageUrl":  "https://commons.wikimedia.org/wiki/File:Nakasu_Yatai_Stalls_(19979437930).jpg",
+                                                                      "transformation":  "blurred-background-resized-and-webp-transcoded",
+                                                                      "sourceRevisionAt":  "2022-01-26T03:42:29Z"
+                                                                  },
+                                                   "departureTime":  "18:00",
+                                                   "otherInfoFolderId":  "other-info-food"
+                                               },
+                                               {
+                                                   "id":  "2198de3d-8c1f-4a55-9f48-dc416ed81ba3",
+                                                   "desc":  "",
+                                                   "time":  "20:00",
+                                                   "type":  "住宿",
+                                                   "title":  "福岡 ANA 皇冠假日飯店",
+                                                   "location":  "福岡 ANA",
+                                                   "typeColor":  "bg-amber-50 text-amber-700 border-amber-200",
+                                                   "departureTime":  "20:00",
+                                                   "otherInfoFolderId":  "other-info-hotels"
+                                               }
+                                           ],
+                                     "5":  [
+                                               {
+                                                   "id":  "96834673-6be8-4a95-a32e-327eb2a5e7cc",
+                                                   "desc":  "",
+                                                   "time":  "08:00",
+                                                   "type":  "住宿",
+                                                   "place":  {
+                                                                 "placeId":  "ChIJSUpIG7mRQTURxun5cSj4YLU"
+                                                             },
+                                                   "title":  "福岡 ANA 皇冠假日飯店",
+                                                   "location":  "福岡 ANA",
+                                                   "typeColor":  "bg-amber-50 text-amber-700 border-amber-200",
+                                                   "travelToNext":  {
+                                                                        "mode":  "drive",
+                                                                        "expiresAt":  "2026-10-17T15:14:50.615Z",
+                                                                        "originKey":  "place:ChIJSUpIG7mRQTURxun5cSj4YLU",
+                                                                        "queriedAt":  "2026-09-17T15:14:50.695Z",
+                                                                        "destinationKey":  "place:ChIJrQFpQhaQQTURtx9OWEZ_5hY",
+                                                                        "distanceMeters":  2741,
+                                                                        "durationSeconds":  582,
+                                                                        "transitDaytimeFallback":  false
+                                                                    },
+                                                   "departureTime":  "09:00",
+                                                   "travelModeToNext":  "drive"
+                                               },
+                                               {
+                                                   "id":  "2316f71a-143f-4625-bfa3-86b9ae4d37e6",
+                                                   "desc":  "::travel-companion-rich-text-v1::{\"text\":\"專車前往福岡國際機場，由領隊協助團體辦理劃位登機及行李託運手續，免稅店進行最後採買。\\n機場限定「御翔印」\\n國內線航廈 2 樓的 JAL PLAZA 商店 。第五天準備搭機回台前，只要時間充裕，可以臨櫃過去國內線航廈的商店購買，機會非常大！\",\"colors\":[{\"start\":43,\"end\":52,\"color\":\"#dc2626\"}]}",
+                                                   "time":  "10:00",
+                                                   "type":  "交通",
+                                                   "place":  {
+                                                                 "placeId":  "ChIJrQFpQhaQQTURtx9OWEZ_5hY"
+                                                             },
+                                                   "title":  "抵達福岡空港",
+                                                   "location":  "福岡空港",
+                                                   "typeColor":  "bg-emerald-50 text-emerald-700 border-emerald-200",
+                                                   "travelKind":  "flight",
+                                                   "departureTime":  "14:10",
+                                                   "otherInfoFolderId":  "other-info-flights"
+                                               },
+                                               {
+                                                   "id":  "946e5f6b-56b4-462d-8fd5-af00327ce4d2",
+                                                   "desc":  "搭乘星宇航空豪華客機 JX841，預計於台灣時間 15:35 抵達桃園機場，圓滿結束精彩的北九州極上五日遊！",
+                                                   "time":  "15:35",
+                                                   "type":  "交通",
+                                                   "title":  "搭機返台 ➡️ 抵達桃園國際機場",
+                                                   "location":  "桃園國際機場",
+                                                   "typeColor":  "bg-emerald-50 text-emerald-700 border-emerald-200",
+                                                   "departureTime":  "16:00",
+                                                   "otherInfoFolderId":  "other-info-flights"
+                                               }
+                                           ]
+                                 }
+                }
 }
