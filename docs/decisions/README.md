@@ -10,7 +10,7 @@
 |---|---|---|---|---|---|
 | [ADR-001](active/ADR-001-trip-daily-card-edit-lock-scope.md) | 每日詳細行程與編輯旅程共用 Trip Lease 的互斥編輯協調 | Accepted（決策持續有效）／Implementation Completed（2026-11-24） | **原 S1／S2／S3／S4 均 Exit PASS；2026-11-24 核准新增範圍亦完成實作、自動化驗證及使用者人工 UI 驗收，Exit PASS。** | **已結案，無待辦。實作結案不代表 Accepted 決策退休；如需修改，須先核准 ADR 修訂。歷史階段紀錄由 ADR-001 主檔連結至 `history/`。** | [ADR-001](active/ADR-001-trip-daily-card-edit-lock-scope.md) |
 | [ADR-002](active/ADR-002-card-save-screen-flicker.md) | 移除已淘汰的每日行程 Preview／通知／同步衍生機制，並修復卡片保存／畫面穩定性與登入身份生命週期 | **Accepted（決策持續有效）／Implementation Completed（2026-11-25；2026-11-26 歸檔）** | **S1、S2 均 Exit PASS；S2-01～14 全數 PASS。S1／S2 階段執行紀錄與影片證據已移至 `history/`，原始輪次紀錄完整保留。** | **無現行待辦。Participant RPC N+1／Weather APP 重複請求僅列未來候選，須重新取證及另行核准；新問題以新證據啟動最小調查。歸檔不代表 Accepted 決策退休。** | [ADR-002](active/ADR-002-card-save-screen-flicker.md) |
-| [ADR-003](active/ADR-003-weather-interval-forecast.md) | 行程卡片時間區段天氣預報（Interval V1） | **Accepted／Implementation Completed（2026-11-26；納入 V3.11.7 發布候選）** | **A、B、C 全數 PASS（2026-11-26）。已驗證資料保護、APP → Edge → DB、時間修改／摘要重算、冷卻保護與自然恢復、Lease 收斂、Console／LocalStorage／UI 邊界；測試 Trip 已還原。Android standalone／實機操作移至部署後回歸。** | **V3.11.7 正式發布流程：本機候選驗證、正式 migration／Edge Function 部署、GitHub Pages 部署及部署後 smoke。Android 實機相容性部署後另行回歸。** | [ADR-003](active/ADR-003-weather-interval-forecast.md) |
+| [ADR-003](active/ADR-003-weather-interval-forecast.md) | 行程卡片時間區段天氣預報（Interval V1） | **Accepted／Implementation Completed（V3.11.7 正式發布；2026-11-26）** | **A、B、C 全數 PASS（2026-11-26）。已驗證資料保護、APP → Edge → DB、時間修改／摘要重算、冷卻保護與自然恢復、Lease 收斂、Console／LocalStorage／UI 邊界；測試 Trip 已還原。Android standalone／實機操作移至部署後回歸。** | **V3.11.7 已正式部署：migration／Edge Function／GitHub Pages 及公開 smoke 均完成。正式登入 Session 天氣刷新與 Android standalone 實機更新接管列為部署後回歸。** | [ADR-003](active/ADR-003-weather-interval-forecast.md) |
 | **[異常旅程資料修復](../09_待辦事項_TODO.md)** | **日本九州 Static Seed → 沖繩 Static→Dynamic** | **COMPLETED（2026-11-26）** | **九州及沖繩實機驗收全數通過：新增／刪除／編輯卡片、共用資料、私人資料、其他資料及帳本均正常；九州景點照片正常顯示。** | **已結案，無剩餘待驗項目。資料修正及文件均已同步 develop／main；四國相關正式旅程及 fixture 未觸碰。** | [TODO](../09_待辦事項_TODO.md) |
 
 ## ADR-002 歷史階段與證據紀錄
@@ -25,7 +25,7 @@
 
 | 階段 | 文件 | 按需載入條件 |
 |---|---|---|
-| Interval V1 必要整合收尾與產品驗收 | [ADR-003](active/ADR-003-weather-interval-forecast.md)／[執行證據](../112_區段預報P0技術驗證與實作前檢查紀錄.md) §7.4 | A／B／C 均 PASS；下一步進入一般 RC 驗收。Android standalone／實機操作移至部署後回歸；不要擴大壓力／效能測試。 |
+| Interval V1 必要整合收尾與產品驗收 | [ADR-003](active/ADR-003-weather-interval-forecast.md)／[執行證據](../112_區段預報P0技術驗證與實作前檢查紀錄.md) §7.4 | A／B／C 均 PASS；V3.11.7 已正式發布。下一步僅保留正式登入 Session 天氣刷新與 Android standalone 實機更新接管回歸；不要擴大壓力／效能測試。 |
 
 ## 載入規則
 

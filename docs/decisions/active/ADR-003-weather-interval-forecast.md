@@ -1,7 +1,7 @@
 # ADR-003：行程卡片時間區段天氣預報（Interval V1）
 
 - **ID：** ADR-003
-- **狀態：** Accepted／Implementation Completed（V1 A–C PASS；納入 V3.11.7 發布候選）
+- **狀態：** Accepted／Implementation Completed／V3.11.7 已正式發布（2026-11-26）
 - **決策基準：** 產品顯示與卡片時間規則依 2026-11-14 已定案規格；時間契約、逐卡資格及引用規則依 2026-11-17 決策；低使用量併發與 V1 驗收範圍依 2026-11-18 決策。
 - **記錄日期：** 2026-11-26
 - **技術規格：** [docs/79_天氣預報功能規格草案.md](../../79_天氣預報功能規格草案.md) §2.7
@@ -82,7 +82,7 @@
 - 前端 WeatherForecastItem 區段 metadata、時間改變後摘要相容性及單一摘要 UI 接線已完成；hourly raw list 不下傳。
 - Deno check／Edge runtime tests（21/21）、Interval summary／timezone／既有 weather regression、前端 TypeScript／ESLint、完整 production build、PWA／browser-security／weather bundle checks 已有 PASS 證據。
 - 本機 Interval migration、SQL regression、transactional rollback rehearsal、RLS／RPC 權限與 catalog 檢查、purge／TTL／座標失效測試已有 PASS 證據。這些僅是本機證據，不代表已套用正式 Supabase。
-- 未執行遠端 migration、正式 DB 寫入、Edge Function 部署、Secrets／Cron 修改或正式發布。
+- V3.11.7 正式 migration `20261117140000_weather_interval_forecast_cache` 已套用；Interval table／RLS／ACL／RPC 權限已唯讀核對。`weather-forecast` Edge Function 已部署 ACTIVE v16；未修改 Secrets／Cron。GitHub Pages `29c82fb581225ec05c970ef6214e261c7c292116`、annotated tag `v3.11.7` 已完成發布。
 
 ### V1 必要收尾 A–C（全數 PASS；2026-11-26）
 
@@ -122,8 +122,8 @@ Android PWA standalone 啟動／顯示相容性，以及 Android 實際操作與
 
 1. A 已 PASS；Daily 與 Interval 的已覆蓋證據分清，不重跑 Interval 12 路 claim race。
 2. B 已 PASS；不重跑完整 APP smoke。驗收證據及 fixture 偏差見文件 112 §7.4。
-3. 目前只剩 C：完成本 ADR 定義的自動化操作與生命週期驗證；Android standalone／實機操作相容性移至部署後回歸，不作為目前 V1 closeout gate。
-4. A–C 全部 PASS 後，才整理一般 RC；遠端／正式操作仍逐項授權。Android 部署後回歸結果須另行記錄，不得以桌面模擬代替實機證據。
+3. A／B／C 已全數 PASS，V3.11.7 已正式發布。Android standalone／實機操作相容性移至部署後回歸，不作為目前 V1 closeout gate。
+4. 部署後僅保留正式登入 Session 的使用者天氣刷新驗收，以及 Android standalone 實機更新接管回歸；不得以未登入桌面瀏覽器或模擬代替實際使用者 Session／實機證據。
 5. 每輪工作只更新文件 112 §7 的現行階段紀錄及 docs/decisions/README.md；文件 79 保持產品／技術契約單一權威，不複製階段日誌。
 
-**跨對話續行：** 新對話先讀 docs/decisions/README.md、本 ADR 及文件 112 §7.3–§7.4；直接從第一個未完成的 A／B／C 切片接續。不得重做已有 PASS 的實作或測試，不得把歷史章節的舊快照誤當現況，也不得把一般 RC／正式環境操作視為已授權。
+**跨對話續行：** 新對話先讀 docs/decisions/README.md、本 ADR 及文件 112 §7.4；A／B／C 均已 PASS，不重跑。只接續正式登入 Session 的使用者天氣刷新驗收與 Android standalone 實機更新接管回歸；不得把未登入桌面 smoke 視為真實使用者端到端證據。

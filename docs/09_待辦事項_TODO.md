@@ -78,9 +78,9 @@
 - [x] Personal Book UX（V3.9.16）：個人帳本每筆記帳成功後不再跳出 alert；帳本頁固定顯示「個人帳本僅儲存在此裝置」、備份風險說明與「個人帳本・僅存本機」標籤。
 - [ ] **舊功能風險導向回歸（V3.11.4 完成後另排）**：補驗近期回歸未直接覆蓋的角色／歷史唯讀與撤權、路線付費 API／正式 OAuth／Android 外部開圖、單日／多日複製，以及離線／pending／跨裝置組合。此為跨版本回歸，不阻擋目前 V3.11.4 P0；iOS 不列入既定清單，除非有實際使用者回報再重新立案。
 
-## 區段預報 V1 必要收尾與下一步
+## 區段預報 V1 已完成與部署後回歸
 
-- [ ] **區段預報 V1 必要收尾（Accepted 決策： [ADR-003](decisions/active/ADR-003-weather-interval-forecast.md)）**：第一版 hourly pipeline、UTC/DST、Interval cache／RLS／RPC／Lease／purge、APP／Cron 逐卡資格與前端 metadata 已接通；現行執行證據及唯一待辦清單見《[112_區段預報P0技術驗證與實作前檢查紀錄](112_區段預報P0技術驗證與實作前檢查紀錄.md)》§7.3–§7.4。2026-11-18 使用者定案：最多 4 位使用者、平常最多 2 人同時使用；接受偶發少量重複 provider request，必要保護聚焦資料正確性、Lease ownership、失敗恢復與舊成功快取保存。**剩餘必要工作只有**：(A) 最小資料保護驗證：Daily／Interval 失敗釋放、錯誤 token ownership、舊成功 payload／`fetched_at` 保護、placeholder recovery；Interval 12 路 DB claim race 已測，Daily 只驗證必要既有契約，不建立完整 golden matrix。(B) 條件式一次隔離 APP → Edge → 本機 DB refresh smoke：需要 Open-Meteo outbound、本機服務及正常授權都可用，否則保留 BLOCKED，不繞過授權。(C) Android PWA 產品實機驗收：Daily／single arrival hour／range、時間變更、舊資料相容及既有提醒。**不列為 V1 門檻**：跨 Edge Isolate 壓測、zero-duplicate 證明、完整 Daily golden matrix、CPU／wall-time 與正式 DB row／index／TOAST benchmark。日後只有實際出現成本、資料錯誤、延遲或儲存問題才做最小量測。完成 A–C 後再進一般 RC；遠端 migration、Edge deploy、Secrets／Cron、正式 smoke 及發布仍分別授權。
+- [x] **區段預報 V1／V3.11.7 正式發布完成（2026-11-26；Accepted 決策：[ADR-003](decisions/active/ADR-003-weather-interval-forecast.md)）**：A／B／C 全數 PASS，證據見《[112_區段預報P0技術驗證與實作前檢查紀錄](112_區段預報P0技術驗證與實作前檢查紀錄.md)》§7.4。V3.11.7 已完成 develop／main 推送、annotated tag、正式 migration `20261117140000_weather_interval_forecast_cache`、`weather-forecast` Edge Function ACTIVE v16、GitHub Pages 部署及公開 smoke。正式登入 Session 的使用者天氣刷新與 Android standalone PWA 更新接管實機回歸仍待完成；未取得真實 Session／實機證據前不得標記 PASS。
 
 ## 待定案功能
 
