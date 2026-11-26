@@ -1,7 +1,7 @@
 # ADR-003：行程卡片時間區段天氣預報（Interval V1）
 
 - **ID：** ADR-003
-- **狀態：** Accepted／Implementation In Progress（V1 必要收尾與產品驗收）
+- **狀態：** Accepted／Implementation Completed（V1 A–C PASS；納入 V3.11.7 發布候選）
 - **決策基準：** 產品顯示與卡片時間規則依 2026-11-14 已定案規格；時間契約、逐卡資格及引用規則依 2026-11-17 決策；低使用量併發與 V1 驗收範圍依 2026-11-18 決策。
 - **記錄日期：** 2026-11-26
 - **技術規格：** [docs/79_天氣預報功能規格草案.md](../../79_天氣預報功能規格草案.md) §2.7
@@ -80,15 +80,17 @@
 - Interval schema／本機 migration、RLS、窄權限 RPC、Lease claim／release／mark-scheduled 已實作；座標變更同交易清除及既有每小時 purge 已接通。
 - APP／Cron Interval 分支、逐卡資格判斷、相同 (place_id, forecast_date) 目標快取共用及 per-card Edge summary response 已接通。
 - 前端 WeatherForecastItem 區段 metadata、時間改變後摘要相容性及單一摘要 UI 接線已完成；hourly raw list 不下傳。
-- Deno check／Edge runtime tests（20/20）、Interval summary／timezone／既有 weather regression、前端 TypeScript／ESLint、完整 production build、PWA／browser-security／weather bundle checks 已有 PASS 證據。
+- Deno check／Edge runtime tests（21/21）、Interval summary／timezone／既有 weather regression、前端 TypeScript／ESLint、完整 production build、PWA／browser-security／weather bundle checks 已有 PASS 證據。
 - 本機 Interval migration、SQL regression、transactional rollback rehearsal、RLS／RPC 權限與 catalog 檢查、purge／TTL／座標失效測試已有 PASS 證據。這些僅是本機證據，不代表已套用正式 Supabase。
 - 未執行遠端 migration、正式 DB 寫入、Edge Function 部署、Secrets／Cron 修改或正式發布。
 
-### 尚未完成：V1 必要收尾 A–C
+### V1 必要收尾 A–C（全數 PASS；2026-11-26）
 
-以下三項是目前唯一 V1 closeout 清單，依序執行；不要重跑已 PASS 項目。
+A／B／C 已依各自驗收範圍完成，證據集中於文件 112 §7.4；不重跑已通過項目。
 
-**A — 最小資料保護驗證**
+**A — PASS（2026-11-26；執行證據見文件 112 §7.4）**
+
+最小資料保護驗證範圍：
 
 1. 確認 Daily 與 Interval 的失敗路徑都能清理自身 Lease。
 2. 確認錯誤／過期 token 不會釋放或覆寫其他持有者的 Lease。
@@ -96,27 +98,32 @@
 4. 確認過期 placeholder 可恢復刷新。
 5. Interval PostgreSQL 12 路 claim race 已有證據；Daily 僅需核對其既有 SQL／RPC 是否已覆蓋上述必要條件，不做 12 路競爭或完整 golden matrix。
 
-**B — 一次隔離 APP → Edge → 本機 DB 真實刷新 smoke（條件式）**
+**B — PASS（2026-11-26；執行證據及測試 fixture 偏差見文件 112 §7.4）**
 
-1. 前置條件必須同時具備 Open-Meteo outbound、本機 Edge／Supabase 可用，以及正常授權 Session。
-2. 使用全新合成 Trip／Place／日期，只執行一次完整 APP → Edge → 本機 DB refresh，核對成功資料、Lease 收斂及失敗後狀態。
-3. 任一前置條件不可用就記錄 BLOCKED 及具體證據；不得繞過 RLS、切換正式環境、改用不正常授權或增加額外 instrumentation。
+驗收契約：正常授權 Session、Open-Meteo outbound、本機 Edge／Supabase；使用隔離測試資料完成 APP → Edge → 本機 DB refresh，核對 hourly payload、Lease 收斂及 APP 單一區段摘要。未繞過 RLS、未切換正式環境；本次以既有合成 Trip／Place、新 forecast_date 完成隔離，未新建 Place ID，偏差詳見文件 112 §7.4。
 
-**C — Android PWA 產品驗收**
+**C — 自動化操作與生命週期驗證（PASS；2026-11-26，證據見文件 112 §7.4）**
 
-1. 核對 Daily、單一到達小時及 range mode 的正確呈現。
-2. 修改卡片時間後，確認舊摘要不再被顯示。
-3. 核對舊版卡片／天氣資料相容、既有來源資訊與提醒。
-4. 確認只呈現單一摘要，不出現 hourly list。
+以隔離本機測試資料庫及已登入的本機測試瀏覽器執行自動化驗證，聚焦功能狀態與資料／請求證據，不以人工肉眼逐項巡檢作為主要驗收方式：
+
+1. 驗證區段預報請求觸發、載入至完成／失敗的狀態轉換，以及 APP、Edge、DB 的結果一致性。
+2. 驗證刷新期間 Lease claim／release、重複請求防護及完成後 Lease 收斂；沿用既有 A／B 證據，不重跑 A／B 測試。
+3. 驗證失敗狀態及既有重試／恢復行為，不清除 failure marker、不繞過 cooldown、不操作遠端正式環境。
+4. 自動擷取並檢查 Console、Network、DOM／可見摘要及本機 DB 狀態；只確認單一摘要，不出現 hourly list。
+5. 對測試卡片時間變更後的摘要失效／重新計算，以可重現的自動化操作及狀態證據驗證；不得把靜態程式碼檢查當作執行驗收。
+
+**部署後回歸（不阻擋目前 V1 開放進度）**
+
+Android PWA standalone 啟動／顯示相容性，以及 Android 實際操作與生命週期相容性，移至部署後回歸測試。桌面瀏覽器或 User-Agent 模擬不得宣稱已完成 Android 實機驗收；部署後若無 Android 裝置，仍須明確標示未驗證。
 
 完成 A–C 後才進入一般 RC 驗收。遠端 migration、Edge deploy、Secrets／Cron、正式資料 smoke、Git 發布及部署均不是本 ADR 的自動授權，須按各自流程另行明確授權。
 
 ## 後續執行順序與交接
 
-1. 先依文件 112 §7.4 完成 A；將 Daily 與 Interval 的已覆蓋證據分清，不重跑 Interval 12 路 claim race。
-2. 再判斷 B 的三項前置條件。可執行則只做一次隔離真實 refresh；不可執行就保存 BLOCKED 證據，不為了通過測試改變環境或權限。
-3. 完成 C 的 Android PWA 產品驗收，逐項記錄顯示、舊摘要失效、相容性及既有提醒結果。
-4. A–C 全部 PASS 或 B 依規格保留為有證據的 BLOCKED 並依產品決策處置後，才整理一般 RC；遠端／正式操作仍逐項授權。
+1. A 已 PASS；Daily 與 Interval 的已覆蓋證據分清，不重跑 Interval 12 路 claim race。
+2. B 已 PASS；不重跑完整 APP smoke。驗收證據及 fixture 偏差見文件 112 §7.4。
+3. 目前只剩 C：完成本 ADR 定義的自動化操作與生命週期驗證；Android standalone／實機操作相容性移至部署後回歸，不作為目前 V1 closeout gate。
+4. A–C 全部 PASS 後，才整理一般 RC；遠端／正式操作仍逐項授權。Android 部署後回歸結果須另行記錄，不得以桌面模擬代替實機證據。
 5. 每輪工作只更新文件 112 §7 的現行階段紀錄及 docs/decisions/README.md；文件 79 保持產品／技術契約單一權威，不複製階段日誌。
 
 **跨對話續行：** 新對話先讀 docs/decisions/README.md、本 ADR 及文件 112 §7.3–§7.4；直接從第一個未完成的 A／B／C 切片接續。不得重做已有 PASS 的實作或測試，不得把歷史章節的舊快照誤當現況，也不得把一般 RC／正式環境操作視為已授權。

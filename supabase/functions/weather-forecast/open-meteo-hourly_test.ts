@@ -24,11 +24,14 @@ const makePayload = (destinationTimezone: string, date: string) => {
 
 Deno.test("hourly URL requests UTC epoch boundaries derived from destination IANA day", () => {
   const tokyo = makeOpenMeteoHourlyUrl(35.68, 139.69, "2026-11-20", "Asia/Tokyo");
-  if (tokyo.searchParams.get("timezone") !== "UTC" ||
+  if (
+    tokyo.searchParams.get("timezone") !== "UTC" ||
     tokyo.searchParams.get("timeformat") !== "unixtime" ||
-    tokyo.searchParams.get("forecast_days") !== "16" ||
-    tokyo.searchParams.get("past_hours") !== "25" ||
-    tokyo.searchParams.get("hourly") !== "temperature_2m,precipitation_probability,weather_code") {
+    tokyo.searchParams.has("forecast_days") ||
+    tokyo.searchParams.has("past_hours") ||
+    tokyo.searchParams.get("hourly") !==
+      "temperature_2m,precipitation_probability,weather_code"
+  ) {
     throw new Error("Unexpected hourly request parameters");
   }
   if (tokyo.searchParams.get("start_hour") !== "2026-11-19T15:00" ||
@@ -55,8 +58,13 @@ Deno.test("valid ordinary destination day filters the inclusive UTC endpoint", (
     throw new Error("Unexpected normalized hourly payload");
   }
   if (result.hourly_data.temperature_2m[3] !== null) throw new Error("Null values must be preserved");
-  if (!result.source_url.startsWith("https://open-meteo.com/en/docs?") ||
-    !result.source_url.includes("start_hour=") || !result.source_url.includes("timezone=UTC")) {
+  if (
+    !result.source_url.startsWith("https://open-meteo.com/en/docs?") ||
+    !result.source_url.includes("start_hour=") ||
+    !result.source_url.includes("timezone=UTC") ||
+    result.source_url.includes("forecast_days=") ||
+    result.source_url.includes("past_hours=")
+  ) {
     throw new Error("Missing UTC hourly attribution query");
   }
 });

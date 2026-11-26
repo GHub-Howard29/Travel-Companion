@@ -14,6 +14,16 @@ export type VersionHistoryItem = {
 
 export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
+    version: "3.11.6",
+    date: "2026-11-25",
+    isMandatoryRelease: false,
+    notes: [
+      "修正登入身份切換後旅程清單未即時 reconciliation 的問題，並隔離舊身份的非同步結果。",
+      "修正登出期間 Workspace Loading、編輯 Lease heartbeat 與舊帳本識別的生命週期清理。",
+      "保護已送出的保存及雲端待同步資料，避免身份切換或登出不當中斷。",
+    ],
+  },
+  {
     version: "3.11.5",
     date: "2026-11-24",
     isMandatoryRelease: false,

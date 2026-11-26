@@ -43,6 +43,7 @@ export const makeOpenMeteoHourlyUrl = (
 ): URL => {
   const { startEpoch, endEpoch } = destinationDayUtcWindow(forecastDate, destinationTimezone);
   const url = new URL("https://api.open-meteo.com/v1/forecast");
+  // Explicit hourly bounds replace relative windows; Open-Meteo rejects those options together.
   url.search = new URLSearchParams({
     latitude: String(latitude),
     longitude: String(longitude),
@@ -51,8 +52,6 @@ export const makeOpenMeteoHourlyUrl = (
     end_hour: makeUtcHour(endEpoch),
     timezone: "UTC",
     timeformat: "unixtime",
-    forecast_days: "16",
-    past_hours: "25",
     temperature_unit: "celsius",
     models: "best_match",
     cell_selection: "land",
@@ -68,6 +67,7 @@ export const makeOpenMeteoHourlySourceUrl = (
 ): string => {
   const { startEpoch, endEpoch } = destinationDayUtcWindow(forecastDate, destinationTimezone);
   const url = new URL("https://open-meteo.com/en/docs");
+  // Explicit hourly bounds replace relative windows; Open-Meteo rejects those options together.
   url.search = new URLSearchParams({
     latitude: String(latitude),
     longitude: String(longitude),
@@ -76,8 +76,6 @@ export const makeOpenMeteoHourlySourceUrl = (
     end_hour: makeUtcHour(endEpoch),
     timezone: "UTC",
     timeformat: "unixtime",
-    forecast_days: "16",
-    past_hours: "25",
     temperature_unit: "celsius",
     models: "best_match",
     cell_selection: "land",
