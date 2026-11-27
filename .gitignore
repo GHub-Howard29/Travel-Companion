@@ -34,3 +34,6 @@ supabase/.temp/
 
 # Codex conversation attachments
 .codex-remote-attachments/
+
+# Local database backups and generated artifacts
+/artifacts/

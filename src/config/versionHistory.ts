@@ -14,6 +14,16 @@ export type VersionHistoryItem = {
 
 export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
+    version: "3.11.8",
+    date: "2026-11-27",
+    isMandatoryRelease: false,
+    notes: [
+      "新增交通資訊映射至自駕須知的唯讀視圖，維持原始資料列與權限並支援雙頁獨立排序。",
+      "修正 Other Info 同步 pending／failed 顯示及重試入口。",
+      "路徑估算加入 keyed reservation 併發保護。",
+    ],
+  },
+  {
     version: "3.11.7",
     date: "2026-11-26",
     isMandatoryRelease: false,
