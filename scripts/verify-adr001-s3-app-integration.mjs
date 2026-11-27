@@ -9,6 +9,21 @@ const app = read("../src/App.tsx");
 const itineraryPage = read("../src/components/ItineraryPage.tsx");
 
 assert.match(workspace, /claimItineraryCardEditLease\(supabase, tripId, "__trip__"\)/);
+const itinerarySaveStart = workspace.indexOf("const saveItineraryTripDetail = useCallback(");
+const itinerarySaveEnd = workspace.indexOf("const recordItineraryResolutionChoice", itinerarySaveStart);
+assert.ok(itinerarySaveStart >= 0 && itinerarySaveEnd > itinerarySaveStart, "Itinerary save flow must exist");
+const itinerarySaveFlow = workspace.slice(itinerarySaveStart, itinerarySaveEnd);
+assert.match(itinerarySaveFlow, /const ownsExistingLease =\s*isManagedItineraryTripLeaseActive\(tripId\) \|\|\s*isLocallyHeldTripEditorLease\(tripId\)/);
+assert.match(itinerarySaveFlow, /if \(navigator\.onLine && !ownsExistingLease\)[\s\S]*?claimItineraryCardEditLease\(supabase, tripId, "__trip__"\)/);
+assert.doesNotMatch(itinerarySaveFlow, /currentState\?\.status !== "pending"/, "Background Weather saves must still be able to acquire a temporary Lease");
+assert.ok(
+  itinerarySaveFlow.indexOf("claimItineraryCardEditLease(supabase, tripId, \"__trip__\")") <
+    itinerarySaveFlow.indexOf("saveTripRecord({"),
+  "A temporary Lease must be acquired before shared Trip/Pending writes",
+);
+assert.match(itinerarySaveFlow, /if \(!leaseAcquired\)[\s\S]*?if \(currentState\?\.status === "pending"\)[\s\S]*?return \{ localSaved: true, cloudSynced: false \}/);
+assert.match(itinerarySaveFlow, /Claim 被拒絕時不重寫 shared Trip／Pending/);
+assert.match(itinerarySaveFlow, /leaseAcquired &&[\s\S]*?!isManagedItineraryTripLeaseActive\(tripId\) &&[\s\S]*?!isLocallyHeldTripEditorLease\(tripId\)/);
 assert.match(workspace, /readItineraryCloudVersion\(supabase, tripId\)/);
 assert.match(workspace, /saveItineraryDaysDataCloud\(supabase, tripId, reconciledState\.baseCloudVersion/);
 assert.match(workspace, /CAS競爭：已重新校正並保留最新待同步資料/);
@@ -94,5 +109,12 @@ assert.doesNotMatch(itineraryPage, /^import .*itineraryCardEditLeaseService/m);
 assert.match(itineraryPage, /startCreateItem[\s\S]*?isManageMode[\s\S]*?hasManagedTripLease[\s\S]*?hasRemoteLeaseOnActiveDay/);
 assert.match(itineraryPage, /saveItem[\s\S]*?hasManagedTripLease[\s\S]*?hasRemoteLeaseOnActiveDay/);
 assert.match(itineraryPage, /closeManageMode[\s\S]*?releaseManagedTripLease\(\)/);
-assert.match(workspace, /leaseAcquired && !isManagedItineraryTripLeaseActive\(tripId\)/);
+assert.match(workspace, /leaseAcquired &&[\s\S]*?!isManagedItineraryTripLeaseActive\(tripId\) &&[\s\S]*?!isLocallyHeldTripEditorLease\(tripId\)/);
+const resolutionStart = workspace.indexOf("const applyItineraryResolution = useCallback");
+const resolutionEnd = workspace.indexOf("useEffect(() => {", resolutionStart);
+assert.ok(resolutionStart >= 0 && resolutionEnd > resolutionStart, "Conflict resolution flow must exist");
+const resolutionFlow = workspace.slice(resolutionStart, resolutionEnd);
+assert.match(resolutionFlow, /const ownsExistingLease =\s*isManagedItineraryTripLeaseActive\(tripId\) \|\|\s*isLocallyHeldTripEditorLease\(tripId\)/);
+assert.match(resolutionFlow, /if \(!ownsExistingLease\)[\s\S]*?claimItineraryCardEditLease\(supabase, tripId, "__trip__"\)/);
+assert.match(resolutionFlow, /leaseAcquired &&[\s\S]*?!isManagedItineraryTripLeaseActive\(tripId\) &&[\s\S]*?!isLocallyHeldTripEditorLease\(tripId\)/);
 console.log("ADR-001 S3 App caller closure、Pending status、Conflict resolution UI、Trip-level Lease、管理模式 Lease lifecycle、trusted version、Save RPC 與 generic daysData bypass static regression PASS.");

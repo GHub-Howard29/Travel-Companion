@@ -23,4 +23,15 @@ assert.match(hook, /shouldSkipDuplicateItinerarySave\(currentState, nextTrip\.co
 assert.match(hook, /if \(currentState\?\.status === "conflict"\)/);
 assert.match(hook, /TripVersionConflictError/);
 assert.match(hook, /reconcilePendingItinerarySyncState/);
+
+const saveStart = hook.indexOf("const saveItineraryTripDetail = useCallback(");
+const saveEnd = hook.indexOf("const recordItineraryResolutionChoice", saveStart);
+assert.ok(saveStart >= 0 && saveEnd > saveStart, "Itinerary save flow must exist");
+const saveFlow = hook.slice(saveStart, saveEnd);
+const claimPosition = saveFlow.indexOf('claimItineraryCardEditLease(supabase, tripId, "__trip__")');
+const sharedWritePosition = saveFlow.indexOf("saveTripRecord({");
+assert.ok(claimPosition >= 0 && claimPosition < sharedWritePosition, "Temporary Lease claim must precede shared local writes");
+assert.match(saveFlow, /isManagedItineraryTripLeaseActive\(tripId\)[\s\S]*?isLocallyHeldTripEditorLease\(tripId\)/);
+assert.match(saveFlow, /if \(!leaseAcquired\)[\s\S]*?if \(currentState\?\.status === "pending"\)[\s\S]*?return \{ localSaved: true, cloudSynced: false \}/);
+assert.match(saveFlow, /!isManagedItineraryTripLeaseActive\(tripId\)[\s\S]*?!isLocallyHeldTripEditorLease\(tripId\)/);
 console.log("P0 pending auto-sync idempotency regression tests passed.");

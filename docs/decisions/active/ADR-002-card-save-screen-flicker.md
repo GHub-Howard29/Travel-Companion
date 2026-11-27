@@ -170,3 +170,70 @@
 - 依 S2 Step 1～4 實作，依 S2-01～S2-14 驗收，另完成 targeted regression tests、typecheck／lint／build、`npm run verify:docs-links` 及 `git diff --check`。
 - 2026-11-24 本 ADR 初始調查輪僅完成唯讀調查及文件定案，當時尚未修改程式、執行測試或動態重現；此句只描述初始調查輪，不代表後續 S2 實作／驗收現況。S2 現行逐項狀態與整體 Exit 下一步，唯一以 [ADR-002-S2](../history/ADR-002-S2-auth-workspace-lifecycle.md) 及 [決策總索引](../README.md) 為準。
 
+## 2026-11-27：V3.11.7 路線／天氣／日卡片清單跳動新事件（唯讀調查）
+
+### 問題範圍與調查邊界
+
+- 使用者於 V3.11.7 回報路線規劃與天氣預報區段不正常跳動。影片 2809.mp4、2810.mp4 的可見現象更具體為 D2／D3 日卡片清單在「單張卡片」與「當日沒有卡片」空狀態間反覆切換；不是單純天氣列重新 render。
+- 另有 2811.mp4 所示天氣列／checkbox 因到達時間已過且沒有快取而隱藏，使用者已確認這是 BUG035 預期行為；該行為與本事件分開，不得修改或混為根因。
+- 使用者表示操作發生於 Android 手機，當時沒有其他電腦正在編輯該 Trip；但可能有另一個瀏覽器頁面在背景開啟。正式服務 log 的相同 UA／IP／登入 Session 無法區分同一手機上的多個分頁或 PWA context。
+- 本輪只允許唯讀程式／log 調查與文件紀錄；不得修改程式、正式 DB、Secrets、Edge Function、部署或 Git 發布。未執行正式資料表 SELECT／UPDATE／DELETE。
+
+### 已確認的程式機制
+
+1. `src/hooks/useTripDataRevision.ts` 接受外部 revision／revision gap 後可觸發 `inspectAccess()` → `onReconcileTrips()` → Workspace reconciliation。該 revision→reconcile 機制早於 V3.11.5 已存在；V3.11.5 移除約 400ms debounce，會使已接受 revision 更即時觸發 reconciliation，屬放大因素而非新引入機制。
+2. `src/hooks/useTripWorkspace.ts` 的 `reconcileTripWorkspaceWithResult()` 重新取得 cloud trips／tombstones、寫入 local records、建立 `nextTrips`，並呼叫 `setTripOptions(nextTrips)`。新的 selected-trip metadata reference 可能使 selected-trip load effect 重跑 `getTripDetail()`。
+3. 同一 hook 的 Pending auto-sync effect 觀察 `currentTrip`、`selectedTripMeta` 與保存 callback；重新載入 currentTrip 後，若同步狀態仍為 pending 且沒有既存 in-flight save，`shouldSkipDuplicateItinerarySave()` 不會阻止再次保存。
+4. `src/components/ItineraryPage.tsx` 的 Weather effect 依賴 trip/day data 參照；重新 hydration 可再次觸發天氣請求。Weather `ineligible` 且沒有 cache 的分支只會將 `showWeather:false` 回寫，不會直接刪除卡片，故不足以單獨解釋整日清單消失。
+5. `src/services/itineraryCloudSaveService.ts` 將完整 `p_days_data` 傳給 `tc_save_itinerary_days`；migration `20261120120000_adr001_stage1_trip_itinerary_edit_enforcement.sql` 使用 `jsonb_set(..., '{daysData}', p_days_data, true)` 替換整份 `content.daysData`。不同 page context 若提交不同／過期快照，具備覆寫其他日卡片陣列的條件。
+6. `APP_SOURCE_CLIENT_ID` 為 page instance 級識別；Lease client ID 使用 `sessionStorage`，不同分頁／PWA context 可具有不同 ID。外部 revision 可被視為 foreign source。這支持多 context 競態假設，但目前沒有 log 能直接映射每筆 RPC 到 page instance。
+7. `src/utils/itinerarySaveGate.ts` 的 `saveItineraryWithRevisionNotice()` 先呼叫 `checkForRemoteTripChange()`，但 revision 僅作通知、不阻擋保存；若 `acceptRevision()` 判定有變更，會以 `void inspectAccess()` 非同步啟動 reconciliation，之後保存仍繼續。故同一 page context 內也存在「revision reconciliation 與 save 同時進行」的重疊窗口，不必然要求第二個頁面同時寫入。
+8. `saveItineraryTripDetail()` 在取得 Trip Lease 之前，先把呼叫端傳入的 `nextTrip.content.daysData` 寫入共享 local Trip record 並建立 Pending state；Lease claim、讀取 cloud version／Trip、revision 檢查及 RPC 都在其後。Lease 可序列化雲端寫入，但不能阻止不同 page context 在 claim 前先以各自 snapshot 更新共享本機狀態。這是目前比「兩個 context 同時持有雲端 Lease」更精確的競態候選；雲端 Lease 本身仍應阻止不同 client 同時成功持有。
+9. `useTripWorkspace.ts` 的 `storage` event listener 只在 `travel_companion_custom_trips` key 改變且選取 Trip 已從 cache 消失時清除畫面；若 Trip 仍存在但 `daysData` 被另一個 page context 更新，該 listener 不會同步更新本頁 `currentTrip`。`tripStorage.ts` 的 `saveTripRecord()` 透過 `upsertStoredTripRecord()` 對整個 localStorage trip array 執行 read-modify-write；不同 context 的寫入可彼此覆蓋。這讓各頁面記憶體中的 currentTrip 與共享 local cache 更容易分歧，需納入雙 context 驗證。
+
+### 正式服務 log 觀察（唯讀）
+
+- 影片時間與正式服務 log 對齊：2809.mp4 約 `2026-11-26T13:20:29Z`、2810.mp4 約 `2026-11-26T13:20:48Z`；檢查窗口為 `2026-11-26T13:19:30Z` 至 `13:22:00Z`。
+- 該窗口約 88 秒觀察到：1,310 次完整 `trips` list GET、7,954 次 `tc_read_trip_participant_email_map`、149 次 `tc_save_itinerary_days` POST（全部 HTTP 200）、150 次 `tc_read_itinerary_version`、151 次 Lease claim POST、67 次 Lease release POST（另有 1 次 OPTIONS preflight）、2 次 Lease renew POST、3 次 Lease list POST、197 次 `weather-forecast` 呼叫，以及 34 次 Realtime `SocketJoinRateLimitReached`。
+- 同窗口亦有 PostgREST `Thread killed by timeout manager` 記錄；這顯示服務負載／請求放大，但不能單獨作為清單覆寫的因果證據。
+- 149 次 Save RPC request body size 分布：880／881 bytes 共 56 次、1,168／1,169 bytes 共 75 次、3,742／3,743 bytes 共 18 次。13:20:09.114 前後三組 body length 各增加 1 byte，與 Lease release 開始時間重合；這只證明多組不同 payload 大小，不代表已還原實際 `daysData`。
+- 149 次 Save 全部來自同一 auth user、同一 authenticated session、同一 source IP 與同一 Android Chrome Mobile User-Agent；無法排除同一手機的第二個 Chrome tab、PWA standalone 或背景頁面。
+- Lease renew 發生於 13:19:43.307 與 13:19:58.297，正好相隔 15 秒；第一筆 release 在 13:20:09.114。程式的 `ITINERARY_EDIT_LEASE_HEARTBEAT_MS` 為 15,000 ms，但 App Trip editor 與 ItineraryPage manage mode 都使用同一 heartbeat，因此只能確認有 managed Trip Lease 生命週期轉換，不能辨認是哪個 UI／page context。
+- Gateway logs 有 request_id／trace_id、content_length、user-agent、auth session 等欄位，但沒有 RPC request body 的實際 `p_days_data`、`p_client_id` 或 page/tab identity。postgres_logs 僅 3 筆，沒有 `tc_save_itinerary_days` 或 Lease function 記錄；因此尚不能確認哪筆 Save 寫入空 D2／D3，也不能定位是哪個 context 發出該請求。
+
+### 目前判斷（證據層級）
+
+- **已確認：** 使用者影片顯示整日卡片列表與空狀態交替；正式服務在同一時間窗口出現極高的 workspace list hydration、Save RPC、Lease、Weather 呼叫；Save RPC request body 尺寸不同；Save RPC 寫入的是整份 `daysData`。
+- **強力支持的機制假設：** 不同 page context 可持有不同 full `daysData` snapshot；保存流程在 Lease claim 前先寫 local Trip／Pending，故 Lease 失敗仍可能覆寫共享本機資料。foreign revision 會以 `void inspectAccess()` 啟動 workspace reconciliation；其 `decideTripReconciliation()` 會讀取並可能重寫 shared local／Pending，但 selected Trip 仍存在時不會直接更新 `currentTrip`。後續若 `currentTrip` 因 reload／hydration 改變，Pending auto-sync 可再次保存 stale snapshot。V3.11.5 debounce 移除可能加速此循環，但正式事件時序仍未證實。
+- **尚未證實：** 實際送出空 D2／D3 的 request、該 request 的發送 context，以及正式事件中是否確有第二個背景頁面參與。自動保存 caller 已於 2026-11-27 追完，詳見下方 caller 與跨 context 追查。
+- **排除單因：** Weather ineligible 分支只改 `showWeather`，無法單獨造成卡片刪除；BUG035 到達時間過期隱藏天氣列屬預期行為，不是本事件修正目標。
+
+### 自動保存 caller 與跨 context 寫入順序追查（2026-11-27）
+
+- 本階段詳細執行紀錄與瀏覽器測試結果：[`ADR-002 V3.11.7 regression investigation`](ADR-002-V3.11.7-regression-investigation.md)。
+- `saveItineraryTripDetail()` 的自動保存 caller 已完整定位：一是 `ItineraryPage.tsx` Weather effect，在結果為 `ineligible` 且無可用 cache 時，只將符合條件卡片的 `showWeather` 設為 `false`，再以 `weatherTripRef.current` 建立並保存完整 `daysData`；二是 `useTripWorkspace.ts` Pending auto-sync effect，在 Session ready、online、已選取可寫 Trip 且 sync state 為 `pending` 時，以 `currentTrip` 加上 `pendingDaysData` 呼叫同一保存函式。其餘 `ItineraryPage` 呼叫點均屬使用者操作（排序、複製日期、時間調整、封面、路線估算、卡片新增／刪除），目前未發現第三條自動保存入口。
+- Pending auto-sync 的同頁重入保護已存在：`itinerarySavePromisesRef` 讓同一 Trip 的重入先等待既有 Promise；`shouldSkipDuplicateItinerarySave()` 只在 pending 快照相同且 `hasPriorSaveInFlight=true` 時略過。既有 `test:p0-pending-autosync-idempotency` 只驗證此 helper 的狀態組合與靜態掛載，未涵蓋跨 context 的共享 localStorage 寫入順序。
+- **新增的直接競態證據：** `saveItineraryTripDetail()` 在取得 `__trip__` Lease 前，先依呼叫端快照執行 `saveTripRecord()` 與 `writeItinerarySyncState()`（約 L1073–1077）；Lease claim 才在後續約 L1097 執行。故另一 page context 即使稍後因 Lease 未取得而不能寫雲端，仍可能先把自己的舊 `daysData` 與 Pending revision 寫入共享 localStorage。已持有 Lease 的保存流程隨後會在約 L1105–1107 讀取 Pending revision；若已被另一 context 改寫，便中止本次雲端保存。這證明「Lease 可序列化雲端寫入」不等於「Lease 前的本機快照／Pending 寫入已被序列化」。
+- `itinerarySyncStorage.ts` 的 `writeItinerarySyncState()` 直接寫入 origin-shared localStorage；`useTripWorkspace` 的 `itinerarySyncSnapshot` 僅由本 hook 的 `refreshItinerarySyncState()` 更新，未見跨 context 的 storage subscription。既有 Trip storage listener 在 Trip 仍存在時不會將其他 context 更新的 `daysData` 套回目前 `currentTrip`。因此不同 context 可同時保留彼此不一致的 React state，而共享 localStorage 已被另一 context 改寫。
+- **瀏覽器雙 context harness（2026-11-27）：** 兩個真實 Chrome page context 在獨立 origin、synthetic localStorage、stub Lease／RPC 下，使用實際 tripStorage、itinerarySyncStorage 與 itinerarySync helper 重播 A 先寫 local／Pending 並取得 Lease，B 以 stale empty D2／D3 snapshot 在 Lease claim 前覆寫後遭拒的順序。A 收到 storage event；測試 listener 按實際 source 條件判斷 selected Trip 仍存在而不刷新 currentTrip；A 因 Pending revision 改變而 abort，cloud 未寫入。詳細結果見本 ADR 階段文件。
+- **Workspace reconciliation 驗證：** 使用實際 `decideTripReconciliation()` 與 `reconcilePendingItinerarySyncState()`，確認 stale B Pending 可在 cloud baseline 未變時被 rebase 為 pending empty D2／D3，改變 revision 並重寫 local Trip；selected Trip 仍存在時，原始碼核對 reconcileTripWorkspaceWithResult 只更新 tripOptions，不會直接更新 currentTrip。
+- **Hydration 觸發鏈已定位：** 初始 workspace load 先執行 reconcileTripWorkspace；selected Trip 載入 effect 再讀取 Pending／Conflict，直接以 pendingDaysData 覆蓋 tripData.daysData 並 setCurrentTrip，觸發 Pending auto-sync。App update/restart 也會 reconcile 後 reloadCurrentTrip；openEditTrip 則持有同頁 Trip Lease 後 reloadCurrentTrip(true)。Pending effect 未檢查 locally-held Trip editor Lease；同頁 sessionStorage client ID 可被 SQL claim 視為同一 owner/client 重新 claim。這些是可觸發路徑，尚未證明正式事件當時發生。
+- **Pending auto-sync 重試驗證：** 模擬後續 currentTrip hydration，按實際 effect 條件讀取 pending；在 A release Lease 後，B retry 取得 Lease，實際 merge helper 將 stale deletion 合併到原 cloud baseline，stub RPC 可將空 D2／D3 寫入 cloud version 2。實際 shouldSkipDuplicateItinerarySave() 只在 prior save in-flight 時略過相同 Pending snapshot；prior save settled 後不再略過，因此後續 hydration 可重試 stale Pending。這證明後續 hydration 若發生，stale Pending 可能成為雲端最終資料；React hook mount 與真實 Lease／RPC 未啟動。
+- **其他分支驗證：** Weather ineligible mapping 只切換 `showWeather`，卡片 ID／總數不變；實際 `saveItineraryWithRevisionNotice()` helper 在 deferred `inspectAccess` 尚未完成時已啟動 save，確認 revision notice gate 不等待 access reconciliation。
+- **證據結論：** Lease 前 shared local／Pending overwrite 已由瀏覽器雙 context harness 重現；workspace reconciliation 與後續 Pending auto-sync 的條件式 stale writeback 亦已驗證。正式事件的實際 request body、發送 page／client ID，以及後續 hydration 是否發生仍未證實；根因仍為強力支持的候選，不提升為正式事件已完全定位。
+
+### 已執行驗證與未完成項目
+
+- `npm run verify:trip-lifecycle`：PASS。
+- `npm run test:p0-pending-autosync-idempotency`：PASS；此 repository test 覆蓋 helper 狀態組合與靜態掛載。多 page context、foreign revision、不同完整快照、workspace reconciliation 與 hydration 後 pending retry 已另以瀏覽器隔離 harness 驗證；修正後 Lease reuse／Claim 順序／conditional release 亦完成四項雙 Chrome Context 回歸，完整結果見階段文件。
+- `npm run verify:v364-trip-data-revision` 曾出現靜態 verifier 的 source-format／regex expectation failure；這不是 app runtime failure，尚未進一步修正或重新執行，與本次修正範圍無直接關聯。
+- 本機 Supabase stack 可用，但本機 DB 沒有手機上的該 Trip，不能以本機現有資料重現正式事件。未對正式 DB 資料表執行查詢。
+- 天氣／地圖快取與 Trip Lease 邊界已完成 source／tag diff 核對：一般天氣與路線快取／顯示不使用 Trip Edit Lease；僅天氣 ineligible 自動停用設定會進入 Trip 保存流程，並由中央保存函式取得暫時 Lease。該分支已結案，不追加雙 Context 測試，詳見階段文件。
+
+### 下一步與保留未知
+
+1. 本次程式修正及本機驗證已完成；天氣／地圖快取分支不再追加測試。
+2. 正式事件的 page／client ID、實際 request body 與後續 hydration 時序仍未知；Gateway log 缺少必要欄位，現有證據無法定位正式事件的實際發送 context。除非取得新的可用證據及明確授權，不新增 instrumentation、不查詢正式資料表、不部署。
+3. 詳細修正內容、回歸條件、天氣／地圖邊界結論及驗證結果見 `ADR-002-V3.11.7-regression-investigation.md`。
+
+**本輪狀態：** 已在既有 ADR-001／ADR-002 契約內修正 Lease reuse、temporary Claim 順序及 conditional release，未擴大 Accepted 決策。修正後雙 Chrome Context 四項隔離回歸、本機 Pending／Recovery／S3 integration／TypeScript／ESLint／完整 build 均 PASS。天氣／地圖快取邊界已以原始碼證據確認並結案，不需額外整合測試。正式事件的實際發送 page／client、request body 與 hydration 時序仍未定位；這是正式事件歸因缺口，不影響本次修正及本機驗證結案。

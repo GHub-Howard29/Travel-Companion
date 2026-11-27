@@ -1068,7 +1068,24 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
           currentTripEditorEmails,
         );
 
-        // 先保存本機正式資料，再寫入待同步狀態；任一步驟失敗都回復原始本機紀錄。
+        // 編輯入口已持有 Lease 時直接沿用；無既有 Lease 的線上背景保存先取得暫時 Lease。
+        const ownsExistingLease =
+          isManagedItineraryTripLeaseActive(tripId) ||
+          isLocallyHeldTripEditorLease(tripId);
+        let leaseAcquired = false;
+        if (navigator.onLine && !ownsExistingLease) {
+          const lease = await claimItineraryCardEditLease(supabase, tripId, "__trip__");
+          leaseAcquired = lease.acquired && lease.ownerClientId === ITINERARY_EDIT_CLIENT_ID;
+          if (!leaseAcquired) {
+            // Claim 被拒絕時不重寫 shared Trip／Pending；既有 Pending 仍保留。
+            if (currentState?.status === "pending") {
+              return { localSaved: true, cloudSynced: false };
+            }
+            throw new Error("目前另一個裝置持有旅程編輯權；本次保存未寫入本機資料。");
+          }
+        }
+
+        // 先取得必要的保存權，再更新本機正式資料及 Pending；任一步驟失敗都回復原始本機紀錄。
         try {
           saveTripRecord({
             ...localRecord,
@@ -1081,6 +1098,14 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
           } catch {
             // 保留原始保存錯誤；不得將失敗回報成保存成功。
           }
+          if (
+            leaseAcquired &&
+            !isManagedItineraryTripLeaseActive(tripId) &&
+            !isLocallyHeldTripEditorLease(tripId)
+          ) {
+            try { await releaseItineraryCardEditLease(supabase, tripId, "__trip__"); }
+            catch (releaseError) { console.warn("Trip edit lease release failed after local save error", releaseError); }
+          }
           throw error;
         }
         refreshItinerarySyncState(tripId);
@@ -1089,14 +1114,18 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
         tripLoadRevisionRef.current += 1;
 
         if (!navigator.onLine) {
+          if (
+            leaseAcquired &&
+            !isManagedItineraryTripLeaseActive(tripId) &&
+            !isLocallyHeldTripEditorLease(tripId)
+          ) {
+            try { await releaseItineraryCardEditLease(supabase, tripId, "__trip__"); }
+            catch (releaseError) { console.warn("Trip edit lease release failed after connection loss", releaseError); }
+          }
           return { localSaved: true, cloudSynced: false };
         }
 
-        let leaseAcquired = false;
         try {
-          const lease = await claimItineraryCardEditLease(supabase, tripId, "__trip__");
-          leaseAcquired = lease.acquired && lease.ownerClientId === ITINERARY_EDIT_CLIENT_ID;
-          if (!leaseAcquired) throw new Error("目前另一個裝置持有旅程編輯權；本機修改已保留待同步。");
           const cloudVersion = await readItineraryCloudVersion(supabase, tripId);
           const cloudRecord = await getCloudTripRecord(supabase, tripId);
           if (!cloudRecord) {
@@ -1236,7 +1265,11 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
           }
           return { localSaved: true, cloudSynced: false };
         } finally {
-          if (leaseAcquired && !isManagedItineraryTripLeaseActive(tripId)) {
+          if (
+            leaseAcquired &&
+            !isManagedItineraryTripLeaseActive(tripId) &&
+            !isLocallyHeldTripEditorLease(tripId)
+          ) {
             try { await releaseItineraryCardEditLease(supabase, tripId, "__trip__"); }
             catch (releaseError) { console.warn("Trip edit lease release failed; lease will expire", releaseError); }
           }
@@ -1293,8 +1326,17 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
     }
     // 決策已先持久化；離線可完成預選，但不得宣告同步成功。
     if (!navigator.onLine) return false;
-    const lease = await claimItineraryCardEditLease(supabase, tripId, "__trip__");
-    if (!lease.acquired || lease.ownerClientId !== ITINERARY_EDIT_CLIENT_ID) throw new Error("目前另一個裝置持有旅程編輯權；原衝突資料保留。");
+    const ownsExistingLease =
+      isManagedItineraryTripLeaseActive(tripId) ||
+      isLocallyHeldTripEditorLease(tripId);
+    let leaseAcquired = false;
+    if (!ownsExistingLease) {
+      const lease = await claimItineraryCardEditLease(supabase, tripId, "__trip__");
+      if (!lease.acquired || lease.ownerClientId !== ITINERARY_EDIT_CLIENT_ID) {
+        throw new Error("目前另一個裝置持有旅程編輯權；原衝突資料保留。");
+      }
+      leaseAcquired = true;
+    }
     try {
     const cloudVersion = await readItineraryCloudVersion(supabase, tripId);
     const cloudRecord = await getCloudTripRecord(supabase, tripId);
@@ -1400,8 +1442,14 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
       : current);
     return true;
     } finally {
-      try { await releaseItineraryCardEditLease(supabase, tripId, "__trip__"); }
-      catch (releaseError) { console.warn("Trip edit lease release failed after conflict resolution", releaseError); }
+      if (
+        leaseAcquired &&
+        !isManagedItineraryTripLeaseActive(tripId) &&
+        !isLocallyHeldTripEditorLease(tripId)
+      ) {
+        try { await releaseItineraryCardEditLease(supabase, tripId, "__trip__"); }
+        catch (releaseError) { console.warn("Trip edit lease release failed after conflict resolution", releaseError); }
+      }
     }
   }, [canWriteSelectedTripNow, refreshItinerarySyncState, selectedTripId, selectedTripMeta, supabase]);
 
