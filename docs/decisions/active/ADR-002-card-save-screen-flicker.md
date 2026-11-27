@@ -3,7 +3,8 @@
 - **ID：** ADR-002
 - **狀態：** Accepted（決策持續有效）／Implementation Completed（2026-11-25；歸檔整理 2026-11-26）。S1 的 Preview／Journal 衍生機制拆除、卡片穩定性修正與 ADR-001 管理權新增範圍均已完成並隨 V3.11.5 發布；S2 登入身份切換與登出生命週期 Step 1–4 已實作，S2-01～14 全部 PASS，整體 Exit PASS。S1／S2 執行紀錄已移至 `../history/`，本 ADR 保留 Accepted 決策，不代表決策退休。Participant RPC N+1 與 Weather APP 重複請求僅為未來性能候選，未授權實作；若有新證據，須重新取證並取得實作授權。
 - **建立日期：** 2026-11-22
-- **修訂日期：** 2026-11-26
+- **修訂日期：** 2026-11-27
+- **新增 Accepted 決策（2026-11-27）：** BUG 3 後端相同 route cache key 的併發 cache miss，採用資料庫持久化、具期限的 keyed reservation。每個 cache key 僅允許一個有效處理者進入 provider 查詢；其他同 key 請求等待並重讀快取，不消耗額外額度；處理者成功／失敗均以持有者識別安全釋放，逾時 reservation 可由後續請求接手；快取寫入亦由 DB 在單一 RPC 內核對 owner 與期限後條件式 upsert，避免舊處理者覆蓋新結果。快取命中不經 reservation。保留既有 route cache key、30 天快取、每日 100 次 provider 查詢額度及 Google 路線參數／結果格式；不改路線計算、Trip 編輯鎖、天氣契約或前端 UI。初始授權僅限本地程式、migration、隔離測試及 ADR 文件；不含正式 Supabase migration 或 Edge Function 部署。2026-11-27 其後已完成本機 PostgreSQL 雙 backend concurrency／SQL regression，使用者再明確授權整理文件及 commit/push；仍不包含正式部署。
 - **標題：** 以現行 develop 為基礎，依實際依賴證據拆除不再需要的預覽／通知／變更摘要及同步衍生機制，恢復符合目前決策的同步與保存行為
 
 ## 工作目標

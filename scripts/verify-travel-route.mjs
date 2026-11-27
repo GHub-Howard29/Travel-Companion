@@ -24,6 +24,14 @@ const itineraryPageSource = readFileSync(
   resolve(projectRoot, "src/components/ItineraryPage.tsx"),
   "utf8",
 );
+const reservationMigration = readFileSync(
+  resolve(projectRoot, "supabase/migrations/20261127100000_route_estimate_keyed_reservation.sql"),
+  "utf8",
+);
+const reservationSqlRegression = readFileSync(
+  resolve(projectRoot, "scripts/test-route-estimate-reservation.sql"),
+  "utf8",
+);
 
 assert.equal(isPlace({ placeId: "ChIJ_valid-place" }), true);
 assert.equal(isPlace({ placeId: "short" }), false);
@@ -91,6 +99,32 @@ assert.match(functionSource, /auth\.getUser\(token\)/);
 assert.match(functionSource, /role\.role === "super_admin"/);
 assert.match(functionSource, /role\.role === "trip_editor" && role\.trip_id === tripId/);
 assert.match(functionSource, /Access-Control-Allow-Headers[\s\S]*x-travel-companion-client-id/);
+assert.match(functionSource, /tc_claim_route_estimate_reservation/);
+assert.match(functionSource, /tc_release_route_estimate_reservation/);
+assert.match(functionSource, /tc_store_route_estimate_if_owner/);
+assert.match(reservationMigration, /create or replace function public\.tc_store_route_estimate_if_owner/);
+assert.match(reservationMigration, /from public\.route_estimate_reservations r[\s\S]*?r\.owner_token = p_owner_token[\s\S]*?r\.expires_at > clock_timestamp\(\)[\s\S]*?on conflict \(cache_key\) do update/i);
+assert.match(reservationMigration, /grant execute on function public\.tc_store_route_estimate_if_owner[\s\S]*?to service_role/i);
+assert.match(functionSource, /signal: AbortSignal\.timeout\(20_000\)/);
+assert.match(functionSource, /const reservationTtlSeconds = 90/);
+assert.match(functionSource, /fetch\(GOOGLE_COMPUTE_ROUTES_URL, \{[\s\S]*?AbortSignal\.timeout\(20_000\)/);
+assert.match(reservationMigration, /cache_key text primary key/);
+assert.match(reservationMigration, /on conflict \(cache_key\) do update[\s\S]*?where reservation\.expires_at <= now\(\)/i);
+assert.match(reservationMigration, /where cache_key = p_cache_key\s+and owner_token = p_owner_token/i);
+assert.match(reservationMigration, /expires_at > now\(\)/);
+assert.match(reservationMigration, /grant execute on function public\.tc_claim_route_estimate_reservation[\s\S]*?to service_role/i);
+assert.match(reservationMigration, /grant execute on function public\.tc_store_route_estimate_if_owner[\s\S]*?to service_role/i);
+assert.match(reservationMigration, /grant execute on function public\.tc_release_route_estimate_reservation[\s\S]*?to service_role/i);
+assert.match(reservationSqlRegression, /v_key text := repeat\('a', 64\)/);
+assert.match(reservationSqlRegression, /v_expired_key text := repeat\('c', 64\)/);
+assert.match(reservationSqlRegression, /TEST EXPIRED RESERVATION TAKEOVER SHOULD SUCCEED/);
+assert.match(reservationSqlRegression, /ROLLBACK/);
+assert.match(functionSource, /const waitDeadline = Date\.now\(\) \+ 30_000/);
+assert.ok(functionSource.indexOf(".from(\"route_estimate_cache\")\n          .select") < functionSource.indexOf("tc_claim_route_estimate_reservation"),
+  "Cache must be rechecked before claiming the keyed reservation");
+assert.ok(functionSource.indexOf("tc_claim_route_estimate_reservation") < functionSource.indexOf("tc_claim_route_query_slot"),
+  "The per-route reservation must be acquired before consuming the daily quota");
+assert.match(functionSource, /if \(ownsReservation\) \{[\s\S]*tc_release_route_estimate_reservation/);
 assert.doesNotMatch(functionSource, /SUPABASE_PUBLISHABLE_KEY(?!S)/);
 assert.doesNotMatch(functionSource, /SUPABASE_SECRET_KEY(?!S)/);
 assert.match(clientSource, /context instanceof Response/);

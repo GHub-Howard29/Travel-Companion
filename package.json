@@ -51,6 +51,8 @@
     "test:trip-excel-rpc-local-integration": "node scripts/test-trip-excel-rpc-local-integration.mjs",
     "verify:v370-time-adjustment": "node --experimental-strip-types --no-warnings scripts/verify-v370-time-adjustment.mjs",
     "verify:travel-route": "node --experimental-strip-types --no-warnings scripts/verify-travel-route.mjs",
+    "test:route-estimate-reservation": "node scripts/test-route-estimate-reservation.mjs",
+    "test:route-estimate-reservation:sql": "supabase db test scripts/test-route-estimate-reservation.sql",
     "verify:v390-place-photos": "node --experimental-strip-types --no-warnings scripts/verify-v390-place-photos.mjs",
     "verify:v391-cover-photo": "node --experimental-strip-types --no-warnings scripts/verify-v391-cover-photo.mjs",
     "verify:v3912-three-stage": "node scripts/verify-v3912-three-stage.mjs",

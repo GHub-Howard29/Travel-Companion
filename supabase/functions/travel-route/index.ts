@@ -607,6 +607,7 @@ const requestRoute = async (
 
   const response = await fetch(GOOGLE_COMPUTE_ROUTES_URL, {
     method: "POST",
+    signal: AbortSignal.timeout(20_000),
     headers: {
       "Content-Type": "application/json",
       "X-Goog-Api-Key": apiKey,
@@ -1135,65 +1136,122 @@ Deno.serve(async (request) => {
       });
     }
 
-    const { data: claimed, error: claimError } = await clients.admin.rpc(
-      "tc_claim_route_query_slot",
-      { maximum_requests: ROUTE_DAILY_LIMIT },
-    );
-    if (claimError) throw claimError;
-    if (!claimed) return json({ error: "今日路線查詢已達 100 次上限，請明日再試。" }, 429);
+    const reservationOwner = crypto.randomUUID();
+    const reservationTtlSeconds = 90;
+    const waitDeadline = Date.now() + 30_000;
+    let ownsReservation = false;
 
-    let daytimeFallback = false;
-    let referenceDeparture = mode === "transit"
-      ? getReferenceDeparture(tripDepartureDate, activeDay, departureTime, false)
-      : undefined;
-    let route = await requestRoute(apiKey, {
-      origin: body.origin,
-      destination: body.destination,
-      mode,
-      departureTime: referenceDeparture ?? undefined,
-    });
-    if (!route && mode === "transit") {
-      daytimeFallback = true;
-      referenceDeparture = getReferenceDeparture(tripDepartureDate, activeDay, departureTime, true);
-      route = await requestRoute(apiKey, {
+    try {
+      while (Date.now() < waitDeadline) {
+        const { data: currentCache, error: cacheReadError } = await clients.admin
+          .from("route_estimate_cache")
+          .select("duration_seconds, distance_meters, transit_daytime_fallback, transit_vehicle, expires_at")
+          .eq("cache_key", cacheKey)
+          .gt("expires_at", new Date().toISOString())
+          .maybeSingle();
+        if (cacheReadError) throw cacheReadError;
+        if (currentCache) {
+          return json({
+            durationSeconds: currentCache.duration_seconds,
+            distanceMeters: currentCache.distance_meters,
+            transitDaytimeFallback: currentCache.transit_daytime_fallback,
+            transitVehicle: currentCache.transit_vehicle ?? undefined,
+            cached: true,
+            expiresAt: currentCache.expires_at,
+          });
+        }
+
+        const { data: reservationClaimed, error: reservationError } = await clients.admin.rpc(
+          "tc_claim_route_estimate_reservation",
+          { p_cache_key: cacheKey, p_owner_token: reservationOwner, p_ttl_seconds: reservationTtlSeconds },
+        );
+        if (reservationError) throw reservationError;
+        if (reservationClaimed) {
+          ownsReservation = true;
+          break;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 250));
+      }
+
+      if (!ownsReservation) {
+        return json({ error: "相同路線正在查詢，請稍後再試。", state: "in-progress" }, 409);
+      }
+
+      const { data: claimed, error: claimError } = await clients.admin.rpc(
+        "tc_claim_route_query_slot",
+        { maximum_requests: ROUTE_DAILY_LIMIT },
+      );
+      if (claimError) throw claimError;
+      if (!claimed) return json({ error: "今日路線查詢已達 100 次上限，請明日再試。" }, 429);
+
+      let daytimeFallback = false;
+      let referenceDeparture = mode === "transit"
+        ? getReferenceDeparture(tripDepartureDate, activeDay, departureTime, false)
+        : undefined;
+      let route = await requestRoute(apiKey, {
         origin: body.origin,
         destination: body.destination,
         mode,
         departureTime: referenceDeparture ?? undefined,
       });
-    }
-    if (!route) return json({ error: "目前查不到可用的路線結果。" }, 502);
+      if (!route && mode === "transit") {
+        daytimeFallback = true;
+        referenceDeparture = getReferenceDeparture(tripDepartureDate, activeDay, departureTime, true);
+        route = await requestRoute(apiKey, {
+          origin: body.origin,
+          destination: body.destination,
+          mode,
+          departureTime: referenceDeparture ?? undefined,
+        });
+      }
+      if (!route) return json({ error: "目前查不到可用的路線結果。" }, 502);
 
-    const durationSeconds = parseDurationSeconds(route.duration);
-    const distanceMeters = typeof route.distanceMeters === "number" ? Math.round(route.distanceMeters) : null;
-    if (!durationSeconds || distanceMeters === null || distanceMeters < 0) {
-      return json({ error: "路線服務回傳資料不完整。" }, 502);
-    }
-    const transitVehicle = mode === "transit" ? getTransitVehicle(route) : null;
-    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
-    const { error: cacheError } = await clients.admin.from("route_estimate_cache").upsert({
-      cache_key: cacheKey,
-      trip_id: body.tripId,
-      travel_mode: mode,
-      origin_key: originKey,
-      destination_key: destinationKey,
-      departure_bucket: departureBucket,
-      duration_seconds: durationSeconds,
-      distance_meters: distanceMeters,
-      transit_daytime_fallback: daytimeFallback,
-      transit_vehicle: transitVehicle,
-      expires_at: expiresAt,
-    });
-    if (cacheError) console.warn("Failed to cache route estimate", cacheError);
+      const durationSeconds = parseDurationSeconds(route.duration);
+      const distanceMeters = typeof route.distanceMeters === "number" ? Math.round(route.distanceMeters) : null;
+      if (!durationSeconds || distanceMeters === null || distanceMeters < 0) {
+        return json({ error: "路線服務回傳資料不完整。" }, 502);
+      }
+      const transitVehicle = mode === "transit" ? getTransitVehicle(route) : null;
+      const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+      const { data: cacheStored, error: cacheError } = await clients.admin.rpc(
+        "tc_store_route_estimate_if_owner",
+        {
+          p_cache_key: cacheKey,
+          p_owner_token: reservationOwner,
+          p_trip_id: body.tripId,
+          p_travel_mode: mode,
+          p_origin_key: originKey,
+          p_destination_key: destinationKey,
+          p_departure_bucket: departureBucket,
+          p_duration_seconds: durationSeconds,
+          p_distance_meters: distanceMeters,
+          p_transit_daytime_fallback: daytimeFallback,
+          p_transit_vehicle: transitVehicle,
+          p_expires_at: expiresAt,
+        },
+      );
+      if (cacheError) throw cacheError;
+      if (cacheStored !== true) {
+        return json({ error: "路線查詢處理時間過長，請重新查詢。", state: "reservation-expired" }, 409);
+      }
 
-    return json({
-      durationSeconds,
-      distanceMeters,
-      transitDaytimeFallback: daytimeFallback,
-      transitVehicle: transitVehicle ?? undefined,
-      cached: false,
-      expiresAt,
-    });
+      return json({
+        durationSeconds,
+        distanceMeters,
+        transitDaytimeFallback: daytimeFallback,
+        transitVehicle: transitVehicle ?? undefined,
+        cached: false,
+        expiresAt,
+      });
+    } finally {
+      if (ownsReservation) {
+        const { error: releaseError } = await clients.admin.rpc(
+          "tc_release_route_estimate_reservation",
+          { p_cache_key: cacheKey, p_owner_token: reservationOwner },
+        );
+        if (releaseError) console.warn("Failed to release route estimate reservation", releaseError.message);
+      }
+    }
   } catch (error) {
     console.error("travel-route failed", error);
     return json({ error: "地圖服務暫時無法使用。" }, 500);
