@@ -1,11 +1,11 @@
 {
-  "version": "3.11.7",
+  "version": "3.11.8",
   "minimumSupportedVersion": "3.9.27",
-  "releaseDate": "2026-11-26",
+  "releaseDate": "2026-11-27",
   "releaseNotes": [
-    "新增行程卡片時間區段天氣預報，依已儲存的到達與離開時間計算單一區段摘要。",
-    "新增獨立 Interval 天氣快取與 Lease，依目的地時區及夏令時間計算預報區段。",
-    "修正 Open-Meteo 小時預報請求參數，避免明確 UTC 時間窗與相對預報範圍衝突。"
+    "其他資訊交通卡片可同步顯示於自駕須知，並支援兩個頁面獨立排序。",
+    "修正 Other Info 本機／雲端同步狀態提示，保留失敗後的重新同步入口。",
+    "修正路徑估算併發請求，使用 keyed reservation 避免相同 cache key 重複呼叫上游 API。"
   ],
   "forceUpdate": false
 }
