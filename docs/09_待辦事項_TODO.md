@@ -19,9 +19,10 @@
 
 ## 發布後待修與待驗
 
+- [ ] **V3.11.10：Checklist hydration 正式流量效益觀察（發布後待辦）**：已修正 `loadChecklistCopySources` 每輪 effect 共用一次完整雲端 Trip snapshot；正式觀察後比較 full-list GET 與 participant-map RPC 請求量，確認不再出現 effect 內 N×N full-list hydration。source-level regression 及 build PASS 不等同正式流量量測；單次 hydration 仍保留逐 Trip participant-map RPC。
 - [ ] **V3.11.8：正式 Route POST 呼叫來源歸因（部署後待辦，不阻擋發布）**：Route reservation migration 與 `travel-route` Edge Function 正式部署後，以正式請求觀察證據釐清每次 `travel-route` POST 的發起 page／client、request body 關聯、caller（手動交通模式、複製卡片自動估算、時間調整預覽）及 panel lifecycle；不得僅由 Gateway POST 數量推定來源。沿用既有安全診斷邊界，不記錄 Trip 原始內容、provider 原始 body、Secrets 或敏感資料。結果回寫 ADR-002 V3.11.7 investigation 與決策索引。
-- [ ] **V3.11.8 部署後修正：自駕須知未顯示原生自駕資訊**：正式 DB 唯讀核對確認原始 `special-info-self-guided` 資料仍存在（5 筆 active）；問題是前端只顯示交通分類映射項目，未納入原生 folder 項目。本機已修正為合併原生項目與交通映射項目；`verify:v3920-other-info-categories`、lint、build、`git diff --check` PASS。尚未完成瀏覽器／實機、排序、reload、跨裝置驗收，未 commit／push／deploy；不執行 DB restore／undelete／搬移。ADR-004 是否涵蓋原生項目顯示組合仍待核對，詳見 [ADR-004](decisions/active/ADR-004-other-info-mirrored-view-order.md)。
-- [ ] **V3.11.8：ADR-004 雙頁排序跨裝置 UI 驗收**：正式 Other Info migration 部署後，使用專用測試 Trip 核對交通／自駕須知顯示同一筆映射資料、一般／敏感角色可見性、兩頁分別排序並在重新載入／另一裝置讀回保持獨立；另須確認原生自駕 folder 項目可正常顯示且排序不破壞既有順序。不以本機靜態契約驗證代替 UI／跨裝置證據。
+- [ ] **V3.11.10 部署後驗收：自駕須知原生卡片 CRUD**：原生 `special-info-self-guided` 資料仍存在（正式 DB 唯讀核對為 5 筆 active）；顯示修正及原生卡片 CRUD 權限邊界修正已隨 V3.11.10 正式部署。自動化契約／完整 build PASS；本機唯讀 UI 已確認原生卡片有新增、編輯、刪除控制，交通映射卡片在自駕頁唯讀。仍待使用專用測試 Trip 實際新增／編輯／刪除、保存後 reload／跨裝置讀回與實機 UI；不得以控制項顯示或公開 smoke 代替 CRUD 驗收。未操作正式資料或 DB restore／undelete／搬移。依 [ADR-004](decisions/active/ADR-004-other-info-mirrored-view-order.md) 既定來源權限邊界執行。
+- [ ] **V3.11.10 部署後驗收：ADR-004 雙頁排序與跨裝置 UI**：既有 Other Info migration 已於 V3.11.8 正式套用；本版不新增 migration。使用專用測試 Trip 核對交通／自駕須知顯示同一筆映射資料、一般／敏感角色可見性、兩頁分別排序並在 reload／另一裝置讀回保持獨立；同時驗證原生自駕 folder 項目順序及其 CRUD 不影響映射項目。尚未取得完整 UI／跨裝置實際操作證據，不以本機靜態契約驗證代替。
 - [ ] **V3.11.3 Android 更新故障恢復分支待驗（低優先級）**：正常 V3.11.2 → V3.11.3 更新路徑已由使用者於 2026-11-16 實機確認通過；只保留手動「重新啟動 App」安全重試、逾時／接管失敗處理及「複製診斷資訊」分支，無故障案例時不阻擋後續版本。測試時保留診斷 JSON。狀態以《[14_專案現況總覽](14_專案現況總覽.md)》為準。
 
 ## 後續候選版本
