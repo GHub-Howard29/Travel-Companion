@@ -29,6 +29,7 @@ import {
   getStandaloneHttpUrl,
   getOtherInfoItemsByFolderId,
   getSelfGuidedTransportInfoItems,
+  isSelfGuidedTransportInfoItem,
   isOtherInfoItemVisibleToRole,
   parseOtherInfoContentLinks,
   sortOtherInfoItemsByOrder,
@@ -575,7 +576,7 @@ export const OtherInfoPage = ({
             </h3>
 
             <div className="flex shrink-0 items-center gap-2">
-              {!isSpecialInfoPage && !isCategoryManagerOpen && (
+              {(!isSpecialInfoPage || Boolean(specialFolderId)) && !isCategoryManagerOpen && (
                 <button
                   type="button"
                   onClick={() => {
@@ -610,9 +611,6 @@ export const OtherInfoPage = ({
                 </button>
               )}
 
-              {isSpecialInfoPage && !isFormOpen && (
-                <span className="text-xs text-slate-500">僅可調整排列</span>
-              )}
             </div>
           </div>
         </div>
@@ -632,7 +630,7 @@ export const OtherInfoPage = ({
         </div>
       )}
 
-      {canEdit && isManageMode && isFormOpen && !isSpecialInfoPage && (
+      {canEdit && isManageMode && isFormOpen && (
         <div className="rounded-lg border border-stone-200 bg-white p-4 shadow-sm">
           <div className="mb-3">
             <h3 className="text-base font-bold text-slate-800">
@@ -896,7 +894,7 @@ export const OtherInfoPage = ({
                 {canEdit && isManageMode && (
                   <div className="flex shrink-0 gap-1">
                     {dragHandle}
-                    {!isSpecialInfoPage && <>
+                    {(!isSpecialInfoPage || !isSelfGuidedTransportInfoItem(item)) && <>
                     <button
                       type="button"
                       disabled={itemIndex === 0}
