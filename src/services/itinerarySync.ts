@@ -513,6 +513,17 @@ export const shouldSkipDuplicateItinerarySave = (
   return state.status === "synced" || (state.status === "pending" && hasPriorSaveInFlight);
 };
 
+/**
+ * A queued save must not replay an older snapshot after its predecessor has
+ * completed if a newer Pending revision has already replaced that snapshot.
+ */
+export const isStaleQueuedItinerarySave = (
+  latestState: ItinerarySyncState | null,
+  queuedDaysData: Record<string, ItineraryItem[]>,
+): boolean =>
+  latestState?.status === "pending" &&
+  !sameItineraryDaysData(latestState.pendingDaysData, queuedDaysData);
+
 export const createPendingItinerarySyncState = (
   tripId: string,
   baseCloudUpdatedAt: string | null,

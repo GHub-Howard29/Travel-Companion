@@ -74,6 +74,7 @@ import {
   applyItineraryResolutionChoices,
   sameItineraryDaysData,
   shouldSkipDuplicateItinerarySave,
+  isStaleQueuedItinerarySave,
 } from "../services/itinerarySync";
 import {
   readItinerarySyncState,
@@ -1020,7 +1021,13 @@ export default function useTripWorkspace({ supabase }: UseTripWorkspaceOptions) 
     (nextTrip: TripDetail, editBaseDaysData?: Record<string, ItineraryItem[]>): Promise<{ localSaved: boolean; cloudSynced: boolean }> => {
       const existingSave = itinerarySavePromisesRef.current.get(nextTrip.id);
       const save = (async (): Promise<{ localSaved: boolean; cloudSynced: boolean }> => {
-        if (existingSave) await existingSave;
+        if (existingSave) {
+          await existingSave;
+          const latestState = readItinerarySyncState(nextTrip.id);
+          if (isStaleQueuedItinerarySave(latestState, nextTrip.content.daysData)) {
+            return { localSaved: true, cloudSynced: false };
+          }
+        }
         if (!selectedTripMeta || selectedTripMeta.id !== nextTrip.id) {
           return { localSaved: false, cloudSynced: false };
         }

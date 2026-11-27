@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { shouldSkipDuplicateItinerarySave } from "../src/services/itinerarySync.ts";
+import {
+  createPendingItinerarySyncState,
+  isStaleQueuedItinerarySave,
+  reconcilePendingItinerarySyncState,
+  shouldSkipDuplicateItinerarySave,
+} from "../src/services/itinerarySync.ts";
 
 const baseline = { "1": [{ id: "card-a", title: "A" }] };
 const changed = { "1": [{ id: "card-a", title: "A edited" }] };
@@ -18,11 +23,53 @@ assert.equal(shouldSkipDuplicateItinerarySave(state("pending", baseline), baseli
 assert.equal(shouldSkipDuplicateItinerarySave(state("pending", baseline), changed, true), false, "new local content must not be skipped");
 assert.equal(shouldSkipDuplicateItinerarySave(state("conflict", baseline), baseline, true), false, "conflict remains handled by existing conflict guard");
 
+const baseDaysData = {
+  "1": [
+    { id: "card-a", title: "A" },
+    { id: "card-b", title: "B" },
+  ],
+};
+const firstSnapshot = {
+  "1": [
+    { id: "card-a", title: "A edited" },
+    { id: "card-b", title: "B" },
+  ],
+};
+const latestSnapshot = {
+  "1": [
+    { id: "card-a", title: "A edited" },
+    { id: "card-b", title: "B edited later" },
+  ],
+};
+const firstPending = createPendingItinerarySyncState(
+  "trip-a", "cloud-v1", baseDaysData, firstSnapshot, null, 1,
+);
+const latestPending = createPendingItinerarySyncState(
+  "trip-a", "cloud-v1", baseDaysData, latestSnapshot, firstPending, 1,
+);
+assert.equal(isStaleQueuedItinerarySave(latestPending, firstSnapshot), true,
+  "older queued snapshot must be rejected after a newer Pending revision replaces it");
+assert.equal(isStaleQueuedItinerarySave(latestPending, latestSnapshot), false,
+  "queued snapshot matching the latest Pending state must still proceed");
+assert.equal(isStaleQueuedItinerarySave(state("synced", baseDaysData), firstSnapshot), false,
+  "a settled state must not be treated as a newer Pending write");
+const staleRetry = createPendingItinerarySyncState(
+  "trip-a", "cloud-v1", baseDaysData, firstSnapshot, latestPending, 1,
+);
+const staleMerge = reconcilePendingItinerarySyncState(
+  staleRetry, baseDaysData, "cloud-v1", 1,
+);
+assert.equal(staleMerge.status, "pending");
+assert.equal(staleMerge.state.pendingDaysData["1"][1].title, "B",
+  "regression setup must demonstrate that replaying the old snapshot loses the newer card edit");
+
 const hook = readFileSync(new URL("../src/hooks/useTripWorkspace.ts", import.meta.url), "utf8");
 assert.match(hook, /shouldSkipDuplicateItinerarySave\(currentState, nextTrip\.content\.daysData, Boolean\(existingSave\)\)/);
 assert.match(hook, /if \(currentState\?\.status === "conflict"\)/);
 assert.match(hook, /TripVersionConflictError/);
 assert.match(hook, /reconcilePendingItinerarySyncState/);
+assert.match(hook, /isStaleQueuedItinerarySave\(latestState, nextTrip\.content\.daysData\)/,
+  "queued saves must re-read Pending after waiting and reject stale snapshots");
 
 const saveStart = hook.indexOf("const saveItineraryTripDetail = useCallback(");
 const saveEnd = hook.indexOf("const recordItineraryResolutionChoice", saveStart);

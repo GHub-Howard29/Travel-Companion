@@ -20,6 +20,10 @@ const clientSource = readFileSync(
   resolve(projectRoot, "src/services/travelRouteService.ts"),
   "utf8",
 );
+const itineraryPageSource = readFileSync(
+  resolve(projectRoot, "src/components/ItineraryPage.tsx"),
+  "utf8",
+);
 
 assert.equal(isPlace({ placeId: "ChIJ_valid-place" }), true);
 assert.equal(isPlace({ placeId: "short" }), false);
@@ -91,4 +95,22 @@ assert.doesNotMatch(functionSource, /SUPABASE_PUBLISHABLE_KEY(?!S)/);
 assert.doesNotMatch(functionSource, /SUPABASE_SECRET_KEY(?!S)/);
 assert.match(clientSource, /context instanceof Response/);
 
-console.log("Routes Edge Function 輸入、金鑰相容與授權邊界驗證通過。");
+const routePanelStart = itineraryPageSource.indexOf("const queryTravelMode = async (mode: TravelMode) => {");
+const routePanelEnd = itineraryPageSource.indexOf("const saveTravelEstimate = async () => {", routePanelStart);
+assert.ok(routePanelStart >= 0 && routePanelEnd > routePanelStart, "Route panel query flow must exist");
+const routePanelFlow = itineraryPageSource.slice(routePanelStart, routePanelEnd);
+assert.match(routePanelFlow, /const requestGeneration = \+\+routeRequestGenerationRef\.current/);
+assert.match(routePanelFlow, /if \(requestGeneration !== routeRequestGenerationRef\.current\) return/);
+assert.match(routePanelFlow, /if \(requestGeneration === routeRequestGenerationRef\.current\) \{\s*setIsRouteLoading\(false\)/);
+assert.match(itineraryPageSource, /routeRequestGenerationRef\.current \+= 1;[\s\S]{0,180}setIsRouteLoading\(false\);[\s\S]{0,180}setActiveTravelSegment\(\{ origin, destination/,
+  "Opening another route segment must invalidate prior requests and reset panel loading");
+assert.match(itineraryPageSource, /onClick=\{\(\) => \{\s*routeRequestGenerationRef\.current \+= 1;\s*setIsRouteLoading\(false\);\s*setActiveTravelSegment\(null\)/,
+  "Closing the route panel must invalidate in-flight requests");
+const previewRenderStart = itineraryPageSource.indexOf('<div className="mt-4 flex min-h-16 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-bold text-slate-700" aria-live="polite">');
+const previewRenderEnd = itineraryPageSource.indexOf("{previewEstimate?.transitDaytimeFallback", previewRenderStart);
+assert.ok(previewRenderStart >= 0 && previewRenderEnd > previewRenderStart, "Route preview render block must exist");
+const previewRender = itineraryPageSource.slice(previewRenderStart, previewRenderEnd);
+assert.ok(previewRender.indexOf("previewEstimate && previewEstimate.mode === selectedTravelMode") < previewRender.indexOf("isRouteLoading ?"),
+  "An existing same-mode estimate must stay visible while refreshing");
+
+console.log("Routes Edge input/auth contract and route-panel concurrency/display regression passed.");

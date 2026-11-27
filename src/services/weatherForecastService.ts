@@ -163,6 +163,7 @@ export const getWeatherReminders = (weather: WeatherForecastItem["weather"]): st
 const WEATHER_CACHE_KEY = "travel-companion-weather-forecast-v1";
 const WEATHER_REQUEST_RETRY_DELAY_MS = 1_000;
 const weatherRequestsInFlight = new Map<string, Promise<WeatherForecastItem[]>>();
+const weatherTargetRequestsInFlight = new Map<string, Promise<WeatherForecastItem>>();
 
 const getWeatherTimeSnapshot = (card: ItineraryItem) => {
   const arrivalTime = card.time ?? "";
@@ -245,47 +246,55 @@ export const storeWeatherForecastResults = (
   return merged;
 };
 
-const requestTripWeatherOnce = async (
-  supabase: SupabaseClient,
-  tripId: string,
+type WeatherRequestItem = {
+  card_id: string;
+  place_id: string;
+  day_number: number;
+  forecast_date: string;
+  arrival_time: string;
+  departure_time: string;
+};
+
+const getWeatherRequestItems = (
   departureDate: string,
   daysData: Record<string, ItineraryItem[]>,
+): WeatherRequestItem[] => Object.entries(daysData).flatMap(([dayKey, cards]) => {
+  const dayNumber = Number(dayKey);
+  if (!Number.isSafeInteger(dayNumber) || dayNumber < 1) return [];
+  const forecastDate = getItineraryDayDate(departureDate, dayNumber);
+  if (!forecastDate) return [];
+  return cards.flatMap((card) => card.showWeather === true && card.id && card.place?.placeId
+    ? [{
+      card_id: card.id, place_id: card.place.placeId, day_number: dayNumber, forecast_date: forecastDate,
+      arrival_time: getWeatherTimeSnapshot(card).arrivalTime,
+      departure_time: getWeatherTimeSnapshot(card).departureTime,
+    }]
+    : []);
+});
+
+const getWeatherTargetRequestKey = (
+  tripId: string,
+  item: WeatherRequestItem,
+): string => JSON.stringify([
+  tripId,
+  item.card_id,
+  item.place_id,
+  item.forecast_date,
+  item.arrival_time,
+  item.departure_time,
+  !item.arrival_time && !item.departure_time ? "daily" :
+    item.arrival_time === item.departure_time ? "arrival_hour" : "interval",
+]);
+
+const requestTripWeatherBatch = async (
+  supabase: SupabaseClient,
+  tripId: string,
+  items: WeatherRequestItem[],
 ): Promise<WeatherForecastItem[]> => {
-  const items = Object.entries(daysData).flatMap(([dayKey, cards]) => {
-    const dayNumber = Number(dayKey);
-    if (!Number.isSafeInteger(dayNumber) || dayNumber < 1) return [];
-    const forecastDate = getItineraryDayDate(departureDate, dayNumber);
-    if (!forecastDate) return [];
-    return cards.flatMap((card) => card.showWeather === true && card.id && card.place?.placeId
-      ? [{
-        card_id: card.id, place_id: card.place.placeId, day_number: dayNumber, forecast_date: forecastDate,
-        arrival_time: getWeatherTimeSnapshot(card).arrivalTime,
-        departure_time: getWeatherTimeSnapshot(card).departureTime,
-      }]
-      : []);
-  });
   if (!items.length) return [];
 
-  const cached = loadWeatherForecastCache(tripId);
-  const stoppedItems = items.filter((item) => {
-    const previous = cached[item.card_id];
-    const stopMatches = previous?.refresh_stopped === true && previous.forecast_date === item.forecast_date &&
-      previous.place_id === item.place_id && previous.arrival_time === item.arrival_time &&
-      (previous.departure_time ?? previous.arrival_time ?? "") === item.departure_time;
-    // A terminal local cache only suppresses a request while its weather remains displayable.
-    // Once local weather expires, ask the Edge Function to re-check destination eligibility and remote cache.
-    const cacheAgeMs = previous?.fetched_at ? Date.now() - Date.parse(previous.fetched_at) : Number.POSITIVE_INFINITY;
-    return Boolean(stopMatches && previous?.weather && previous.fetched_at && cacheAgeMs < 48 * 3600000);
-  });
-  const stoppedIds = new Set(stoppedItems.map((item) => item.card_id));
-  const stoppedResults = stoppedItems.map((item) => cached[item.card_id]);
-  const pendingItems = items.filter((item) => !stoppedIds.has(item.card_id));
-  // Let the Edge Function check destination-local eligibility and any usable remote cache before disabling a card.
-  const activeItems = pendingItems;
-  if (!activeItems.length) return stoppedResults;
-
-  const targets = new Map<string, typeof activeItems>();
-  for (const item of activeItems) {
+  const targets = new Map<string, WeatherRequestItem[]>();
+  for (const item of items) {
     const key = `${item.place_id}|${item.forecast_date}`;
     targets.set(key, [...(targets.get(key) ?? []), item]);
   }
@@ -318,7 +327,7 @@ const requestTripWeatherOnce = async (
   }
 
   const resultsByRequestId = new Map(results.map((result) => [result.request_id, result]));
-  return [...stoppedResults, ...activeItems.map((item) => {
+  return items.map((item) => {
     const result = resultsByRequestId.get(item.card_id);
     if (result?.place_id === item.place_id && result.forecast_date === item.forecast_date) return {
       ...result,
@@ -335,12 +344,12 @@ const requestTripWeatherOnce = async (
       departure_time: item.departure_time,
       message: "未取得有效天氣回應，請稍後重試",
     };
-  })];
+  });
 };
 
 /**
- * 同一份 Trip 快照只允許一個天氣請求；複製卡片造成的連續 render 不得重複打同一批資料。
- * Edge Function 回報同步／租約忙碌或卡片尚未同步時，只對該等候項目做一次短暫重試；已完成或已停止更新的卡片不重送。
+ * 同一份 Trip 快照沿用原批次 Promise；不同 snapshot 僅合併目標完全相同的卡片請求。
+ * Edge Function 回報同步／租約忙碌或卡片尚未同步時，只對該等候項目做一次短暫重試。
  */
 export const requestTripWeather = (
   supabase: SupabaseClient,
@@ -348,35 +357,24 @@ export const requestTripWeather = (
   departureDate: string,
   daysData: Record<string, ItineraryItem[]>,
 ): Promise<WeatherForecastItem[]> => {
-  const fingerprint = Object.entries(daysData)
-    .sort(([left], [right]) => left.localeCompare(right))
-    .flatMap(([dayKey, cards]) => cards.map((card) => {
-      const forecastDate = getItineraryDayDate(departureDate, Number(dayKey));
-      const { arrivalTime, departureTime, forecastType } = getWeatherTimeSnapshot(card);
-      return `${dayKey}:${card.id ?? ""}:${card.place?.placeId ?? ""}:${forecastDate ?? ""}:${arrivalTime}:${departureTime}:${forecastType}:${card.showWeather ? "1" : "0"}`;
-    }))
-    .sort()
-    .join(";");
+  const items = getWeatherRequestItems(departureDate, daysData);
+  if (!items.length) return Promise.resolve([]);
+
+  const fingerprint = items.map((item) => getWeatherTargetRequestKey(tripId, item)).sort().join(";");
   const requestKey = `${tripId}|${departureDate}|${fingerprint}`;
-  const hasWeatherTargets = Object.values(daysData).some((cards) => cards.some((card) =>
-    card.showWeather === true && Boolean(card.id) && Boolean(card.place?.placeId),
-  ));
-  if (!hasWeatherTargets) return Promise.resolve([]);
   const existing = weatherRequestsInFlight.get(requestKey);
   if (existing) return existing;
 
   const request = (async () => {
-    const firstResults = await requestTripWeatherOnce(supabase, tripId, departureDate, daysData);
+    const firstResults = await requestWeatherTargets(supabase, tripId, items);
     const retryIds = new Set(firstResults.filter((result) =>
       result.status === "waiting" || result.diagnostic_code === "WEATHER_CARD_NOT_FOUND",
     ).map((result) => result.request_id));
     const finalResults = retryIds.size > 0
       ? await (async () => {
         await waitForWeatherRetry();
-        const retryDaysData = Object.fromEntries(Object.entries(daysData).map(([dayKey, cards]) => [
-          dayKey, cards.filter((card) => Boolean(card.id && retryIds.has(card.id))),
-        ]).filter(([, cards]) => cards.length > 0));
-        const retryResults = await requestTripWeatherOnce(supabase, tripId, departureDate, retryDaysData);
+        const retryItems = items.filter((item) => retryIds.has(item.card_id));
+        const retryResults = await requestWeatherTargets(supabase, tripId, retryItems);
         return [
           ...firstResults.filter((result) => !retryIds.has(result.request_id)),
           ...retryResults,
@@ -384,7 +382,6 @@ export const requestTripWeather = (
       })()
       : firstResults;
 
-    // A second lease-busy response has no automatic retry scheduled by this effect; never leave the UI in a permanent waiting state.
     return finalResults.map((result) => result.status === "waiting" ? {
       ...result,
       status: "unavailable" as const,
@@ -392,10 +389,90 @@ export const requestTripWeather = (
       diagnostic_code: result.diagnostic_code ?? "WEATHER_REFRESH_IN_PROGRESS",
     } : result);
   })();
+
   weatherRequestsInFlight.set(requestKey, request);
   const clearRequest = () => {
     if (weatherRequestsInFlight.get(requestKey) === request) weatherRequestsInFlight.delete(requestKey);
   };
   void request.then(clearRequest, clearRequest);
   return request;
+};
+
+const requestWeatherTargets = async (
+  supabase: SupabaseClient,
+  tripId: string,
+  items: WeatherRequestItem[],
+): Promise<WeatherForecastItem[]> => {
+  const cached = loadWeatherForecastCache(tripId);
+  const stoppedItems = items.filter((item) => {
+    const previous = cached[item.card_id];
+    const stopMatches = previous?.refresh_stopped === true && previous.forecast_date === item.forecast_date &&
+      previous.place_id === item.place_id && previous.arrival_time === item.arrival_time &&
+      (previous.departure_time ?? previous.arrival_time ?? "") === item.departure_time;
+    const cacheAgeMs = previous?.fetched_at ? Date.now() - Date.parse(previous.fetched_at) : Number.POSITIVE_INFINITY;
+    return Boolean(stopMatches && previous?.weather && previous.fetched_at && cacheAgeMs < 48 * 3600000);
+  });
+  const stoppedIds = new Set(stoppedItems.map((item) => item.card_id));
+  const activeItems = items.filter((item) => !stoppedIds.has(item.card_id));
+  if (!activeItems.length) return stoppedItems.map((item) => cached[item.card_id]);
+
+  const resultPromises = new Map<string, Promise<WeatherForecastItem>>();
+  const newItems: WeatherRequestItem[] = [];
+  const reservations = new Map<string, {
+    promise: Promise<WeatherForecastItem>;
+    resolve: (result: WeatherForecastItem) => void;
+    reject: (reason: unknown) => void;
+  }>();
+  for (const item of activeItems) {
+    const key = getWeatherTargetRequestKey(tripId, item);
+    const existing = weatherTargetRequestsInFlight.get(key);
+    if (existing) {
+      resultPromises.set(item.card_id, existing);
+      continue;
+    }
+    let resolveTarget!: (result: WeatherForecastItem) => void;
+    let rejectTarget!: (reason: unknown) => void;
+    const targetPromise = new Promise<WeatherForecastItem>((resolve, reject) => {
+      resolveTarget = resolve;
+      rejectTarget = reject;
+    });
+    weatherTargetRequestsInFlight.set(key, targetPromise);
+    resultPromises.set(item.card_id, targetPromise);
+    reservations.set(item.card_id, { promise: targetPromise, resolve: resolveTarget, reject: rejectTarget });
+    newItems.push(item);
+  }
+
+  if (newItems.length > 0) {
+    void requestTripWeatherBatch(supabase, tripId, newItems).then((results) => {
+      const resultsById = new Map(results.map((result) => [result.request_id, result]));
+      for (const item of newItems) {
+        const result = resultsById.get(item.card_id) ?? {
+          request_id: item.card_id,
+          place_id: item.place_id,
+          forecast_date: item.forecast_date,
+          status: "unavailable" as const,
+          arrival_time: item.arrival_time,
+          departure_time: item.departure_time,
+          message: "未取得有效天氣回應，請稍後重試",
+        };
+        const key = getWeatherTargetRequestKey(tripId, item);
+        const reservation = reservations.get(item.card_id);
+        if (weatherTargetRequestsInFlight.get(key) === reservation?.promise) weatherTargetRequestsInFlight.delete(key);
+        reservation?.resolve(result);
+      }
+    }).catch((error: unknown) => {
+      for (const item of newItems) {
+        const key = getWeatherTargetRequestKey(tripId, item);
+        const reservation = reservations.get(item.card_id);
+        if (weatherTargetRequestsInFlight.get(key) === reservation?.promise) weatherTargetRequestsInFlight.delete(key);
+        reservation?.reject(error);
+      }
+    });
+  }
+
+  const resolved = await Promise.all([...resultPromises.values()]);
+  return [
+    ...stoppedItems.map((item) => cached[item.card_id]),
+    ...resolved,
+  ];
 };

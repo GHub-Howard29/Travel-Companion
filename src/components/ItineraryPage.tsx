@@ -701,6 +701,7 @@ export const ItineraryPage = ({
   const [selectedTravelMode, setSelectedTravelMode] = useState<TravelMode>("drive");
   const [previewEstimate, setPreviewEstimate] = useState<SavedTravelEstimate | null>(null);
   const [isRouteLoading, setIsRouteLoading] = useState(false);
+  const routeRequestGenerationRef = useRef(0);
   const [routeError, setRouteError] = useState<string | null>(null);
   const [isItemSaving, setIsItemSaving] = useState(false);
   const [itemSaveError, setItemSaveError] = useState<string | null>(null);
@@ -2337,6 +2338,8 @@ export const ItineraryPage = ({
     destinationIndex: number,
   ) => {
     const savedEstimate = getSavedTravelEstimate(origin, destination);
+    routeRequestGenerationRef.current += 1;
+    setIsRouteLoading(false);
     setActiveTravelSegment({ origin, destination, originIndex, destinationIndex });
     setSelectedTravelMode(getPreferredTravelMode(origin));
     setPreviewEstimate(savedEstimate);
@@ -2375,23 +2378,30 @@ export const ItineraryPage = ({
   };
 
   const queryTravelMode = async (mode: TravelMode) => {
+    const requestGeneration = ++routeRequestGenerationRef.current;
     setSelectedTravelMode(mode);
     setRouteError(null);
     if (!activeTravelSegment ||
       !isConfirmedPlace(activeTravelSegment.origin.place) ||
       !isConfirmedPlace(activeTravelSegment.destination.place)) return;
 
+    const segment = activeTravelSegment;
     setIsRouteLoading(true);
     try {
-      setPreviewEstimate(await requestTravelEstimate(
-        activeTravelSegment.origin,
-        activeTravelSegment.destination,
+      const estimate = await requestTravelEstimate(
+        segment.origin,
+        segment.destination,
         mode,
-      ));
+      );
+      if (requestGeneration !== routeRequestGenerationRef.current) return;
+      setPreviewEstimate(estimate);
     } catch (error) {
+      if (requestGeneration !== routeRequestGenerationRef.current) return;
       setRouteError(error instanceof Error ? error.message : "路線查詢暫時無法使用。");
     } finally {
-      setIsRouteLoading(false);
+      if (requestGeneration === routeRequestGenerationRef.current) {
+        setIsRouteLoading(false);
+      }
     }
   };
 
@@ -4169,7 +4179,11 @@ export const ItineraryPage = ({
               </div>
               <button
                 type="button"
-                onClick={() => setActiveTravelSegment(null)}
+                onClick={() => {
+                  routeRequestGenerationRef.current += 1;
+                  setIsRouteLoading(false);
+                  setActiveTravelSegment(null);
+                }}
                 className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"
                 aria-label="關閉交通方式"
               >
@@ -4202,13 +4216,14 @@ export const ItineraryPage = ({
             </div>
 
             <div className="mt-4 flex min-h-16 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-bold text-slate-700" aria-live="polite">
-              {isRouteLoading ? (
-                <><Loader2 size={18} className="animate-spin" /> 正在查詢預估路線…</>
-              ) : previewEstimate && previewEstimate.mode === selectedTravelMode ? (
+              {previewEstimate && previewEstimate.mode === selectedTravelMode ? (
                 <>
                   <MaterialTravelModeIcon mode={previewEstimate.mode} size={20} />
                   約 {formatTravelDuration(previewEstimate.durationSeconds)} · {formatTravelDistance(previewEstimate.distanceMeters)}
+                  {isRouteLoading && <Loader2 size={16} className="animate-spin" aria-label="正在更新預估路線" />}
                 </>
+              ) : isRouteLoading ? (
+                <><Loader2 size={18} className="animate-spin" /> 正在查詢預估路線…</>
               ) : (
                 <span className="text-xs font-normal text-slate-500">點選交通方式取得預估結果</span>
               )}
