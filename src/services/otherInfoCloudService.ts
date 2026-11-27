@@ -12,6 +12,7 @@ interface CloudOtherInfoItemRow {
   content: string;
   allowed_roles: unknown;
   sort_order: number;
+  self_guided_sort_order: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -56,6 +57,7 @@ const toOtherInfoItem = (row: CloudOtherInfoItemRow): OtherInfoItem => {
     content: row.content,
     allowedRoles: toAllowedRoles(row.allowed_roles),
     order: row.sort_order,
+    selfGuidedOrder: row.self_guided_sort_order ?? undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -70,6 +72,7 @@ const toCloudRow = (tripId: string, item: OtherInfoItem) => {
     content: item.content,
     allowed_roles: toCloudAllowedRoles(item.allowedRoles),
     sort_order: item.order,
+    self_guided_sort_order: item.selfGuidedOrder ?? null,
     deleted_at: null,
   };
 };
@@ -85,7 +88,7 @@ export const getCloudOtherInfoItems = async (
   const { data, error } = await supabase
     .from("other_info_items")
     .select(
-      "id, client_item_id, trip_id, folder_id, title, content, allowed_roles, sort_order, created_at, updated_at",
+      "id, client_item_id, trip_id, folder_id, title, content, allowed_roles, sort_order, self_guided_sort_order, created_at, updated_at",
     )
     .eq("trip_id", tripId)
     .is("deleted_at", null)

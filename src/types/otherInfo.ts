@@ -42,8 +42,11 @@ export interface OtherInfoItem {
   /** 可閱讀角色，未設定代表不限制 */
   allowedRoles?: Role[];
 
-  /** 排序 */
+  /** 交通／原始分類排序 */
   order: number;
+
+  /** 自駕須知視圖排序；未設定時沿用交通排序建立初始順序 */
+  selfGuidedOrder?: number;
 
   /** 建立時間 */
   createdAt: string;

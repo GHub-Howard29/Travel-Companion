@@ -163,16 +163,22 @@ const ensureSpecialInfoItems = (
   const currentItems = (items ?? []).filter((item) => item.tripId === tripId);
   const specialFolderId = getSpecialInfoFolderId(mode);
   const normalizedItems = currentItems.map((item) => {
-    const isMatchingSpecialItem =
-      item.title === title ||
-      (mode === "guided" &&
-        (item.title.includes("領隊") || item.title.includes("導遊"))) ||
-      (mode === "selfGuided" &&
-        (item.title.includes("自駕") || item.title.includes("租車")));
+    const isMatchingSpecialItem = item.title === title;
+    const isLegacyMirroredTransportItem =
+      mode === "selfGuided" &&
+      item.folderId === "special-info-self-guided" &&
+      item.title !== title &&
+      (item.title.includes("租車") || item.title.includes("自駕"));
 
-    return isMatchingSpecialItem
-      ? { ...item, folderId: specialFolderId }
-      : item;
+    if (isMatchingSpecialItem) {
+      return { ...item, folderId: specialFolderId };
+    }
+
+    if (isLegacyMirroredTransportItem) {
+      return { ...item, folderId: "other-info-transport" };
+    }
+
+    return item;
   });
 
   if (normalizedItems.some((item) => item.title === title)) {

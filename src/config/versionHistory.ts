@@ -14,6 +14,15 @@ export type VersionHistoryItem = {
 
 export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
+    version: "3.11.7",
+    date: "2026-11-26",
+    isMandatoryRelease: false,
+    notes: [
+      "新增每日行程卡片依已儲存到達／離開時間計算單一區段天氣摘要，採獨立 Interval cache／RLS／RPC／Lease。",
+      "依目的地 IANA timezone 與 DST 產生 UTC hourly window，既有 Daily 契約不變。",
+    ],
+  },
+  {
     version: "3.11.6",
     date: "2026-11-25",
     isMandatoryRelease: false,

@@ -40,6 +40,7 @@ const isStoredOtherInfoItem = (value: unknown): value is OtherInfoItem => {
     isString(item.title) &&
     isString(item.content) &&
     isNumber(item.order) &&
+    (item.selfGuidedOrder === undefined || isNumber(item.selfGuidedOrder)) &&
     isString(item.createdAt) &&
     isString(item.updatedAt) &&
     (item.allowedRoles === undefined ||

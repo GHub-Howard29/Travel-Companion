@@ -76,6 +76,25 @@ export const getOtherInfoItemsByFolderId = (
   return items.filter((item) => item.folderId === folderId);
 };
 
+export const isSelfGuidedTransportInfoItem = (
+  item: Pick<OtherInfoItem, "folderId" | "title">,
+): boolean =>
+  item.folderId === "other-info-transport" &&
+  (item.title.includes("租車") || item.title.includes("自駕"));
+
+export const getSelfGuidedTransportInfoItems = (
+  items: OtherInfoItem[],
+): OtherInfoItem[] => items.filter(isSelfGuidedTransportInfoItem);
+
+export const sortSelfGuidedTransportInfoItems = (
+  items: OtherInfoItem[],
+): OtherInfoItem[] =>
+  [...items].sort(
+    (a, b) =>
+      (a.selfGuidedOrder ?? a.order) - (b.selfGuidedOrder ?? b.order) ||
+      a.createdAt.localeCompare(b.createdAt),
+  );
+
 /**
  * 依照排序欄位排序其他資訊內容
  */

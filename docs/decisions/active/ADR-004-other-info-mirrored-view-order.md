@@ -1,0 +1,42 @@
+# ADR-004：其他資訊交通卡片映射至自駕須知與雙頁獨立排序
+
+- **ID：** ADR-004
+- **狀態：** Accepted（2026-11-27；Product Owner 定案）／Implementation in progress
+- **建立日期：** 2026-11-27
+- **範圍：** 自駕行程中，將交通分類特定標題的資訊卡片額外顯示於「自駕租車須知」，並讓兩個視圖維持獨立排序。
+- **不在範圍：** 新增重複資料列、建立第二套內容編輯／刪除流程、變更敏感資料權限、建立新的同步 API／服務、或直接修改正式資料。
+
+## Accepted 決策
+
+1. **原始分類歸屬不變。** 被映射的資訊卡片仍屬於使用者選定的「交通」分類，`folder_id`／`folderId` 不因映射而改變。
+2. **映射條件。** 僅自駕行程的「交通」分類項目，且標題包含「租車」或「自駕」時，額外顯示於「自駕租車須知」。一般資訊與敏感資料皆適用；敏感資料仍依原有 `allowed_roles`／RLS 權限決定能否讀取。
+3. **同一筆資料、兩個視圖。** 自駕須知只投影交通分類中的既有項目，不複製資料、不產生第二筆可同步的內容。
+4. **內容管理唯一入口。** 新增、編輯及刪除映射卡片，一律回到「其他資訊 → 交通」操作。自駕須知不提供新增、編輯及刪除。
+5. **條件式提示。** 新增／編輯資訊表單目前分類為「交通」時，在標題輸入框右側顯示映射關鍵字與規則；其他分類不顯示。
+6. **兩套獨立排序。** 交通視圖沿用既有 `order`／`sort_order`；自駕須知使用同筆資料新增的 `selfGuidedOrder`／`self_guided_sort_order`。自駕排序僅修改自駕排序欄位，交通排序僅修改原有排序欄位，兩邊互不改寫對方排序。
+7. **既有儲存與同步。** 本機仍走既有 Other Info localStorage；跨裝置仍走既有 `other_info_items` upsert／read／sync pipeline。只在既有資料列增加 nullable 自駕排序欄位，不新增資料表、同步服務或 API。
+8. **舊資料相容。** 原有資料沒有自駕排序欄位時，首次建立自駕視圖順序以當時交通映射清單順序初始化；之後才各自獨立維護。舊版錯誤歸入 `special-info-self-guided` 的非 canonical 關鍵字項目，應在自駕 Trip 載入正規化時還原到交通原始分類，canonical `自駕租車資訊` 保持專用 folder。
+
+## 驗收條件
+
+- 相同符合條件的項目同時出現在交通與自駕須知，且具有相同 ID、內容及敏感權限。
+- 非交通分類即使標題包含關鍵字，也不出現在自駕須知。
+- Guest／一般 User 不得因映射而取得原本無權限的敏感卡片或存在提示。
+- 交通重排只更新 `order`；自駕須知重排只更新 `selfGuidedOrder`。
+- 一個視圖重排後，另一視圖的順序保持不變；跨裝置重新載入後兩套順序均保留。
+- 自駕須知的管理模式保留拖曳排序；不提供新增、編輯、刪除。交通頁保留既有內容管理功能。
+- 非交通表單不顯示映射規則提示；交通表單提示顯示在標題輸入框右側。
+
+## 實作紀錄
+
+### 2026-11-27
+
+- 已新增 `OtherInfoItem.selfGuidedOrder`，localStorage schema 接受此 optional number。
+- 已新增交通來源篩選 helper：`folderId === "other-info-transport"` 且標題含「租車」或「自駕」；視圖套用現有 role filter 後才顯示。
+- 已分離排序寫入：交通寫 `order`，自駕寫 `selfGuidedOrder`；沿用既有 defer/local save/cloud sync pipeline。
+- 已修改 `otherInfoCloudService` 讀寫 `self_guided_sort_order`，並新增 migration `20261127120000_other_info_self_guided_sort_order.sql`，欄位 nullable。**Migration 尚未套用任何資料庫。**
+- 已將舊版錯誤歸入 `special-info-self-guided` 的符合關鍵字非 canonical 卡片，於 Trip 正規化時還原至 `other-info-transport`；不直接寫入真實資料。
+- 已保留自駕頁管理入口與拖曳排序，隱藏內容編輯／刪除／新增 controls；一般交通頁既有管理功能保留。
+- 已新增／更新 `verify:v3920-other-info-categories` 契約斷言，第一次重跑通過。
+- 尚待：修正表單提示精確位置後重跑驗證；ESLint／完整 Build；檢查無 migration 的本機舊 DB 會正常等待 migration、套用後可讀寫；瀏覽器端到端雙頁順序操作及跨 reload 驗收。
+- Git：未 commit／push；正式資料庫、正式部署均未操作。

@@ -10,6 +10,10 @@ const tripTypes = fs.readFileSync("src/types/trip.ts", "utf8");
 const folderTypes = fs.readFileSync("src/types/folder.ts", "utf8");
 const defaults = fs.readFileSync("src/utils/folderDefaults.ts", "utf8");
 const repo = fs.readFileSync("src/services/tripRepository.ts", "utf8");
+const otherInfoUtils = fs.readFileSync("src/utils/otherInfoUtils.ts", "utf8");
+const otherInfoTypes = fs.readFileSync("src/types/otherInfo.ts", "utf8");
+const otherInfoCloud = fs.readFileSync("src/services/otherInfoCloudService.ts", "utf8");
+const migration = fs.readFileSync("supabase/migrations/20261127120000_other_info_self_guided_sort_order.sql", "utf8");
 
 assert.match(folderTypes, /isVisible\?: boolean/);
 assert.match(tripTypes, /otherInfoFolders\?: Folder\[\]/);
@@ -53,6 +57,12 @@ assert.match(page, /!isFormOpen/);
 assert.match(page, /scrollManagePanelToTop/);
 assert.match(page, /revealElementTopWhenViewportStable\(panel, 8\)/);
 assert.match(page, /openEditForm\(item\);\s*scrollManagePanelToTop\(\);/s);
+assert.match(page, /syncStatus === "pending"/);
+assert.match(page, /syncStatus === "failed"/);
+assert.match(page, /正在同步雲端/);
+assert.match(page, /雲端同步失敗/);
+assert.match(page, /onRetrySync\?\.\(\)/);
+assert.match(page, /重新同步/);
 assert.match(page, /bg-stone-900 px-3 py-2 text-xs font-bold text-white transition-colors hover:bg-stone-700/);
 
 assert.match(itinerary, /revealElementTopWhenViewportStable\(target, 8\)/);
@@ -72,5 +82,29 @@ assert.match(app, /!didSave && navigator\.onLine/);
 assert.match(repo, /normalizeOtherInfoFolders/);
 assert.match(repo, /createDefaultFoldersForTrip\(id\)/);
 assert.match(repo, /otherInfoFolders: normalizeOtherInfoFolders/);
+assert.match(repo, /const isMatchingSpecialItem = item\.title === title/);
+assert.doesNotMatch(
+  repo,
+  /mode === "selfGuided"\s*&&\s*\(item\.title\.includes\("自駕"\)\s*\|\|\s*item\.title\.includes\("租車"\)\)/,
+  "一般資訊標題包含「租車」時不得被正規化搬入自駕專用分類",
+);
+assert.match(repo, /isLegacyMirroredTransportItem/);
+assert.match(repo, /return \{ \.\.\.item, folderId: "other-info-transport" \}/);
+assert.match(repo, /item\.folderId === "special-info-self-guided"/);
+assert.match(otherInfoUtils, /item\.title\.includes\("租車"\) \|\| item\.title\.includes\("自駕"\)/);
+assert.match(otherInfoUtils, /export const sortSelfGuidedTransportInfoItems/);
+assert.match(otherInfoTypes, /selfGuidedOrder\?: number/);
+assert.match(otherInfoCloud, /self_guided_sort_order: item\.selfGuidedOrder \?\? null/);
+assert.match(otherInfoCloud, /selfGuidedOrder: row\.self_guided_sort_order \?\? undefined/);
+assert.match(migration, /add column if not exists self_guided_sort_order integer null/);
+assert.match(page, /selfGuidedOrder: nextOrder/);
+assert.match(page, /order: nextOrder/);
+assert.match(page, /form\.folderId === "other-info-transport"/);
+assert.doesNotMatch(page, /effectiveActiveFolderId === "other-info-transport"/);
+assert.match(page, /標題含「租車」或「自駕」即額外顯示於自駕須知/);
+assert.match(page, /w-28 shrink-0 rounded-lg border border-sky-200/);
+assert.match(page, /{canEdit && isManageMode && \(/);
+assert.match(page, /!isSpecialInfoPage && <>/);
+assert.match(page, /selfGuidedOrder: nextOrder/);
 
-console.log("V3.9.20 其他資訊自訂子類別、顯示隱藏與自動排列契約驗證通過。");
+console.log("V3.9.20 其他資訊子類別與雙頁映射／獨立排序契約驗證通過。");

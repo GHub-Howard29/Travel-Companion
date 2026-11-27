@@ -38,6 +38,26 @@ assert.match(
 );
 assert.match(
   app,
+  /setOtherInfoSyncStatus\("pending"\)/,
+  "Other Info 本機先存後必須顯示 pending 狀態",
+);
+assert.match(
+  app,
+  /markOtherInfoSyncFailed\([\s\S]*?setOtherInfoSyncStatus\("failed"\)/,
+  "Other Info 雲端同步失敗必須保留 failed 狀態",
+);
+assert.match(
+  app,
+  /const retryOtherInfoSync = useCallback\(\(\) => \{\s*void syncPendingOtherInfo\(\);/,
+  "Other Info 應提供重試同步 callback",
+);
+assert.match(
+  app,
+  /syncStatus=\{otherInfoSyncStatus\}[\s\S]*onRetrySync=\{retryOtherInfoSync\}/,
+  "Other Info 頁面必須收到同步狀態與重試 callback",
+);
+assert.match(
+  app,
   /pendingItems\.filter\(\(item\) => !item\.isDeleted\)/,
   "Other Info pending sync 只能 upsert 本次變更的 active rows",
 );

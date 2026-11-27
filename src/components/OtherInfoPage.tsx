@@ -28,9 +28,11 @@ import {
 import {
   getStandaloneHttpUrl,
   getOtherInfoItemsByFolderId,
+  getSelfGuidedTransportInfoItems,
   isOtherInfoItemVisibleToRole,
   parseOtherInfoContentLinks,
   sortOtherInfoItemsByOrder,
+  sortSelfGuidedTransportInfoItems,
 } from "../utils/otherInfoUtils";
 import { useOtherInfoForm } from "../hooks/useOtherInfoForm";
 import { SortableCard } from "./SortableCard";
@@ -261,15 +263,25 @@ export const OtherInfoPage = ({
       void flushPendingOrder();
     };
   }, [flushPendingOrder]);
-  const activeItems = useMemo(
-    () =>
-      sortOtherInfoItemsByOrder(
-        isSpecialInfoPage
-          ? getOtherInfoItemsByFolderId(visibleItems, initialFolderId)
-          : getOtherInfoItemsByFolderId(visibleItems, effectiveActiveFolderId),
-      ),
-    [effectiveActiveFolderId, initialFolderId, isSpecialInfoPage, visibleItems],
-  );
+  const activeItems = useMemo(() => {
+    if (!isSpecialInfoPage) {
+      return sortOtherInfoItemsByOrder(
+        getOtherInfoItemsByFolderId(visibleItems, effectiveActiveFolderId),
+      );
+    }
+
+    const mirroredItems = getSelfGuidedTransportInfoItems(visibleItems);
+    const hasSelfGuidedOrdering = mirroredItems.some(
+      (item) => item.selfGuidedOrder !== undefined,
+    );
+    const itemsWithViewOrder = mirroredItems.map((item, index) => ({
+      ...item,
+      selfGuidedOrder:
+        item.selfGuidedOrder ?? (hasSelfGuidedOrdering ? Number.MAX_SAFE_INTEGER + index : index + 1),
+    }));
+
+    return sortSelfGuidedTransportInfoItems(itemsWithViewOrder);
+  }, [effectiveActiveFolderId, isSpecialInfoPage, visibleItems]);
 
   const closeManageMode = () => {
     releaseFocusedControl();
@@ -345,7 +357,7 @@ export const OtherInfoPage = ({
       return;
     }
 
-    const targetFolderId = isSpecialInfoPage ? initialFolderId : form.folderId;
+    const targetFolderId = form.folderId;
     const allowedRoles = form.isSensitive
       ? normalizeOtherInfoAllowedRoles(MANAGER_ONLY_ROLES)
       : undefined;
@@ -420,6 +432,20 @@ export const OtherInfoPage = ({
     }
   };
 
+  const applyActiveOrder = (reorderedItems: OtherInfoItem[]) => {
+    const orderById = new Map(reorderedItems.map((item, index) => [item.id, index + 1]));
+    const now = new Date().toISOString();
+    deferOrderSync(
+      items.map((item) => {
+        const nextOrder = orderById.get(item.id);
+        if (nextOrder === undefined) return item;
+        return isSpecialInfoPage
+          ? { ...item, selfGuidedOrder: nextOrder, updatedAt: now }
+          : { ...item, order: nextOrder, updatedAt: now };
+      }),
+    );
+  };
+
   const moveActiveItem = (itemId: string, direction: -1 | 1) => {
     const currentIndex = activeItems.findIndex((item) => item.id === itemId);
     const targetIndex = currentIndex + direction;
@@ -432,16 +458,7 @@ export const OtherInfoPage = ({
       reorderedItems[targetIndex],
       reorderedItems[currentIndex],
     ];
-    const orderById = new Map(
-      reorderedItems.map((item, index) => [item.id, index + 1]),
-    );
-    deferOrderSync(
-      items.map((item) =>
-        orderById.has(item.id)
-          ? { ...item, order: orderById.get(item.id) ?? item.order, updatedAt: new Date().toISOString() }
-          : item,
-      ),
-    );
+    applyActiveOrder(reorderedItems);
   };
 
   const handleDragEnd = ({ active, over }: DragEndEvent) => {
@@ -449,13 +466,7 @@ export const OtherInfoPage = ({
     const oldIndex = activeItems.findIndex((item) => item.id === active.id);
     const newIndex = activeItems.findIndex((item) => item.id === over.id);
     if (oldIndex < 0 || newIndex < 0) return;
-    const reorderedItems = arrayMove(activeItems, oldIndex, newIndex);
-    const orderById = new Map(reorderedItems.map((item, index) => [item.id, index + 1]));
-    deferOrderSync(items.map((item) =>
-      orderById.has(item.id)
-        ? { ...item, order: orderById.get(item.id) ?? item.order, updatedAt: new Date().toISOString() }
-        : item,
-    ));
+    applyActiveOrder(arrayMove(activeItems, oldIndex, newIndex));
   };
 
   return (
@@ -598,22 +609,14 @@ export const OtherInfoPage = ({
               )}
 
               {isSpecialInfoPage && !isFormOpen && (
-                <button
-                  type="button"
-                  onClick={() => openCreateForm(effectiveActiveFolderId)}
-                  disabled={isSaving}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-stone-900 px-3 py-2 text-xs font-bold text-white hover:bg-stone-700"
-                >
-                  <Plus size={14} />
-                  新增
-                </button>
+                <span className="text-xs text-slate-500">僅可調整排列</span>
               )}
             </div>
           </div>
         </div>
       )}
 
-      {canEdit && isManageMode && !isSpecialInfoPage && isCategoryManagerOpen && (
+      {canEdit && isManageMode && isCategoryManagerOpen && (
         <div id="other-info-category-manager">
           <OtherInfoCategoryManager
             tripId={tripId}
@@ -627,7 +630,7 @@ export const OtherInfoPage = ({
         </div>
       )}
 
-      {canEdit && isManageMode && isFormOpen && (
+      {canEdit && isManageMode && isFormOpen && !isSpecialInfoPage && (
         <div className="rounded-lg border border-stone-200 bg-white p-4 shadow-sm">
           <div className="mb-3">
             <h3 className="text-base font-bold text-slate-800">
@@ -697,16 +700,24 @@ export const OtherInfoPage = ({
             </select>
             )}
 
-            <input
-              value={form.title}
-              onChange={(event) =>
-                updateForm({
-                  title: event.target.value,
-                })
-              }
-              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 outline-none focus:border-stone-500"
-              placeholder="標題"
-            />
+            <div className="flex items-start gap-2">
+              <input
+                value={form.title}
+                onChange={(event) =>
+                  updateForm({
+                    title: event.target.value,
+                  })
+                }
+                className="min-w-0 flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 outline-none focus:border-stone-500"
+                placeholder="標題"
+              />
+              {form.folderId === "other-info-transport" && (
+                <div className="w-28 shrink-0 rounded-lg border border-sky-200 bg-sky-50 px-2 py-2 text-[11px] leading-relaxed text-sky-900" role="note">
+                  **自駕須知同步**
+                  標題含「租車」或「自駕」即額外顯示於自駕須知，原始分類仍是交通。一般／敏感皆適用。
+                </div>
+              )}
+            </div>
 
             <RichTextColorEditor
               value={form.content}
@@ -813,6 +824,26 @@ export const OtherInfoPage = ({
           </span>
         </div>
 
+        {syncStatus === "pending" && (
+          <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800" role="status" aria-live="polite">
+            <RefreshCw size={15} className="shrink-0 animate-spin" aria-hidden="true" />
+            <span>資料已暫存在本機，正在同步雲端…</span>
+          </div>
+        )}
+        {syncStatus === "failed" && (
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800" role="alert">
+            <span>雲端同步失敗，這筆資料目前只保存在本機；其他裝置尚無法取得。</span>
+            <button
+              type="button"
+              onClick={() => onRetrySync?.()}
+              className="inline-flex shrink-0 items-center gap-1 rounded-md border border-rose-300 bg-white px-2.5 py-1.5 font-bold text-rose-700 hover:bg-rose-100"
+            >
+              <RefreshCw size={13} aria-hidden="true" />
+              重新同步
+            </button>
+          </div>
+        )}
+
         {activeItems.length === 0 ? (
           <div className="rounded-lg border border-dashed border-slate-200 bg-white px-4 py-10 text-center text-sm text-slate-400">
             {isSpecialInfoPage ? "目前尚無資訊" : "這個資料夾目前沒有資訊"}
@@ -863,6 +894,7 @@ export const OtherInfoPage = ({
                 {canEdit && isManageMode && (
                   <div className="flex shrink-0 gap-1">
                     {dragHandle}
+                    {!isSpecialInfoPage && <>
                     <button
                       type="button"
                       disabled={itemIndex === 0}
@@ -904,6 +936,7 @@ export const OtherInfoPage = ({
                     >
                       <Trash2 size={15} />
                     </button>
+                    </>}
                   </div>
                 )}
               </div>
