@@ -14,6 +14,14 @@ export type VersionHistoryItem = {
 
 export const VERSION_HISTORY: VersionHistoryItem[] = [
   {
+    version: "3.11.9",
+    date: "2026-11-27",
+    isMandatoryRelease: false,
+    notes: [
+      "修正自駕租車須知未顯示原生 special-info-self-guided 資訊的問題，保留既有資料與交通映射內容。",
+    ],
+  },
+  {
     version: "3.11.8",
     date: "2026-11-27",
     isMandatoryRelease: false,

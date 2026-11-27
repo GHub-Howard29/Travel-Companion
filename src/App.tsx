@@ -3,6 +3,7 @@ import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRe
 
 // Supabase 雲端資料庫
 import { createClient } from "@supabase/supabase-js";
+import { isStaticSeedTripId } from "./constants/appConstants";
 
 // 旅程型別
 import {
@@ -1471,10 +1472,13 @@ function ConfiguredApp({
       const storedTripsById = new Map(
         readStoredTripRecords().map((record) => [record.meta.id, record.detail]),
       );
+      const hasCloudTrips = tripOptions.some((trip) => !isStaticSeedTripId(trip.id));
+      const cloudRecords =
+        isOnline && hasCloudTrips ? await getCloudTripRecords(supabase) : undefined;
       const sources = await Promise.all(
         tripOptions.map(async (trip) => {
           const detail = isOnline
-            ? await getTripDetail(supabase, basePath, trip.id, trip)
+            ? await getTripDetail(supabase, basePath, trip.id, trip, cloudRecords)
             : storedTripsById.get(trip.id) ??
               (trip.id === selectedTripId ? currentTrip : null);
 

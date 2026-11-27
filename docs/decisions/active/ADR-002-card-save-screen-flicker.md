@@ -1,9 +1,9 @@
 # ADR-002：移除已淘汰的每日行程預覽／同步衍生機制並修復保存更新行為
 
 - **ID：** ADR-002
-- **狀態：** Accepted（決策持續有效）／Implementation Completed（2026-11-25；歸檔整理 2026-11-26）。S1 的 Preview／Journal 衍生機制拆除、卡片穩定性修正與 ADR-001 管理權新增範圍均已完成並隨 V3.11.5 發布；S2 登入身份切換與登出生命週期 Step 1–4 已實作，S2-01～14 全部 PASS，整體 Exit PASS。S1／S2 執行紀錄已移至 `../history/`，本 ADR 保留 Accepted 決策，不代表決策退休。Participant RPC N+1 與 Weather APP 重複請求僅為未來性能候選，未授權實作；若有新證據，須重新取證並取得實作授權。
+- **狀態：** Accepted（決策持續有效）／Implementation Completed（2026-11-25；歸檔整理 2026-11-26）。S1 的 Preview／Journal 衍生機制拆除、卡片穩定性修正與 ADR-001 管理權新增範圍均已完成並隨 V3.11.5 發布；S2 登入身份切換與登出生命週期 Step 1–4 已實作，S2-01～14 全部 PASS，整體 Exit PASS。S1／S2 執行紀錄已移至 `../history/`，本 ADR 保留 Accepted 決策，不代表決策退休。Participant RPC N+1／Weather APP 重複請求原列為未來性能候選；2026-11-27 正式 log 已確認 V3.11.8 `loadChecklistCopySources` N×N fan-out（詳見事件調查文件）；使用者於 2026-11-28 核准僅修正此 effect 的 N×N full-list hydration；最小修正、本機回歸、全專案 ESLint、完整 production build 均 PASS，已隨 V3.11.10 正式部署。正式流量效益仍待觀察。
 - **建立日期：** 2026-11-22
-- **修訂日期：** 2026-11-27
+- **修訂日期：** 2026-11-28
 - **新增 Accepted 決策（2026-11-27）：** BUG 3 後端相同 route cache key 的併發 cache miss，採用資料庫持久化、具期限的 keyed reservation。每個 cache key 僅允許一個有效處理者進入 provider 查詢；其他同 key 請求等待並重讀快取，不消耗額外額度；處理者成功／失敗均以持有者識別安全釋放，逾時 reservation 可由後續請求接手；快取寫入亦由 DB 在單一 RPC 內核對 owner 與期限後條件式 upsert，避免舊處理者覆蓋新結果。快取命中不經 reservation。保留既有 route cache key、30 天快取、每日 100 次 provider 查詢額度及 Google 路線參數／結果格式；不改路線計算、Trip 編輯鎖、天氣契約或前端 UI。初始授權僅限本地程式、migration、隔離測試及 ADR 文件；不含正式 Supabase migration 或 Edge Function 部署。2026-11-27 其後已完成本機 PostgreSQL 雙 backend concurrency／SQL regression，使用者再明確授權整理文件及 commit/push；仍不包含正式部署。
 - **標題：** 以現行 develop 為基礎，依實際依賴證據拆除不再需要的預覽／通知／變更摘要及同步衍生機制，恢復符合目前決策的同步與保存行為
 
@@ -196,7 +196,7 @@
 
 - 影片時間與正式服務 log 對齊：2809.mp4 約 `2026-11-26T13:20:29Z`、2810.mp4 約 `2026-11-26T13:20:48Z`；檢查窗口為 `2026-11-26T13:19:30Z` 至 `13:22:00Z`。
 - 該窗口約 88 秒觀察到：1,310 次完整 `trips` list GET、7,954 次 `tc_read_trip_participant_email_map`、149 次 `tc_save_itinerary_days` POST（全部 HTTP 200）、150 次 `tc_read_itinerary_version`、151 次 Lease claim POST、67 次 Lease release POST（另有 1 次 OPTIONS preflight）、2 次 Lease renew POST、3 次 Lease list POST、197 次 `weather-forecast` 呼叫，以及 34 次 Realtime `SocketJoinRateLimitReached`。
-- 同窗口亦有 PostgREST `Thread killed by timeout manager` 記錄；這顯示服務負載／請求放大，但不能單獨作為清單覆寫的因果證據。
+- 同窗口亦有 PostgREST `Warp server error: Thread killed by timeout manager` 記錄；PostgREST upstream issue #4799 指出此訊息可在正常 SIGINT／server shutdown 時出現，不能單獨作為服務負載、API timeout 或清單覆寫的因果證據。
 - 149 次 Save RPC request body size 分布：880／881 bytes 共 56 次、1,168／1,169 bytes 共 75 次、3,742／3,743 bytes 共 18 次。13:20:09.114 前後三組 body length 各增加 1 byte，與 Lease release 開始時間重合；這只證明多組不同 payload 大小，不代表已還原實際 `daysData`。
 - 149 次 Save 全部來自同一 auth user、同一 authenticated session、同一 source IP 與同一 Android Chrome Mobile User-Agent；無法排除同一手機的第二個 Chrome tab、PWA standalone 或背景頁面。
 - Lease renew 發生於 13:19:43.307 與 13:19:58.297，正好相隔 15 秒；第一筆 release 在 13:20:09.114。程式的 `ITINERARY_EDIT_LEASE_HEARTBEAT_MS` 為 15,000 ms，但 App Trip editor 與 ItineraryPage manage mode 都使用同一 heartbeat，因此只能確認有 managed Trip Lease 生命週期轉換，不能辨認是哪個 UI／page context。

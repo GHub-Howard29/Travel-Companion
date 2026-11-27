@@ -1,9 +1,9 @@
 {
-  "version": "3.11.9",
+  "version": "3.11.10",
   "minimumSupportedVersion": "3.9.27",
-  "releaseDate": "2026-11-27",
+  "releaseDate": "2026-11-28",
   "releaseNotes": [
-    "修正自駕租車須知未顯示原生自駕資訊的問題，保留既有資料與交通映射內容。"
+    "修正 Checklist 複製來源載入重複下載完整旅程清單的問題，降低多旅程情境的重複雲端讀取。"
   ],
   "forceUpdate": false
 }
