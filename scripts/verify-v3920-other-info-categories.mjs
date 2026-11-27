@@ -106,5 +106,7 @@ assert.match(page, /w-28 shrink-0 rounded-lg border border-sky-200/);
 assert.match(page, /{canEdit && isManageMode && \(/);
 assert.match(page, /!isSpecialInfoPage && <>/);
 assert.match(page, /selfGuidedOrder: nextOrder/);
+assert.match(page, /const nativeItems = getOtherInfoItemsByFolderId\(visibleItems, effectiveActiveFolderId\)/);
+assert.match(page, /const selfGuidedItems = \[\.\.\.nativeItems, \.\.\.mirroredItems\]/);
 
 console.log("V3.9.20 其他資訊子類別與雙頁映射／獨立排序契約驗證通過。");

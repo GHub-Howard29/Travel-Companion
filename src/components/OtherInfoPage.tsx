@@ -270,11 +270,13 @@ export const OtherInfoPage = ({
       );
     }
 
+    const nativeItems = getOtherInfoItemsByFolderId(visibleItems, effectiveActiveFolderId);
     const mirroredItems = getSelfGuidedTransportInfoItems(visibleItems);
-    const hasSelfGuidedOrdering = mirroredItems.some(
+    const selfGuidedItems = [...nativeItems, ...mirroredItems];
+    const hasSelfGuidedOrdering = selfGuidedItems.some(
       (item) => item.selfGuidedOrder !== undefined,
     );
-    const itemsWithViewOrder = mirroredItems.map((item, index) => ({
+    const itemsWithViewOrder = selfGuidedItems.map((item, index) => ({
       ...item,
       selfGuidedOrder:
         item.selfGuidedOrder ?? (hasSelfGuidedOrdering ? Number.MAX_SAFE_INTEGER + index : index + 1),

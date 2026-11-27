@@ -40,3 +40,13 @@
 - 已新增／更新 `verify:v3920-other-info-categories` 契約斷言，第一次重跑通過。
 - 尚待：修正表單提示精確位置後重跑驗證；ESLint／完整 Build；檢查無 migration 的本機舊 DB 會正常等待 migration、套用後可讀寫；瀏覽器端到端雙頁順序操作及跨 reload 驗收。
 - Git：未 commit／push；正式資料庫、正式部署均未操作。
+
+### 2026-11-27 V3.11.8 部署後修正追蹤：原生自駕資訊未顯示
+
+- 使用者回報 V3.11.8 部署後，原本存放於 `special-info-self-guided` 的自駕資訊未出現在「自駕租車須知」頁。
+- 正式資料庫唯讀核對：該 Trip 原生自駕資料仍有 5 筆 active records；另有 2 筆 soft-deleted records，經內容辨識為測試資料，並非原始使用者資料。原始資料未遭刪除，本次不執行 DB restore／undelete／資料搬移。
+- 根因定位於 `OtherInfoPage.tsx`：自駕頁只組合交通分類映射項目，未納入目前自駕專用 folder 的原生項目。
+- 本機修正已加入 `getOtherInfoItemsByFolderId(visibleItems, effectiveActiveFolderId)` 取得原生項目，並與既有交通映射項目合併顯示；沿用 `selfGuidedOrder`，未改動資料列、原始分類或資料庫。
+- 本機驗證：`npm run verify:v3920-other-info-categories`、`npm run lint`、`npm run build`、`git diff --check` 均 PASS。尚未完成正式頁面瀏覽器／實機驗收、跨裝置讀回及部署後驗證；此修正目前僅在本機，未 commit／push／deploy。
+- **ADR 邊界待確認：** ADR-004 明確規範交通分類映射與 canonical `自駕租車資訊` 專用 folder，但 Accepted 範圍未明文描述原生 folder 項目在自駕頁的顯示組合。先記錄為 V3.11.8 部署後缺陷修正候選，不自行擴張或修改 Accepted 決策；完成 ADR 原文與產品契約核對後再判定是否需 ADR 修訂。
+- 下一步：完成 ADR 邊界判定及自駕原生資料／交通映射資料同頁顯示、排序、reload、跨裝置驗收；其他 V3.11.8 部署後待驗項目仍維持未完成。

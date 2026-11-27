@@ -20,7 +20,8 @@
 ## 發布後待修與待驗
 
 - [ ] **V3.11.8：正式 Route POST 呼叫來源歸因（部署後待辦，不阻擋發布）**：Route reservation migration 與 `travel-route` Edge Function 正式部署後，以正式請求觀察證據釐清每次 `travel-route` POST 的發起 page／client、request body 關聯、caller（手動交通模式、複製卡片自動估算、時間調整預覽）及 panel lifecycle；不得僅由 Gateway POST 數量推定來源。沿用既有安全診斷邊界，不記錄 Trip 原始內容、provider 原始 body、Secrets 或敏感資料。結果回寫 ADR-002 V3.11.7 investigation 與決策索引。
-- [ ] **V3.11.8：ADR-004 雙頁排序跨裝置 UI 驗收**：正式 Other Info migration 部署後，使用專用測試 Trip 核對交通／自駕須知顯示同一筆資料、一般／敏感角色可見性、兩頁分別排序並在重新載入／另一裝置讀回保持獨立；不以本機靜態契約驗證代替 UI／跨裝置證據。
+- [ ] **V3.11.8 部署後修正：自駕須知未顯示原生自駕資訊**：正式 DB 唯讀核對確認原始 `special-info-self-guided` 資料仍存在（5 筆 active）；問題是前端只顯示交通分類映射項目，未納入原生 folder 項目。本機已修正為合併原生項目與交通映射項目；`verify:v3920-other-info-categories`、lint、build、`git diff --check` PASS。尚未完成瀏覽器／實機、排序、reload、跨裝置驗收，未 commit／push／deploy；不執行 DB restore／undelete／搬移。ADR-004 是否涵蓋原生項目顯示組合仍待核對，詳見 [ADR-004](decisions/active/ADR-004-other-info-mirrored-view-order.md)。
+- [ ] **V3.11.8：ADR-004 雙頁排序跨裝置 UI 驗收**：正式 Other Info migration 部署後，使用專用測試 Trip 核對交通／自駕須知顯示同一筆映射資料、一般／敏感角色可見性、兩頁分別排序並在重新載入／另一裝置讀回保持獨立；另須確認原生自駕 folder 項目可正常顯示且排序不破壞既有順序。不以本機靜態契約驗證代替 UI／跨裝置證據。
 - [ ] **V3.11.3 Android 更新故障恢復分支待驗（低優先級）**：正常 V3.11.2 → V3.11.3 更新路徑已由使用者於 2026-11-16 實機確認通過；只保留手動「重新啟動 App」安全重試、逾時／接管失敗處理及「複製診斷資訊」分支，無故障案例時不阻擋後續版本。測試時保留診斷 JSON。狀態以《[14_專案現況總覽](14_專案現況總覽.md)》為準。
 
 ## 後續候選版本
