@@ -862,9 +862,9 @@ export const OtherInfoPage = ({
 
                 return <>
               <div className="mb-2 flex items-start justify-between gap-3">
-                <div className="flex items-start gap-2">
-                  <FileText className="mt-0.5 text-stone-500" size={18} />
-                  <h4 className="text-base font-bold leading-snug text-slate-800">
+                <div className="flex min-w-0 items-start gap-2">
+                  <FileText className="mt-0.5 shrink-0 text-stone-500" size={18} />
+                  <h4 className="min-w-0 text-base font-bold leading-snug text-slate-800">
                     {standaloneUrl ? (
                       <a
                         href={standaloneUrl}
@@ -883,68 +883,71 @@ export const OtherInfoPage = ({
                       item.title
                     )}
                   </h4>
-                  {isSensitiveItem(item) && (
-                    <span className="mt-0.5 inline-flex items-center gap-1 rounded-md bg-sky-50 px-1.5 py-0.5 text-[11px] font-semibold text-sky-700" title="僅行程管理者可查看">
-                      <LockKeyhole size={12} aria-hidden="true" />
-                      僅行程管理者可查看
-                    </span>
-                  )}
                 </div>
 
-                {canEdit && isManageMode && (
-                  <div className="flex shrink-0 gap-1">
-                    {dragHandle}
-                    {(!isSpecialInfoPage || !isSelfGuidedTransportInfoItem(item)) && <>
-                    <button
-                      type="button"
-                      disabled={itemIndex === 0}
-                      onClick={() => void moveActiveItem(item.id, -1)}
-                      className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-800 disabled:opacity-30"
-                      aria-label="上移卡片"
-                      title="上移"
-                    >
-                      <ArrowUp size={15} />
-                    </button>
-                    <button
-                      type="button"
-                      disabled={itemIndex === activeItems.length - 1}
-                      onClick={() => void moveActiveItem(item.id, 1)}
-                      className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-800 disabled:opacity-30"
-                      aria-label="下移卡片"
-                      title="下移"
-                    >
-                      <ArrowDown size={15} />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        openEditForm(item);
-                        scrollManagePanelToTop();
-                      }}
-                      className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-800"
-                      aria-label="編輯"
-                      title="編輯"
-                    >
-                      <Pencil size={15} />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => void handleDelete(item)}
-                      className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-rose-50 hover:text-rose-700"
-                      aria-label="刪除"
-                      title="刪除"
-                    >
-                      <Trash2 size={15} />
-                    </button>
-                    </>}
-                  </div>
-                )}
+                <div className="flex shrink-0 flex-col items-end gap-1">
+                  {canEdit && isManageMode && (
+                    <div className="flex gap-1">
+                      {dragHandle}
+                      {(!isSpecialInfoPage || !isSelfGuidedTransportInfoItem(item)) && <>
+                      <button
+                        type="button"
+                        disabled={itemIndex === 0}
+                        onClick={() => void moveActiveItem(item.id, -1)}
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-800 disabled:opacity-30"
+                        aria-label="上移卡片"
+                        title="上移"
+                      >
+                        <ArrowUp size={15} />
+                      </button>
+                      <button
+                        type="button"
+                        disabled={itemIndex === activeItems.length - 1}
+                        onClick={() => void moveActiveItem(item.id, 1)}
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-800 disabled:opacity-30"
+                        aria-label="下移卡片"
+                        title="下移"
+                      >
+                        <ArrowDown size={15} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          openEditForm(item);
+                          scrollManagePanelToTop();
+                        }}
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+                        aria-label="編輯"
+                        title="編輯"
+                      >
+                        <Pencil size={15} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void handleDelete(item)}
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-rose-50 hover:text-rose-700"
+                        aria-label="刪除"
+                        title="刪除"
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                      </>}
+                    </div>
+                  )}
+                  {isSensitiveItem(item) && (
+                    <div className="flex items-center gap-1 whitespace-nowrap rounded-md bg-sky-50 px-2 py-1 text-xs font-semibold text-sky-700" title="僅管理者可查看">
+                      <LockKeyhole size={12} aria-hidden="true" />
+                      僅管理者可查看
+                    </div>
+                  )}
+                </div>
               </div>
               {!standaloneUrl && (
                 <div className="text-sm leading-relaxed text-slate-600">
                   {renderContentWithLinks(item.content)}
                 </div>
               )}
+
                 </>;
               })()}
             </article>}

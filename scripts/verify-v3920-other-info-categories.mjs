@@ -114,4 +114,14 @@ assert.match(page, /selfGuidedOrder: nextOrder/);
 assert.match(page, /const nativeItems = getOtherInfoItemsByFolderId\(visibleItems, effectiveActiveFolderId\)/);
 assert.match(page, /const selfGuidedItems = \[\.\.\.nativeItems, \.\.\.mirroredItems\]/);
 
-console.log("V3.9.20 其他資訊子類別與雙頁映射／獨立排序契約驗證通過。");
+const cardHeaderStart = page.indexOf('<div className="mb-2 flex items-start justify-between gap-3">');
+const cardContentStart = page.indexOf("{!standaloneUrl && (", cardHeaderStart);
+const privacyReminderStart = page.indexOf('className="flex items-center gap-1 whitespace-nowrap rounded-md bg-sky-50', cardHeaderStart);
+assert.ok(cardHeaderStart >= 0 && privacyReminderStart > cardHeaderStart && privacyReminderStart < cardContentStart,
+  "敏感資料提醒必須位於右側操作按鈕列下方、卡片內容之前");
+assert.match(page, /<div className="flex shrink-0 flex-col items-end gap-1">/,
+  "右側操作按鈕與敏感提醒應垂直排列且靠右對齊");
+assert.match(page, /僅管理者可查看/,
+  "敏感資料提醒使用精簡文案");
+
+console.log("V3.9.20 其他資訊子類別、雙頁映射／獨立排序及敏感提醒卡片排版契約驗證通過。");
